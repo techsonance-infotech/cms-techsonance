@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,19 +9,16 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, Trash2, Loader2, Calendar, Clock, Edit, Eye, Users } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Check, ChevronsUpDown, Eraser, Plus, Trash2, Loader2, Calendar, Clock, Edit, Eye, Users, FileText, UserCheck, UserMinus, UserX, UserCog } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatsSkeleton, TableSkeleton, PageHeaderSkeleton, TabsSkeleton } from '@/components/ui/dashboard-skeleton';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import {
   AlertDialog,
@@ -81,6 +78,9 @@ interface Employee {
   lastName: string;
   employeeId: string;
   status: string;
+  email?: string;
+  designation?: string;
+  userId?: number;
 }
 
 interface User {
@@ -88,9 +88,17 @@ interface User {
   role: string;
 }
 
+const checkIsAdmin = (role?: string) => {
+  const r = role?.toLowerCase() || '';
+  return ['admin', 'superadmin', 'super_admin', 'manager', 'project_manager', 'hr_manager', 'ceo', 'cto'].includes(r);
+};
+
 export default function DailyUpdatePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  
+  // Render diagnostic
+  console.log('[DailyUpdate] Rendering component state...');
   const [projects, setProjects] = useState<Project[]>([]);
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [availableStatus, setAvailableStatus] = useState('present');
@@ -103,9 +111,16 @@ export default function DailyUpdatePage() {
     isExtraWork: false,
   }]);
 
+  // Active tab tracking to prevent redundant API calls
+  const [activeTab, setActiveTab] = useState<string>('');
+
   // Admin-specific state
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const isFetchingRef = useRef(false);
+  const lastFetchUrlRef = useRef("");
+  const initialDataLoadedRef = useRef({ employees: false, directory: false });
   const [allDailyReports, setAllDailyReports] = useState<DailyReport[]>([]);
+  const [allReportsTotal, setAllReportsTotal] = useState(0);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedEmployeeFilter, setSelectedEmployeeFilter] = useState('all');
   const [adminStartDate, setAdminStartDate] = useState('');
@@ -114,27 +129,33 @@ export default function DailyUpdatePage() {
   const [deletingReport, setDeletingReport] = useState<DailyReport | null>(null);
   const [viewingReportDetails, setViewingReportDetails] = useState<DailyReport | null>(null);
   const [reportProjects, setReportProjects] = useState<DailyReportProject[]>([]);
+  const [loadingReportProjects, setLoadingReportProjects] = useState(false);
 
-  // Filter states for Extra/Covered Work
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [selectedProjectFilter, setSelectedProjectFilter] = useState('all');
+  const [extraWorkStartDate, setExtraWorkStartDate] = useState('');
+  const [extraWorkEndDate, setExtraWorkEndDate] = useState('');
+  const [selectedProjectFilterExtra, setSelectedProjectFilterExtra] = useState('all');
   const [extraWorkReports, setExtraWorkReports] = useState<DailyReportProject[]>([]);
-  const [coveredWorkReports, setCoveredWorkReports] = useState<DailyReportProject[]>([]);
-  const [projectsList, setProjectsList] = useState<Project[]>([]);
 
-  // My History State
+  const [coveredWorkStartDate, setCoveredWorkStartDate] = useState('');
+  const [coveredWorkEndDate, setCoveredWorkEndDate] = useState('');
+  const [selectedProjectFilterCovered, setSelectedProjectFilterCovered] = useState('all');
+  const [coveredWorkReports, setCoveredWorkReports] = useState<DailyReportProject[]>([]);
+
+  const [projectsList, setProjectsList] = useState<Project[]>([]);
+  const [employeeSearchOpen, setEmployeeSearchOpen] = useState(false);
+  const [employeeSearchValue, setEmployeeSearchValue] = useState("");
+  const [scanningDirectory, setScanningDirectory] = useState(false);
+
   const [myHistoryReports, setMyHistoryReports] = useState<DailyReport[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [historyFilterType, setHistoryFilterType] = useState<'month' | 'range'>('month');
-  const [historyMonth, setHistoryMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
+  const [historyMonth, setHistoryMonth] = useState(new Date().toISOString().slice(0, 7));
   const [historyStartDate, setHistoryStartDate] = useState('');
   const [historyEndDate, setHistoryEndDate] = useState('');
   const [loadingExtraWork, setLoadingExtraWork] = useState(false);
   const [loadingCoveredWork, setLoadingCoveredWork] = useState(false);
   const [loadingProjects, setLoadingProjects] = useState(false);
 
-  // Pagination states
   const [historyPage, setHistoryPage] = useState(0);
   const [historyTotal, setHistoryTotal] = useState(0);
   const [extraWorkPage, setExtraWorkPage] = useState(0);
@@ -147,11 +168,10 @@ export default function DailyUpdatePage() {
   const [loadingTabProjects, setLoadingTabProjects] = useState(false);
   const pageSize = 10;
 
-  // New filters for Extra/Covered Work
   const [isExtraWorkMonthFilter, setIsExtraWorkMonthFilter] = useState(true);
   const [extraWorkMonth, setExtraWorkMonth] = useState(new Date().toISOString().slice(0, 7));
   const [selectedEmployeeExtraWork, setSelectedEmployeeExtraWork] = useState('all');
-  
+
   const [isCoveredWorkMonthFilter, setIsCoveredWorkMonthFilter] = useState(true);
   const [coveredWorkMonth, setCoveredWorkMonth] = useState(new Date().toISOString().slice(0, 7));
   const [selectedEmployeeCoveredWork, setSelectedEmployeeCoveredWork] = useState('all');
@@ -161,26 +181,48 @@ export default function DailyUpdatePage() {
   }, []);
 
   useEffect(() => {
+    if (currentUser && !activeTab) {
+      const initialTab = checkIsAdmin(currentUser.role) ? 'all-reports' : 'daily-report';
+      setActiveTab(initialTab);
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (currentUser) {
+      if (checkIsAdmin(currentUser.role)) {
+        fetchEmployees();
+      }
+      fetchAllProjectsList();
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
     if (currentUser) {
       fetchProjects();
-      fetchProjectsList();
       fetchExistingReport();
     }
   }, [currentUser, date]);
 
   useEffect(() => {
-    if (currentUser && (currentUser.role === 'SuperAdmin' || currentUser.role === 'Admin' || currentUser.role === 'Manager')) {
+    if (currentUser && checkIsAdmin(currentUser.role) && activeTab === 'all-reports') {
       fetchAllDailyReports();
-      fetchEmployees();
     }
-  }, [currentUser, selectedEmployeeFilter, adminStartDate, adminEndDate, adminStatusFilter, allReportsPage]);
+  }, [currentUser, activeTab, selectedEmployeeFilter, adminStartDate, adminEndDate, adminStatusFilter, allReportsPage]);
+
+  // Separate effect for one-time background directory sync
+  useEffect(() => {
+    if (currentUser && checkIsAdmin(currentUser.role) && activeTab === 'all-reports') {
+      fetchUniversalDirectory();
+    }
+  }, [currentUser, activeTab]);
+
+
 
   const fetchExistingReport = async () => {
     if (!currentUser || !date) return;
 
     try {
       const token = localStorage.getItem('session_token');
-      // Fetch report for this date
       const response = await fetch(`/api/daily-reports?startDate=${date}&endDate=${date}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -188,37 +230,33 @@ export default function DailyUpdatePage() {
       if (response.ok) {
         const result = await response.json();
         const reports = result.data || [];
-        // The API returns an array, but should be only one for (user + date)
         const existing = reports.find((r: DailyReport) => r.date.startsWith(date));
-        
+
         if (existing) {
           setAvailableStatus(existing.availableStatus);
-          // Fetch associated projects
           const projectsResponse = await fetch(`/api/daily-report-projects?dailyReportId=${existing.id}&limit=100`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
-          
+
           if (projectsResponse.ok) {
             const prsResult = await projectsResponse.json();
             const prs = prsResult.data || [];
             if (prs.length > 0) {
               setProjectReports(prs.map((p: any) => ({
-                id: p.id.toString(), // Mark as already existing by using its ID
+                id: p.id.toString(),
                 projectId: p.projectId,
                 description: p.description,
                 trackerTime: p.trackerTime,
                 isCoveredWork: p.isCoveredWork,
                 isExtraWork: p.isExtraWork,
-                isSubmitted: true // Flag to know this was already in DB
+                isSubmitted: true
               })));
               return;
             }
           }
         }
       }
-      
-      // If no report or projects found, reset to a clean entry
-      // Reset form if it was a new clean date
+
       if (!viewingReportDetails) {
         setProjectReports([{
           id: 'temp_' + Date.now().toString(),
@@ -254,12 +292,9 @@ export default function DailyUpdatePage() {
     setLoadingProjects(true);
     try {
       const token = localStorage.getItem('session_token');
+      const isAdmin = checkIsAdmin(currentUser?.role);
 
-      // Check if user has admin-level access using new RBAC system
-      const isAdmin = currentUser && (currentUser.role === 'SuperAdmin' || currentUser.role === 'Admin' || currentUser.role === 'Manager');
-      
       if (isAdmin) {
-        // Fetch all projects for admin roles
         const response = await fetch('/api/projects?limit=100', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -268,7 +303,6 @@ export default function DailyUpdatePage() {
           setProjects(result.data || []);
         }
       } else {
-        // Fetch only assigned projects for other roles
         const memberResponse = await fetch('/api/project-members?limit=1000', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -301,15 +335,11 @@ export default function DailyUpdatePage() {
     }
   };
 
-  const fetchProjectsList = async () => {
+  const fetchAllProjectsList = async () => {
     try {
       const token = localStorage.getItem('session_token');
 
-      // Check if user has admin-level access using new RBAC system
-      const isAdmin = currentUser && (currentUser.role === 'SuperAdmin' || currentUser.role === 'Admin' || currentUser.role === 'Manager');
-      
-      if (isAdmin) {
-        // Fetch all projects for admin roles (larger limit for filters)
+      if (checkIsAdmin(currentUser?.role)) {
         const response = await fetch('/api/projects?limit=1000', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -318,13 +348,13 @@ export default function DailyUpdatePage() {
           setProjectsList(result.data || []);
         }
       } else {
-        // For other roles, fetch only assigned projects
         const memberResponse = await fetch('/api/project-members?limit=1000', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
 
         if (memberResponse.ok) {
-          const members = await memberResponse.json();
+          const membersResult = await memberResponse.json();
+          const members = membersResult.data || [];
           const userProjectIds = members
             .filter((m: any) => m.userId === currentUser?.id)
             .map((m: any) => m.projectId);
@@ -353,11 +383,7 @@ export default function DailyUpdatePage() {
     try {
       const token = localStorage.getItem('session_token');
 
-      // Check if user has admin-level access using new RBAC system
-      const isAdmin = currentUser && (currentUser.role === 'SuperAdmin' || currentUser.role === 'Admin' || currentUser.role === 'Manager');
-      
-      if (isAdmin) {
-        // Fetch all projects for admin roles
+      if (checkIsAdmin(currentUser?.role)) {
         const response = await fetch(`/api/projects?limit=${pageSize}&offset=${projectsPage * pageSize}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -366,7 +392,6 @@ export default function DailyUpdatePage() {
           setTabProjects(result.data || []);
         }
       } else {
-        // For other roles, fetch only assigned projects
         const memberResponse = await fetch('/api/project-members?limit=1000', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -402,69 +427,231 @@ export default function DailyUpdatePage() {
   const fetchEmployees = async () => {
     try {
       const token = localStorage.getItem('session_token');
-      const response = await fetch('/api/employees?limit=100', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const empResult = await response.json();
-        const employeesData = empResult.data || [];
+      
+      const [empRes, userRes] = await Promise.allSettled([
+        fetch('/api/employees?limit=1000', { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch('/api/users?limit=1000', { headers: { 'Authorization': `Bearer ${token}` } })
+      ]);
 
-        // Fetch user details for all employees
-        const usersResponse = await fetch('/api/users?limit=100', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+      let employeesRaw: any[] = [];
+      let usersRaw: any[] = [];
 
-        if (usersResponse.ok) {
-          const usersResult = await usersResponse.json();
-          const usersData = usersResult.data || [];
-
-          // Merge employee and user data
-          const enrichedEmployees = employeesData.map((emp: any) => {
-            const user = usersData.find((u: any) => u.id === emp.userId);
-            return {
-              ...emp,
-              firstName: user?.firstName || '',
-              lastName: user?.lastName || ''
-            };
-          });
-
-          setEmployees(enrichedEmployees);
-        } else {
-          setEmployees(employeesData);
-        }
+      if (empRes.status === 'fulfilled' && empRes.value.ok) {
+        const data = await empRes.value.json();
+        employeesRaw = data.data || [];
       }
-    } catch {
-      toast.error('Failed to load employees');
+      
+      if (userRes.status === 'fulfilled' && userRes.value.ok) {
+        const data = await userRes.value.json();
+        usersRaw = data.data || [];
+      }
+
+      let finalEmployees: Employee[] = [];
+
+      if (employeesRaw.length > 0) {
+        finalEmployees = employeesRaw.map((emp: any) => {
+          const user = usersRaw.find((u: any) => 
+            Number(u.id) === Number(emp.userId) || u.email === emp.email
+          );
+          return {
+            ...emp,
+            firstName: user?.firstName || emp.firstName || '',
+            lastName: user?.lastName || emp.lastName || '',
+            email: user?.email || emp.email || ''
+          };
+        });
+      } else if (usersRaw.length > 0) {
+        // Fallback: Use all users as employees if employees table is empty
+        console.log('[DailyUpdate] Employees table empty, falling back to Users table');
+        finalEmployees = usersRaw.map((u: any) => ({
+          id: u.id,
+          userId: u.id,
+          firstName: u.firstName,
+          lastName: u.lastName,
+          email: u.email,
+          employeeId: `U-${u.id}`,
+          status: u.isActive ? 'active' : 'inactive'
+        }));
+      }
+
+      setEmployees(finalEmployees);
+    } catch (error) {
+      console.error('[DailyUpdate] Error in fetchEmployees:', error);
     }
   };
 
-  const fetchAllDailyReports = async () => {
-    setLoading(true);
+  const discoverNamesFromReports = (reports: DailyReport[]) => {
+    if (!reports || reports.length === 0) return;
+    
+    setEmployees(prev => {
+      const existingIds = new Set(prev.map(e => e.id.toString()));
+      const newDiscoveries: Employee[] = [];
+      
+      reports.forEach(report => {
+        const reportUserId = report.userId?.toString();
+        // Skip if we already have this user ID, but ONLY if ID is valid
+        if (reportUserId && reportUserId !== '0' && existingIds.has(reportUserId)) return;
+
+        // Check if we already have this person by name (in case IDs are different)
+        const fullName = `${report.firstName || ''} ${report.lastName || ''}`.trim();
+        const hasByName = prev.some(e => `${e.firstName} ${e.lastName}`.trim() === fullName);
+        const hasByEmail = report.email && prev.some(e => e.email === report.email);
+        const hasById = reportUserId && reportUserId !== '0' && existingIds.has(reportUserId);
+
+        if (!hasById && !hasByName && !hasByEmail && (fullName || report.email)) {
+          newDiscoveries.push({
+            id: report.userId || Math.floor(Math.random() * 1000000),
+            userId: report.userId,
+            firstName: report.firstName || '',
+            lastName: report.lastName || '',
+            email: report.email || '',
+            employeeId: `D-${report.userId || 'NEW'}`,
+            status: 'active'
+          });
+          if (reportUserId) existingIds.add(reportUserId);
+        }
+      });
+      
+      if (newDiscoveries.length > 0) {
+        return [...prev, ...newDiscoveries];
+      }
+      return prev;
+    });
+  };
+
+  const fetchUniversalDirectory = async () => {
+    if (initialDataLoadedRef.current.directory || employees.length > 50) return;
+    
+    setScanningDirectory(true);
     try {
       const token = localStorage.getItem('session_token');
-      let url = `/api/daily-reports?limit=${pageSize}&offset=${allReportsPage * pageSize}`;
+      // Fetch a larger batch of report headers to "learn" names
+      const response = await fetch('/api/daily-reports?limit=500', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        let reportsArray: DailyReport[] = [];
+        if (Array.isArray(result.data)) {
+          reportsArray = result.data;
+        } else if (Array.isArray(result)) {
+          reportsArray = result;
+        } else if (result?.data?.data) {
+          reportsArray = result.data.data;
+        }
+        
+        if (reportsArray.length > 0) {
+          discoverNamesFromReports(reportsArray);
+        }
+        initialDataLoadedRef.current.directory = true;
+      }
+    } catch {
+      // Background scan silenty fails
+    } finally {
+      setScanningDirectory(false);
+    }
+  };
 
-      if (selectedEmployeeFilter !== 'all') url += `&employeeId=${selectedEmployeeFilter}`;
-      if (adminStartDate) url += `&startDate=${adminStartDate}`;
-      if (adminEndDate) url += `&endDate=${adminEndDate}`;
-      if (adminStatusFilter !== 'all') url += `&availableStatus=${adminStatusFilter}`;
+  const applyDatePreset = (preset: 'today' | 'yesterday' | 'this-week' | 'this-month') => {
+    const now = new Date();
+    let start = "";
+    let end = format(now, 'yyyy-MM-dd');
 
+    switch (preset) {
+      case 'today':
+        start = format(now, 'yyyy-MM-dd');
+        end = start;
+        break;
+      case 'yesterday':
+        start = format(subDays(now, 1), 'yyyy-MM-dd');
+        end = start;
+        break;
+      case 'this-week':
+        start = format(startOfWeek(now), 'yyyy-MM-dd');
+        end = format(endOfWeek(now), 'yyyy-MM-dd');
+        break;
+      case 'this-month':
+        start = format(startOfMonth(now), 'yyyy-MM-dd');
+        end = format(endOfMonth(now), 'yyyy-MM-dd');
+        break;
+    }
+
+    setAdminStartDate(start);
+    setAdminEndDate(end);
+    setAllReportsPage(0);
+  };
+
+  const resetFilters = () => {
+    setSelectedEmployeeFilter('all');
+    setEmployeeSearchValue("");
+    setAdminStartDate("");
+    setAdminEndDate("");
+    setAdminStatusFilter('all');
+    setAllReportsPage(0);
+  };
+
+  const fetchAllDailyReports = async () => {
+    const token = localStorage.getItem('session_token');
+    let url = `/api/daily-reports?limit=${pageSize}&offset=${allReportsPage * pageSize}`;
+
+    if (selectedEmployeeFilter !== 'all') url += `&employeeId=${selectedEmployeeFilter}`;
+    if (adminStartDate) url += `&startDate=${adminStartDate}`;
+    if (adminEndDate) url += `&endDate=${adminEndDate}`;
+    if (adminStatusFilter !== 'all') url += `&availableStatus=${adminStatusFilter}`;
+
+    if (isFetchingRef.current || url === lastFetchUrlRef.current) {
+      return;
+    }
+
+    setLoading(true);
+    isFetchingRef.current = true;
+    lastFetchUrlRef.current = url;
+
+    try {
       const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
       if (response.ok) {
         const result = await response.json();
-        setAllDailyReports(result.data || []);
+        let reportsArray: DailyReport[] = [];
+        if (Array.isArray(result.data)) {
+          reportsArray = result.data;
+        } else if (Array.isArray(result)) {
+          reportsArray = result;
+        } else if (result && result.data && Array.isArray(result.data.data)) {
+          reportsArray = result.data.data;
+        }
+        
+        setAllDailyReports(reportsArray);
+        
+        let total = 0;
+        if (result?.meta?.total !== undefined) {
+          total = result.meta.total;
+        } else if (result?.total !== undefined) {
+          total = result.total;
+        } else {
+          total = reportsArray.length;
+        }
+        
+        setAllReportsTotal(total);
+        if (reportsArray.length > 0) {
+          discoverNamesFromReports(reportsArray);
+        }
+      } else {
+        lastFetchUrlRef.current = "";
       }
-    } catch {
-      toast.error('Failed to load daily reports');
+    } catch (error) {
+      lastFetchUrlRef.current = "";
     } finally {
       setLoading(false);
+      isFetchingRef.current = false;
     }
   };
 
   const fetchReportProjects = async (reportId: number) => {
+    setLoadingReportProjects(true);
     try {
       const token = localStorage.getItem('session_token');
       const response = await fetch(`/api/daily-report-projects?dailyReportId=${reportId}&limit=100`, {
@@ -473,10 +660,20 @@ export default function DailyUpdatePage() {
 
       if (response.ok) {
         const result = await response.json();
-        setReportProjects(result.data || []);
+        let projectsArr = [];
+        if (Array.isArray(result.data)) {
+          projectsArr = result.data;
+        } else if (Array.isArray(result)) {
+          projectsArr = result;
+        } else if (result && result.data && Array.isArray(result.data.data)) {
+          projectsArr = result.data.data;
+        }
+        setReportProjects(projectsArr);
       }
     } catch {
       toast.error('Failed to load report details');
+    } finally {
+      setLoadingReportProjects(false);
     }
   };
 
@@ -547,7 +744,6 @@ export default function DailyUpdatePage() {
         return;
       }
 
-      // Create daily report (API will update if one already exists for this date)
       const reportResponse = await fetch('/api/daily-reports', {
         method: 'POST',
         headers: {
@@ -566,11 +762,9 @@ export default function DailyUpdatePage() {
 
       const dailyReport = await reportResponse.json();
 
-      // Create or Update project reports
       for (const pr of projectReports) {
-        // If it does NOT have a temp_ prefix, it's an existing DB record, use PUT
         if (!pr.id.toString().startsWith('temp_')) {
-           await fetch(`/api/daily-report-projects?id=${pr.id}`, {
+          await fetch(`/api/daily-report-projects?id=${pr.id}`, {
             method: 'PUT',
             headers: {
               'Authorization': `Bearer ${token}`,
@@ -604,14 +798,13 @@ export default function DailyUpdatePage() {
       }
 
       toast.success('Daily report details saved successfully!');
-      fetchExistingReport(); // Refresh the form with saved data
-
+      fetchExistingReport();
       setAvailableStatus('present');
 
-      if (currentUser && (currentUser.role === 'SuperAdmin' || currentUser.role === 'Admin' || currentUser.role === 'Manager')) {
+      if (checkIsAdmin(currentUser?.role)) {
         fetchAllDailyReports();
       }
-      fetchMyHistory(); // Refresh history for everyone
+      fetchMyHistory();
     } catch {
       toast.error('An error occurred while submitting the report');
     } finally {
@@ -624,19 +817,19 @@ export default function DailyUpdatePage() {
     try {
       const token = localStorage.getItem('session_token');
       let url = `/api/daily-report-projects?isExtraWork=true&limit=${pageSize}&offset=${extraWorkPage * pageSize}`;
-      
+
       if (isExtraWorkMonthFilter && extraWorkMonth) {
         const [year, month] = extraWorkMonth.split('-');
         const start = `${year}-${month}-01`;
         const end = new Date(parseInt(year), parseInt(month), 0).toISOString().split('T')[0];
         url += `&startDate=${start}&endDate=${end}`;
       } else {
-        if (startDate) url += `&startDate=${startDate}`;
-        if (endDate) url += `&endDate=${endDate}`;
+        if (extraWorkStartDate) url += `&startDate=${extraWorkStartDate}`;
+        if (extraWorkEndDate) url += `&endDate=${extraWorkEndDate}`;
       }
 
-      if (selectedProjectFilter !== 'all') url += `&projectId=${selectedProjectFilter}`;
-      if (isAdmin && selectedEmployeeExtraWork !== 'all') url += `&employeeId=${selectedEmployeeExtraWork}`;
+      if (selectedProjectFilterExtra !== 'all') url += `&projectId=${selectedProjectFilterExtra}`;
+      if (checkIsAdmin(currentUser?.role) && selectedEmployeeExtraWork !== 'all') url += `&employeeId=${selectedEmployeeExtraWork}`;
 
       const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -645,7 +838,6 @@ export default function DailyUpdatePage() {
         const result = await response.json();
         const dataArr = result.data || [];
         setExtraWorkReports(dataArr);
-        // Simple heuristic for total: if we got less than pageSize, we're on last page
         setExtraWorkTotal(extraWorkPage * pageSize + dataArr.length + (dataArr.length === pageSize ? 1 : 0));
       }
     } catch {
@@ -667,12 +859,12 @@ export default function DailyUpdatePage() {
         const end = new Date(parseInt(year), parseInt(month), 0).toISOString().split('T')[0];
         url += `&startDate=${start}&endDate=${end}`;
       } else {
-        if (startDate) url += `&startDate=${startDate}`;
-        if (endDate) url += `&endDate=${endDate}`;
+        if (coveredWorkStartDate) url += `&startDate=${coveredWorkStartDate}`;
+        if (coveredWorkEndDate) url += `&endDate=${coveredWorkEndDate}`;
       }
 
-      if (selectedProjectFilter !== 'all') url += `&projectId=${selectedProjectFilter}`;
-      if (isAdmin && selectedEmployeeCoveredWork !== 'all') url += `&employeeId=${selectedEmployeeCoveredWork}`;
+      if (selectedProjectFilterCovered !== 'all') url += `&projectId=${selectedProjectFilterCovered}`;
+      if (checkIsAdmin(currentUser?.role) && selectedEmployeeCoveredWork !== 'all') url += `&employeeId=${selectedEmployeeCoveredWork}`;
 
       const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -696,20 +888,15 @@ export default function DailyUpdatePage() {
     setLoadingHistory(true);
     try {
       const token = localStorage.getItem('session_token');
-      // For non-admins, API auto-filters by userId. 
-      // For admins, we want to see OUR OWN history here, but the API might give all if we don't filter.
-      // However, the requirement is for "employees can see there all daily updates".
-      // Let's assume admins also want to see their own history in this tab.
-      // But wait, the API: "Admin/HR can view all reports, others only their own".
-      // If admin calls it without employeeId, they get ALL.
-      // So if admin is viewing "My History", we MUST explicitly pass employeeId (if mapped) or filter client-side?
-      // Actually, standard employees just call it and get theirs.
-      // Let's fetch and rely on role behavior, but for Admins to see THEIR OWN history is a bit tricky if API returns ALL.
-      // FIX: Add `userId=me` or similar? No, API doesn't support that.
-      // Workaround: We will client-side filter for admins if needed, OR relies on the fact that admins mainly use "All Reports".
-      // But for robustness:
 
       let url = `/api/daily-reports?limit=${pageSize}&offset=${historyPage * pageSize}`;
+
+      if (checkIsAdmin(currentUser?.role)) {
+        const adminEmployee = employees.find(emp => emp.userId === currentUser.id);
+        if (adminEmployee) {
+          url += `&employeeId=${adminEmployee.id}`;
+        }
+      }
 
       if (historyFilterType === 'month' && historyMonth) {
         const [year, month] = historyMonth.split('-');
@@ -728,7 +915,7 @@ export default function DailyUpdatePage() {
       if (response.ok) {
         const result = await response.json();
         let reports = result.data || [];
-        if (currentUser && (currentUser.role === 'SuperAdmin' || currentUser.role === 'Admin' || currentUser.role === 'Manager')) {
+        if (checkIsAdmin(currentUser?.role)) {
           reports = reports.filter((r: DailyReport) => r.userId === currentUser.id);
         }
         setMyHistoryReports(reports);
@@ -742,22 +929,22 @@ export default function DailyUpdatePage() {
   };
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && activeTab === 'my-history') {
       fetchMyHistory();
     }
-  }, [currentUser, historyMonth, historyFilterType, historyStartDate, historyEndDate, historyPage]);
+  }, [currentUser, activeTab, historyMonth, historyFilterType, historyStartDate, historyEndDate, historyPage, employees]);
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && activeTab === 'extra-work') {
       fetchExtraWork();
     }
-  }, [currentUser, extraWorkMonth, isExtraWorkMonthFilter, startDate, endDate, selectedProjectFilter, selectedEmployeeExtraWork, extraWorkPage]);
+  }, [currentUser, activeTab, extraWorkMonth, isExtraWorkMonthFilter, extraWorkStartDate, extraWorkEndDate, selectedProjectFilterExtra, selectedEmployeeExtraWork, extraWorkPage]);
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && activeTab === 'covered-work') {
       fetchCoveredWork();
     }
-  }, [currentUser, coveredWorkMonth, isCoveredWorkMonthFilter, startDate, endDate, selectedProjectFilter, selectedEmployeeCoveredWork, coveredWorkPage]);
+  }, [currentUser, activeTab, coveredWorkMonth, isCoveredWorkMonthFilter, coveredWorkStartDate, coveredWorkEndDate, selectedProjectFilterCovered, selectedEmployeeCoveredWork, coveredWorkPage]);
 
   const getProjectName = (projectId: number) => {
     const project = projectsList.find(p => p.id === projectId);
@@ -765,20 +952,19 @@ export default function DailyUpdatePage() {
   };
 
   const getEmployeeName = (report: DailyReport) => {
-    // Use firstName and lastName from the report (now included in API response)
-    if (report.firstName && report.lastName) {
-      return `${report.firstName} ${report.lastName}`;
+    if (report.firstName || report.lastName) {
+      return `${report.firstName || ''} ${report.lastName || ''}`.trim();
     }
-    return 'Unknown Employee';
+    return `Employee #${report.employeeId || report.userId || 'Unknown'}`;
   };
 
-  const isAdmin = currentUser && (currentUser.role === 'SuperAdmin' || currentUser.role === 'Admin' || currentUser.role === 'Manager');
+  const isAdmin = checkIsAdmin(currentUser?.role);
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && activeTab === 'projects') {
       fetchTabProjects();
     }
-  }, [currentUser, projectsPage]);
+  }, [currentUser, activeTab, projectsPage]);
 
   if (!currentUser || loading) {
     return (
@@ -802,7 +988,7 @@ export default function DailyUpdatePage() {
         </p>
       </div>
 
-      <Tabs defaultValue={isAdmin ? "all-reports" : "daily-report"} className="space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className={isAdmin ? "grid w-full grid-cols-6" : "grid w-full grid-cols-5"}>
           {isAdmin && <TabsTrigger value="all-reports"><Users className="mr-2 h-4 w-4" />All Reports</TabsTrigger>}
           <TabsTrigger value="daily-report">Daily Report</TabsTrigger>
@@ -822,56 +1008,193 @@ export default function DailyUpdatePage() {
                 <CardDescription>View, manage, and track all employee daily work reports</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Filters */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="space-y-2">
-                    <Label>Employee Name</Label>
-                    <Select value={selectedEmployeeFilter} onValueChange={setSelectedEmployeeFilter}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Employees</SelectItem>
-                        {employees
-                          .filter(emp => emp.status !== 'resignation')
-                          .map(emp => (
-                            <SelectItem key={emp.id} value={emp.id.toString()}>
-                              {emp.firstName} {emp.lastName}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Start Date</Label>
-                    <Input
-                      type="date"
-                      value={adminStartDate}
-                      onChange={(e) => setAdminStartDate(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>End Date</Label>
-                    <Input
-                      type="date"
-                      value={adminEndDate}
-                      onChange={(e) => setAdminEndDate(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Status</Label>
-                    <Select value={adminStatusFilter} onValueChange={setAdminStatusFilter}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Status</SelectItem>
-                        <SelectItem value="present">Present</SelectItem>
-                        <SelectItem value="half_day">Half Day</SelectItem>
-                        <SelectItem value="early_leave">Early Leave</SelectItem>
-                        <SelectItem value="on_leave">On Leave</SelectItem>
-                      </SelectContent>
-                    </Select>
+                {/* SaaS-Ready Filtering Bar */}
+                <div className="bg-white/50 dark:bg-slate-900/50 backdrop-blur-md rounded-xl p-5 border border-slate-200 dark:border-slate-800 shadow-sm mb-8">
+                  <div className="flex flex-col gap-6">
+                    {/* Top Row: Main Filters */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                      <div className="space-y-2">
+                        <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Employee Name</Label>
+                        <Popover open={employeeSearchOpen} onOpenChange={setEmployeeSearchOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={employeeSearchOpen}
+                              className="w-full justify-between bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800"
+                            >
+                              {selectedEmployeeFilter === 'all' 
+                                ? "All Employees" 
+                                : employees.find((e) => e.id.toString() === selectedEmployeeFilter)
+                                  ? `${employees.find((e) => e.id.toString() === selectedEmployeeFilter)?.firstName} ${employees.find((e) => e.id.toString() === selectedEmployeeFilter)?.lastName}`.trim() || employees.find((e) => e.id.toString() === selectedEmployeeFilter)?.email
+                                  : "Select employee..."}
+                              {scanningDirectory ? (
+                                <Loader2 className="ml-2 h-4 w-4 shrink-0 animate-spin opacity-50" />
+                              ) : (
+                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                              )}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[300px] p-0" align="start">
+                            <Command>
+                              <CommandInput placeholder={scanningDirectory ? "Scanning directory..." : "Search employee..."} className="h-9" />
+                              <CommandList>
+                                {scanningDirectory && employees.length === 0 && (
+                                  <div className="py-6 text-center text-sm text-slate-500">
+                                    <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2" />
+                                    Scanning history for names...
+                                  </div>
+                                )}
+                                <CommandEmpty>{scanningDirectory ? "Scanning..." : "No employee found."}</CommandEmpty>
+                                <CommandGroup>
+                                  <CommandItem
+                                    value="all"
+                                    onSelect={() => {
+                                      setSelectedEmployeeFilter("all");
+                                      setEmployeeSearchOpen(false);
+                                      setAllReportsPage(0);
+                                    }}
+                                  >
+                                    <Check className={cn("mr-2 h-4 w-4", selectedEmployeeFilter === "all" ? "opacity-100" : "opacity-0")} />
+                                    All Employees
+                                  </CommandItem>
+                                  {employees.map((emp, idx) => {
+                                    const fullName = `${emp.firstName || ''} ${emp.lastName || ''}`.trim();
+                                    const label = fullName || emp.email || `ID: ${emp.id}`;
+                                    // Use a composite key to prevent React duplicate key errors
+                                    const itemKey = `emp-${emp.id}-${fullName || idx}`;
+                                    return (
+                                      <CommandItem
+                                        key={itemKey}
+                                        value={label}
+                                        onSelect={() => {
+                                          setSelectedEmployeeFilter(emp.id.toString());
+                                          setEmployeeSearchValue(label);
+                                          setEmployeeSearchOpen(false);
+                                          setAllReportsPage(0);
+                                        }}
+                                      >
+                                        <Check className={cn("mr-2 h-4 w-4", selectedEmployeeFilter === emp.id.toString() ? "opacity-100" : "opacity-0")} />
+                                        <div className="flex flex-col">
+                                          <span className="font-medium">{label}</span>
+                                          {emp.designation && <span className="text-[10px] text-slate-400 capitalize">{emp.designation.replace('_', ' ')}</span>}
+                                        </div>
+                                      </CommandItem>
+                                    );
+                                  })}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Start Date</Label>
+                        <div className="relative">
+                          <Input
+                            type="date"
+                            value={adminStartDate}
+                            onChange={(e) => {
+                              setAdminStartDate(e.target.value);
+                              setAllReportsPage(0);
+                            }}
+                            className="bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">End Date</Label>
+                        <Input
+                          type="date"
+                          value={adminEndDate}
+                          onChange={(e) => {
+                            setAdminEndDate(e.target.value);
+                            setAllReportsPage(0);
+                          }}
+                          className="bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Status</Label>
+                        <Select value={adminStatusFilter} onValueChange={(v) => {
+                          setAdminStatusFilter(v);
+                          setAllReportsPage(0);
+                        }}>
+                          <SelectTrigger className="bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800">
+                            <SelectValue placeholder="Filter Status" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Status</SelectItem>
+                            <SelectItem value="present">Present</SelectItem>
+                            <SelectItem value="half_day">Half Day</SelectItem>
+                            <SelectItem value="early_leave">Early Leave</SelectItem>
+                            <SelectItem value="on_leave">On Leave</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    {/* Bottom Row: Quick Actions */}
+                    <div className="flex flex-wrap items-center justify-between gap-4 pt-2 border-t border-slate-100 dark:border-slate-800/50">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mr-1">Quick Date:</span>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-7 text-xs hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/30"
+                          onClick={() => applyDatePreset('today')}
+                        >
+                          Today
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-7 text-xs hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/30"
+                          onClick={() => applyDatePreset('yesterday')}
+                        >
+                          Yesterday
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-7 text-xs hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/30"
+                          onClick={() => applyDatePreset('this-week')}
+                        >
+                          This Week
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-7 text-xs hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/30"
+                          onClick={() => applyDatePreset('this-month')}
+                        >
+                          This Month
+                        </Button>
+                      </div>
+
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="h-8 gap-2 border-dashed border-slate-300 dark:border-slate-700 text-slate-500 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50"
+                        onClick={fetchEmployees}
+                      >
+                        <Clock className="h-3.5 w-3.5" />
+                        Refresh List
+                      </Button>
+
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="h-8 gap-2 border-dashed border-slate-300 dark:border-slate-700 text-slate-500 hover:text-rose-600 hover:border-rose-300 hover:bg-rose-50 dark:hover:bg-rose-900/20"
+                        onClick={resetFilters}
+                      >
+                        <Eraser className="h-3.5 w-3.5" />
+                        Clear Filters
+                      </Button>
+                    </div>
                   </div>
                 </div>
 
@@ -879,36 +1202,56 @@ export default function DailyUpdatePage() {
                 {loading ? (
                   <StatsSkeleton />
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <Card>
-                      <CardHeader className="pb-3">
-                        <CardDescription>Total Reports</CardDescription>
-                        <CardTitle className="text-2xl">{allDailyReports.length}</CardTitle>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
+                    <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/50 dark:to-indigo-950/50 border-blue-100 dark:border-blue-900 shadow-sm">
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                          Total Reports
+                        </CardTitle>
+                        <FileText className="h-4 w-4 text-blue-500" />
                       </CardHeader>
+                      <CardContent>
+                        <div className="text-3xl font-bold text-blue-900 dark:text-blue-100">{allReportsTotal}</div>
+                      </CardContent>
                     </Card>
-                    <Card>
-                      <CardHeader className="pb-3">
-                        <CardDescription>Present</CardDescription>
-                        <CardTitle className="text-2xl">
+                    <Card className="bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/50 dark:to-teal-950/50 border-emerald-100 dark:border-emerald-900 shadow-sm">
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
+                          Present
+                        </CardTitle>
+                        <UserCheck className="h-4 w-4 text-emerald-500" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-3xl font-bold text-emerald-900 dark:text-emerald-100">
                           {allDailyReports.filter(r => r.availableStatus === 'present').length}
-                        </CardTitle>
-                      </CardHeader>
+                        </div>
+                      </CardContent>
                     </Card>
-                    <Card>
-                      <CardHeader className="pb-3">
-                        <CardDescription>Half Day</CardDescription>
-                        <CardTitle className="text-2xl">
+                    <Card className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/50 dark:to-orange-950/50 border-amber-100 dark:border-amber-900 shadow-sm">
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium text-amber-700 dark:text-amber-300">
+                          Half Day
+                        </CardTitle>
+                        <UserMinus className="h-4 w-4 text-amber-500" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-3xl font-bold text-amber-900 dark:text-amber-100">
                           {allDailyReports.filter(r => r.availableStatus === 'half_day').length}
-                        </CardTitle>
-                      </CardHeader>
+                        </div>
+                      </CardContent>
                     </Card>
-                    <Card>
-                      <CardHeader className="pb-3">
-                        <CardDescription>On Leave</CardDescription>
-                        <CardTitle className="text-2xl">
-                          {allDailyReports.filter(r => r.availableStatus === 'on_leave').length}
+                    <Card className="bg-gradient-to-br from-rose-50 to-red-50 dark:from-rose-950/50 dark:to-red-950/50 border-rose-100 dark:border-rose-900 shadow-sm">
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium text-rose-700 dark:text-rose-300">
+                          On Leave
                         </CardTitle>
+                        <UserX className="h-4 w-4 text-rose-500" />
                       </CardHeader>
+                      <CardContent>
+                        <div className="text-3xl font-bold text-rose-900 dark:text-rose-100">
+                          {allDailyReports.filter(r => r.availableStatus === 'on_leave').length}
+                        </div>
+                      </CardContent>
                     </Card>
                   </div>
                 )}
@@ -925,78 +1268,78 @@ export default function DailyUpdatePage() {
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
-                  <TableBody>
-                    {loading ? (
-                      <TableSkeleton columns={5} rows={5} />
-                    ) : allDailyReports.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                          No daily reports found
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      allDailyReports.map((report) => (
-                        <TableRow key={report.id}>
-                          <TableCell className="font-medium">
-                            {getEmployeeName(report)}
-                          </TableCell>
-                          <TableCell>{new Date(report.date).toLocaleDateString()}</TableCell>
-                          <TableCell>
-                            <Badge variant={
-                              report.availableStatus === 'present' ? 'default' :
-                                report.availableStatus === 'on_leave' ? 'destructive' :
-                                  'secondary'
-                            }>
-                              {report.availableStatus.replace('_', ' ')}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{new Date(report.createdAt).toLocaleString()}</TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleViewReportDetails(report)}
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setDeletingReport(report)}
-                              >
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </div>
+                    <TableBody>
+                      {loading ? (
+                        <TableSkeleton columns={5} rows={5} />
+                      ) : allDailyReports.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                            No daily reports found
                           </TableCell>
                         </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
+                      ) : (
+                        allDailyReports.map((report) => (
+                          <TableRow key={report.id}>
+                            <TableCell className="font-medium">
+                              {getEmployeeName(report)}
+                            </TableCell>
+                            <TableCell>{new Date(report.date).toLocaleDateString()}</TableCell>
+                            <TableCell>
+                              <Badge className={
+                                report.availableStatus === 'present' ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800' :
+                                  report.availableStatus === 'on_leave' ? 'bg-rose-100 text-rose-800 hover:bg-rose-200 dark:bg-rose-900/40 dark:text-rose-300 border-rose-200 dark:border-rose-800' :
+                                    'bg-amber-100 text-amber-800 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                              } variant="outline">
+                                {report.availableStatus.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>{new Date(report.createdAt).toLocaleString()}</TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleViewReportDetails(report)}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setDeletingReport(report)}
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
 
-              {/* Pagination */}
-              <div className="flex items-center justify-end space-x-2 py-4">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setAllReportsPage(p => Math.max(0, p - 1))}
-                  disabled={allReportsPage === 0}
-                >
-                  Previous
-                </Button>
-                <div className="text-sm font-medium">Page {allReportsPage + 1}</div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setAllReportsPage(p => p + 1)}
-                  disabled={allDailyReports.length < pageSize}
-                >
-                  Next
-                </Button>
-              </div>
-            </CardContent>
+                {/* Pagination */}
+                <div className="flex items-center justify-end space-x-2 py-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setAllReportsPage(p => Math.max(0, p - 1))}
+                    disabled={allReportsPage === 0}
+                  >
+                    Previous
+                  </Button>
+                  <div className="text-sm font-medium">Page {allReportsPage + 1}</div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setAllReportsPage(p => p + 1)}
+                    disabled={allDailyReports.length < pageSize}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </CardContent>
             </Card>
           </TabsContent>
         )}
@@ -1222,16 +1565,16 @@ export default function DailyUpdatePage() {
                       <Label>Start Date</Label>
                       <Input
                         type="date"
-                        value={startDate}
-                        onChange={(e) => setStartDate(e.target.value)}
+                        value={extraWorkStartDate}
+                        onChange={(e) => setExtraWorkStartDate(e.target.value)}
                       />
                     </div>
                     <div className="space-y-2">
                       <Label>End Date</Label>
                       <Input
                         type="date"
-                        value={endDate}
-                        onChange={(e) => setEndDate(e.target.value)}
+                        value={extraWorkEndDate}
+                        onChange={(e) => setExtraWorkEndDate(e.target.value)}
                       />
                     </div>
                   </>
@@ -1239,7 +1582,7 @@ export default function DailyUpdatePage() {
 
                 <div className="space-y-2 min-w-[200px]">
                   <Label>Project</Label>
-                  <Select value={selectedProjectFilter} onValueChange={setSelectedProjectFilter}>
+                  <Select value={selectedProjectFilterExtra} onValueChange={setSelectedProjectFilterExtra}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -1383,16 +1726,16 @@ export default function DailyUpdatePage() {
                       <Label>Start Date</Label>
                       <Input
                         type="date"
-                        value={startDate}
-                        onChange={(e) => setStartDate(e.target.value)}
+                        value={coveredWorkStartDate}
+                        onChange={(e) => setCoveredWorkStartDate(e.target.value)}
                       />
                     </div>
                     <div className="space-y-2">
                       <Label>End Date</Label>
                       <Input
                         type="date"
-                        value={endDate}
-                        onChange={(e) => setEndDate(e.target.value)}
+                        value={coveredWorkEndDate}
+                        onChange={(e) => setCoveredWorkEndDate(e.target.value)}
                       />
                     </div>
                   </>
@@ -1400,7 +1743,7 @@ export default function DailyUpdatePage() {
 
                 <div className="space-y-2 min-w-[200px]">
                   <Label>Project</Label>
-                  <Select value={selectedProjectFilter} onValueChange={setSelectedProjectFilter}>
+                  <Select value={selectedProjectFilterCovered} onValueChange={setSelectedProjectFilterCovered}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -1670,12 +2013,12 @@ export default function DailyUpdatePage() {
                             {new Date(report.date).toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
                           </TableCell>
                           <TableCell>
-                            <Badge variant={
-                              report.availableStatus === 'present' ? 'default' :
-                                report.availableStatus === 'on_leave' ? 'destructive' :
-                                  'secondary'
-                            }>
-                              {report.availableStatus.replace('_', ' ')}
+                            <Badge className={
+                              report.availableStatus === 'present' ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800' :
+                                report.availableStatus === 'on_leave' ? 'bg-rose-100 text-rose-800 hover:bg-rose-200 dark:bg-rose-900/40 dark:text-rose-300 border-rose-200 dark:border-rose-800' :
+                                  'bg-amber-100 text-amber-800 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                            } variant="outline">
+                              {report.availableStatus.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
                             </Badge>
                           </TableCell>
                           <TableCell className="max-w-[300px] truncate text-muted-foreground text-sm">
@@ -1747,12 +2090,12 @@ export default function DailyUpdatePage() {
                   </div>
                   <div>
                     <Label className="text-muted-foreground">Status</Label>
-                    <Badge variant={
-                      viewingReportDetails.availableStatus === 'present' ? 'default' :
-                        viewingReportDetails.availableStatus === 'on_leave' ? 'destructive' :
-                          'secondary'
-                    }>
-                      {viewingReportDetails.availableStatus.replace('_', ' ')}
+                    <Badge className={
+                      viewingReportDetails.availableStatus === 'present' ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800' :
+                        viewingReportDetails.availableStatus === 'on_leave' ? 'bg-rose-100 text-rose-800 hover:bg-rose-200 dark:bg-rose-900/40 dark:text-rose-300 border-rose-200 dark:border-rose-800' :
+                          'bg-amber-100 text-amber-800 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                    } variant="outline">
+                      {viewingReportDetails.availableStatus.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
                     </Badge>
                   </div>
                   <div>
@@ -1762,35 +2105,56 @@ export default function DailyUpdatePage() {
                 </div>
 
                 <div>
-                  <Label className="text-muted-foreground mb-2 block">Project Activities</Label>
-                  <div className="space-y-2">
-                    {reportProjects.map((rp) => (
-                      <Card key={rp.id} className="p-3">
-                        <div className="flex justify-between items-start mb-2">
-                          <div className="font-medium">{getProjectName(rp.projectId)}</div>
-                          <div className="flex gap-2">
-                            {rp.isExtraWork && <Badge variant="secondary">Extra Work</Badge>}
-                            {rp.isCoveredWork && <Badge variant="outline">Covered Work</Badge>}
+                  <Label className="text-muted-foreground mb-2 block font-semibold text-blue-900 dark:text-blue-100">Project Activities</Label>
+                  <div className="space-y-4">
+                    {loadingReportProjects ? (
+                      Array.from({ length: 2 }).map((_, i) => (
+                        <Card key={i} className="p-4 border-dashed animate-pulse bg-slate-50 dark:bg-slate-900/40">
+                          <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-1/3 mb-4" />
+                          <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded w-full mb-2" />
+                          <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded w-2/3" />
+                        </Card>
+                      ))
+                    ) : (
+                      <>
+                        {reportProjects.map((rp) => (
+                          <Card key={rp.id} className="p-4 border-l-4 border-l-blue-500 shadow-sm hover:shadow-md transition-shadow">
+                            <div className="flex justify-between items-start mb-3">
+                              <div className="font-bold text-blue-800 dark:text-blue-300">
+                                {rp.projectName || getProjectName(rp.projectId)}
+                              </div>
+                              <div className="flex gap-2">
+                                {rp.isExtraWork && <Badge className="bg-orange-100 text-orange-800 border-orange-200" variant="outline">Extra Work</Badge>}
+                                {rp.isCoveredWork && <Badge className="bg-purple-100 text-purple-800 border-purple-200" variant="outline">Covered Work</Badge>}
+                              </div>
+                            </div>
+                            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4 leading-relaxed line-clamp-3">
+                              {rp.description}
+                            </p>
+                            <div className="flex items-center gap-3 text-xs font-semibold text-slate-500">
+                              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-full">
+                                <Clock className="h-3.3 w-3 h-3 w-3" />
+                                <span>{Math.floor(rp.trackerTime / 60)}h {rp.trackerTime % 60}m</span>
+                              </div>
+                            </div>
+                          </Card>
+                        ))}
+                        {reportProjects.length === 0 && (
+                          <div className="text-center py-10 bg-slate-50 dark:bg-slate-900/20 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-800">
+                            <FileText className="h-10 w-10 text-slate-300 mx-auto mb-2" />
+                            <p className="text-sm text-muted-foreground">
+                              No project activities recorded for this day
+                            </p>
                           </div>
-                        </div>
-                        <p className="text-sm text-muted-foreground mb-2">{rp.description}</p>
-                        <div className="flex items-center gap-2 text-sm">
-                          <Clock className="h-3 w-3" />
-                          <span>{Math.floor(rp.trackerTime / 60)}h {rp.trackerTime % 60}m</span>
-                        </div>
-                      </Card>
-                    ))}
-                    {reportProjects.length === 0 && (
-                      <p className="text-sm text-muted-foreground text-center py-4">
-                        No project activities recorded
-                      </p>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
               </div>
             )}
-            <AlertDialogFooter>
-              <AlertDialogAction onClick={() => setViewingReportDetails(null)}>
+            <AlertDialogFooter className="border-t pt-4">
+              <AlertDialogAction className="bg-blue-600 hover:bg-blue-700 text-white min-w-[100px]" onClick={() => setViewingReportDetails(null)}>
                 Close
               </AlertDialogAction>
             </AlertDialogFooter>

@@ -353,7 +353,7 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
                       control={form.control}
                       name="projectId"
                       render={({ field }) => (
-                        <FormItem>
+                        <FormItem className="min-w-0">
                           <Label className="flex items-center gap-1.5 peer-disabled:opacity-70 text-xs font-bold uppercase tracking-wider text-muted-foreground/80 mb-2">
                             <Target className="h-3 w-3" /> Project *
                           </Label>
@@ -363,7 +363,7 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
                             disabled={loading || loadingData || !!projectId || !!task}
                           >
                             <FormControl>
-                              <SelectTrigger className="bg-background/50">
+                              <SelectTrigger className="bg-background/50 w-full">
                                 <SelectValue placeholder="Select project" />
                               </SelectTrigger>
                             </FormControl>
@@ -384,7 +384,7 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
                       control={form.control}
                       name="sprintId"
                       render={({ field }) => (
-                        <FormItem>
+                        <FormItem className="min-w-0">
                           <Label className="flex items-center gap-1.5 peer-disabled:opacity-70 text-xs font-bold uppercase tracking-wider text-muted-foreground/80 mb-2">
                             <CalendarIcon className="h-3 w-3" /> Sprint
                           </Label>
@@ -394,7 +394,7 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
                             disabled={loading || !selectedProjectId}
                           >
                             <FormControl>
-                              <SelectTrigger className="bg-background/50">
+                              <SelectTrigger className="bg-background/50 w-full">
                                 <SelectValue placeholder="Select sprint" />
                               </SelectTrigger>
                             </FormControl>
@@ -466,7 +466,7 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
                           : users;
 
                         return (
-                          <FormItem>
+                          <FormItem className="min-w-0">
                             <Label className="flex items-center gap-1.5 peer-disabled:opacity-70 text-xs font-bold uppercase tracking-wider text-muted-foreground/80 mb-2">
                               <User className="h-3 w-3" /> Assigned To *
                             </Label>
@@ -476,7 +476,7 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
                               disabled={loading || loadingData || (isEmployee && !selectedProjectId)}
                             >
                               <FormControl>
-                                <SelectTrigger className="bg-background/50">
+                                <SelectTrigger className="bg-background/50 w-full">
                                   <SelectValue placeholder="Select member" />
                                 </SelectTrigger>
                               </FormControl>
@@ -498,7 +498,7 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
                       control={form.control}
                       name="dueDate"
                       render={({ field }) => (
-                        <FormItem>
+                        <FormItem className="min-w-0">
                           <Label className="flex items-center gap-1.5 peer-disabled:opacity-70 text-xs font-bold uppercase tracking-wider text-muted-foreground/80 mb-2">
                             <Clock className="h-3 w-3" /> Final Deadline
                           </Label>
@@ -521,7 +521,7 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
                       control={form.control}
                       name="status"
                       render={({ field }) => (
-                        <FormItem>
+                        <FormItem className="min-w-0">
                           <Label className="flex items-center gap-1.5 peer-disabled:opacity-70 text-xs font-bold uppercase tracking-wider text-muted-foreground/80 mb-2">
                              Status
                           </Label>
@@ -531,7 +531,7 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
                             disabled={loading}
                           >
                             <FormControl>
-                              <SelectTrigger className="bg-background/50">
+                              <SelectTrigger className="bg-background/50 w-full">
                                 <SelectValue />
                               </SelectTrigger>
                             </FormControl>
@@ -552,7 +552,7 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
                       control={form.control}
                       name="priority"
                       render={({ field }) => (
-                        <FormItem>
+                        <FormItem className="min-w-0">
                           <Label className="flex items-center gap-1.5 peer-disabled:opacity-70 text-xs font-bold uppercase tracking-wider text-muted-foreground/80 mb-2">
                             <Flag className="h-3 w-3" /> Priority
                           </Label>
@@ -562,7 +562,7 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
                             disabled={loading}
                           >
                             <FormControl>
-                              <SelectTrigger className="bg-background/50 border-l-4 border-l-indigo-500">
+                              <SelectTrigger className="bg-background/50 border-l-4 border-l-primary w-full">
                                 <SelectValue />
                               </SelectTrigger>
                             </FormControl>
@@ -587,7 +587,7 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
                       control={form.control}
                       name="storyPoints"
                       render={({ field }) => (
-                        <FormItem>
+                        <FormItem className="min-w-0">
                           <Label className="flex items-center gap-1.5 peer-disabled:opacity-70 text-xs font-bold uppercase tracking-wider text-muted-foreground/80 mb-2">
                             <Hash className="h-3 w-3" /> Story Points (Fibonacci)
                           </Label>
@@ -597,7 +597,7 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
                             disabled={loading}
                           >
                             <FormControl>
-                              <SelectTrigger className="bg-background/50">
+                              <SelectTrigger className="bg-background/50 w-full">
                                 <SelectValue placeholder="Select" />
                               </SelectTrigger>
                             </FormControl>
@@ -616,7 +616,7 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
                       control={form.control}
                       name="blockedById"
                       render={({ field }) => (
-                        <FormItem>
+                        <FormItem className="min-w-0">
                           <Label className="flex items-center gap-1.5 peer-disabled:opacity-70 text-xs font-bold uppercase tracking-wider text-muted-foreground/80 mb-2">
                             <Link2 className="h-3 w-3" /> Blocked By
                           </Label>
@@ -626,7 +626,7 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
                             disabled={loading || !selectedProjectId}
                           >
                             <FormControl>
-                              <SelectTrigger className="bg-background/50">
+                              <SelectTrigger className="bg-background/50 w-full">
                                 <SelectValue placeholder="Select dependency" />
                               </SelectTrigger>
                             </FormControl>
@@ -649,7 +649,7 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
                       control={form.control}
                       name="estimatedHours"
                       render={({ field }) => (
-                        <FormItem>
+                        <FormItem className="min-w-0">
                           <Label className="flex items-center gap-1.5 peer-disabled:opacity-70 text-xs font-bold uppercase tracking-wider text-muted-foreground/80 mb-2">
                              Est. Hours
                           </Label>
@@ -673,7 +673,7 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
                       control={form.control}
                       name="loggedHours"
                       render={({ field }) => (
-                        <FormItem>
+                        <FormItem className="min-w-0">
                           <Label className="flex items-center gap-1.5 peer-disabled:opacity-70 text-xs font-bold uppercase tracking-wider text-muted-foreground/80 mb-2">
                              Logged Hours
                           </Label>
@@ -719,7 +719,7 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={loading} className="px-8 bg-indigo-600 hover:bg-indigo-700">
+              <Button type="submit" disabled={loading} className="px-8">
                 {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

@@ -26,6 +26,43 @@ function normalizeSupabaseClientRow(row: Record<string, unknown>, userMap: Map<s
   };
 }
 
+/** Check for duplicate email or phone in the same tenant. Returns a conflict message or null. */
+async function checkDuplicates(
+  supabase: ReturnType<typeof getAdminRouteSupabase>,
+  tenantId: string,
+  email: string,
+  phone: string | null | undefined,
+  excludeId?: number
+): Promise<string | null> {
+  // Check email uniqueness (case-insensitive)
+  let emailQuery = supabase
+    .from('clients')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .ilike('email', email);
+  if (excludeId) emailQuery = emailQuery.neq('id', excludeId);
+  const { data: emailConflict } = await emailQuery.limit(1);
+  if (emailConflict && emailConflict.length > 0) {
+    return 'A client with this email address already exists.';
+  }
+
+  // Check phone uniqueness (only if phone is provided)
+  if (phone && phone.trim()) {
+    let phoneQuery = supabase
+      .from('clients')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('phone', phone.trim());
+    if (excludeId) phoneQuery = phoneQuery.neq('id', excludeId);
+    const { data: phoneConflict } = await phoneQuery.limit(1);
+    if (phoneConflict && phoneConflict.length > 0) {
+      return 'A client with this phone number already exists.';
+    }
+  }
+
+  return null;
+}
+
 export const GET = withApiHandler(async (request, context) => {
   const searchParams = new URL(request.url).searchParams;
   const id = searchParams.get('id');
@@ -98,8 +135,13 @@ export const POST = withApiHandler(async (request, context) => {
   const tenantId = context.auth?.user.tenantId;
   if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
   
-  const actor = await getCurrentSupabaseActor(accessToken);
   const supabase = getAdminRouteSupabase();
+
+  // Pre-insert uniqueness check — avoids raw Postgres PK/unique constraint crashes
+  const conflict = await checkDuplicates(supabase, tenantId, payload.email.toLowerCase().trim(), payload.phone);
+  if (conflict) throw new BadRequestError(conflict);
+
+  const actor = await getCurrentSupabaseActor(accessToken);
   const now = new Date().toISOString();
   const { data, error } = await supabase.from('clients').insert({
     company_name: payload.companyName.trim(),
@@ -116,7 +158,17 @@ export const POST = withApiHandler(async (request, context) => {
     updated_at: now,
   }).select('*').single();
 
-  if (error || !data) throw error ? new Error(error.message) : new Error('Failed to create client');
+  if (error) {
+    // Fallback: catch unique constraint violations from DB directly (code 23505)
+    if (error.code === '23505') {
+      if (error.message.includes('email')) throw new BadRequestError('A client with this email address already exists.');
+      if (error.message.includes('phone')) throw new BadRequestError('A client with this phone number already exists.');
+      throw new BadRequestError('A client with these details already exists.');
+    }
+    throw new Error(error.message);
+  }
+  if (!data) throw new Error('Failed to create client');
+
   const userMap = await buildLegacyUserIdMap(accessToken, [actor.authUserId], tenantId);
   return NextResponse.json(normalizeSupabaseClientRow(data, userMap), { status: 201 });
 }, { requireAuth: true, roles: ['Manager'] });
@@ -141,6 +193,20 @@ export const PUT = withApiHandler(async (request, context) => {
     
   if (!existing) throw new NotFoundError('Client not found');
 
+  // Pre-update uniqueness check (exclude current record)
+  const emailToCheck = payload.email ? payload.email.toLowerCase().trim() : null;
+  const phoneToCheck = payload.phone ?? null;
+  if (emailToCheck || phoneToCheck) {
+    const conflict = await checkDuplicates(
+      supabase,
+      tenantId,
+      emailToCheck ?? String(existing.email),
+      phoneToCheck,
+      id
+    );
+    if (conflict) throw new BadRequestError(conflict);
+  }
+
   const { data, error } = await supabase.from('clients').update({
     ...(payload.companyName !== undefined ? { company_name: payload.companyName.trim() } : {}),
     ...(payload.contactPerson !== undefined ? { contact_person: payload.contactPerson.trim() } : {}),
@@ -157,7 +223,16 @@ export const PUT = withApiHandler(async (request, context) => {
   .select('*')
   .single();
 
-  if (error || !data) throw error ? new Error(error.message) : new Error('Failed to update client');
+  if (error) {
+    if (error.code === '23505') {
+      if (error.message.includes('email')) throw new BadRequestError('A client with this email address already exists.');
+      if (error.message.includes('phone')) throw new BadRequestError('A client with this phone number already exists.');
+      throw new BadRequestError('A client with these details already exists.');
+    }
+    throw new Error(error.message);
+  }
+  if (!data) throw new Error('Failed to update client');
+
   const userMap = await buildLegacyUserIdMap(accessToken, [String(data.created_by)]);
   return NextResponse.json(normalizeSupabaseClientRow(data, userMap));
 }, { requireAuth: true, roles: ['Manager'] });

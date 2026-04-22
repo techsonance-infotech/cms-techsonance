@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { taskPriorityOptions, taskStatusOptions, type TaskFormValues } from '@/lib/forms/schemas';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
 import { z } from 'zod';
 import { toast } from 'sonner';
 import { isEmployeeRole, type UserRole } from '@/lib/permissions';
@@ -149,9 +149,11 @@ export function TaskFormDialog({
   };
 
   const handleSubmit = async (values: ProjectTaskFormValues) => {
+    form.clearErrors('root');
     setLoading(true);
 
     try {
+      const token = localStorage.getItem('session_token');
       const url = task ? `/api/tasks?id=${task.id}` : '/api/tasks';
       const method = task ? 'PUT' : 'POST';
 
@@ -167,20 +169,24 @@ export function TaskFormDialog({
 
       const response = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
         body: JSON.stringify(payload),
       });
 
       if (response.ok) {
+        toast.success(task ? 'Task updated successfully' : 'Task created successfully');
         onSuccess();
         onOpenChange(false);
-        toast.success(task ? 'Task updated successfully' : 'Task created successfully');
       } else {
         const error = await response.json();
-        toast.error(error.error || 'Failed to save task');
+        const message: string = error.message || error.error || 'Failed to save task';
+        form.setError('root', { message });
       }
     } catch {
-      toast.error('An error occurred while saving the task');
+      form.setError('root', { message: 'An unexpected error occurred. Please try again.' });
     } finally {
       setLoading(false);
     }
@@ -338,6 +344,14 @@ export function TaskFormDialog({
               )}
             />
           </div>
+
+          {/* Root-level error banner */}
+          {form.formState.errors.root && (
+            <div className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+              <span>{form.formState.errors.root.message}</span>
+            </div>
+          )}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

@@ -155,7 +155,15 @@ export const POST = withApiHandler(async (request, context) => {
     updated_at: now,
   }).select('*').single();
 
-  if (error || !data) throw error ? new Error(error.message) : new Error('Failed to create project');
+  // Catch Postgres unique constraint violations (e.g. PK sequence out of sync)
+  if (error) {
+    if ((error as any).code === '23505') {
+      throw new BadRequestError('A project with this identifier already exists. Please try again.');
+    }
+    throw new Error(error.message);
+  }
+  if (!data) throw new Error('Failed to create project');
+
   const userMap = await buildLegacyUserIdMap(accessToken, [actor.authUserId], tenantId);
   return NextResponse.json(normalizeSupabaseProjectRecord(data, userMap), { status: 201 });
 }, { requireAuth: true, roles: ['Manager'] });

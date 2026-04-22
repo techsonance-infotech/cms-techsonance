@@ -3,6 +3,7 @@ import { withApiHandler } from '@/server/http/handler';
 import { BadRequestError, NotFoundError } from '@/server/http/errors';
 import { createPurchaseSchema, updatePurchaseSchema } from '@/server/validation/procurement';
 import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
+import { safeInsert } from '@/server/supabase/safe-insert';
 
 async function assertSupabaseVendorExists(tenantId: string, vendorId: number) {
   const supabase = getAdminRouteSupabase();
@@ -116,7 +117,7 @@ export const POST = withApiHandler(async (request, context) => {
   
   await assertSupabaseVendorExists(tenantId, payload.vendorId);
   const supabase = getAdminRouteSupabase();
-  const { data, error } = await supabase.from('purchases').insert({
+  const { data, error } = await safeInsert('purchases', {
     vendor_id: payload.vendorId,
     date: payload.date,
     amount: payload.amount,
@@ -127,9 +128,9 @@ export const POST = withApiHandler(async (request, context) => {
     tenant_id: tenantId,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
-  }).select('*').single();
+  }, supabase);
   if (error || !data) throw error ?? new Error('Failed to create purchase');
-  return NextResponse.json(normalizeSupabasePurchaseRow(data), { status: 201 });
+  return NextResponse.json(normalizeSupabasePurchaseRow(data as Record<string, unknown>), { status: 201 });
 }, { requireAuth: true, roles: ['Manager'] });
 
 export const PUT = withApiHandler(async (request, context) => {

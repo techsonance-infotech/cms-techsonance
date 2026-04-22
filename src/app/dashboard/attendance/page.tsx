@@ -135,7 +135,7 @@ export default function AttendancePage() {
   const searchParams = useSearchParams();
   const initialTab = searchParams.get('tab');
 
-  const [activeTab, setActiveTab] = useState('leave');
+  const [activeTab, setActiveTab] = useState('attendance');
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [attendance, setAttendance] = useState<Attendance[]>([]);
   const [holidays, setHolidays] = useState<CompanyHoliday[]>([]);
@@ -247,7 +247,7 @@ export default function AttendancePage() {
       setActiveTab(initialTab);
     } else if (currentUser) {
       // Strictly separate Admin Hub from Manager/Employee Personal View
-      const isAdminHubRole = hasFullAccess(currentUser.role as UserRole);
+      const isAdminHubRole = hasFullAccess(currentUser.role as UserRole) || currentUser.role === 'project_manager';
       setActiveTab(isAdminHubRole ? 'all-attendance' : 'attendance');
     }
   }, [initialTab, currentUser]);
@@ -367,9 +367,13 @@ export default function AttendancePage() {
   const handleApproveRejectRequest = async (id: number, action: 'approve' | 'reject', index: number) => {
     try {
       const token = localStorage.getItem('session_token');
-      const reason = action === 'reject' ? prompt('Reason for rejection:') : undefined;
+      let reason = undefined;
       
-      if (action === 'reject' && reason === null) return; // cancelled
+      if (action === 'reject') {
+        const inputReason = prompt('Please enter a reason for rejection:');
+        if (!inputReason || inputReason.trim() === '') return;
+        reason = inputReason.trim();
+      }
 
       const res = await fetch('/api/attendance/requests', {
         method: 'PATCH',
@@ -1328,7 +1332,7 @@ export default function AttendancePage() {
     };
   };
 
-  const isFullAccessUser = currentUser && ['admin', 'cms_administrator', 'hr_manager', 'project_manager', 'management'].includes(currentUser.role);
+  const isFullAccessUser = currentUser && (hasFullAccess(currentUser.role) || currentUser.role === 'project_manager');
   const canApproveLeaves = currentUser && hasPermission(currentUser.role, 'myAccount', 'canApprove');
   const canEditAttendance = currentUser && hasPermission(currentUser.role, 'myAccount', 'canEdit');
   const canDeleteRecords = currentUser && hasPermission(currentUser.role, 'myAccount', 'canDelete');
@@ -1353,7 +1357,7 @@ export default function AttendancePage() {
     );
   });
 
-  if (isLoading || isLoadingUser || !currentUser) {
+  if (loading || isLoadingUser || !currentUser) {
     return (
       <div className="space-y-6">
         <PageHeaderSkeleton />
@@ -1420,14 +1424,19 @@ export default function AttendancePage() {
                       <TableBody>
                         {pendingRequests.filter(r => r.status === 'pending').map((req, i) => (
                           <TableRow key={req.id}>
-                            <TableCell className="font-medium">{(req.employees as any)?.user_id}</TableCell>
+                            <TableCell className="font-medium whitespace-nowrap">
+                              {getEmployeeName(req.employee_id)}
+                              <div className="text-[10px] text-muted-foreground uppercase">{req.employees?.employee_id || req.employee_id}</div>
+                            </TableCell>
                             <TableCell>{new Date(req.date).toLocaleDateString()}</TableCell>
                             <TableCell>
                               {new Date(req.time_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit'})} 
                               {' - '} 
                               {req.time_out ? new Date(req.time_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit'}) : 'Pending Out'}
                             </TableCell>
-                            <TableCell className="max-w-[200px] truncate">{req.notes || <em>No notes</em>}</TableCell>
+                             <TableCell className="max-w-[400px] whitespace-normal break-words py-4 leading-relaxed text-xs">
+                               {req.notes || <em className="text-muted-foreground opacity-50 italic">No notes provided</em>}
+                             </TableCell>
                             <TableCell>
                               <Badge variant="outline" className={req.check_in_method === 'nfc' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}>
                                 {req.check_in_method.toUpperCase()}
@@ -1435,10 +1444,10 @@ export default function AttendancePage() {
                             </TableCell>
                             <TableCell className="text-right flex justify-end gap-2">
                               <Button size="sm" variant="outline" className="text-green-600 border-green-200 bg-green-50 hover:bg-green-100" onClick={() => handleApproveRejectRequest(req.id, 'approve', i)}>
-                                <CheckCircle className="h-4 w-4 mr-1"/> Approve
+                                <Check className="h-4 w-4 mr-1"/> Approve
                               </Button>
                               <Button size="sm" variant="outline" className="text-red-600 border-red-200 bg-red-50 hover:bg-red-100" onClick={() => handleApproveRejectRequest(req.id, 'reject', i)}>
-                                <XCircle className="h-4 w-4 mr-1"/> Reject
+                                <X className="h-4 w-4 mr-1"/> Reject
                               </Button>
                             </TableCell>
                           </TableRow>
@@ -1980,6 +1989,7 @@ export default function AttendancePage() {
                         <TableHead>Work Hours</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Method</TableHead>
+                        <TableHead>Notes</TableHead>
                         {(canDeleteRecords || canEditAttendance) && <TableHead className="text-right">Actions</TableHead>}
                       </TableRow>
                     </TableHeader>
@@ -2070,9 +2080,12 @@ export default function AttendancePage() {
                                     Manual
                                   </Badge>
                                 )}
-                              </TableCell>
-                              {/* Actions */}
-                              {(canDeleteRecords || canEditAttendance) && (
+                            </TableCell>
+                            <TableCell className="max-w-[400px] whitespace-normal break-words text-xs leading-relaxed py-4">
+                              {record.notes || (record.metadata as any)?.notes || <span className="text-muted-foreground/30 italic">No notes</span>}
+                            </TableCell>
+                            {/* Actions */}
+                            {(canDeleteRecords || canEditAttendance) && (
                                 <TableCell className="text-right">
                                   <div className="flex justify-end gap-2">
                                     {canEditAttendance && (
@@ -2384,6 +2397,7 @@ export default function AttendancePage() {
                         <TableHead>Work Hours</TableHead>
                         <TableHead>Method</TableHead>
                         <TableHead>Status</TableHead>
+                        <TableHead>Notes</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -2448,6 +2462,9 @@ export default function AttendancePage() {
                                 }>
                                   {record.status}
                                 </Badge>
+                              </TableCell>
+                              <TableCell className="max-w-[300px] whitespace-normal break-words text-xs py-4 italic text-muted-foreground">
+                                {record.notes || (record.metadata as any)?.notes || '—'}
                               </TableCell>
                             </TableRow>
                           );

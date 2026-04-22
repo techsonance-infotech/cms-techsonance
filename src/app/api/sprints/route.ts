@@ -116,7 +116,14 @@ export const POST = withApiHandler(async (request, context) => {
     created_at: now,
     updated_at: now,
   }).select('*').single();
-  if (error || !created) throw error ?? new Error('Failed to create sprint');
+
+  if (error) {
+    if ((error as any).code === '23505') {
+      throw new BadRequestError('A sprint with this identifier already exists. Please try again.');
+    }
+    throw new Error(error.message);
+  }
+  if (!created) throw new Error('Failed to create sprint');
   return NextResponse.json(normalizeSupabaseSprintRow(created), { status: 201 });
 }, { requireAuth: true, roles: ['Manager'] });
 
@@ -159,7 +166,6 @@ export const PUT = withApiHandler(async (request, context) => {
     ...(payload.startDate !== undefined ? { start_date: payload.startDate } : {}),
     ...(payload.endDate !== undefined ? { end_date: payload.endDate } : {}),
     ...(payload.status !== undefined ? { status: payload.status } : {}),
-    version: Number(existingSprint.version ?? 1) + 1,
     updated_at: new Date().toISOString(),
   })
   .eq('id', id)
@@ -183,7 +189,6 @@ export const DELETE = withApiHandler(async (request, context) => {
     .from('sprints')
     .update({
       status: 'cancelled',
-      version: 2,
       updated_at: new Date().toISOString(),
     })
     .eq('id', id)

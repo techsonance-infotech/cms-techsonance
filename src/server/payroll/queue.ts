@@ -141,13 +141,36 @@ export async function enqueuePayrollGenerationJob(input: {
 
   const { data: existing } = await supabase
     .from('payroll_jobs')
-    .select('id')
+    .select('id, status')
     .eq('tenant_id', requester.tenant_id)
     .eq('job_key', jobKey)
     .maybeSingle();
 
   if (existing) {
-    throw new ConflictError('A payroll generation job already exists for this pay period and employee scope');
+    if (existing.status === toQueueStatus('pending') || existing.status === toQueueStatus('processing')) {
+      throw new ConflictError('A payroll generation job is already running for this pay period');
+    } else {
+      const { data, error } = await supabase
+        .from('payroll_jobs')
+        .update({
+          status: toQueueStatus('pending'),
+          requested_by: requester.id,
+          requested_at: new Date().toISOString(),
+          started_at: null,
+          completed_at: null,
+          result: input.startDate || input.endDate ? { startDate: input.startDate, endDate: input.endDate } : null,
+          error: null
+        })
+        .eq('id', existing.id)
+        .select('*')
+        .single();
+        
+      if (error || !data) {
+        throw error ?? new Error('Failed to recycle payroll job');
+      }
+      
+      return normalizeJob(data as PayrollJobRow);
+    }
   }
 
   const { data, error } = await supabase
@@ -212,6 +235,14 @@ export async function processPayrollJob(jobId: number) {
     const { data: employeeRows, error: employeeError } = await employeeQuery;
     if (employeeError) throw employeeError;
 
+    const { data: holidaysData } = await supabase
+      .from('company_holidays')
+      .select('date')
+      .eq('tenant_id', job.tenant_id)
+      .gte('date', startDate)
+      .lte('date', endDate);
+    const holidayDates = new Set((holidaysData ?? []).map((h: any) => h.date));
+
     const generated: number[] = [];
     for (const employee of (employeeRows ?? []) as Record<string, any>[]) {
       const salary = employee.salary === null || employee.salary === undefined ? 0 : Number(employee.salary);
@@ -227,7 +258,7 @@ export async function processPayrollJob(jobId: number) {
         .maybeSingle();
       if (existingPayroll) continue;
 
-      const [{ data: legacyRecords, error: legacyError }, { data: nfcRecords, error: nfcError }] = await Promise.all([
+      const [{ data: legacyRecords, error: legacyError }, { data: nfcRecords, error: nfcError }, { data: leaveReqs }] = await Promise.all([
         supabase
           .from('attendance')
           .select('date, status')
@@ -242,10 +273,30 @@ export async function processPayrollJob(jobId: number) {
           .eq('employee_id', employee.id)
           .gte('date', startDate)
           .lte('date', endDate),
+        supabase
+          .from('leave_requests')
+          .select('start_date, end_date, leave_type')
+          .eq('tenant_id', job.tenant_id)
+          .eq('employee_id', employee.id)
+          .eq('status', 'approved')
+          .lte('start_date', endDate)
+          .gte('end_date', startDate),
       ]);
 
       if (legacyError) throw legacyError;
       if (nfcError) throw nfcError;
+
+      const unpaidLeaveDates = new Set<string>();
+      for (const lr of (leaveReqs ?? [])) {
+        if (String(lr.leave_type).toLowerCase().includes('unpaid') || String(lr.leave_type) === 'LWP') {
+          let curr = new Date(Math.max(new Date(lr.start_date).getTime(), new Date(startDate).getTime()));
+          const lrEnd = new Date(Math.min(new Date(lr.end_date).getTime(), new Date(endDate).getTime()));
+          while (curr <= lrEnd) {
+             unpaidLeaveDates.add(curr.toISOString().split('T')[0]);
+             curr.setDate(curr.getDate() + 1);
+          }
+        }
+      }
 
       const byDate = new Map<string, { status: string }>();
       for (const row of (legacyRecords ?? []) as Record<string, any>[]) byDate.set(row.date, { status: row.status });
@@ -253,27 +304,48 @@ export async function processPayrollJob(jobId: number) {
 
       let presentDays = 0;
       let halfDays = 0;
-      let leaveDays = 0;
+      let paidLeaveDays = 0;
+      let unpaidLeaveDays = 0;
       let absentDays = 0;
-      for (const row of byDate.values()) {
-        switch (row.status) {
-          case 'present':
-          case 'late':
-            presentDays += 1;
-            break;
-          case 'half_day':
-            halfDays += 1;
-            break;
-          case 'leave':
-          case 'on_leave':
-            leaveDays += 1;
-            break;
-          default:
-            absentDays += 1;
+      let holidayDays = 0;
+
+      let current = new Date(startDate);
+      const endMarker = new Date(endDate);
+      while (current <= endMarker) {
+        const dateStr = current.toISOString().split('T')[0];
+        const dayOfWeek = current.getDay();
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+        const isHoliday = holidayDates.has(dateStr);
+        
+        const att = byDate.get(dateStr);
+        
+        if (att) {
+           if (att.status === 'present' || att.status === 'late') {
+              presentDays++;
+           } else if (att.status === 'half_day') {
+              halfDays++;
+           } else if (att.status === 'leave' || att.status === 'on_leave') {
+              if (unpaidLeaveDates.has(dateStr)) {
+                 unpaidLeaveDays++;
+              } else {
+                 paidLeaveDays++;
+              }
+           } else {
+              if (!isWeekend && !isHoliday) absentDays++;
+           }
+        } else {
+           if (!isWeekend) {
+              if (isHoliday) {
+                 holidayDays++;
+              } else {
+                 absentDays++;
+              }
+           }
         }
+        current.setDate(current.getDate() + 1);
       }
 
-      const effectiveDays = presentDays + leaveDays + halfDays * 0.5;
+      const effectiveDays = presentDays + paidLeaveDays + (halfDays * 0.5) + holidayDays;
       const calculatedSalary = Number(((salary / Math.max(totalWorkingDays, 1)) * effectiveDays).toFixed(4));
 
       const { data: created, error: insertError } = await supabase
@@ -287,7 +359,7 @@ export async function processPayrollJob(jobId: number) {
           present_days: presentDays,
           absent_days: absentDays,
           half_days: halfDays,
-          leave_days: leaveDays,
+          leave_days: paidLeaveDays,
           total_working_days: totalWorkingDays,
           calculated_salary: calculatedSalary,
           deductions: 0,

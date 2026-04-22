@@ -16,7 +16,7 @@ export const GET = withApiHandler(async (request, context) => {
   const accessToken = context.auth?.accessToken;
   const tenantId = context.auth?.user.tenantId;
   if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
-  
+
   const supabase = getAdminRouteSupabase();
 
   if (id) {
@@ -27,7 +27,7 @@ export const GET = withApiHandler(async (request, context) => {
       .eq('tenant_id', tenantId)
       .single();
     if (error || !data) throw new NotFoundError('Employee not found');
-    const userMap = await buildLegacyUserIdMap(accessToken, [String(data.user_id)], tenantId);
+    const userMap = await buildLegacyUserIdMap(accessToken, [String(data.user_id), data.manager_id ? String(data.manager_id) : ''].filter(Boolean), tenantId);
     return NextResponse.json(normalizeSupabaseEmployeeRecord(data, userMap));
   }
 
@@ -79,7 +79,7 @@ export const GET = withApiHandler(async (request, context) => {
   const userMap = await buildLegacyUserIdMap(
     accessToken,
     ((data as Record<string, unknown>[] | null) ?? [])
-      .map((row) => String(row.user_id))
+      .flatMap((row) => [String(row.user_id), row.manager_id ? String(row.manager_id) : ''])
       .filter(Boolean),
     tenantId
   );
@@ -105,6 +105,7 @@ export const POST = withApiHandler(async (request, context) => {
   if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
   
   const supabase = getAdminRouteSupabase();
+  
   const authUserId = await resolveAuthUserIdFromLegacyUserId(accessToken, payload.userId, tenantId);
 
   const { data: existingUser } = await supabase
@@ -125,16 +126,34 @@ export const POST = withApiHandler(async (request, context) => {
     
   if (duplicate) throw new ConflictError('Employee with this employeeId already exists');
 
+  let managerAuthId = null;
+  if (payload.managerId) {
+    managerAuthId = await resolveAuthUserIdFromLegacyUserId(accessToken, payload.managerId, tenantId);
+  }
+
   const now = new Date().toISOString();
   const { data, error } = await supabase.from('employees').insert({
     user_id: authUserId,
     employee_id: payload.employeeId.trim(),
     department: payload.department.trim(),
     designation: payload.designation.trim(),
+    employment_type: payload.employmentType,
     date_of_joining: payload.dateOfJoining,
     date_of_birth: payload.dateOfBirth ?? null,
-    skills: payload.skills ?? null,
+    skills: [
+      ...(payload.skills || []),
+      ...(payload.gender ? [`__gender:${payload.gender}`] : []),
+      ...(payload.role ? [`__role:${payload.role}`] : []),
+    ],
     salary: payload.salary ?? null,
+    hourly_rate: payload.hourlyRate ?? null,
+    ctc: payload.ctc ?? null,
+    pf_number: payload.pfNumber?.trim() ?? null,
+    uan_number: payload.uanNumber?.trim() ?? null,
+    bank_name: payload.bankName?.trim() ?? null,
+    bank_account_number: payload.bankAccountNumber?.trim() ?? null,
+    ifsc_code: payload.ifscCode?.trim() ?? null,
+    manager_id: managerAuthId,
     status: payload.status ?? 'active',
     tenant_id: tenantId,
     created_at: now,
@@ -142,7 +161,8 @@ export const POST = withApiHandler(async (request, context) => {
   }).select('*').single();
 
   if (error || !data) throw error ? new Error(error.message) : new Error('Failed to create employee');
-  const userMap = await buildLegacyUserIdMap(accessToken, [authUserId], tenantId);
+  // Need to add managerAuthId to user map resolution
+  const userMap = await buildLegacyUserIdMap(accessToken, [authUserId, managerAuthId].filter(Boolean) as string[], tenantId);
   return NextResponse.json(normalizeSupabaseEmployeeRecord(data, userMap), { status: 201 });
 }, { requireAuth: true, roles: ['Manager'] });
 
@@ -157,6 +177,7 @@ export const PUT = withApiHandler(async (request, context) => {
   if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
   
   const supabase = getAdminRouteSupabase();
+  
   const { data: existingEmployee } = await supabase
     .from('employees')
     .select('*')
@@ -177,15 +198,35 @@ export const PUT = withApiHandler(async (request, context) => {
     if (duplicate) throw new ConflictError('Employee with this employeeId already exists');
   }
 
+  let managerAuthId = undefined;
+  if ('managerId' in payload) {
+    managerAuthId = payload.managerId ? await resolveAuthUserIdFromLegacyUserId(accessToken, payload.managerId, tenantId) : null;
+  }
+
   const { data, error } = await supabase.from('employees').update({
     ...(payload.employeeId !== undefined ? { employee_id: payload.employeeId.trim() } : {}),
     ...(payload.department !== undefined ? { department: payload.department.trim() } : {}),
     ...(payload.designation !== undefined ? { designation: payload.designation.trim() } : {}),
+    ...('employmentType' in payload && payload.employmentType !== undefined ? { employment_type: payload.employmentType } : {}),
     ...(payload.dateOfJoining !== undefined ? { date_of_joining: payload.dateOfJoining } : {}),
     ...(payload.dateOfBirth !== undefined ? { date_of_birth: payload.dateOfBirth ?? null } : {}),
     ...(payload.status !== undefined ? { status: payload.status } : {}),
-    ...(payload.skills !== undefined ? { skills: payload.skills ?? null } : {}),
-    ...(payload.salary !== undefined ? { salary: payload.salary ?? null } : {}),
+    ...(payload.skills !== undefined || payload.gender !== undefined || payload.role !== undefined ? {
+      skills: [
+        ...(payload.skills !== undefined ? (payload.skills || []) : (Array.isArray(existingEmployee.skills) ? (existingEmployee.skills as string[]).filter(s => !s.startsWith('__')) : [])),
+        ...(payload.gender !== undefined ? (payload.gender ? [`__gender:${payload.gender}`] : []) : (Array.isArray(existingEmployee.skills) ? (existingEmployee.skills as string[]).filter(s => s.startsWith('__gender:')) : [])),
+        ...(payload.role !== undefined ? (payload.role ? [`__role:${payload.role}`] : []) : (Array.isArray(existingEmployee.skills) ? (existingEmployee.skills as string[]).filter(s => s.startsWith('__role:')) : [])),
+      ]
+    } : {}),
+    ...('salary' in payload && payload.salary !== undefined ? { salary: payload.salary ?? null } : {}),
+    ...('hourlyRate' in payload && payload.hourlyRate !== undefined ? { hourly_rate: payload.hourlyRate ?? null } : {}),
+    ...('ctc' in payload && payload.ctc !== undefined ? { ctc: payload.ctc ?? null } : {}),
+    ...('pfNumber' in payload && payload.pfNumber !== undefined ? { pf_number: payload.pfNumber?.trim() ?? null } : {}),
+    ...('uanNumber' in payload && payload.uanNumber !== undefined ? { uan_number: payload.uanNumber?.trim() ?? null } : {}),
+    ...('bankName' in payload && payload.bankName !== undefined ? { bank_name: payload.bankName?.trim() ?? null } : {}),
+    ...('bankAccountNumber' in payload && payload.bankAccountNumber !== undefined ? { bank_account_number: payload.bankAccountNumber?.trim() ?? null } : {}),
+    ...('ifscCode' in payload && payload.ifscCode !== undefined ? { ifsc_code: payload.ifscCode?.trim() ?? null } : {}),
+    ...('managerId' in payload ? { manager_id: managerAuthId } : {}),
     updated_at: new Date().toISOString(),
   })
   .eq('id', id)
@@ -194,7 +235,7 @@ export const PUT = withApiHandler(async (request, context) => {
   .single();
 
   if (error || !data) throw error ? new Error(error.message) : new Error('Failed to update employee');
-  const userMap = await buildLegacyUserIdMap(accessToken, [String(data.user_id)], tenantId);
+  const userMap = await buildLegacyUserIdMap(accessToken, [String(data.user_id), data.manager_id ? String(data.manager_id) : ''].filter(Boolean), tenantId);
   return NextResponse.json(normalizeSupabaseEmployeeRecord(data, userMap));
 }, { requireAuth: true, roles: ['Manager'] });
 

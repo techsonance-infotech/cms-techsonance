@@ -1,16 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Search, UserCog, Eye, Edit, Trash2 } from 'lucide-react';
-import { InlineTableSkeleton } from '@/components/ui/dashboard-skeleton';
+import { PageSkeleton, InlineTableSkeleton } from '@/components/ui/dashboard-skeleton';
 import Link from 'next/link';
-import { hasFullAccess, isEmployeeRole, type UserRole } from '@/lib/permissions';
 import { AddEmployeeDialog } from '@/components/team/add-employee-dialog';
 import { EditEmployeeDialog } from '@/components/team/edit-employee-dialog';
+import { hasFullAccess, type UserRole } from '@/lib/permissions';
+import { Users, UserCheck, UserMinus, Building, UsersRound, Plus, MoreHorizontal, Eye, Edit, Trash2, Mail, Phone, MapPin, Building2, UserCog, UserMinus2, Calendar, Search } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -38,7 +38,9 @@ interface Employee {
   department: string;
   designation: string;
   dateOfJoining: string;
+  employmentType: string;
   status: string;
+  gender?: string | null;
 }
 
 interface User {
@@ -63,7 +65,12 @@ export default function TeamPage() {
   const [currentPage, setCurrentPage] = useState(0);
   const pageSize = 10;
 
+  const initialized = useRef(false);
+
   useEffect(() => {
+    if (initialized.current) return;
+    initialized.current = true;
+    
     fetchCurrentUser();
     fetchTeamData();
   }, []);
@@ -181,13 +188,30 @@ export default function TeamPage() {
 
   const isAdmin = currentUser && hasFullAccess(currentUser.role as UserRole);
 
+  if (!loading && currentUser && !isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
+        <UserCog className="h-16 w-16 text-muted-foreground" />
+        <h2 className="text-2xl font-bold tracking-tight">Access Restricted</h2>
+        <p className="text-muted-foreground text-center max-w-md">
+          The Team Management directory is strictly reserved for Administrators and HR personnel. Your profile details will be available in your personal dashboard soon.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Team Management</h2>
-          <p className="text-muted-foreground">
-            {isAdmin ? 'Manage employees, attendance, and performance' : 'View team members and their details'}
+          <h2 className="text-3xl font-bold tracking-tight flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-primary/10 ring-1 ring-primary/20">
+              <UsersRound className="h-6 w-6 text-primary" />
+            </div>
+            Team Management
+          </h2>
+          <p className="text-muted-foreground mt-2">
+            {isAdmin ? 'Manage employees, attendance, and monitor HR performance' : 'View team members and their details'}
           </p>
         </div>
         {isAdmin && (
@@ -200,17 +224,19 @@ export default function TeamPage() {
 
       {isAdmin && (
         <div className="grid gap-4 md:grid-cols-4">
-          <Card>
-            <CardHeader className="pb-3">
+          <Card className="bg-gradient-to-br from-card to-primary/5 hover:border-primary/50 transition-colors">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
               <CardTitle className="text-sm font-medium">Total Employees</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{employees.length}</div>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="pb-3">
+          <Card className="bg-gradient-to-br from-card to-emerald-500/5 hover:border-emerald-500/50 transition-colors">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
               <CardTitle className="text-sm font-medium">Active</CardTitle>
+              <UserCheck className="h-4 w-4 text-emerald-500" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
@@ -218,9 +244,10 @@ export default function TeamPage() {
               </div>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="pb-3">
+          <Card className="bg-gradient-to-br from-card to-amber-500/5 hover:border-amber-500/50 transition-colors">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
               <CardTitle className="text-sm font-medium">On Leave</CardTitle>
+              <Calendar className="h-4 w-4 text-amber-500" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
@@ -228,9 +255,10 @@ export default function TeamPage() {
               </div>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="pb-3">
+          <Card className="bg-gradient-to-br from-card to-indigo-500/5 hover:border-indigo-500/50 transition-colors">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
               <CardTitle className="text-sm font-medium">Departments</CardTitle>
+              <Building className="h-4 w-4 text-indigo-500" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
@@ -279,6 +307,8 @@ export default function TeamPage() {
                       <TableHead>Name</TableHead>
                       <TableHead>Department</TableHead>
                       <TableHead>Designation</TableHead>
+                      <TableHead>Gender</TableHead>
+                      <TableHead>Type</TableHead>
                       <TableHead>Joining Date</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
@@ -295,6 +325,8 @@ export default function TeamPage() {
                           </TableCell>
                           <TableCell>{employee.department}</TableCell>
                           <TableCell>{employee.designation}</TableCell>
+                          <TableCell className="capitalize">{employee.gender || 'Not set'}</TableCell>
+                          <TableCell className="capitalize">{employee.employmentType?.replace('_', ' ') || 'Full time'}</TableCell>
                           <TableCell>
                             {new Date(employee.dateOfJoining).toLocaleDateString()}
                           </TableCell>

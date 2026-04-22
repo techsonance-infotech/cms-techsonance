@@ -16,7 +16,7 @@ interface Announcement {
 
 interface ApprovalItem {
   id: number;
-  type: 'leave' | 'reimbursement';
+  type: 'leave' | 'reimbursement' | 'attendance';
   title: string;
   employee: string;
   details: string;
@@ -112,17 +112,22 @@ export function DashboardApprovalQueue({ items }: { items: ApprovalItem[] }) {
     const token = localStorage.getItem('session_token');
     
     try {
-      const endpoint = item.type === 'leave' 
-        ? `/api/leave-requests?id=${item.id}` 
-        : `/api/reimbursements?id=${item.id}`;
+      let endpoint = '';
+      if (item.type === 'leave') endpoint = `/api/leave-requests?id=${item.id}`;
+      else if (item.type === 'reimbursement') endpoint = `/api/reimbursements?id=${item.id}`;
+      else if (item.type === 'attendance') endpoint = `/api/attendance/requests`;
 
       const res = await fetch(endpoint, {
-        method: 'PUT',
+        method: item.type === 'attendance' ? 'PATCH' : 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ status: action })
+        body: JSON.stringify(
+          item.type === 'attendance' 
+            ? { id: item.id, action: action === 'approved' ? 'approve' : 'reject' }
+            : { status: action }
+        )
       });
 
       if (!res.ok) throw new Error('Failed to update status');
@@ -159,9 +164,13 @@ export function DashboardApprovalQueue({ items }: { items: ApprovalItem[] }) {
               <div key={`${item.type}-${item.id}`} className="flex items-center justify-between p-3 rounded-xl bg-muted/30 border border-white/5 hover:bg-muted/50 transition-colors">
                 <div className="flex items-center gap-4">
                   <div className={`p-2 rounded-lg ${
-                    item.type === 'leave' ? 'bg-amber-100 text-amber-600' : 'bg-green-100 text-green-600'
+                    item.type === 'leave' ? 'bg-amber-100 text-amber-600' : 
+                    item.type === 'attendance' ? 'bg-blue-100 text-blue-600' :
+                    'bg-green-100 text-green-600'
                   }`}>
-                    {item.type === 'leave' ? <Clock className="h-5 w-5" /> : <IndianRupee className="h-5 w-5" />}
+                    {item.type === 'leave' ? <Clock className="h-5 w-5" /> : 
+                     item.type === 'attendance' ? <CheckCircle2 className="h-5 w-5" /> :
+                     <IndianRupee className="h-5 w-5" />}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
@@ -170,7 +179,7 @@ export function DashboardApprovalQueue({ items }: { items: ApprovalItem[] }) {
                         {item.type}
                       </Badge>
                     </div>
-                    <p className="text-xs text-muted-foreground">{item.details}</p>
+                    <p className="text-xs text-muted-foreground max-w-[280px] break-words whitespace-normal leading-relaxed">{item.details}</p>
                   </div>
                 </div>
                 

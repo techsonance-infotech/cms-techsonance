@@ -8,9 +8,11 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Download, Check, DollarSign, Users, Calendar, TrendingUp } from 'lucide-react';
+import { Loader2, Download, Check, DollarSign, Users, Calendar, TrendingUp, Settings2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 
 interface Employee {
     id: number;
@@ -33,8 +35,10 @@ interface AttendanceSummary {
     employeeName: string;
     presentDays: number;
     halfDays: number;
-    leaveDays: number;
+    paidLeaveDays: number;
+    unpaidLeaveDays: number;
     absentDays: number;
+    holidayDays: number;
     workPercentage: number;
     baseSalary: number;
     calculatedSalary: number;
@@ -57,6 +61,7 @@ interface Payroll {
     netSalary: number;
     status: string;
     generatedAt: string;
+    notes?: string;
 }
 
 interface BusinessSettings {
@@ -90,10 +95,20 @@ export default function PayrollPage() {
     const [payrollPage, setPayrollPage] = useState(0);
     const pageSize = 10;
 
+    const [isAdjustmentDialogOpen, setIsAdjustmentDialogOpen] = useState(false);
+    const [editingPayroll, setEditingPayroll] = useState<Payroll | null>(null);
+    const [adjustmentBonuses, setAdjustmentBonuses] = useState('');
+    const [adjustmentDeductions, setAdjustmentDeductions] = useState('');
+    const [adjustmentNotes, setAdjustmentNotes] = useState('');
+    const [isSavingAdjustment, setIsSavingAdjustment] = useState(false);
+
     useEffect(() => {
         fetchEmployees();
-        fetchPayrolls();
         fetchBusinessSettings();
+    }, []);
+
+    useEffect(() => {
+        fetchPayrolls();
     }, [selectedMonth, selectedYear]);
 
     useEffect(() => {
@@ -189,26 +204,35 @@ export default function PayrollPage() {
             const response = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
+            const holidaysResp = await fetch(`/api/company-holidays?startDate=${startDate}&endDate=${endDate}&limit=100`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const leavesResp = await fetch(`/api/leave-requests?startDate=${startDate}&endDate=${endDate}&status=approved&limit=1000`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
 
             if (response.ok) {
                 const attendanceData = await response.json();
+                const holidaysData = holidaysResp.ok ? (await holidaysResp.json()).data || [] : [];
+                const leavesData = leavesResp.ok ? (await leavesResp.json()).data || [] : [];
 
-                // Calculate working days
-                const start = new Date(startDate);
-                const end = new Date(endDate);
-                let workingDays = 0;
-
-                for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-                    const dayOfWeek = d.getDay();
-                    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-                        workingDays++;
+                const holidayDates = new Set(holidaysData.map((h: any) => h.date));
+                const unpaidLeaveDatesByEmp = new Map<number, Set<string>>();
+                
+                for (const lr of leavesData) {
+                    if (String(lr.leaveType).toLowerCase().includes('unpaid') || String(lr.leaveType) === 'LWP') {
+                        const empSet = unpaidLeaveDatesByEmp.get(lr.employeeId) || new Set<string>();
+                        let curr = new Date(Math.max(new Date(lr.startDate).getTime(), new Date(startDate).getTime()));
+                        const lrEnd = new Date(Math.min(new Date(lr.endDate).getTime(), new Date(endDate).getTime()));
+                        while (curr <= lrEnd) {
+                            empSet.add(curr.toISOString().split('T')[0]);
+                            curr.setDate(curr.getDate() + 1);
+                        }
+                        unpaidLeaveDatesByEmp.set(lr.employeeId, empSet);
                     }
                 }
-                setTotalWorkingDays(workingDays);
 
-                // Group by employee
                 const employeeMap = new Map<number, AttendanceSummary>();
-
                 const employeesToProcess = selectedEmployeeFilter !== 'all'
                     ? employees.filter(e => e.id === parseInt(selectedEmployeeFilter))
                     : employees;
@@ -220,41 +244,64 @@ export default function PayrollPage() {
                         employeeName: user ? `${user.firstName} ${user.lastName}` : emp.employeeId,
                         presentDays: 0,
                         halfDays: 0,
-                        leaveDays: 0,
+                        paidLeaveDays: 0,
+                        unpaidLeaveDays: 0,
                         absentDays: 0,
+                        holidayDays: 0,
                         workPercentage: 0,
                         baseSalary: emp.salary || 0,
                         calculatedSalary: 0,
                     });
                 });
 
+                const attByEmpDate = new Map<string, string>();
                 attendanceData.forEach((record: any) => {
-                    const summary = employeeMap.get(record.employeeId);
-                    if (summary) {
-                        switch (record.status) {
-                            case 'present':
-                                summary.presentDays++;
-                                break;
-                            case 'half_day':
-                                summary.halfDays++;
-                                break;
-                            case 'on_leave':
-                            case 'leave':
-                                summary.leaveDays++;
-                                break;
-                            case 'absent':
-                                summary.absentDays++;
-                                break;
-                        }
-                    }
+                    attByEmpDate.set(`${record.employeeId}_${record.date}`, record.status);
                 });
 
-                // Calculate work percentage and salary
-                employeeMap.forEach(summary => {
-                    const effectiveDays = summary.presentDays + (summary.halfDays * 0.5) + summary.leaveDays;
-                    summary.workPercentage = workingDays > 0 ? Math.round((effectiveDays / workingDays) * 100) : 0;
+                let workingDays = 0;
+                for (let curr = new Date(startDate); curr <= new Date(endDate); curr.setDate(curr.getDate() + 1)) {
+                    const dateStr = curr.toISOString().split('T')[0];
+                    const dayOfWeek = curr.getDay();
+                    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+                    const isHoliday = holidayDates.has(dateStr);
 
-                    // Calculate salary: (baseSalary / totalWorkingDays) * effectiveDays
+                    if (!isWeekend && !isHoliday) workingDays++;
+
+                    employeeMap.forEach(summary => {
+                        const attStatus = attByEmpDate.get(`${summary.employeeId}_${dateStr}`);
+                        const unpaidSet = unpaidLeaveDatesByEmp.get(summary.employeeId);
+                        
+                        if (attStatus) {
+                            if (attStatus === 'present' || attStatus === 'late') {
+                                summary.presentDays++;
+                            } else if (attStatus === 'half_day') {
+                                summary.halfDays++;
+                            } else if (attStatus === 'leave' || attStatus === 'on_leave') {
+                                if (unpaidSet?.has(dateStr)) {
+                                    summary.unpaidLeaveDays++;
+                                } else {
+                                    summary.paidLeaveDays++;
+                                }
+                            } else {
+                                if (!isWeekend && !isHoliday) summary.absentDays++;
+                            }
+                        } else {
+                            if (!isWeekend) {
+                                if (isHoliday) {
+                                    summary.holidayDays++;
+                                } else {
+                                    summary.absentDays++;
+                                }
+                            }
+                        }
+                    });
+                }
+                setTotalWorkingDays(workingDays);
+
+                employeeMap.forEach(summary => {
+                    const effectiveDays = summary.presentDays + summary.paidLeaveDays + (summary.halfDays * 0.5) + summary.holidayDays;
+                    summary.workPercentage = workingDays > 0 ? Math.round((effectiveDays / workingDays) * 100) : 0;
                     if (summary.baseSalary > 0 && workingDays > 0) {
                         summary.calculatedSalary = Math.round((summary.baseSalary / workingDays) * effectiveDays);
                     }
@@ -287,8 +334,8 @@ export default function PayrollPage() {
             });
 
             if (response.ok) {
-                const data = await response.json();
-                setGeneratedPayrolls(data);
+                const result = await response.json();
+                setGeneratedPayrolls(Array.isArray(result) ? result : (result.data || []));
                 setPayrollPage(0); // Reset to first page
             }
         } catch (error) {
@@ -396,6 +443,49 @@ export default function PayrollPage() {
         } catch (error) {
             console.error('Error deleting payroll:', error);
             toast.error('An error occurred while deleting payroll');
+        }
+    };
+
+    const handleOpenAdjustment = (payroll: Payroll) => {
+        setEditingPayroll(payroll);
+        setAdjustmentBonuses(String(payroll.bonuses || 0));
+        setAdjustmentDeductions(String(payroll.deductions || 0));
+        setAdjustmentNotes(payroll.notes || '');
+        setIsAdjustmentDialogOpen(true);
+    };
+
+    const handleSaveAdjustment = async () => {
+        if (!editingPayroll) return;
+        setIsSavingAdjustment(true);
+        try {
+            const token = localStorage.getItem('session_token');
+            const response = await fetch(`/api/payroll`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    id: editingPayroll.id,
+                    bonuses: Number(adjustmentBonuses),
+                    deductions: Number(adjustmentDeductions),
+                    notes: adjustmentNotes,
+                }),
+            });
+
+            if (response.ok) {
+                toast.success('Payroll adjustments saved');
+                setIsAdjustmentDialogOpen(false);
+                fetchPayrolls();
+            } else {
+                const error = await response.json();
+                toast.error(error.error || 'Failed to save adjustments');
+            }
+        } catch (error) {
+            console.error('Error saving adjustments:', error);
+            toast.error('An error occurred');
+        } finally {
+            setIsSavingAdjustment(false);
         }
     };
 
@@ -607,41 +697,49 @@ export default function PayrollPage() {
 
             {/* Summary Cards */}
             {attendanceSummary.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <Card>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    <Card className="bg-gradient-to-br from-blue-50 to-white dark:from-blue-900/20 dark:to-background border-none shadow-sm pb-1">
                         <CardHeader className="pb-3">
-                            <CardDescription className="flex items-center gap-2">
-                                <Calendar className="h-4 w-4" />
+                            <CardDescription className="flex items-center gap-2 font-medium text-blue-600 dark:text-blue-400">
+                                <div className="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-lg">
+                                    <Calendar className="h-4 w-4" />
+                                </div>
                                 Working Days
                             </CardDescription>
-                            <CardTitle className="text-2xl">{totalWorkingDays}</CardTitle>
+                            <CardTitle className="text-3xl font-bold">{totalWorkingDays}</CardTitle>
                         </CardHeader>
                     </Card>
-                    <Card>
+                    <Card className="bg-gradient-to-br from-indigo-50 to-white dark:from-indigo-900/20 dark:to-background border-none shadow-sm pb-1">
                         <CardHeader className="pb-3">
-                            <CardDescription className="flex items-center gap-2">
-                                <Users className="h-4 w-4" />
+                            <CardDescription className="flex items-center gap-2 font-medium text-indigo-600 dark:text-indigo-400">
+                                <div className="p-2 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg">
+                                    <Users className="h-4 w-4" />
+                                </div>
                                 Total Employees
                             </CardDescription>
-                            <CardTitle className="text-2xl">{attendanceSummary.length}</CardTitle>
+                            <CardTitle className="text-3xl font-bold">{attendanceSummary.length}</CardTitle>
                         </CardHeader>
                     </Card>
-                    <Card>
+                    <Card className="bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-900/20 dark:to-background border-none shadow-sm pb-1">
                         <CardHeader className="pb-3">
-                            <CardDescription className="flex items-center gap-2">
-                                <TrendingUp className="h-4 w-4" />
+                            <CardDescription className="flex items-center gap-2 font-medium text-emerald-600 dark:text-emerald-400">
+                                <div className="p-2 bg-emerald-100 dark:bg-emerald-900/50 rounded-lg">
+                                    <TrendingUp className="h-4 w-4" />
+                                </div>
                                 Avg Attendance
                             </CardDescription>
-                            <CardTitle className="text-2xl">{avgAttendance}%</CardTitle>
+                            <CardTitle className="text-3xl font-bold">{avgAttendance}%</CardTitle>
                         </CardHeader>
                     </Card>
-                    <Card>
+                    <Card className="bg-gradient-to-br from-violet-50 to-white dark:from-violet-900/20 dark:to-background border-none shadow-sm pb-1">
                         <CardHeader className="pb-3">
-                            <CardDescription className="flex items-center gap-2">
-                                <DollarSign className="h-4 w-4" />
-                                Total Disbursement
+                            <CardDescription className="flex items-center gap-2 font-medium text-violet-600 dark:text-violet-400">
+                                <div className="p-2 bg-violet-100 dark:bg-violet-900/50 rounded-lg">
+                                    <DollarSign className="h-4 w-4" />
+                                </div>
+                                Expected Disb.
                             </CardDescription>
-                            <CardTitle className="text-2xl">₹{totalDisbursement.toLocaleString()}</CardTitle>
+                            <CardTitle className="text-3xl font-bold">₹{totalDisbursement.toLocaleString()}</CardTitle>
                         </CardHeader>
                     </Card>
                 </div>
@@ -689,11 +787,12 @@ export default function PayrollPage() {
                                         <TableHead>Employee</TableHead>
                                         <TableHead>Present</TableHead>
                                         <TableHead>Half Days</TableHead>
-                                        <TableHead>Leave</TableHead>
+                                        <TableHead>Holidays</TableHead>
+                                        <TableHead>Paid Leave</TableHead>
+                                        <TableHead>Unpaid Leave</TableHead>
                                         <TableHead>Absent</TableHead>
                                         <TableHead>Work %</TableHead>
-                                        <TableHead>Base Salary</TableHead>
-                                        <TableHead>Calculated Salary</TableHead>
+                                        <TableHead>Estimated Salary</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -708,15 +807,18 @@ export default function PayrollPage() {
                                             <TableCell className="font-medium">{summary.employeeName}</TableCell>
                                             <TableCell>{summary.presentDays}</TableCell>
                                             <TableCell>{summary.halfDays}</TableCell>
-                                            <TableCell>{summary.leaveDays}</TableCell>
-                                            <TableCell>{summary.absentDays}</TableCell>
+                                            <TableCell>{summary.holidayDays}</TableCell>
+                                            <TableCell>{summary.paidLeaveDays}</TableCell>
+                                            <TableCell>{summary.unpaidLeaveDays}</TableCell>
+                                            <TableCell className="text-destructive font-medium">{summary.absentDays > 0 ? summary.absentDays : '-'}</TableCell>
                                             <TableCell>
                                                 <Badge variant={summary.workPercentage >= 80 ? 'default' : 'secondary'}>
                                                     {summary.workPercentage}%
                                                 </Badge>
                                             </TableCell>
-                                            <TableCell>₹{summary.baseSalary.toLocaleString()}</TableCell>
-                                            <TableCell className="font-semibold">₹{summary.calculatedSalary.toLocaleString()}</TableCell>
+                                            <TableCell className="font-semibold text-emerald-600 dark:text-emerald-400">
+                                                ₹{summary.calculatedSalary.toLocaleString()}
+                                            </TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>
@@ -775,8 +877,9 @@ export default function PayrollPage() {
                                     <TableRow>
                                         <TableHead>Employee</TableHead>
                                         <TableHead>Month</TableHead>
-                                        <TableHead>Base Salary</TableHead>
-                                        <TableHead>Present Days</TableHead>
+                                        <TableHead>Calc. Salary</TableHead>
+                                        <TableHead>Bonuses</TableHead>
+                                        <TableHead>Deductions</TableHead>
                                         <TableHead>Net Salary</TableHead>
                                         <TableHead>Status</TableHead>
                                         <TableHead className="text-right">Actions</TableHead>
@@ -787,9 +890,14 @@ export default function PayrollPage() {
                                         <TableRow key={payroll.id}>
                                             <TableCell className="font-medium">{getEmployeeName(payroll.employeeId)}</TableCell>
                                             <TableCell>{payroll.month}</TableCell>
-                                            <TableCell>₹{payroll.baseSalary.toLocaleString()}</TableCell>
-                                            <TableCell>{payroll.presentDays + (payroll.halfDays * 0.5)}</TableCell>
-                                            <TableCell className="font-semibold">₹{payroll.netSalary.toLocaleString()}</TableCell>
+                                            <TableCell>₹{payroll.calculatedSalary?.toLocaleString() || payroll.baseSalary.toLocaleString()}</TableCell>
+                                            <TableCell className="text-emerald-600 dark:text-emerald-400">
+                                                {payroll.bonuses > 0 ? `+₹${payroll.bonuses.toLocaleString()}` : '-'}
+                                            </TableCell>
+                                            <TableCell className="text-destructive">
+                                                {payroll.deductions > 0 ? `-₹${payroll.deductions.toLocaleString()}` : '-'}
+                                            </TableCell>
+                                            <TableCell className="font-bold">₹{payroll.netSalary.toLocaleString()}</TableCell>
                                             <TableCell>
                                                 <Badge
                                                     variant={
@@ -816,13 +924,23 @@ export default function PayrollPage() {
                                                             <Button
                                                                 size="sm"
                                                                 variant="ghost"
-                                                                onClick={() => handleUpdateStatus(payroll.id, 'approved')}
+                                                                onClick={() => handleOpenAdjustment(payroll)}
+                                                                title="Adjust Bonuses & Deductions"
                                                             >
-                                                                <Check className="h-4 w-4" />
+                                                                <Settings2 className="h-4 w-4" />
                                                             </Button>
                                                             <Button
                                                                 size="sm"
                                                                 variant="ghost"
+                                                                onClick={() => handleUpdateStatus(payroll.id, 'approved')}
+                                                                title="Approve Payroll"
+                                                            >
+                                                                <Check className="h-4 w-4 text-emerald-500" />
+                                                            </Button>
+                                                            <Button
+                                                                size="sm"
+                                                                variant="ghost"
+                                                                className="text-destructive hover:text-destructive"
                                                                 onClick={() => handleDeletePayroll(payroll.id)}
                                                             >
                                                                 Delete
@@ -869,6 +987,55 @@ export default function PayrollPage() {
                     </CardContent>
                 </Card>
             )}
+
+            <Dialog open={isAdjustmentDialogOpen} onOpenChange={setIsAdjustmentDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Adjust Payroll</DialogTitle>
+                        <DialogDescription>
+                            Add bonuses or deductions to the calculated salary for {editingPayroll ? getEmployeeName(editingPayroll.employeeId) : ''}.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <Label>Bonuses (₹)</Label>
+                            <Input
+                                type="number"
+                                min="0"
+                                value={adjustmentBonuses}
+                                onChange={(e) => setAdjustmentBonuses(e.target.value)}
+                                placeholder="e.g. 5000"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Deductions (₹)</Label>
+                            <Input
+                                type="number"
+                                min="0"
+                                value={adjustmentDeductions}
+                                onChange={(e) => setAdjustmentDeductions(e.target.value)}
+                                placeholder="e.g. 2000"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Notes</Label>
+                            <Textarea
+                                value={adjustmentNotes}
+                                onChange={(e) => setAdjustmentNotes(e.target.value)}
+                                placeholder="Reason for adjustments..."
+                                rows={3}
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsAdjustmentDialogOpen(false)}>Cancel</Button>
+                        <Button onClick={handleSaveAdjustment} disabled={isSavingAdjustment}>
+                            {isSavingAdjustment && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Save Adjustments
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

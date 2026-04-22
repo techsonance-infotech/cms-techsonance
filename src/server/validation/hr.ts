@@ -22,6 +22,7 @@ export const updateLeaveRequestSchema = z.object({
   leavePeriod: leavePeriodSchema.optional(),
   actualDays: z.coerce.number().positive().optional(),
   status: approvalStatusSchema.optional(),
+  adminComment: z.string().trim().max(2000).optional().nullable(),
 });
 
 export const createPerformanceReviewSchema = z.object({

@@ -3,6 +3,7 @@ import { BadRequestError, ConflictError, NotFoundError } from '@/server/http/err
 import { apiSuccess } from '@/server/http/response';
 import { expenseCategorySchema } from '@/server/validation/system';
 import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
+import { safeInsert } from '@/server/supabase/safe-insert';
 
 function normalizeSupabaseExpenseCategoryRow(row: Record<string, unknown>) {
   return {
@@ -73,15 +74,15 @@ export const POST = withApiHandler(async (request, context) => {
   if (existing) throw new ConflictError('Expense category already exists');
 
   const now = new Date().toISOString();
-  const { data: created, error } = await supabase.from('expense_categories').insert({
+  const { data: created, error } = await safeInsert('expense_categories', {
     name: normalizedName,
     description: payload.description?.trim() || null,
     tenant_id: tenantId,
     created_at: now,
     updated_at: now,
-  }).select('*').single();
+  }, supabase);
   if (error || !created) throw error ?? new Error('Failed to create expense category');
-  return apiSuccess(normalizeSupabaseExpenseCategoryRow(created), 'Expense category created successfully', { status: 201 });
+  return apiSuccess(normalizeSupabaseExpenseCategoryRow(created as Record<string, unknown>), 'Expense category created successfully', { status: 201 });
 }, { requireAuth: true, roles: ['Admin'] });
 
 export const DELETE = withApiHandler(async (request, context) => {

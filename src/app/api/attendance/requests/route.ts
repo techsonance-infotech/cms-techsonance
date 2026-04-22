@@ -79,16 +79,7 @@ export const PATCH = withApiHandler(async (request, context) => {
 
   if (action === 'approve') {
     // 1. Move to attendance_records
-    const { data: maxRecord } = await supabase
-      .from('attendance_records')
-      .select('id')
-      .order('id', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    const nextId = (maxRecord?.id || 0) + 1;
-
     const { error: insertError } = await supabase.from('attendance_records').insert({
-      id: nextId,
       employee_id: attendanceRequest.employee_id,
       date: attendanceRequest.date,
       time_in: attendanceRequest.time_in,
@@ -98,7 +89,12 @@ export const PATCH = withApiHandler(async (request, context) => {
       check_in_method: attendanceRequest.check_in_method,
       location: attendanceRequest.location,
       reader_id: attendanceRequest.reader_id,
-      metadata: attendanceRequest.metadata,
+      tag_uid: null,
+      location_latitude: null,
+      location_longitude: null,
+      idempotency_key: null,
+      synced_at: null,
+      metadata: { ...attendanceRequest.metadata, notes: attendanceRequest.notes },
       tenant_id: tenantId,
       created_at: new Date().toISOString(),
     });

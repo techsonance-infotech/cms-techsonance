@@ -269,9 +269,10 @@ export function LeaveRequestDialog({ open, onOpenChange, employeeData, userRole,
     return calculateAccruedBalances(
       employeeData.dateOfJoining,
       userRole,
-      policies.length > 0 ? policies : undefined
+      policies.length > 0 ? policies : undefined,
+      employeeData.gender
     );
-  }, [employeeData?.dateOfJoining, userRole, policies]);
+  }, [employeeData?.dateOfJoining, employeeData?.gender, userRole, policies]);
 
   // Merge company holidays into the holidays map
   const allHolidaysMap = useMemo(() => {
@@ -305,15 +306,26 @@ export function LeaveRequestDialog({ open, onOpenChange, employeeData, userRole,
 
   // Available leave types (filtered for interns)
   const availableLeaveTypes = useMemo(() => {
+    const isFemale = employeeData?.gender?.toLowerCase() === 'female';
+    
+    // Filter base types: always remove paternity, remove maternity if not female
+    let baseTypes = LEAVE_TYPES.filter(t => {
+      if (t.id === 'paternity') return false;
+      if (t.id === 'maternity' && !isFemale) return false;
+      return true;
+    });
+
     if (isIntern) {
-      return LEAVE_TYPES.filter(t => t.id === 'unpaid');
+      return baseTypes.filter(t => t.id === 'unpaid');
     }
+
     if (policies.length > 0) {
       const activeTypes = policies.filter(p => p.isActive).map(p => p.leaveType);
-      return LEAVE_TYPES.filter(t => activeTypes.includes(t.id));
+      return baseTypes.filter(t => activeTypes.includes(t.id) || t.id === 'unpaid');
     }
-    return LEAVE_TYPES;
-  }, [isIntern, policies]);
+    
+    return baseTypes;
+  }, [isIntern, policies, employeeData?.gender]);
 
   // Calendar months to show (current + next)
   const calendarMonths = useMemo(() => {

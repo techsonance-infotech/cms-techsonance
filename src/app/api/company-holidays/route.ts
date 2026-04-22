@@ -29,6 +29,16 @@ export const GET = withApiHandler(async (request, context) => {
       throw new BadRequestError('Valid company holiday id is required');
     }
 
+    // Attempt to heal the sequence via raw SQL using Admin privileges
+    try {
+      const admin = getSupabaseAdminClient() as any;
+      await admin.rpc('exec_sql', {
+        query: `SELECT setval(pg_get_serial_sequence('public.company_holidays', 'id'), COALESCE((SELECT MAX(id) FROM public.company_holidays), 0) + 1, false)`
+      });
+    } catch {
+      // If RPC doesn't exist, the retry may still work if the collision was transient
+    }
+
     const { data: holiday, error } = await supabase
       .from('company_holidays')
       .select('*')
@@ -75,6 +85,16 @@ export const POST = withApiHandler(async (request, context) => {
   const tenantId = context.auth?.user.tenantId;
   if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
   const supabase = getAdminRouteSupabase();
+
+  // Manual ID Generation to bypass broken database sequences
+  const { data: maxRecord } = await supabase
+    .from('company_holidays')
+    .select('id')
+    .order('id', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const nextId = (maxRecord?.id || 0) + 1;
+
   const { data: existing } = await supabase
     .from('company_holidays')
     .select('id')
@@ -86,6 +106,7 @@ export const POST = withApiHandler(async (request, context) => {
   }
 
   const { data: created, error } = await supabase.from('company_holidays').insert({
+    id: nextId,
     date: payload.date,
     reason: payload.reason.trim(),
     year,

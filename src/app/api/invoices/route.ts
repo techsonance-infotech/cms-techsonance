@@ -5,6 +5,7 @@ import { createInvoiceSchema, invoiceStatusSchema, updateInvoiceSchema } from '@
 import {
   getAdminRouteSupabase,
 } from '@/server/supabase/route-helpers';
+import { safeInsert } from '@/server/supabase/safe-insert';
 
 async function assertSupabaseInvoiceRelations(tenantId: string, input: { clientId?: number; projectId?: number | null }) {
   const supabase = getAdminRouteSupabase();
@@ -115,7 +116,7 @@ export const POST = withApiHandler(async (request, context) => {
     .maybeSingle();
   if (existing) throw new ConflictError('Invoice number already exists');
   const now = new Date().toISOString();
-  const { data, error } = await supabase.from('invoices').insert({
+  const { data, error } = await safeInsert('invoices', {
     invoice_number: payload.invoiceNumber,
     client_id: payload.clientId,
     project_id: payload.projectId ?? null,
@@ -129,9 +130,9 @@ export const POST = withApiHandler(async (request, context) => {
     tenant_id: tenantId,
     created_at: now,
     updated_at: now,
-  }).select('*').single();
+  }, supabase);
   if (error || !data) throw error ? new Error(error.message) : new Error('Failed to create invoice');
-  return NextResponse.json(normalizeSupabaseInvoiceRow(data), { status: 201 });
+  return NextResponse.json(normalizeSupabaseInvoiceRow(data as Record<string, unknown>), { status: 201 });
 }, { requireAuth: true, roles: ['Manager'] });
 
 export const PUT = withApiHandler(async (request, context) => {

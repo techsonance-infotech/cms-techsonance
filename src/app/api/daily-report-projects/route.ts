@@ -23,6 +23,7 @@ function normalizeSupabaseDailyReportProjectRow(row: Record<string, any>) {
     id: Number(row.id),
     dailyReportId: Number(row.daily_report_id),
     projectId: Number(row.project_id),
+    projectName: row.projects?.name || row.projectName || 'Unknown Project',
     description: row.description,
     trackerTime: Number(row.tracker_time),
     isCoveredWork: Boolean(row.is_covered_work),
@@ -38,7 +39,8 @@ export const GET = withApiHandler(async (request, context) => {
   // Allow authenticated users to read daily report projects based on their role
   // Admin-like roles can see all projects, employees can see their own
   
-  const isAdminLike = user.role === 'Admin' || user.role === 'SuperAdmin' || user.role === 'Manager';
+  const role = user.role?.toLowerCase() || '';
+  const isAdminLike = ['admin', 'superadmin', 'super_admin', 'manager', 'project_manager', 'hr_manager', 'ceo', 'cto'].includes(role);
   const searchParams = new URL(request.url).searchParams;
   const id = searchParams.get('id');
 
@@ -69,7 +71,7 @@ export const GET = withApiHandler(async (request, context) => {
   const endDate = searchParams.get('endDate');
   let query = supabase
     .from('daily_report_projects')
-    .select('*, daily_reports!inner(user_id,date), users:daily_reports!inner(users!inner(first_name,last_name))', { count: 'exact' })
+    .select('*, projects(name), daily_reports(user_id,date)', { count: 'exact' })
     .eq('tenant_id', tenantId);
   if (!isAdminLike) query = query.eq('daily_reports.user_id', actor.authUserId);
   if (dailyReportId) query = query.eq('daily_report_id', Number(dailyReportId));
@@ -78,8 +80,13 @@ export const GET = withApiHandler(async (request, context) => {
   if (isExtraWork === 'true' || isExtraWork === 'false') query = query.eq('is_extra_work', isExtraWork === 'true');
   if (startDate) query = query.gte('daily_reports.date', startDate);
   if (endDate) query = query.lte('daily_reports.date', endDate);
+  
+  console.log('[DailyReportProjects API] Fetching with:', { tenantId, dailyReportId, isAdminLike });
   const { data, count, error } = await query.order('created_at', { ascending: false }).range(offset, offset + limit - 1);
-  if (error) throw error;
+  if (error) {
+    console.error('[DailyReportProjects API] Supabase error:', error);
+    throw error;
+  }
   let rows = (data as Record<string, any>[] | null) ?? [];
   if (isAdminLike && employeeId && employeeId !== 'all') {
     const employeeIdNumber = Number(employeeId);

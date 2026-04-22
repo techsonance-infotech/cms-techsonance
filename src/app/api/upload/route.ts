@@ -7,7 +7,7 @@ import { getCurrentSupabaseActor } from '@/server/supabase/route-helpers';
 
 const VALID_TYPES = new Set(['image/jpeg', 'image/png', 'application/pdf']);
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
-const VALID_KINDS = new Set(['avatar', 'payroll', 'expense', 'project', 'leave_document']);
+const VALID_KINDS = new Set(['avatar', 'payroll', 'expense', 'project', 'leave_document', 'employee_document']);
 
 function getUploadKind(value: FormDataEntryValue | null) {
   if (typeof value !== 'string') {
@@ -18,7 +18,7 @@ function getUploadKind(value: FormDataEntryValue | null) {
     throw new BadRequestError('Invalid upload kind');
   }
 
-  return value as 'avatar' | 'payroll' | 'expense' | 'project' | 'leave_document';
+  return value as 'avatar' | 'payroll' | 'expense' | 'project' | 'leave_document' | 'employee_document';
 }
 
 function assertSafeStoragePath(path: string) {
@@ -45,7 +45,7 @@ export const GET = withApiHandler(async (request, context) => {
   assertSafeStoragePath(path);
   const signedUrl = await createSignedTenantFileUrl({
     tenantId: actor.tenantId,
-    kind: kindParam as 'avatar' | 'payroll' | 'expense' | 'project',
+    kind: kindParam as 'avatar' | 'payroll' | 'expense' | 'project' | 'leave_document' | 'employee_document',
     path,
     expiresIn: 60 * 10,
   });

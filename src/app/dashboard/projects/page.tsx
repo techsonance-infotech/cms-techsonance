@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -125,48 +125,15 @@ export default function ProjectsPage() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const debouncedSearch = useDebouncedValue(search, 300);
 
-  // Reset page when search changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search]);
+  // Guard: prevents auth + fetch from running more than once (React StrictMode / hot-reload)
+  const initializedRef = useRef(false);
 
-  useEffect(() => {
-    fetchCurrentUser();
-  }, []);
-
-  useEffect(() => {
-    if (currentUser) {
-      fetchProjects();
-      // Admin and project managers can see clients
-      if (currentUser.role && hasFullAccess(currentUser.role as UserRole)) {
-        fetchClients();
-      }
-    }
-  }, [statusFilter, priorityFilter, clientFilter, activeFilter, sortBy, sortOrder, startDateFilter, endDateFilter, currentUser]);
-
-  const fetchCurrentUser = async () => {
-    try {
-      const token = localStorage.getItem('session_token');
-      const response = await fetch('/api/auth/me', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setCurrentUser(data.user);
-      }
-    } catch (error) {
-      console.error('Error fetching current user:', error);
-    }
-  };
-
-  const fetchProjects = async () => {
+  const fetchProjects = useCallback(async () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('session_token');
       let url = '/api/projects?limit=100';
-      
+
       if (statusFilter !== 'all') url += `&status=${statusFilter}`;
       if (priorityFilter !== 'all') url += `&priority=${priorityFilter}`;
       if (clientFilter !== 'all') url += `&clientId=${clientFilter}`;
@@ -174,45 +141,81 @@ export default function ProjectsPage() {
       if (sortBy && sortBy !== 'default') url += `&sort=${sortBy}&order=${sortOrder}`;
       if (startDateFilter) url += `&startDate=${startDateFilter}`;
       if (endDateFilter) url += `&endDate=${endDateFilter}`;
-      
-      // Optmized: Use API-level scoping for developers
-      if (currentUser && isEmployeeRole(currentUser.role as UserRole)) {
-        url += `&assignedTo=${currentUser.id}`;
+
+      // Optimized: Use API-level scoping for employee roles
+      const user = currentUser;
+      if (user && isEmployeeRole(user.role as UserRole)) {
+        url += `&assignedTo=${user.id}`;
       }
-      
+
       const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        headers: { 'Authorization': `Bearer ${token}` },
       });
       if (response.ok) {
         const data = await response.json();
-        setProjects(data);
+        setProjects(Array.isArray(data) ? data : (data.data ?? []));
       }
     } catch (error) {
       console.error('Error fetching projects:', error);
-      toast.error('Failed to load projects');
     } finally {
       setLoading(false);
     }
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, priorityFilter, clientFilter, activeFilter, sortBy, sortOrder, startDateFilter, endDateFilter, currentUser]);
 
-  const fetchClients = async () => {
+  const fetchClients = useCallback(async () => {
     try {
       const token = localStorage.getItem('session_token');
       const response = await fetch('/api/clients?limit=100', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        headers: { 'Authorization': `Bearer ${token}` },
       });
       if (response.ok) {
         const data = await response.json();
-        setClients(data);
+        setClients(Array.isArray(data) ? data : (data.data ?? []));
       }
     } catch (error) {
       console.error('Error fetching clients:', error);
     }
-  };
+  }, []); // stable — no deps, token read from localStorage
+
+  // Single guarded init: auth → projects (+ clients for admin) — runs exactly once
+  useEffect(() => {
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+
+    const init = async () => {
+      try {
+        const token = localStorage.getItem('session_token');
+        if (!token) return;
+        const res = await fetch('/api/auth/me', {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const user: User = data.user;
+        setCurrentUser(user);
+
+        // Fetch projects and clients (admin only) in parallel after auth resolves
+        const fetches: Promise<void>[] = [fetchProjects()];
+        if (user.role && hasFullAccess(user.role as UserRole)) {
+          fetches.push(fetchClients());
+        }
+        await Promise.all(fetches);
+      } catch (error) {
+        console.error('Error initializing projects page:', error);
+      }
+    };
+
+    init();
+  }, [fetchProjects, fetchClients]);
+
+  // Re-fetch projects when any filter/sort changes (only after init)
+  useEffect(() => {
+    if (!initializedRef.current || !currentUser) return;
+    fetchProjects();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, priorityFilter, clientFilter, activeFilter, sortBy, sortOrder, startDateFilter, endDateFilter]);
+
 
   const handleDelete = async () => {
     if (!deletingProject) return;
@@ -375,7 +378,7 @@ export default function ProjectsPage() {
               <Input
                 placeholder="Search projects..."
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
                 className="pl-8"
               />
             </div>
@@ -702,6 +705,21 @@ export default function ProjectsPage() {
                             </span>
                           );
                         })()}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="capitalize text-[11px]">
+                          {project.priority}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className="capitalize text-[11px]">
+                          {project.status.replace('_', ' ')}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <span className={`inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full ${project.isActive ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-800'}`}>
+                          {project.isActive ? 'Active' : 'Inactive'}
+                        </span>
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">

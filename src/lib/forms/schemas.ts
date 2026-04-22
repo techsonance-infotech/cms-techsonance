@@ -37,6 +37,7 @@ export const employeeDepartmentOptions = [
   'Finance',
   'Operations',
 ] as const;
+export const employmentTypeOptions = ['full_time', 'part_time', 'contract', 'intern'] as const;
 export const employeeStatusOptions = ['active', 'on_leave', 'inactive'] as const;
 export const sprintStatusOptions = ['planning', 'active', 'completed'] as const;
 export const taskStatusOptions = ['todo', 'in_progress', 'review', 'done'] as const;
@@ -73,6 +74,7 @@ export const employeeCreateFormSchema = z.object({
   employeeId: z.string().trim().min(1, 'Employee ID is required'),
   department: z.enum(employeeDepartmentOptions, { error: 'Department is required' }),
   designation: z.string().trim().min(1, 'Designation is required'),
+  employmentType: z.enum(employmentTypeOptions).default('full_time'),
   dateOfJoining: z.string().min(1, 'Date of joining is required'),
   dateOfBirth: optionalDateField,
   salary: z
@@ -80,7 +82,24 @@ export const employeeCreateFormSchema = z.object({
     .optional()
     .or(z.literal(''))
     .refine((value) => !value || (!Number.isNaN(Number(value)) && Number(value) >= 0), 'Salary must be a valid positive number'),
+  hourlyRate: z
+    .string()
+    .optional()
+    .or(z.literal(''))
+    .refine((value) => !value || (!Number.isNaN(Number(value)) && Number(value) >= 0), 'Hourly rate must be a valid positive number'),
+  ctc: z
+    .string()
+    .optional()
+    .or(z.literal(''))
+    .refine((value) => !value || (!Number.isNaN(Number(value)) && Number(value) >= 0), 'CTC must be a valid positive number'),
+  pfNumber: z.string().trim().optional().or(z.literal('')),
+  uanNumber: z.string().trim().optional().or(z.literal('')),
+  bankName: z.string().trim().optional().or(z.literal('')),
+  bankAccountNumber: z.string().trim().optional().or(z.literal('')),
+  ifscCode: z.string().trim().optional().or(z.literal('')),
+  managerId: z.string().optional().or(z.literal('')),
   skills: z.string().optional().or(z.literal('')),
+  gender: z.enum(['male', 'female', 'other'], { error: 'Gender is required' }).optional().or(z.literal('')),
   role: z.enum(employeeRoleOptions, { error: 'Role is required' }),
 });
 

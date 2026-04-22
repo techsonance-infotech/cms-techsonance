@@ -63,13 +63,15 @@ export function calculateAccruedBalances(
   joiningDate: string,
   role: string,
   policies?: LeavePolicy[],
+  gender?: string | null,
   currentDate: Date = new Date()
 ): LeaveEntitlement {
   // Interns get 0 paid leave (only unpaid)
   const isIntern = role.toLowerCase() === 'intern';
+  const isFemale = gender?.toLowerCase() === 'female';
 
   if (isIntern) {
-    return { annual: 0, sick: 0, family: 0, study: 0, maternity: 0, paternity: 0, unpaid: 365 };
+    return { annual: 0, sick: 0, family: 0, study: 0, maternity: 0, paternity: 0, unpaid: 0 };
   }
 
   const start = parseISO(joiningDate);
@@ -81,6 +83,21 @@ export function calculateAccruedBalances(
     const result: Record<string, number> = {};
     for (const policy of policies) {
       if (!policy.isActive) continue;
+      
+      // Gender-specific overrides
+      if (policy.leaveType === 'maternity' && !isFemale) {
+        result[policy.leaveType] = 0;
+        continue;
+      }
+      if (policy.leaveType === 'paternity') {
+        result[policy.leaveType] = 0;
+        continue;
+      }
+      if (policy.leaveType === 'unpaid') {
+        result[policy.leaveType] = 0;
+        continue;
+      }
+
       if (isIntern && !policy.internEligible) {
         result[policy.leaveType] = 0;
         continue;
@@ -112,7 +129,7 @@ export function calculateAccruedBalances(
       study: result.study ?? 0,
       maternity: result.maternity ?? 0,
       paternity: result.paternity ?? 0,
-      unpaid: result.unpaid ?? 365,
+      unpaid: 0,
     };
   }
 
@@ -141,9 +158,9 @@ export function calculateAccruedBalances(
     sick: parseFloat(accruedSick.toFixed(3)),
     family: parseFloat(accruedFamily.toFixed(3)),
     study: parseFloat(accruedStudy.toFixed(3)),
-    maternity: 0,
+    maternity: isFemale ? (totalMonths < 12 ? (totalMonths * (120/12)) : 120) : 0,
     paternity: 0,
-    unpaid: 365,
+    unpaid: 0,
   };
 }
 

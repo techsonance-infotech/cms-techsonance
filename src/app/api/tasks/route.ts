@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { withApiHandler } from '@/server/http/handler';
-import { BadRequestError, NotFoundError, UnprocessableEntityError } from '@/server/http/errors';
+import { BadRequestError, NotFoundError, ForbiddenError } from '@/server/http/errors';
 import { taskPrioritySchema, taskStatusSchema, createTaskSchema, updateTaskSchema } from '@/server/validation/tasks';
 import {
   buildLegacyUserIdMap,
@@ -9,21 +9,12 @@ import {
   normalizeSupabaseTaskRecord,
   resolveAuthUserIdFromLegacyUserId,
 } from '@/server/supabase/route-helpers';
-import { ForbiddenError } from '@/server/http/errors';
 import { hasFullAccess, UserRole } from '@/lib/permissions';
 
-const allowedTransitions: Record<string, string[]> = {
-  todo: ['in_progress'],
-  in_progress: ['review', 'todo'],
-  review: ['done', 'in_progress'],
-  done: [],
-};
 
 async function assertSupabaseTaskRelations(tenantId: string, accessToken: string, input: {
   projectId?: number;
   assignedTo?: number;
-  milestoneId?: number | null;
-  sprintId?: number | null;
 }) {
   const supabase = getAdminRouteSupabase();
   const actor = await getCurrentSupabaseActor(accessToken);
@@ -52,26 +43,6 @@ async function assertSupabaseTaskRelations(tenantId: string, accessToken: string
 
   if (input.assignedTo !== undefined) {
     await resolveAuthUserIdFromLegacyUserId(accessToken, input.assignedTo, tenantId);
-  }
-
-  if (input.milestoneId !== undefined && input.milestoneId !== null) {
-    const { data } = await supabase
-      .from('milestones')
-      .select('id')
-      .eq('id', input.milestoneId)
-      .eq('tenant_id', tenantId)
-      .single();
-    if (!data) throw new NotFoundError('Milestone not found');
-  }
-
-  if (input.sprintId !== undefined && input.sprintId !== null) {
-    const { data } = await supabase
-      .from('sprints')
-      .select('id')
-      .eq('id', input.sprintId)
-      .eq('tenant_id', tenantId)
-      .single();
-    if (!data) throw new NotFoundError('Sprint not found');
   }
 }
 
@@ -166,28 +137,11 @@ export const POST = withApiHandler(async (request, context) => {
   const supabase = getAdminRouteSupabase();
   const assignedToAuthUserId = await resolveAuthUserIdFromLegacyUserId(accessToken, payload.assignedTo, tenantId);
 
-  if (payload.blockedById) {
-    const { data: blockedTask } = await supabase
-      .from('tasks')
-      .select('id')
-      .eq('id', payload.blockedById)
-      .eq('project_id', payload.projectId)
-      .eq('tenant_id', tenantId)
-      .single();
-    if (!blockedTask) throw new NotFoundError('Dependency task not found or belongs to a different project');
-  }
-
   const { data, error } = await supabase.from('tasks').insert({
     project_id: payload.projectId,
     title: payload.title.trim(),
     description: payload.description?.trim() || null,
     assigned_to: assignedToAuthUserId,
-    milestone_id: payload.milestoneId ?? null,
-    sprint_id: payload.sprintId ?? null,
-    story_points: payload.storyPoints ?? null,
-    estimated_hours: payload.estimatedHours ?? 0,
-    logged_hours: payload.loggedHours ?? 0,
-    blocked_by_id: payload.blockedById ?? null,
     due_date: payload.dueDate ?? null,
     status: payload.status ?? 'todo',
     priority: payload.priority ?? 'medium',
@@ -223,34 +177,7 @@ export const PUT = withApiHandler(async (request, context) => {
 
   await assertSupabaseTaskRelations(tenantId, accessToken, {
     assignedTo: payload.assignedTo,
-    milestoneId: payload.milestoneId,
-    sprintId: payload.sprintId,
   });
-
-  if (payload.blockedById) {
-    const { data: blockedTask } = await supabase
-      .from('tasks')
-      .select('id')
-      .eq('id', payload.blockedById)
-      .eq('project_id', existingTask.project_id)
-      .eq('tenant_id', tenantId)
-      .single();
-    if (!blockedTask) throw new NotFoundError('Dependency task not found or belongs to a different project');
-  }
-
-  const finalStatus = payload.status || existingTask.status;
-  const finalLoggedHours = payload.loggedHours ?? existingTask.logged_hours;
-
-  if (finalStatus === 'done' && (!finalLoggedHours || finalLoggedHours <= 0)) {
-    throw new BadRequestError('Mandatory: Please log hours before marking this task as done');
-  }
-
-  if (payload.status && payload.status !== existingTask.status) {
-    const nextStates = allowedTransitions[existingTask.status] ?? [];
-    if (!nextStates.includes(payload.status)) {
-      throw new UnprocessableEntityError(`Invalid task status transition from ${existingTask.status} to ${payload.status}`);
-    }
-  }
 
   const assignedToAuthUserId = payload.assignedTo !== undefined
     ? await resolveAuthUserIdFromLegacyUserId(accessToken, payload.assignedTo, tenantId)
@@ -260,17 +187,10 @@ export const PUT = withApiHandler(async (request, context) => {
     ...(payload.title !== undefined ? { title: payload.title.trim() } : {}),
     ...(payload.description !== undefined ? { description: payload.description?.trim() || null } : {}),
     ...(assignedToAuthUserId !== undefined ? { assigned_to: assignedToAuthUserId } : {}),
-    ...(payload.milestoneId !== undefined ? { milestone_id: payload.milestoneId ?? null } : {}),
-    ...(payload.sprintId !== undefined ? { sprint_id: payload.sprintId ?? null } : {}),
-    ...(payload.blockedById !== undefined ? { blocked_by_id: payload.blockedById ?? null } : {}),
-    ...(payload.storyPoints !== undefined ? { story_points: payload.storyPoints ?? null } : {}),
-    ...(payload.estimatedHours !== undefined ? { estimated_hours: payload.estimatedHours ?? 0 } : {}),
-    ...(payload.loggedHours !== undefined ? { logged_hours: payload.loggedHours ?? 0 } : {}),
     ...(payload.status !== undefined ? { status: payload.status } : {}),
     ...(payload.priority !== undefined ? { priority: payload.priority } : {}),
     ...(payload.dueDate !== undefined ? { due_date: payload.dueDate ?? null } : {}),
     updated_at: new Date().toISOString(),
-    version: Number(existingTask.version ?? 1) + 1,
   })
   .eq('id', id)
   .eq('tenant_id', tenantId)

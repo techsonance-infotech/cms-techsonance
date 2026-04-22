@@ -10,6 +10,7 @@ import { ArrowLeft, Edit, Calendar, Award, Trash2, Plus, Briefcase, X } from 'lu
 import { DetailedPageSkeleton } from '@/components/ui/dashboard-skeleton';
 import { EditEmployeeDialog } from '@/components/team/edit-employee-dialog';
 import { AssignProjectsDialog } from '@/components/team/assign-projects-dialog';
+import { EmployeeDocuments } from '@/components/team/employee-documents';
 import { hasFullAccess, type UserRole } from '@/lib/permissions';
 import {
   AlertDialog,
@@ -416,6 +417,7 @@ export default function EmployeeDetailPage() {
           <TabsTrigger value="attendance">Attendance</TabsTrigger>
           <TabsTrigger value="leaves">Leave Requests</TabsTrigger>
           <TabsTrigger value="performance">Performance</TabsTrigger>
+          <TabsTrigger value="documents">Documents</TabsTrigger>
         </TabsList>
 
         <TabsContent value="attendance">
@@ -515,6 +517,10 @@ export default function EmployeeDetailPage() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="documents">
+          <EmployeeDocuments employeeId={employee.id} isAdmin={isAdmin} />
         </TabsContent>
       </Tabs>
 

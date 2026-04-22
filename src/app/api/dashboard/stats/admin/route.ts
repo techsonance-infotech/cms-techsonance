@@ -33,6 +33,7 @@ export const GET = withApiHandler(async (request, context) => {
     reportsYesterdayRes,
     leavesRes,
     claimsRes,
+    attendanceRequestsRes,
     recentProjectsRes
   ] = await Promise.all([
     supabase.from('clients').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId).eq('status', 'active'),
@@ -43,6 +44,7 @@ export const GET = withApiHandler(async (request, context) => {
     supabase.from('daily_reports').select('user_id').eq('tenant_id', tenantId).eq('date', yesterdayStr),
     supabase.from('leave_requests').select('*, employees!inner(id, user_id, employees:users!inner(first_name, last_name))').eq('tenant_id', tenantId).eq('status', 'pending').limit(10),
     supabase.from('reimbursements').select('*, employees!inner(id, user_id, employees:users!inner(first_name, last_name))').eq('tenant_id', tenantId).eq('status', 'pending').limit(10),
+    supabase.from('attendance_requests').select('*, employees!inner(id, user_id, employees:users!inner(first_name, last_name))').eq('tenant_id', tenantId).eq('status', 'pending').limit(10),
     supabase.from('projects').select('*').eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(5)
   ]);
 
@@ -77,6 +79,14 @@ export const GET = withApiHandler(async (request, context) => {
       employee: `${r.employees?.employees?.first_name} ${r.employees?.employees?.last_name}`,
       details: `Amount: ₹${r.amount} - ${r.purpose}`,
       date: r.created_at 
+    })),
+    ...(attendanceRequestsRes.data || []).map(a => ({
+      id: a.id,
+      type: 'attendance',
+      title: 'Weekend Attendance',
+      employee: `${a.employees?.employees?.first_name} ${a.employees?.employees?.last_name}`,
+      details: `${a.date}: ${a.notes || 'No reason provided'}`,
+      date: a.created_at
     }))
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 

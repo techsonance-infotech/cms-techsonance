@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { withApiHandler } from '@/server/http/handler';
-import { BadRequestError, NotFoundError } from '@/server/http/errors';
+import { BadRequestError, NotFoundError, ConflictError } from '@/server/http/errors';
 import { createVendorSchema, updateVendorSchema } from '@/server/validation/procurement';
 import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
+import { safeInsert } from '@/server/supabase/safe-insert';
 
 function normalizeSupabaseVendorRow(row: Record<string, unknown>) {
   return {
@@ -59,7 +60,19 @@ export const POST = withApiHandler(async (request, context) => {
   const tenantId = context.auth?.user.tenantId;
   if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
   const supabase = getAdminRouteSupabase();
-  const { data, error } = await supabase.from('vendors').insert({
+
+  // Check for duplicate vendor name in same tenant
+  const { data: existing } = await supabase
+    .from('vendors')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .ilike('name', payload.name.trim())
+    .maybeSingle();
+  if (existing) {
+    throw new ConflictError('A vendor with this name already exists');
+  }
+
+  const { data, error } = await safeInsert('vendors', {
     name: payload.name,
     contact_person: payload.contactPerson ?? null,
     email: payload.email ?? null,
@@ -69,9 +82,10 @@ export const POST = withApiHandler(async (request, context) => {
     tenant_id: tenantId,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
-  }).select('*').single();
+  }, supabase);
+
   if (error || !data) throw error ?? new Error('Failed to create vendor');
-  return NextResponse.json(normalizeSupabaseVendorRow(data), { status: 201 });
+  return NextResponse.json(normalizeSupabaseVendorRow(data as Record<string, unknown>), { status: 201 });
 }, { requireAuth: true, roles: ['Manager'] });
 
 export const PUT = withApiHandler(async (request, context) => {

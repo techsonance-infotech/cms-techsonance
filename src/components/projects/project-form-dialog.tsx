@@ -30,7 +30,7 @@ import {
   projectStatusOptions,
   type ProjectFormValues,
 } from '@/lib/forms/schemas';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface ProjectFormDialogProps {
@@ -104,24 +104,30 @@ export function ProjectFormDialog({
 
   const fetchClients = async () => {
     try {
+      const token = localStorage.getItem('session_token');
       const response = await fetch('/api/clients?limit=100', {
         headers: {
           'Content-Type': 'application/json',
-        }
+          'Authorization': `Bearer ${token}`,
+        },
       });
       if (response.ok) {
         const data = await response.json();
         setClients(Array.isArray(data) ? data : data.data ?? []);
       }
     } catch {
-      toast.error('Failed to load clients');
+      // Silent — clients list simply stays empty if network fails
+      console.error('Failed to load clients for project form');
     }
   };
 
   const handleSubmit = async (values: ProjectFormValues) => {
+    // Clear any stale root-level error before each attempt
+    form.clearErrors('root');
     setLoading(true);
 
     try {
+      const token = localStorage.getItem('session_token');
       const url = project ? `/api/projects?id=${project.id}` : '/api/projects';
       const method = project ? 'PUT' : 'POST';
 
@@ -139,23 +145,25 @@ export function ProjectFormDialog({
 
       const response = await fetch(url, {
         method,
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
       });
 
       if (response.ok) {
-        await response.json();
         toast.success(project ? 'Project updated successfully!' : 'Project created successfully!');
         onSuccess();
         onOpenChange(false);
       } else {
         const error = await response.json();
-        toast.error(error.error || 'Failed to save project');
+        const message: string = error.message || error.error || 'Failed to save project';
+        // Show server error inside the form so the dialog stays open
+        form.setError('root', { message });
       }
     } catch {
-      toast.error('An error occurred while saving the project');
+      form.setError('root', { message: 'An unexpected error occurred. Please check your connection and try again.' });
     } finally {
       setLoading(false);
     }
@@ -172,7 +180,7 @@ export function ProjectFormDialog({
         </DialogHeader>
 
         <Form {...form}>
-        <form onSubmit={form.handleSubmit(handleSubmit, () => toast.error('Please fix the form errors before submitting'))} className="space-y-4">
+        <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
           {Object.keys(form.formState.errors).length > 0 && (
             <div className="bg-destructive/10 border border-destructive rounded-lg p-4">
               <p className="text-sm font-semibold text-destructive mb-2">
@@ -400,6 +408,14 @@ export function ProjectFormDialog({
           </FormItem>
             )}
           />
+
+          {/* Root-level error banner */}
+          {form.formState.errors.root && (
+            <div className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+              <span>{form.formState.errors.root.message}</span>
+            </div>
+          )}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

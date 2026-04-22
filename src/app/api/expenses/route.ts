@@ -3,6 +3,7 @@ import { withApiHandler } from '@/server/http/handler';
 import { BadRequestError, NotFoundError } from '@/server/http/errors';
 import { createExpenseSchema, expenseStatusSchema, updateExpenseSchema } from '@/server/validation/expenses';
 import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
+import { safeInsert } from '@/server/supabase/safe-insert';
 
 async function assertSupabaseExpenseRelations(tenantId: string, input: { projectId?: number | null; employeeId?: number | null }) {
   const supabase = getAdminRouteSupabase();
@@ -137,7 +138,7 @@ export const POST = withApiHandler(async (request, context) => {
   
   await assertSupabaseExpenseRelations(tenantId, payload);
   const supabase = getAdminRouteSupabase();
-  const { data, error } = await supabase.from('expenses').insert({
+  const { data, error } = await safeInsert('expenses', {
     category: payload.category.trim(),
     description: payload.description.trim(),
     amount: payload.amount,
@@ -148,10 +149,10 @@ export const POST = withApiHandler(async (request, context) => {
     status: payload.status ?? 'pending',
     tenant_id: tenantId,
     created_at: new Date().toISOString(),
-  }).select('*').single();
+  }, supabase);
 
   if (error || !data) throw error ?? new Error('Failed to create expense');
-  return NextResponse.json(normalizeSupabaseExpenseRow(data), { status: 201 });
+  return NextResponse.json(normalizeSupabaseExpenseRow(data as Record<string, unknown>), { status: 201 });
 }, { requireAuth: true, roles: ['Manager'] });
 
 export const PUT = withApiHandler(async (request, context) => {

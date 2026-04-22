@@ -5,6 +5,7 @@ import { createUserSchema, updateUserSchema, userRoleSchema } from '@/server/val
 import { getSupabaseAdminClient } from '@/server/supabase/admin';
 import { getCurrentSupabaseActor, getAdminRouteSupabase } from '@/server/supabase/route-helpers';
 import { getSupabaseProfileByEmail, getSupabaseProfileByLegacyUserId } from '@/server/supabase/users';
+import { normalizeAppRole } from '@/server/auth/rbac';
 
 function normalizeSupabaseUser(user: Record<string, unknown>) {
   return {
@@ -144,7 +145,7 @@ export const POST = withApiHandler(async (request, context) => {
     email: normalizedEmail,
     first_name: payload.firstName.trim(),
     last_name: payload.lastName.trim(),
-    role: payload.role,
+    role: normalizeAppRole(payload.role),
     status: payload.isActive ?? true ? 'active' : 'inactive',
     created_at: now,
     updated_at: now,
@@ -158,7 +159,7 @@ export const POST = withApiHandler(async (request, context) => {
     email: normalizedEmail,
     first_name: payload.firstName.trim(),
     last_name: payload.lastName.trim(),
-    role: payload.role,
+    role: normalizeAppRole(payload.role),
     avatar_url: payload.avatarUrl?.trim() || null,
     phone: payload.phone?.trim() || null,
     two_factor_enabled: payload.twoFactorEnabled ?? false,
@@ -186,13 +187,17 @@ export const PUT = withApiHandler(async (request, context) => {
   if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
   
   const admin = getSupabaseAdminClient() as any;
+  let lookupError: any = null;
   const existingUser = await getSupabaseProfileByLegacyUserId(id, { 
     accessToken, 
     tenantId,
     useAdmin: true 
-  }).catch(() => null);
+  }).catch((e) => {
+    lookupError = e;
+    return null;
+  });
   if (!existingUser) {
-    throw new NotFoundError('User not found');
+    throw new NotFoundError(`User lookup failed for ID ${id}. Log: ${lookupError?.message || 'Not found'}`);
   }
 
   const updates: Record<string, unknown> = {
@@ -214,7 +219,9 @@ export const PUT = withApiHandler(async (request, context) => {
 
   if (payload.firstName !== undefined) updates.first_name = payload.firstName.trim();
   if (payload.lastName !== undefined) updates.last_name = payload.lastName.trim();
-  if (payload.role !== undefined) updates.role = payload.role;
+  if (payload.role !== undefined) {
+    updates.role = normalizeAppRole(payload.role);
+  }
   if (payload.avatarUrl !== undefined) updates.avatar_url = payload.avatarUrl?.trim() || null;
   if (payload.phone !== undefined) updates.phone = payload.phone?.trim() || null;
   if (payload.twoFactorEnabled !== undefined) updates.two_factor_enabled = payload.twoFactorEnabled;
@@ -244,8 +251,9 @@ export const PUT = withApiHandler(async (request, context) => {
     .eq('tenant_id', tenantId)
     .select('*')
     .single();
+    
   if (error || !data) {
-    throw new NotFoundError('User not found');
+    throw new NotFoundError(`User update failed. DB Error: ${error?.message || 'No data returned'}`);
   }
 
   return NextResponse.json(normalizeSupabaseUser(data));

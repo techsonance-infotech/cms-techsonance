@@ -213,6 +213,12 @@ export default function FinancePage() {
   const [invoicePage, setInvoicePage] = useState(0);
   const pageSize = 10;
 
+  // Income tab pagination states (must be at top level – not inside JSX)
+  const [paidInvoicePage, setPaidInvoicePage] = useState(0);
+  const [pendingInvoicePage, setPendingInvoicePage] = useState(0);
+  const [monthlyReportPage, setMonthlyReportPage] = useState(0);
+  const incomePageSize = 5;
+
   useEffect(() => {
     fetchCurrentUser();
     fetchFinanceData();
@@ -811,135 +817,158 @@ export default function FinancePage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Business Module - Finance</h2>
-          <p className="text-muted-foreground">
+          <h2 className="text-3xl font-bold tracking-tight flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-primary/10 ring-1 ring-primary/20">
+              <CreditCard className="h-6 w-6 text-primary" />
+            </div>
+            Finance & Accounting
+          </h2>
+          <p className="text-muted-foreground mt-2">
             Purchase Management, Expenses, Invoicing & Income Tracking
           </p>
         </div>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <DollarSign className="h-4 w-4 text-green-600" />
-              Total Revenue
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">₹{(totalRevenue / 1000).toFixed(1)}K</div>
-            <p className="text-xs text-muted-foreground">All invoices</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-600" />
-              Paid
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">₹{(totalPaid / 1000).toFixed(1)}K</div>
-            <p className="text-xs text-muted-foreground">Received payments</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-red-600" />
-              Expenses
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">₹{(totalExpenses / 1000).toFixed(1)}K</div>
-            <p className="text-xs text-muted-foreground">Total spent</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <DollarSign className="h-4 w-4" />
-              Net Profit
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              ₹{(netProfit / 1000).toFixed(1)}K
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card className="bg-gradient-to-br from-card to-emerald-500/5 hover:border-emerald-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-emerald-500/5">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+            <div className="p-2 rounded-lg bg-emerald-500/10">
+              <DollarSign className="h-4 w-4 text-emerald-500" />
             </div>
-            <p className="text-xs text-muted-foreground">Revenue - Expenses</p>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">₹{totalRevenue.toLocaleString('en-IN')}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              <span className="text-emerald-500 font-medium">{invoices.length}</span> total invoices
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-card to-green-500/5 hover:border-green-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-green-500/5">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium">Collected</CardTitle>
+            <div className="p-2 rounded-lg bg-green-500/10">
+              <CheckCircle className="h-4 w-4 text-green-500" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">₹{totalPaid.toLocaleString('en-IN')}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              <span className="text-green-500 font-medium">{invoices.filter(i => i.status === 'paid').length}</span> paid invoices
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-card to-rose-500/5 hover:border-rose-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-rose-500/5">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium">Expenses</CardTitle>
+            <div className="p-2 rounded-lg bg-rose-500/10">
+              <TrendingUp className="h-4 w-4 text-rose-500" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-rose-600">₹{totalExpenses.toLocaleString('en-IN')}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              <span className="text-rose-500 font-medium">{expenses.filter(e => e.status === 'approved').length}</span> approved entries
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className={`bg-gradient-to-br from-card ${netProfit >= 0 ? 'to-teal-500/5 hover:border-teal-500/50 hover:shadow-teal-500/5' : 'to-red-500/5 hover:border-red-500/50 hover:shadow-red-500/5'} transition-all duration-300 hover:shadow-lg`}>
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium">Net Profit</CardTitle>
+            <div className={`p-2 rounded-lg ${netProfit >= 0 ? 'bg-teal-500/10' : 'bg-red-500/10'}`}>
+              <DollarSign className={`h-4 w-4 ${netProfit >= 0 ? 'text-teal-500' : 'text-red-500'}`} />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${netProfit >= 0 ? 'text-teal-600' : 'text-red-600'}`}>
+              ₹{netProfit.toLocaleString('en-IN')}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Revenue − Expenses</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Main Tabs */}
       <Tabs defaultValue="purchase" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="purchase">Purchase Management</TabsTrigger>
-          <TabsTrigger value="expenses">Business Expenses</TabsTrigger>
-          <TabsTrigger value="invoices">Invoice Generation</TabsTrigger>
-          <TabsTrigger value="income">Income Tracking</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-4 h-12 p-1 bg-muted/50 rounded-xl">
+          <TabsTrigger value="purchase" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2 text-xs sm:text-sm">
+            <ShoppingCart className="h-4 w-4 hidden sm:block" />
+            Purchases
+          </TabsTrigger>
+          <TabsTrigger value="expenses" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2 text-xs sm:text-sm">
+            <Receipt className="h-4 w-4 hidden sm:block" />
+            Expenses
+          </TabsTrigger>
+          <TabsTrigger value="invoices" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2 text-xs sm:text-sm">
+            <FileText className="h-4 w-4 hidden sm:block" />
+            Invoices
+          </TabsTrigger>
+          <TabsTrigger value="income" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2 text-xs sm:text-sm">
+            <TrendingUp className="h-4 w-4 hidden sm:block" />
+            Income
+          </TabsTrigger>
         </TabsList>
 
         {/* PURCHASE MANAGEMENT */}
-        <TabsContent value="purchase" className="space-y-4">
+        <TabsContent value="purchase" className="space-y-6">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  Vendors
-                </CardTitle>
+            <Card className="bg-gradient-to-br from-card to-indigo-500/5 hover:border-indigo-500/50 transition-all duration-300">
+              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardTitle className="text-sm font-medium">Vendors</CardTitle>
+                <div className="p-2 rounded-lg bg-indigo-500/10">
+                  <Users className="h-4 w-4 text-indigo-500" />
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{vendors.length}</div>
-                <p className="text-xs text-muted-foreground">Active vendors</p>
+                <p className="text-xs text-muted-foreground mt-1">Active vendors</p>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <ShoppingCart className="h-4 w-4" />
-                  Purchases
-                </CardTitle>
+            <Card className="bg-gradient-to-br from-card to-violet-500/5 hover:border-violet-500/50 transition-all duration-300">
+              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardTitle className="text-sm font-medium">Purchases</CardTitle>
+                <div className="p-2 rounded-lg bg-violet-500/10">
+                  <ShoppingCart className="h-4 w-4 text-violet-500" />
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{purchases.length}</div>
-                <p className="text-xs text-muted-foreground">Total entries</p>
+                <p className="text-xs text-muted-foreground mt-1">Total entries</p>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <Receipt className="h-4 w-4" />
-                  Pending Bills
-                </CardTitle>
+            <Card className="bg-gradient-to-br from-card to-amber-500/5 hover:border-amber-500/50 transition-all duration-300">
+              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardTitle className="text-sm font-medium">Pending Bills</CardTitle>
+                <div className="p-2 rounded-lg bg-amber-500/10">
+                  <Receipt className="h-4 w-4 text-amber-500" />
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-orange-600">
+                <div className="text-2xl font-bold text-amber-600">
                   {purchases.filter(p => p.status === 'pending').length}
                 </div>
-                <p className="text-xs text-muted-foreground">Awaiting payment</p>
+                <p className="text-xs text-muted-foreground mt-1">Awaiting payment</p>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <CreditCard className="h-4 w-4" />
-                  Paid This Month
-                </CardTitle>
+            <Card className="bg-gradient-to-br from-card to-sky-500/5 hover:border-sky-500/50 transition-all duration-300">
+              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardTitle className="text-sm font-medium">Paid This Month</CardTitle>
+                <div className="p-2 rounded-lg bg-sky-500/10">
+                  <CreditCard className="h-4 w-4 text-sky-500" />
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  ₹{(purchases.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0) / 1000).toFixed(1)}K
+                  ₹{purchases.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0).toLocaleString('en-IN')}
                 </div>
-                <p className="text-xs text-muted-foreground">Payment tracking</p>
+                <p className="text-xs text-muted-foreground mt-1">Payment tracking</p>
               </CardContent>
             </Card>
           </div>
@@ -949,7 +978,13 @@ export default function FinancePage() {
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle>Vendor List</CardTitle>
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Users className="h-5 w-5 text-indigo-500" />
+                      Vendor Directory
+                    </CardTitle>
+                    <CardDescription>{vendors.length} registered vendors</CardDescription>
+                  </div>
                   <Dialog open={isAddVendorOpen} onOpenChange={setIsAddVendorOpen}>
                     <DialogTrigger asChild>
                       <Button size="sm" onClick={() => vendorForm.reset({ name: '', contactPerson: '', email: '', phone: '' })}>
@@ -1800,343 +1835,256 @@ export default function FinancePage() {
         </TabsContent>
 
         {/* INCOME TRACKING */}
-        < TabsContent value="income" className="space-y-4" >
-
-          {/* Defined Calculated Variables for Render */}
-          {(() => {
-            const [reportYear, setReportYear] = useState(new Date().getFullYear().toString());
-            const [monthSearch, setMonthSearch] = useState('');
-
-            // Pagination states for Income tab
-            const [paidInvoicePage, setPaidInvoicePage] = useState(0);
-            const [pendingInvoicePage, setPendingInvoicePage] = useState(0);
-            const [monthlyReportPage, setMonthlyReportPage] = useState(0);
-            const incomePageSize = 5; // Smaller page size for income tab cards
-
-            const totalPaid = invoices.filter(i => i.status === 'paid').reduce((acc, curr) => acc + curr.totalAmount, 0);
-            const pendingPayments = invoices.filter(i => i.status === 'sent').reduce((acc, curr) => acc + curr.totalAmount, 0);
-            const overduePayments = invoices.filter(i => i.status === 'overdue').reduce((acc, curr) => acc + curr.totalAmount, 0);
-
-            const currentMonth = new Date().getMonth();
-            const currentYear = new Date().getFullYear();
-            const thisMonthIncome = invoices.filter(i => {
-              if (i.status !== 'paid' || !i.paidDate) return false;
-              const d = new Date(i.paidDate);
-              return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-            }).reduce((acc, curr) => acc + curr.totalAmount, 0);
-
-            const getMonthlyReports = () => {
-              const reports: Record<string, { count: number, total: number, date: Date }> = {};
-              invoices.filter(i => {
-                if (i.status !== 'paid' || !i.paidDate) return false;
-                const d = new Date(i.paidDate);
-                // Filter by Year
-                if (d.getFullYear().toString() !== reportYear) return false;
-                return true;
-              }).forEach(inv => {
-                const d = new Date(inv.paidDate!);
-                const key = d.toLocaleString('default', { month: 'long', year: 'numeric' });
-
-                // Filter by Search (Month Name)
-                if (monthSearch && !key.toLowerCase().includes(monthSearch.toLowerCase())) return;
-
-                if (!reports[key]) {
-                  reports[key] = { count: 0, total: 0, date: d };
-                }
-                reports[key].count++;
-                reports[key].total += inv.totalAmount;
-              });
-              return Object.entries(reports)
-                .map(([month, data]) => ({ month, ...data }))
-                .sort((a, b) => b.date.getTime() - a.date.getTime());
-            };
-            const monthlyReports = getMonthlyReports();
-
-            return (
-              <>
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm font-medium flex items-center gap-2">
-                        <CheckCircle className="h-4 w-4 text-green-600" />
-                        Paid Invoices
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold text-green-600">
-                        {invoices.filter(i => i.status === 'paid').length}
-                      </div>
-                      <div className="text-sm font-medium mt-1">₹{(totalPaid / 1000).toFixed(1)}K</div>
-                      <p className="text-xs text-muted-foreground">Total received</p>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm font-medium flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-blue-600" />
-                        Pending Payments
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold text-blue-600">
-                        {invoices.filter(i => i.status === 'sent').length}
-                      </div>
-                      <div className="text-sm font-medium mt-1">₹{(pendingPayments / 1000).toFixed(1)}K</div>
-                      <p className="text-xs text-muted-foreground">Awaiting payment</p>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm font-medium flex items-center gap-2">
-                        <AlertCircle className="h-4 w-4 text-red-600" />
-                        Overdue Payments
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold text-red-600">
-                        {invoices.filter(i => i.status === 'overdue').length}
-                      </div>
-                      <div className="text-sm font-medium mt-1">₹{(overduePayments / 1000).toFixed(1)}K</div>
-                      <p className="text-xs text-muted-foreground">Action required</p>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm font-medium">This Month</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold">₹{(thisMonthIncome / 1000).toFixed(1)}K</div>
-                      <p className="text-xs text-muted-foreground">Income received</p>
-                    </CardContent>
-                  </Card>
+        <TabsContent value="income" className="space-y-6">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <Card className="bg-gradient-to-br from-card to-green-500/5 hover:border-green-500/50 transition-all duration-300">
+              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardTitle className="text-sm font-medium">Paid Invoices</CardTitle>
+                <div className="p-2 rounded-lg bg-green-500/10">
+                  <CheckCircle className="h-4 w-4 text-green-500" />
                 </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">
+                  {invoices.filter(i => i.status === 'paid').length}
+                </div>
+                <div className="text-sm font-medium mt-1">₹{invoices.filter(i => i.status === 'paid').reduce((acc, curr) => acc + curr.totalAmount, 0).toLocaleString('en-IN')}</div>
+                <p className="text-xs text-muted-foreground">Total received</p>
+              </CardContent>
+            </Card>
 
-                <div className="grid gap-4 lg:grid-cols-2">
-                  {/* Paid Invoices */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Paid Invoices</CardTitle>
-                      <CardDescription>Successfully collected payments</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="max-h-[300px] overflow-y-auto">
-                        <Table>
-                          <TableHeader className="sticky top-0 bg-background z-10">
-                            <TableRow>
-                              <TableHead>Invoice #</TableHead>
-                              <TableHead>Amount</TableHead>
-                              <TableHead>Paid Date</TableHead>
+            <Card className="bg-gradient-to-br from-card to-blue-500/5 hover:border-blue-500/50 transition-all duration-300">
+              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardTitle className="text-sm font-medium">Pending Payments</CardTitle>
+                <div className="p-2 rounded-lg bg-blue-500/10">
+                  <Clock className="h-4 w-4 text-blue-500" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-blue-600">
+                  {invoices.filter(i => i.status === 'sent').length}
+                </div>
+                <div className="text-sm font-medium mt-1">₹{pendingPayments.toLocaleString('en-IN')}</div>
+                <p className="text-xs text-muted-foreground">Awaiting payment</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-card to-rose-500/5 hover:border-rose-500/50 transition-all duration-300">
+              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardTitle className="text-sm font-medium">Overdue Payments</CardTitle>
+                <div className="p-2 rounded-lg bg-rose-500/10">
+                  <AlertCircle className="h-4 w-4 text-rose-500" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-rose-600">
+                  {invoices.filter(i => i.status === 'overdue').length}
+                </div>
+                <div className="text-sm font-medium mt-1">₹{overduePayments.toLocaleString('en-IN')}</div>
+                <p className="text-xs text-muted-foreground">Action required</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-card to-purple-500/5 hover:border-purple-500/50 transition-all duration-300">
+              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardTitle className="text-sm font-medium">This Month</CardTitle>
+                <div className="p-2 rounded-lg bg-purple-500/10">
+                  <TrendingUp className="h-4 w-4 text-purple-500" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  ₹{invoices.filter(i => {
+                    if (i.status !== 'paid' || !i.paidDate) return false;
+                    const d = new Date(i.paidDate);
+                    return d.getMonth() === new Date().getMonth() && d.getFullYear() === new Date().getFullYear();
+                  }).reduce((acc, curr) => acc + curr.totalAmount, 0).toLocaleString('en-IN')}
+                </div>
+                <p className="text-xs text-muted-foreground">Income received</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            {/* Paid Invoices */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Paid Invoices</CardTitle>
+                <CardDescription>Successfully collected payments</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="max-h-[300px] overflow-y-auto">
+                  <Table>
+                    <TableHeader className="sticky top-0 bg-background z-10">
+                      <TableRow>
+                        <TableHead>Invoice #</TableHead>
+                        <TableHead>Amount</TableHead>
+                        <TableHead>Paid Date</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {invoices.filter(i => i.status === 'paid').length === 0 ? (
+                        <TableRow><TableCell colSpan={3} className="text-center">No paid invoices</TableCell></TableRow>
+                      ) : (
+                        invoices.filter(i => i.status === 'paid')
+                          .sort((a, b) => new Date(b.paidDate || 0).getTime() - new Date(a.paidDate || 0).getTime())
+                          .slice(paidInvoicePage * incomePageSize, (paidInvoicePage + 1) * incomePageSize)
+                          .map((invoice) => (
+                            <TableRow key={invoice.id}>
+                              <TableCell className="font-medium">{invoice.invoiceNumber}</TableCell>
+                              <TableCell className="text-green-600">₹{(invoice.totalAmount / 1000).toFixed(2)}K</TableCell>
+                              <TableCell>{invoice.paidDate ? new Date(invoice.paidDate).toLocaleDateString() : '—'}</TableCell>
                             </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {(() => {
-                              const paidInvoices = invoices.filter(i => i.status === 'paid').sort((a, b) => new Date(b.paidDate || 0).getTime() - new Date(a.paidDate || 0).getTime());
-                              return (
-                                <>
-                                  {paidInvoices.length === 0 ? (
-                                    <TableRow><TableCell colSpan={3} className="text-center">No paid invoices</TableCell></TableRow>
-                                  ) : (
-                                    paidInvoices.slice(paidInvoicePage * incomePageSize, (paidInvoicePage + 1) * incomePageSize).map((invoice) => (
-                                      <TableRow key={invoice.id}>
-                                        <TableCell className="font-medium">{invoice.invoiceNumber}</TableCell>
-                                        <TableCell className="text-green-600">₹{(invoice.totalAmount / 1000).toFixed(2)}K</TableCell>
-                                        <TableCell>{invoice.paidDate ? new Date(invoice.paidDate).toLocaleDateString() : '—'}</TableCell>
-                                      </TableRow>
-                                    ))
-                                  )}
-                                </>
-                              );
-                            })()}
-                          </TableBody>
-                        </Table>
-                      </div>
-                      <div className="flex items-center justify-end space-x-2 py-4">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setPaidInvoicePage(Math.max(0, paidInvoicePage - 1))}
-                          disabled={paidInvoicePage === 0}
-                        >
-                          Previous
-                        </Button>
-                        <div className="text-sm font-medium">
-                          Page {paidInvoicePage + 1} of {Math.ceil(invoices.filter(i => i.status === 'paid').length / incomePageSize) || 1}
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setPaidInvoicePage(Math.min(Math.ceil(invoices.filter(i => i.status === 'paid').length / incomePageSize) - 1, paidInvoicePage + 1))}
-                          disabled={paidInvoicePage >= Math.ceil(invoices.filter(i => i.status === 'paid').length / incomePageSize) - 1}
-                        >
-                          Next
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
+                          ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+                <div className="flex items-center justify-end space-x-2 py-4">
+                  <Button variant="outline" size="sm" onClick={() => setPaidInvoicePage(Math.max(0, paidInvoicePage - 1))} disabled={paidInvoicePage === 0}>Previous</Button>
+                  <div className="text-sm font-medium">Page {paidInvoicePage + 1} of {Math.ceil(invoices.filter(i => i.status === 'paid').length / incomePageSize) || 1}</div>
+                  <Button variant="outline" size="sm" onClick={() => setPaidInvoicePage(Math.min(Math.ceil(invoices.filter(i => i.status === 'paid').length / incomePageSize) - 1, paidInvoicePage + 1))} disabled={paidInvoicePage >= Math.ceil(invoices.filter(i => i.status === 'paid').length / incomePageSize) - 1}>Next</Button>
+                </div>
+              </CardContent>
+            </Card>
 
-                  {/* Pending & Overdue */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Pending & Overdue Payments</CardTitle>
-                      <CardDescription>Follow-up required</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="max-h-[300px] overflow-y-auto">
-                        <Table>
-                          <TableHeader className="sticky top-0 bg-background z-10">
-                            <TableRow>
-                              <TableHead>Invoice #</TableHead>
-                              <TableHead>Amount</TableHead>
-                              <TableHead>Due Date</TableHead>
-                              <TableHead>Status</TableHead>
+            {/* Pending & Overdue */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Pending & Overdue Payments</CardTitle>
+                <CardDescription>Follow-up required</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="max-h-[300px] overflow-y-auto">
+                  <Table>
+                    <TableHeader className="sticky top-0 bg-background z-10">
+                      <TableRow>
+                        <TableHead>Invoice #</TableHead>
+                        <TableHead>Amount</TableHead>
+                        <TableHead>Due Date</TableHead>
+                        <TableHead>Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {invoices.filter(i => i.status === 'sent' || i.status === 'overdue').length === 0 ? (
+                        <TableRow><TableCell colSpan={4} className="text-center">No pending payments</TableCell></TableRow>
+                      ) : (
+                        invoices.filter(i => i.status === 'sent' || i.status === 'overdue')
+                          .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+                          .slice(pendingInvoicePage * incomePageSize, (pendingInvoicePage + 1) * incomePageSize)
+                          .map((invoice) => (
+                            <TableRow key={invoice.id}>
+                              <TableCell className="font-medium">{invoice.invoiceNumber}</TableCell>
+                              <TableCell>₹{(invoice.totalAmount / 1000).toFixed(2)}K</TableCell>
+                              <TableCell>{new Date(invoice.dueDate).toLocaleDateString()}</TableCell>
+                              <TableCell>
+                                <Badge variant={invoice.status === 'overdue' ? 'destructive' : 'secondary'}>{invoice.status}</Badge>
+                              </TableCell>
                             </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {(() => {
-                              const pendingInvoices = invoices.filter(i => i.status === 'sent' || i.status === 'overdue').sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-                              return (
-                                <>
-                                  {pendingInvoices.length === 0 ? (
-                                    <TableRow><TableCell colSpan={4} className="text-center">No pending payments</TableCell></TableRow>
-                                  ) : (
-                                    pendingInvoices.slice(pendingInvoicePage * incomePageSize, (pendingInvoicePage + 1) * incomePageSize).map((invoice) => (
-                                      <TableRow key={invoice.id}>
-                                        <TableCell className="font-medium">{invoice.invoiceNumber}</TableCell>
-                                        <TableCell>₹{(invoice.totalAmount / 1000).toFixed(2)}K</TableCell>
-                                        <TableCell>{new Date(invoice.dueDate).toLocaleDateString()}</TableCell>
-                                        <TableCell>
-                                          <Badge variant={invoice.status === 'overdue' ? 'destructive' : 'secondary'}>
-                                            {invoice.status}
-                                          </Badge>
-                                        </TableCell>
-                                      </TableRow>
-                                    ))
-                                  )}
-                                </>
-                              );
-                            })()}
-                          </TableBody>
-                        </Table>
-                      </div>
-                      <div className="flex items-center justify-end space-x-2 py-4">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setPendingInvoicePage(Math.max(0, pendingInvoicePage - 1))}
-                          disabled={pendingInvoicePage === 0}
-                        >
-                          Previous
-                        </Button>
-                        <div className="text-sm font-medium">
-                          Page {pendingInvoicePage + 1} of {Math.ceil(invoices.filter(i => i.status === 'sent' || i.status === 'overdue').length / incomePageSize) || 1}
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setPendingInvoicePage(Math.min(Math.ceil(invoices.filter(i => i.status === 'sent' || i.status === 'overdue').length / incomePageSize) - 1, pendingInvoicePage + 1))}
-                          disabled={pendingInvoicePage >= Math.ceil(invoices.filter(i => i.status === 'sent' || i.status === 'overdue').length / incomePageSize) - 1}
-                        >
-                          Next
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
+                          ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+                <div className="flex items-center justify-end space-x-2 py-4">
+                  <Button variant="outline" size="sm" onClick={() => setPendingInvoicePage(Math.max(0, pendingInvoicePage - 1))} disabled={pendingInvoicePage === 0}>Previous</Button>
+                  <div className="text-sm font-medium">Page {pendingInvoicePage + 1} of {Math.ceil(invoices.filter(i => i.status === 'sent' || i.status === 'overdue').length / incomePageSize) || 1}</div>
+                  <Button variant="outline" size="sm" onClick={() => setPendingInvoicePage(Math.min(Math.ceil(invoices.filter(i => i.status === 'sent' || i.status === 'overdue').length / incomePageSize) - 1, pendingInvoicePage + 1))} disabled={pendingInvoicePage >= Math.ceil(invoices.filter(i => i.status === 'sent' || i.status === 'overdue').length / incomePageSize) - 1}>Next</Button>
+                </div>
+              </CardContent>
+            </Card>
 
-                  {/* Monthly Reports */}
-                  <Card className="lg:col-span-2">
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <CardTitle>Monthly Income Reports</CardTitle>
-                          <CardDescription>Income breakdown by month</CardDescription>
-                        </div>
-                        <div className="flex gap-2">
-                          <Select value={reportYear} onValueChange={setReportYear}>
-                            <SelectTrigger className="w-[100px]">
-                              <SelectValue placeholder="Year" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {Array.from(new Set(invoices.map(i => i.paidDate ? new Date(i.paidDate).getFullYear() : new Date().getFullYear()))).sort((a, b) => b - a).map(year => (
-                                <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Button variant="outline" size="sm" onClick={() => handleExportYearReport(reportYear)}>
+            {/* Monthly Reports */}
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Monthly Income Reports</CardTitle>
+                    <CardDescription>Income breakdown by month</CardDescription>
+                  </div>
+                  <div className="flex gap-2">
+                    <Select value={reportYear} onValueChange={setReportYear}>
+                      <SelectTrigger className="w-[100px]">
+                        <SelectValue placeholder="Year" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from(new Set(invoices.map(i => i.paidDate ? new Date(i.paidDate).getFullYear() : new Date().getFullYear()))).sort((a, b) => b - a).map(year => (
+                          <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button variant="outline" size="sm" onClick={() => handleExportYearReport(reportYear)}>
+                      <Download className="mr-2 h-4 w-4" />
+                      Export Year
+                    </Button>
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <Input
+                    placeholder="Search month..."
+                    value={monthSearch}
+                    onChange={(e) => setMonthSearch(e.target.value)}
+                    className="max-w-sm"
+                  />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="max-h-[400px] overflow-y-auto space-y-4">
+                  {(() => {
+                    const reports: Record<string, { count: number; total: number; date: Date }> = {};
+                    invoices.filter(i => {
+                      if (i.status !== 'paid' || !i.paidDate) return false;
+                      return new Date(i.paidDate).getFullYear().toString() === reportYear;
+                    }).forEach(inv => {
+                      const d = new Date(inv.paidDate!);
+                      const key = d.toLocaleString('default', { month: 'long', year: 'numeric' });
+                      if (monthSearch && !key.toLowerCase().includes(monthSearch.toLowerCase())) return;
+                      if (!reports[key]) reports[key] = { count: 0, total: 0, date: d };
+                      reports[key].count++;
+                      reports[key].total += inv.totalAmount;
+                    });
+                    const monthlyReports = Object.entries(reports)
+                      .map(([month, data]) => ({ month, ...data }))
+                      .sort((a, b) => b.date.getTime() - a.date.getTime());
+
+                    if (monthlyReports.length === 0) {
+                      return <p className="text-center py-4 text-muted-foreground">No income history available.</p>;
+                    }
+
+                    return monthlyReports
+                      .slice(monthlyReportPage * incomePageSize, (monthlyReportPage + 1) * incomePageSize)
+                      .map((report) => (
+                        <div key={report.month} className="flex items-center justify-between p-4 border rounded-lg">
+                          <div>
+                            <p className="font-medium">{report.month}</p>
+                            <p className="text-sm text-muted-foreground">{report.count} invoice{report.count !== 1 ? 's' : ''} paid</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-2xl font-bold text-green-600">₹{(report.total / 1000).toFixed(1)}K</p>
+                            <p className="text-sm text-muted-foreground">Total income</p>
+                          </div>
+                          <Button variant="outline" size="sm" onClick={() => handleExportReport(report.month)}>
                             <Download className="mr-2 h-4 w-4" />
-                            Export Year
+                            Export
                           </Button>
                         </div>
-                      </div>
-                      <div className="mt-4">
-                        <Input
-                          placeholder="Search month..."
-                          value={monthSearch}
-                          onChange={(e) => setMonthSearch(e.target.value)}
-                          className="max-w-sm"
-                        />
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="max-h-[400px] overflow-y-auto space-y-4">
-                        {monthlyReports.length === 0 ? (
-                          <p className="text-center py-4 text-muted-foreground">No income history available.</p>
-                        ) : (
-                          monthlyReports.slice(monthlyReportPage * incomePageSize, (monthlyReportPage + 1) * incomePageSize).map((report) => (
-                            <div key={report.month} className="flex items-center justify-between p-4 border rounded-lg">
-                              <div>
-                                <p className="font-medium">{report.month}</p>
-                                <p className="text-sm text-muted-foreground">
-                                  {report.count} invoice{report.count !== 1 ? 's' : ''} paid
-                                </p>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-2xl font-bold text-green-600">₹{(report.total / 1000).toFixed(1)}K</p>
-                                <p className="text-sm text-muted-foreground">Total income</p>
-                              </div>
-                              <Button variant="outline" size="sm" onClick={() => handleExportReport(report.month)}>
-                                <Download className="mr-2 h-4 w-4" />
-                                Export
-                              </Button>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                      <div className="flex items-center justify-end space-x-2 py-4">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setMonthlyReportPage(Math.max(0, monthlyReportPage - 1))}
-                          disabled={monthlyReportPage === 0}
-                        >
-                          Previous
-                        </Button>
-                        <div className="text-sm font-medium">
-                          Page {monthlyReportPage + 1} of {Math.ceil(monthlyReports.length / incomePageSize) || 1}
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setMonthlyReportPage(Math.min(Math.ceil(monthlyReports.length / incomePageSize) - 1, monthlyReportPage + 1))}
-                          disabled={monthlyReportPage >= Math.ceil(monthlyReports.length / incomePageSize) - 1}
-                        >
-                          Next
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
+                      ));
+                  })()}
                 </div>
-              </>
-            );
-          })()}
-        </TabsContent >
+                <div className="flex items-center justify-end space-x-2 py-4">
+                  <Button variant="outline" size="sm" onClick={() => setMonthlyReportPage(Math.max(0, monthlyReportPage - 1))} disabled={monthlyReportPage === 0}>Previous</Button>
+                  <div className="text-sm font-medium">Page {monthlyReportPage + 1}</div>
+                  <Button variant="outline" size="sm" onClick={() => setMonthlyReportPage(monthlyReportPage + 1)}>Next</Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
 
         {/* BUSINESS SETTINGS */}
 
 
-      </Tabs >
-    </div >
+      </Tabs>
+    </div>
   );
 }

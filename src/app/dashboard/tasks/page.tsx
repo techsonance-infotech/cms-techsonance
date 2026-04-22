@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -54,109 +54,35 @@ export default function TasksPage() {
     completedPoints: 0,
   });
 
-  useEffect(() => {
-    fetchCurrentUser();
-  }, []);
+  // Guard: prevents the auth+fetch chain from running more than once
+  const initializedRef = useRef(false);
 
-  useEffect(() => {
-    if (currentUser) {
-      fetchProjects();
-    }
-  }, [currentUser]);
+  // Sort sprints so active sprint always appears first
+  const sortSprintsActivFirst = (list: Sprint[]) =>
+    [...list].sort((a, b) => {
+      if (a.status === 'active' && b.status !== 'active') return -1;
+      if (b.status === 'active' && a.status !== 'active') return  1;
+      return 0;
+    });
 
-  useEffect(() => {
-    if (selectedProject) {
-      fetchSprints(selectedProject);
-    }
-  }, [selectedProject]);
-
-  useEffect(() => {
-    if (selectedSprint) {
-      fetchTaskStats(selectedSprint);
-    }
-  }, [selectedSprint]);
-
-  const fetchCurrentUser = async () => {
-    try {
-      const token = localStorage.getItem('session_token');
-      const response = await fetch('/api/auth/me', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setCurrentUser(data.user);
-      }
-    } catch (error) {
-      console.error('Error fetching current user:', error);
-    }
-  };
-
-  const fetchProjects = async () => {
-    setLoading(true);
-    try {
-      const token = localStorage.getItem('session_token');
-      const response = await fetch('/api/projects?limit=100', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        
-        // Filter projects for developers
-        if (currentUser && isEmployeeRole(currentUser.role as UserRole)) {
-          const memberResponse = await fetch(`/api/project-members?limit=1000`, {
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          });
-          if (memberResponse.ok) {
-            const members = await memberResponse.json();
-            const userProjectIds = members
-              .filter((m: any) => m.userId === currentUser.id)
-              .map((m: any) => m.projectId);
-            const filteredProjects = data.filter((p: Project) => userProjectIds.includes(p.id));
-            setProjects(filteredProjects);
-            if (filteredProjects.length > 0) {
-              setSelectedProject(filteredProjects[0].id);
-            }
-          }
-        } else {
-          setProjects(data);
-          if (data.length > 0) {
-            setSelectedProject(data[0].id);
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching projects:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchSprints = async (projectId: number) => {
+  const fetchSprints = useCallback(async (projectId: number) => {
     try {
       const token = localStorage.getItem('session_token');
       const response = await fetch(`/api/sprints?projectId=${projectId}&limit=100`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
-
       if (response.ok) {
-        const data = await response.json();
-        const filteredSprints = data.filter((s: Sprint) => s.status !== 'cancelled');
-        setSprints(filteredSprints);
-        
-        const activeSprint = filteredSprints.find((s: Sprint) => s.status === 'active');
+        const result = await response.json();
+        const raw: Sprint[] = Array.isArray(result) ? result : (result.data ?? []);
+        const filtered = raw.filter((s) => s.status !== 'cancelled');
+        // Active sprint always listed first
+        const sorted = sortSprintsActivFirst(filtered);
+        setSprints(sorted);
+        const activeSprint = sorted.find((s) => s.status === 'active');
         if (activeSprint) {
           setSelectedSprint(activeSprint.id);
-        } else if (filteredSprints.length > 0) {
-          setSelectedSprint(filteredSprints[0].id);
+        } else if (sorted.length > 0) {
+          setSelectedSprint(sorted[0].id);
         } else {
           setSelectedSprint(null);
         }
@@ -164,45 +90,114 @@ export default function TasksPage() {
     } catch (error) {
       console.error('Error fetching sprints:', error);
     }
-  };
+  }, []);
 
-  const fetchTaskStats = async (sprintId: number) => {
+  const fetchTaskStats = useCallback(async (sprintId: number) => {
     try {
       const token = localStorage.getItem('session_token');
       const response = await fetch(`/api/tasks?sprintId=${sprintId}&limit=1000`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
-
       if (response.ok) {
-        const tasks = await response.json();
-        const totalTasks = tasks.length;
-        const completedTasks = tasks.filter((t: any) => t.status === 'done').length;
-        const totalPoints = tasks.reduce((sum: number, t: any) => sum + (t.storyPoints || 0), 0);
+        const result = await response.json();
+        const tasks: any[] = Array.isArray(result) ? result : (result.data ?? []);
+        const completedTasks  = tasks.filter((t) => t.status === 'done').length;
+        const totalPoints     = tasks.reduce((s: number, t: any) => s + (t.storyPoints || 0), 0);
         const completedPoints = tasks
           .filter((t: any) => t.status === 'done')
-          .reduce((sum: number, t: any) => sum + (t.storyPoints || 0), 0);
-
-        setStats({
-          totalTasks,
-          completedTasks,
-          totalPoints,
-          completedPoints,
-        });
+          .reduce((s: number, t: any) => s + (t.storyPoints || 0), 0);
+        setStats({ totalTasks: tasks.length, completedTasks, totalPoints, completedPoints });
       }
     } catch (error) {
       console.error('Error fetching task stats:', error);
     }
-  };
+  }, []);
+
+  const fetchProjects = useCallback(async (user: User) => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('session_token');
+      const response = await fetch('/api/projects?limit=100', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) return;
+      const result = await response.json();
+      const allProjects: Project[] = Array.isArray(result) ? result : (result.data ?? []);
+
+      if (isEmployeeRole(user.role as UserRole)) {
+        // Employees: filter to only their assigned projects
+        const membersRes = await fetch('/api/project-members?limit=1000', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (membersRes.ok) {
+          const membersResult = await membersRes.json();
+          const members: any[] = Array.isArray(membersResult) ? membersResult : (membersResult.data ?? []);
+          const userProjectIds = members
+            .filter((m) => m.userId === user.id)
+            .map((m) => m.projectId);
+          const filtered = allProjects.filter((p) => userProjectIds.includes(p.id));
+          setProjects(filtered);
+          if (filtered.length > 0) {
+            setSelectedProject(filtered[0].id);
+            await fetchSprints(filtered[0].id);
+          }
+        }
+      } else {
+        setProjects(allProjects);
+        if (allProjects.length > 0) {
+          setSelectedProject(allProjects[0].id);
+          await fetchSprints(allProjects[0].id);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching projects:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchSprints]);
+
+  // Single guarded init: auth → projects → sprints (runs exactly once)
+  useEffect(() => {
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+
+    const init = async () => {
+      try {
+        const token = localStorage.getItem('session_token');
+        if (!token) return;
+        const res = await fetch('/api/auth/me', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const user: User = data.user;
+        setCurrentUser(user);
+        await fetchProjects(user);
+      } catch (error) {
+        console.error('Error initializing tasks page:', error);
+      }
+    };
+    init();
+  }, [fetchProjects]);
+
+  // Re-fetch sprints when user changes project
+  useEffect(() => {
+    if (!initializedRef.current || !selectedProject) return;
+    fetchSprints(selectedProject);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProject]);
+
+  // Re-fetch stats when sprint selection changes
+  useEffect(() => {
+    if (selectedSprint) fetchTaskStats(selectedSprint);
+  }, [selectedSprint, fetchTaskStats]);
+
 
   const handleRefresh = () => {
-    if (selectedSprint) {
-      fetchTaskStats(selectedSprint);
-    }
-    // Force Kanban board to refresh
-    setRefreshKey(prev => prev + 1);
+    if (selectedSprint) fetchTaskStats(selectedSprint);
+    setRefreshKey((prev) => prev + 1);
   };
+
 
   const handleTaskClick = (task: any) => {
     setSelectedTask(task);
@@ -252,7 +247,10 @@ export default function TasksPage() {
         </div>
         <div className="flex gap-2">
           {!isEmployee && (
-            <Button onClick={() => setSprintDialogOpen(true)}>
+            <Button
+              onClick={() => setSprintDialogOpen(true)}
+              variant="outline"
+            >
               <Plus className="mr-2 h-4 w-4" />
               New Sprint
             </Button>
@@ -296,7 +294,15 @@ export default function TasksPage() {
               <SelectItem value="none">Backlog (No Sprint)</SelectItem>
               {sprints.map((sprint) => (
                 <SelectItem key={sprint.id} value={sprint.id.toString()}>
-                  {sprint.name} ({sprint.status === 'active' ? 'Current' : sprint.status})
+                  <span className="flex items-center gap-2">
+                    {sprint.status === 'active' && (
+                      <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
+                    )}
+                    {sprint.name}
+                    <span className="text-muted-foreground text-xs">
+                      ({sprint.status === 'active' ? 'Active' : sprint.status})
+                    </span>
+                  </span>
                 </SelectItem>
               ))}
             </SelectContent>
@@ -391,6 +397,7 @@ export default function TasksPage() {
           key={refreshKey}
           sprintId={selectedSprint}
           projectId={selectedProject}
+          currentUser={currentUser}
           onTaskClick={handleTaskClick}
           onCreateTask={handleCreateTask}
         />
