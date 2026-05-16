@@ -17,18 +17,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Loader2, Calendar, CalendarDays, Flag, Plus, Eye, ChevronLeft, ChevronRight, Check, X, Trash2, RefreshCcw, ChevronsUpDown, Eraser, MessageSquareQuote, CheckCircle, User } from 'lucide-react';
+import { Loader2, Calendar, CalendarDays, Flag, Plus, Eye, ChevronLeft, ChevronRight, Check, X, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { LeaveRequestDialog } from '@/components/dashboard/LeaveRequestDialog';
-import { HolidayDialog } from '@/components/dashboard/HolidayDialog';
 import { hasPermission } from '@/lib/permissions';
-import { PageHeaderSkeleton, MetricCardGridSkeleton, TabsSkeleton } from '@/components/ui/dashboard-skeleton';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { cn } from '@/lib/utils';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Textarea } from '@/components/ui/textarea';
-import { format } from 'date-fns';
 
 interface LeaveRequest {
   id: number;
@@ -122,70 +114,30 @@ export default function LeavesPage() {
   const [approvingLeave, setApprovingLeave] = useState<LeaveRequest | null>(null);
   const [rejectingLeave, setRejectingLeave] = useState<LeaveRequest | null>(null);
   const [deletingLeave, setDeletingLeave] = useState<LeaveRequest | null>(null);
-  const [adminComment, setAdminComment] = useState("");
-  const [employeeSearchOpen, setEmployeeSearchOpen] = useState(false);
-  const [isHolidayDialogOpen, setIsHolidayDialogOpen] = useState(false);
-  const [editingHoliday, setEditingHoliday] = useState<CompanyHoliday | null>(null);
-  const [deletingHoliday, setDeletingHoliday] = useState<CompanyHoliday | null>(null);
-  
-  const stats = useMemo(() => {
-    const pending = allLeaveRequests.filter(l => l.status === 'pending').length;
-    const approvedMonth = allLeaveRequests.filter(l => {
-      const date = new Date(l.startDate);
-      const now = new Date();
-      return l.status === 'approved' && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
-    }).length;
-    const onLeaveToday = allLeaveRequests.filter(l => {
-      const start = new Date(l.startDate);
-      const end = new Date(l.endDate);
-      const now = new Date();
-      now.setHours(0,0,0,0);
-      return l.status === 'approved' && now >= start && now <= end;
-    }).length;
-    
-    return { pending, approvedMonth, onLeaveToday };
-  }, [allLeaveRequests]);
 
   useEffect(() => {
     fetchCurrentUser();
   }, []);
 
-  // Fetch employee profile when user is loaded
   useEffect(() => {
     if (user) {
       fetchEmployeeData();
       if (isFullAccessUser) {
         fetchAllLeaveRequests();
-        fetchAdminMappingData(); // Unified admin fetcher
       }
     }
   }, [user]);
 
-  // Fetch filters/tabs specific data only when ready
   useEffect(() => {
-    if (!user) return;
-    
-    // STRICT GUARD: We must wait for employeeData to be loaded before fetching leaves
-    // to ensure the 'My Leaves' section is correctly scoped to the current user's ID
-    // and to prevent a double-fetch (one without ID, one with ID).
-    if (!employeeData?.id) return;
+    if (user) {
+      fetchLeaveRequests();
+      fetchCompanyHolidays();
+    }
+  }, [user, employeeData, statusFilter, holidayYear]);
 
-    fetchLeaveRequests();
-    fetchCompanyHolidays();
-  }, [employeeData?.id, statusFilter, holidayYear]);
-
-  const isFullAccessUser = user && (
-    ['admin', 'cms_administrator', 'hr_manager', 'project_manager', 'management', 'ceo', 'cto', 'super_admin'].includes(user.role.toLowerCase()) ||
-    (employeeData?.designation && /admin|hr|manager|director|ceo|cto/i.test(employeeData.designation))
-  );
-  const canApproveLeaves = user && (
-    hasPermission(user.role, 'myAccount', 'canApprove') || 
-    ['admin', 'hr_manager', 'project_manager'].includes(user.role.toLowerCase())
-  );
-  const canDeleteRecords = user && (
-    hasPermission(user.role, 'myAccount', 'canDelete') || 
-    ['admin', 'hr_manager'].includes(user.role.toLowerCase())
-  );
+  const isFullAccessUser = user && ['admin', 'cms_administrator', 'hr_manager', 'project_manager', 'management'].includes(user.role);
+  const canApproveLeaves = user && hasPermission(user.role, 'myAccount', 'canApprove');
+  const canDeleteRecords = user && hasPermission(user.role, 'myAccount', 'canDelete');
 
   const fetchCurrentUser = async () => {
     const token = localStorage.getItem('session_token');
@@ -230,24 +182,16 @@ export default function LeavesPage() {
         designation: currentEmployee.designation ?? null,
         dateOfJoining: currentEmployee.dateOfJoining ?? null,
         status: currentEmployee.status ?? null,
-        gender: currentEmployee.gender ?? null,
         firstName: user.firstName ?? null,
         lastName: user.lastName ?? null,
         avatarUrl: user.avatarUrl ?? null,
       });
     }
-  };
 
-  const fetchAdminMappingData = async () => {
-    const token = localStorage.getItem('session_token');
-    if (!token || !user) return;
-
-    try {
-      const [empRes, usrRes] = await Promise.all([
-        fetch('/api/employees?limit=1000', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('/api/users?limit=1000', { headers: { Authorization: `Bearer ${token}` } })
-      ]);
-
+    // Fetch all employees and users for admin mapping
+    if (['admin', 'cms_administrator', 'hr_manager', 'project_manager'].includes(user.role)) {
+      const empRes = await fetch('/api/employees?limit=1000', { headers: { Authorization: `Bearer ${token}` } });
+      const usrRes = await fetch('/api/users?limit=1000', { headers: { Authorization: `Bearer ${token}` } });
       if (empRes.ok) {
         const empJson = await empRes.json();
         setEmployees(Array.isArray(empJson) ? empJson : empJson?.data ?? []);
@@ -256,8 +200,6 @@ export default function LeavesPage() {
         const usrJson = await usrRes.json();
         setUsers(Array.isArray(usrJson) ? usrJson : usrJson?.data ?? []);
       }
-    } catch (e) {
-      console.error('Failed to fetch admin mapping data', e);
     }
   };
 
@@ -283,12 +225,6 @@ export default function LeavesPage() {
       let url = '/api/leave-requests?limit=100';
       if (employeeData?.id) {
         url += `&employeeId=${employeeData.id}`;
-      } else {
-        // If we don't have an employeeId, we shouldn't attempt a personal fetch
-        // because it might return 'all records' for an admin caller.
-        setLeaveRequests([]);
-        setLoading(false);
-        return;
       }
       if (statusFilter !== 'all') {
         url += `&status=${encodeURIComponent(statusFilter)}`;
@@ -349,16 +285,16 @@ export default function LeavesPage() {
     }
   };
 
-  const updateLeaveStatus = async (id: number, status: string, isApproval: boolean, comment?: string) => {
+  const updateLeaveStatus = async (id: number, status: string, isApproval: boolean) => {
     try {
       const token = localStorage.getItem('session_token');
-      const res = await fetch(`/api/leave-requests?id=${id}`, {
-        method: 'PUT',
+      const res = await fetch(`/api/leave-requests/${id}`, {
+        method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ status, adminComment: comment })
+        body: JSON.stringify({ status })
       });
 
       if (!res.ok) throw new Error('Update failed');
@@ -366,7 +302,6 @@ export default function LeavesPage() {
       fetchAllLeaveRequests();
       setApprovingLeave(null);
       setRejectingLeave(null);
-      setAdminComment("");
     } catch {
       toast.error('Failed to update leave request');
     }
@@ -389,23 +324,6 @@ export default function LeavesPage() {
     }
   };
 
-  const handleDeleteHoliday = async (id: number) => {
-    try {
-      const token = localStorage.getItem('session_token');
-      const res = await fetch(`/api/company-holidays?id=${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (!res.ok) throw new Error('Delete failed');
-      toast.success('Holiday deleted successfully');
-      fetchCompanyHolidays();
-      setDeletingHoliday(null);
-    } catch {
-      toast.error('Failed to delete holiday');
-    }
-  };
-
   const getEmployeeName = (employeeId: number) => {
     const emp = employees.find(e => e.id === employeeId);
     if (!emp) return 'Unknown';
@@ -423,77 +341,20 @@ export default function LeavesPage() {
     return true;
   });
 
-  if (loading || !user) {
-    return (
-      <div className="space-y-6">
-        <PageHeaderSkeleton />
-        <MetricCardGridSkeleton count={4} />
-        <div className="mt-8">
-          <TabsSkeleton count={3} />
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Leaves & Holidays</h2>
-          <p className="text-slate-500 dark:text-slate-400">Manage time-off requests and view company calendar</p>
+          <p className="text-sm text-muted-foreground">Employee Portal</p>
+          <h1 className="text-3xl font-semibold">{isFullAccessUser ? 'Leave Management' : 'Leave Management'}</h1>
         </div>
-        <div className="flex gap-2">
-          <Button 
-            onClick={() => setShowDialog(true)}
-            className="rounded-full px-6 bg-blue-600 hover:bg-blue-700 shadow-md transition-all hover:scale-105"
-          >
+        <div className="flex flex-col gap-3 sm:flex-row">
+
+          <Button onClick={() => setShowDialog(true)}>
             <Plus className="mr-2 h-4 w-4" /> Apply Leave
           </Button>
         </div>
       </div>
-
-      {isFullAccessUser && (
-        <div className="grid gap-4 md:grid-cols-3">
-          <Card className="bg-gradient-to-br from-blue-50 to-white dark:from-blue-900/10 dark:to-slate-900 border-blue-100 dark:border-blue-900/20 shadow-sm overflow-hidden relative">
-            <div className="absolute top-0 right-0 p-3 opacity-10">
-              <CalendarDays className="h-12 w-12 text-blue-600" />
-            </div>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-blue-600 dark:text-blue-400 uppercase tracking-widest">Pending Approvals</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-slate-900 dark:text-white">{stats.pending}</div>
-              <p className="text-xs text-slate-500 mt-1">Leaves awaiting review</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-900/10 dark:to-slate-900 border-emerald-100 dark:border-emerald-900/20 shadow-sm overflow-hidden relative">
-            <div className="absolute top-0 right-0 p-3 opacity-10">
-              <CheckCircle className="h-12 w-12 text-emerald-600" />
-            </div>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Approved this Month</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-slate-900 dark:text-white">{stats.approvedMonth}</div>
-              <p className="text-xs text-slate-500 mt-1">Total approvals in {format(new Date(), 'MMMM')}</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-indigo-50 to-white dark:from-indigo-900/10 dark:to-slate-900 border-indigo-100 dark:border-indigo-900/20 shadow-sm overflow-hidden relative">
-            <div className="absolute top-0 right-0 p-3 opacity-10">
-              <User className="h-12 w-12 text-indigo-600" />
-            </div>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">On Leave Today</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-slate-900 dark:text-white">{stats.onLeaveToday}</div>
-              <p className="text-xs text-slate-500 mt-1">Team members currently out</p>
-            </CardContent>
-          </Card>
-        </div>
-      )}
 
       <Card className="overflow-hidden">
         <CardContent className="grid gap-4 lg:grid-cols-[1.75fr_1fr] p-6">
@@ -540,106 +401,40 @@ export default function LeavesPage() {
                 <CardDescription>View, approve, reject, and manage all employee leave requests</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="bg-slate-50/50 dark:bg-slate-900/50 p-6 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm backdrop-blur-sm space-y-4">
-                  <div className="flex flex-wrap items-end gap-5">
-                    <div className="flex-1 min-w-[240px] space-y-2.5">
-                      <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 px-1">Employee Name</Label>
-                      <Popover open={employeeSearchOpen} onOpenChange={setEmployeeSearchOpen}>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            role="combobox"
-                            aria-expanded={employeeSearchOpen}
-                            className="w-full justify-between bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 rounded-xl h-10"
-                          >
-                            {selectedEmployeeFilter === "all" ? "All Employees" : getEmployeeName(Number(selectedEmployeeFilter))}
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[300px] p-0" align="start">
-                          <Command>
-                            <CommandInput placeholder="Search employee..." className="h-9" />
-                            <CommandList>
-                              <CommandEmpty>No employee found.</CommandEmpty>
-                              <CommandGroup>
-                                <CommandItem
-                                  value="all"
-                                  onSelect={() => {
-                                    setSelectedEmployeeFilter("all")
-                                    setEmployeeSearchOpen(false)
-                                  }}
-                                >
-                                  <Check className={cn("mr-2 h-4 w-4", selectedEmployeeFilter === "all" ? "opacity-100" : "opacity-0")} />
-                                  All Employees
-                                </CommandItem>
-                                {employees.map((emp) => (
-                                  <CommandItem
-                                    key={emp.id}
-                                    value={getEmployeeName(emp.id)}
-                                    onSelect={() => {
-                                      setSelectedEmployeeFilter(emp.id.toString())
-                                      setEmployeeSearchOpen(false)
-                                    }}
-                                  >
-                                    <Check className={cn("mr-2 h-4 w-4", selectedEmployeeFilter === emp.id.toString() ? "opacity-100" : "opacity-0")} />
-                                    {getEmployeeName(emp.id)}
-                                  </CommandItem>
-                                ))}
-                              </CommandGroup>
-                            </CommandList>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-
-                    <div className="w-[180px] space-y-2.5">
-                      <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 px-1">Status</Label>
-                      <Select value={adminLeaveStatusFilter} onValueChange={setAdminLeaveStatusFilter}>
-                        <SelectTrigger className="rounded-xl h-10 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950"><SelectValue /></SelectTrigger>
-                        <SelectContent className="rounded-xl">
-                          <SelectItem value="all">All Status</SelectItem>
-                          <SelectItem value="approved">Approved</SelectItem>
-                          <SelectItem value="pending">Pending</SelectItem>
-                          <SelectItem value="rejected">Rejected</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="w-[160px] space-y-2.5">
-                      <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 px-1">Start Date</Label>
-                      <div className="relative">
-                        <Input type="date" value={leaveStartDate} onChange={(e) => setLeaveStartDate(e.target.value)} className="rounded-xl h-10 pl-10 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800" />
-                        <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                      </div>
-                    </div>
-
-                    <div className="w-[160px] space-y-2.5">
-                      <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 px-1">End Date</Label>
-                      <div className="relative">
-                        <Input type="date" value={leaveEndDate} onChange={(e) => setLeaveEndDate(e.target.value)} className="rounded-xl h-10 pl-10 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800" />
-                        <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                       <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="h-10 rounded-xl gap-2 border-dashed border-slate-300 dark:border-slate-700 text-slate-500 hover:text-rose-600 hover:border-rose-300 transition-colors"
-                        onClick={() => {
-                          setSelectedEmployeeFilter('all');
-                          setAdminLeaveStatusFilter('all');
-                          setLeaveStartDate('');
-                          setLeaveEndDate('');
-                        }}
-                      >
-                        <Eraser className="h-3.5 w-3.5" />
-                        Reset
-                      </Button>
-                      <Button variant="outline" size="sm" className="h-10 w-10 rounded-xl" onClick={handleRefresh} disabled={refreshing}>
-                        <RefreshCcw className={cn("h-4 w-4", refreshing && "animate-spin")} />
-                      </Button>
-                    </div>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <Label>Employee</Label>
+                    <Select value={selectedEmployeeFilter} onValueChange={setSelectedEmployeeFilter}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Employees</SelectItem>
+                        {employees.map(emp => (
+                          <SelectItem key={emp.id} value={emp.id.toString()}>
+                            {getEmployeeName(emp.id)} ({emp.employeeId})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Leave Status</Label>
+                    <Select value={adminLeaveStatusFilter} onValueChange={setAdminLeaveStatusFilter}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Status</SelectItem>
+                        <SelectItem value="approved">Approved</SelectItem>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="rejected">Rejected</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>From Date</Label>
+                    <Input type="date" value={leaveStartDate} onChange={(e) => setLeaveStartDate(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>To Date</Label>
+                    <Input type="date" value={leaveEndDate} onChange={(e) => setLeaveEndDate(e.target.value)} />
                   </div>
                 </div>
 
@@ -652,16 +447,15 @@ export default function LeavesPage() {
                         <TableHead>From Date</TableHead>
                         <TableHead>To Date</TableHead>
                         <TableHead>Status</TableHead>
-                        <TableHead>Reason</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {loading ? (
-                        <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground"><Loader2 className="mx-auto h-4 w-4 animate-spin" /></TableCell></TableRow>
+                        <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground"><Loader2 className="mx-auto h-4 w-4 animate-spin" /></TableCell></TableRow>
                       ) : filteredAllLeaveRequests.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No leave requests found</TableCell>
+                          <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No leave requests found</TableCell>
                         </TableRow>
                       ) : (
                         filteredAllLeaveRequests.slice(leavePage * PAGE_SIZE, (leavePage + 1) * PAGE_SIZE).map((leave) => (
@@ -671,9 +465,6 @@ export default function LeavesPage() {
                             <TableCell className="whitespace-nowrap">{formatDateOrdinal(leave.startDate)}</TableCell>
                             <TableCell className="whitespace-nowrap">{formatDateOrdinal(leave.endDate)}</TableCell>
                             <TableCell>{getLeaveStatusBadge(leave.status)}</TableCell>
-                            <TableCell className="max-w-[400px] whitespace-normal break-words text-xs leading-relaxed py-4 italic text-muted-foreground">
-                              {leave.reason || <span className="opacity-30 italic">No reason provided</span>}
-                            </TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end gap-2">
                                 <Button variant="ghost" size="sm" onClick={() => setViewingLeave(leave)}><Eye className="h-4 w-4 text-blue-600" /></Button>
@@ -762,7 +553,6 @@ export default function LeavesPage() {
                       <TableHead>To Date</TableHead>
                       <TableHead>Applied On</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead>Reason</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -775,7 +565,7 @@ export default function LeavesPage() {
                       </TableRow>
                     ) : leaveRequests.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                        <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
                           No leave requests found.
                         </TableCell>
                       </TableRow>
@@ -786,30 +576,7 @@ export default function LeavesPage() {
                           <TableCell className="whitespace-nowrap">{formatDateOrdinal(leave.startDate)}</TableCell>
                           <TableCell className="whitespace-nowrap">{formatDateOrdinal(leave.endDate)}</TableCell>
                           <TableCell className="whitespace-nowrap">{formatDateOrdinal(leave.createdAt)}</TableCell>
-                          <TableCell>
-                            <div className="flex flex-col gap-1">
-                              {getLeaveStatusBadge(leave.status)}
-                              {leave.adminComment && (
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <div className="flex items-center gap-1 text-[10px] text-slate-400 font-medium cursor-help hover:text-slate-600 transition-colors">
-                                        <MessageSquareQuote className="h-3 w-3" />
-                                        Admin feedback
-                                      </div>
-                                    </TooltipTrigger>
-                                    <TooltipContent className="max-w-xs p-3 rounded-xl shadow-xl border-slate-200">
-                                      <p className="text-xs font-semibold mb-1 text-slate-800">Administrator Comment</p>
-                                      <p className="text-[11px] text-slate-600 leading-relaxed italic">"{leave.adminComment}"</p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="max-w-[250px] whitespace-normal break-words text-xs py-4 text-muted-foreground italic">
-                            {leave.reason}
-                          </TableCell>
+                          <TableCell>{getLeaveStatusBadge(leave.status)}</TableCell>
                           <TableCell className="text-right">
                             <Button variant="ghost" size="sm" onClick={() => setViewingLeave(leave)}>
                               <Eye className="h-4 w-4 text-blue-600" />
@@ -859,7 +626,7 @@ export default function LeavesPage() {
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2 sm:w-auto w-full">
                   <Select value={String(holidayYear)} onValueChange={(value) => setHolidayYear(Number(value))}>
-                    <SelectTrigger className="rounded-xl h-10 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
+                    <SelectTrigger>
                       <SelectValue placeholder="Year" />
                     </SelectTrigger>
                     <SelectContent>
@@ -871,17 +638,6 @@ export default function LeavesPage() {
                     </SelectContent>
                   </Select>
 
-                  {isFullAccessUser && (
-                    <Button 
-                      onClick={() => {
-                        setEditingHoliday(null);
-                        setIsHolidayDialogOpen(true);
-                      }}
-                      className="rounded-xl bg-blue-600 hover:bg-blue-700"
-                    >
-                      <Plus className="mr-2 h-4 w-4" /> Add Holiday
-                    </Button>
-                  )}
                 </div>
               </div>
             </CardHeader>
@@ -892,43 +648,13 @@ export default function LeavesPage() {
                 <div className="space-y-4">
                   <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
                     {holidays.slice(holidayPage * PAGE_SIZE, (holidayPage + 1) * PAGE_SIZE).map((holiday) => (
-                      <div key={holiday.id} className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-4 shadow-sm hover:shadow-md transition-shadow">
+                      <div key={holiday.id} className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                          <div className="flex items-center gap-4">
-                            <div className="h-10 w-10 rounded-2xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
-                              <Calendar className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                            </div>
-                            <div>
-                              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{holiday.reason}</p>
-                              <p className="text-xs text-slate-500 dark:text-slate-400">{formatDisplayDate(holiday.date)}</p>
-                            </div>
+                          <div>
+                            <p className="text-sm font-semibold">{holiday.reason}</p>
+                            <p className="text-xs text-muted-foreground">{formatDisplayDate(holiday.date)}</p>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <Badge className="bg-blue-50 text-blue-600 border-blue-100 font-medium px-3 py-0.5 rounded-full">{holiday.year}</Badge>
-                            {isFullAccessUser && (
-                              <div className="flex items-center gap-1 ml-2 border-l pl-3 dark:border-slate-800">
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
-                                  className="h-8 w-8 p-0 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                                  onClick={() => {
-                                    setEditingHoliday(holiday);
-                                    setIsHolidayDialogOpen(true);
-                                  }}
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
-                                  className="h-8 w-8 p-0 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                                  onClick={() => setDeletingHoliday(holiday)}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            )}
-                          </div>
+                          <Badge className="bg-primary/10 text-primary">{holiday.year}</Badge>
                         </div>
                       </div>
                     ))}
@@ -1001,12 +727,6 @@ export default function LeavesPage() {
                   <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Applied On</span>
                   <p className="font-medium text-xs text-muted-foreground">{formatDateOrdinal(viewingLeave.createdAt)}</p>
                 </div>
-                {viewingLeave.adminComment && (
-                  <div className="col-span-2 mt-2 p-3 bg-blue-50 dark:bg-blue-900/10 border-l-4 border-blue-500 rounded-r-lg">
-                    <span className="text-[10px] text-blue-600 dark:text-blue-400 uppercase font-bold tracking-wider block mb-1">Administrator Comment</span>
-                    <p className="text-sm italic text-slate-700 dark:text-slate-300">"{viewingLeave.adminComment}"</p>
-                  </div>
-                )}
               </div>
 
               <div className="bg-primary/5 p-4 rounded-xl border border-primary/10 space-y-3">
@@ -1042,78 +762,31 @@ export default function LeavesPage() {
 
       {/* Admin Action Dialogs */}
       <Dialog open={approvingLeave !== null} onOpenChange={() => setApprovingLeave(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-full bg-emerald-100 flex items-center justify-center">
-                <Check className="h-4 w-4 text-emerald-600" />
-              </div>
-              Approve Leave Request
-            </DialogTitle>
-            <DialogDescription className="pt-2">
-              Reviewing <strong>{approvingLeave?.leaveType?.replace(/_/g, ' ')}</strong> for <span className="text-slate-900 font-medium">{approvingLeave ? getEmployeeName(approvingLeave.employeeId) : ''}</span>. 
-              {approvingLeave && (
-                <div className="mt-2 text-xs text-slate-500 italic bg-slate-50 p-2 rounded border-l-2 border-slate-300">
-                  "{approvingLeave.reason}"
-                </div>
-              )}
+            <DialogTitle>Approve Leave Request</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to approve this {approvingLeave?.leaveType?.replace(/_/g, ' ')} for {approvingLeave ? getEmployeeName(approvingLeave.employeeId) : ''}?
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Decision Comment (Optional)</Label>
-              <Textarea 
-                placeholder="Good to go! Enjoy your time off." 
-                value={adminComment}
-                onChange={(e) => setAdminComment(e.target.value)}
-                className="min-h-[100px] rounded-xl bg-slate-50/50"
-              />
-            </div>
-          </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setApprovingLeave(null)} className="rounded-xl">Cancel</Button>
-            <Button onClick={() => approvingLeave && updateLeaveStatus(approvingLeave.id, 'approved', true, adminComment)} className="rounded-xl bg-emerald-600 hover:bg-emerald-700">Approve Request</Button>
+            <Button variant="outline" onClick={() => setApprovingLeave(null)}>Cancel</Button>
+            <Button onClick={() => approvingLeave && updateLeaveStatus(approvingLeave.id, 'approved', true)}>Approve Request</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={rejectingLeave !== null} onOpenChange={() => setRejectingLeave(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-full bg-rose-100 flex items-center justify-center">
-                <X className="h-4 w-4 text-rose-600" />
-              </div>
-              Reject Leave Request
-            </DialogTitle>
-            <DialogDescription className="pt-2">
-              You are rejecting the request from <strong>{rejectingLeave ? getEmployeeName(rejectingLeave.employeeId) : ''}</strong>. 
-              A justification reason is mandatory.
+            <DialogTitle>Reject Leave Request</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to reject this leave request? Needs to be justified to the employee.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label className={`text-[10px] font-bold uppercase tracking-widest px-1 ${!adminComment.trim() ? 'text-rose-500' : 'text-slate-400'}`}>
-                Rejection Reason (Required)
-              </Label>
-              <Textarea 
-                placeholder="Unfortunately, we have overlapping deadlines during this period..." 
-                value={adminComment}
-                onChange={(e) => setAdminComment(e.target.value)}
-                className="min-h-[120px] rounded-xl border-rose-200 focus-visible:ring-rose-500 bg-rose-50/10"
-              />
-            </div>
-          </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setRejectingLeave(null)} className="rounded-xl">Cancel</Button>
-            <Button 
-              variant="destructive" 
-              onClick={() => rejectingLeave && updateLeaveStatus(rejectingLeave.id, 'rejected', false, adminComment)}
-              disabled={!adminComment.trim()}
-              className="rounded-xl px-6"
-            >
-              Confirm Rejection
-            </Button>
+            <Button variant="outline" onClick={() => setRejectingLeave(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => rejectingLeave && updateLeaveStatus(rejectingLeave.id, 'rejected', false)}>Reject Request</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1132,31 +805,6 @@ export default function LeavesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <Dialog open={deletingHoliday !== null} onOpenChange={() => setDeletingHoliday(null)}>
-        <DialogContent className="max-w-xs">
-          <DialogHeader>
-            <DialogTitle>Delete Holiday?</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to remove <strong>{deletingHoliday?.reason}</strong>?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex gap-2 sm:justify-center pt-2">
-            <Button variant="ghost" onClick={() => setDeletingHoliday(null)} className="rounded-xl flex-1">Cancel</Button>
-            <Button variant="destructive" onClick={() => deletingHoliday && handleDeleteHoliday(deletingHoliday.id)} className="rounded-xl flex-1">Delete</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <HolidayDialog 
-        open={isHolidayDialogOpen}
-        onOpenChange={setIsHolidayDialogOpen}
-        holiday={editingHoliday}
-        onSuccess={() => {
-          fetchCompanyHolidays();
-          setEditingHoliday(null);
-        }}
-      />
     </div>
   );
 }

@@ -18,7 +18,7 @@ import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { StatsSkeleton, TableSkeleton, PageHeaderSkeleton, MetricCardGridSkeleton, TabsSkeleton } from '@/components/ui/dashboard-skeleton';
+import { StatsSkeleton, TableSkeleton } from '@/components/ui/dashboard-skeleton';
 import {
   Dialog,
   DialogContent,
@@ -135,7 +135,7 @@ export default function AttendancePage() {
   const searchParams = useSearchParams();
   const initialTab = searchParams.get('tab');
 
-  const [activeTab, setActiveTab] = useState('attendance');
+  const [activeTab, setActiveTab] = useState('leave');
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [attendance, setAttendance] = useState<Attendance[]>([]);
   const [holidays, setHolidays] = useState<CompanyHoliday[]>([]);
@@ -150,7 +150,6 @@ export default function AttendancePage() {
   const [users, setUsers] = useState<UserData[]>([]);
   const [allLeaveRequests, setAllLeaveRequests] = useState<LeaveRequest[]>([]);
   const [allAttendance, setAllAttendance] = useState<Attendance[]>([]);
-  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [todaySummary, setTodaySummary] = useState<any>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -228,16 +227,6 @@ export default function AttendancePage() {
     reason: '',
   });
 
-  // Advanced Attendance Settings
-  const [attendanceSettings, setAttendanceSettings] = useState({
-    office_latitude: '',
-    office_longitude: '',
-    geofence_radius_meters: 500,
-    allowed_ips: '',
-    standard_work_hours: 9.0
-  });
-  const [isSavingSettings, setIsSavingSettings] = useState(false);
-
   useEffect(() => {
     fetchCurrentUser();
   }, []);
@@ -247,7 +236,7 @@ export default function AttendancePage() {
       setActiveTab(initialTab);
     } else if (currentUser) {
       // Strictly separate Admin Hub from Manager/Employee Personal View
-      const isAdminHubRole = hasFullAccess(currentUser.role as UserRole) || currentUser.role === 'project_manager';
+      const isAdminHubRole = hasFullAccess(currentUser.role as UserRole);
       setActiveTab(isAdminHubRole ? 'all-attendance' : 'attendance');
     }
   }, [initialTab, currentUser]);
@@ -257,8 +246,6 @@ export default function AttendancePage() {
         fetchEmployees();
         fetchAllLeaveRequests();
         fetchAllAttendance();
-        fetchPendingRequests();
-        fetchSettings();
       }
 
       if (employeeId) {
@@ -306,94 +293,6 @@ export default function AttendancePage() {
       fetchTodaySummary();
     }
   }, [currentUser]);
-
-  const fetchSettings = async () => {
-    try {
-      const token = localStorage.getItem('session_token');
-      const res = await fetch('/api/attendance/settings', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setAttendanceSettings({
-          office_latitude: data.office_latitude || '',
-          office_longitude: data.office_longitude || '',
-          geofence_radius_meters: data.geofence_radius_meters || 500,
-          allowed_ips: data.allowed_ips || '',
-          standard_work_hours: data.standard_work_hours || 9.0
-        });
-      }
-    } catch (e) { console.error('Failed to load settings', e); }
-  };
-
-  const saveSettings = async () => {
-    setIsSavingSettings(true);
-    try {
-      const token = localStorage.getItem('session_token');
-      const res = await fetch('/api/attendance/settings', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...attendanceSettings,
-          office_latitude: attendanceSettings.office_latitude ? parseFloat(String(attendanceSettings.office_latitude)) : null,
-          office_longitude: attendanceSettings.office_longitude ? parseFloat(String(attendanceSettings.office_longitude)) : null,
-          geofence_radius_meters: parseInt(String(attendanceSettings.geofence_radius_meters)),
-          standard_work_hours: parseFloat(String(attendanceSettings.standard_work_hours))
-        })
-      });
-      if (!res.ok) throw new Error();
-      toast.success('Settings updated successfully');
-    } catch {
-      toast.error('Failed to update Settings');
-    } finally {
-      setIsSavingSettings(false);
-    }
-  };
-
-  const fetchPendingRequests = async () => {
-    try {
-      const token = localStorage.getItem('session_token');
-      const res = await fetch('/api/attendance/requests', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!res.ok) throw new Error('Failed to fetch pending requests');
-      const data = await res.json();
-      setPendingRequests(data);
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  const handleApproveRejectRequest = async (id: number, action: 'approve' | 'reject', index: number) => {
-    try {
-      const token = localStorage.getItem('session_token');
-      let reason = undefined;
-      
-      if (action === 'reject') {
-        const inputReason = prompt('Please enter a reason for rejection:');
-        if (!inputReason || inputReason.trim() === '') return;
-        reason = inputReason.trim();
-      }
-
-      const res = await fetch('/api/attendance/requests', {
-        method: 'PATCH',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, action, rejection_reason: reason })
-      });
-      if (!res.ok) throw new Error('Failed to process request');
-      toast.success(`Request ${action}d successfully`);
-      
-      const updated = [...pendingRequests];
-      updated.splice(index, 1);
-      setPendingRequests(updated);
-
-      if (action === 'approve') {
-        fetchAllAttendance(); // Refresh table
-      }
-    } catch (error) {
-      toast.error(`Failed to ${action} request`);
-    }
-  };
 
   const fetchCurrentUser = async () => {
     try {
@@ -1048,24 +947,13 @@ export default function AttendancePage() {
       return;
     }
 
-    // Weekend Notes Validation
-    const selectedDate = new Date(attendanceForm.date);
-    const dayOfWeek = selectedDate.getDay();
-    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6; // 0 is Sunday, 6 is Saturday
-    
-    if (isWeekend && (!attendanceForm.notes || attendanceForm.notes.trim() === '')) {
-      toast.error('Notes are mandatory when logging attendance on a weekend');
-      return;
-    }
-
     setLoading(true);
     try {
       const token = localStorage.getItem('session_token');
 
-      // Create local Date objects and convert to ISO strings for the API
-      // This ensures the local time (e.g. IST) explicitly selected by the user is accurately offset to UTC
-      const checkInISO = new Date(`${attendanceForm.date}T${attendanceForm.timeIn}:00`).toISOString();
-      const checkOutISO = new Date(`${attendanceForm.date}T${attendanceForm.timeOut}:00`).toISOString();
+      // Create ISO datetime strings with Z suffix for API validation
+      const checkInISO = `${attendanceForm.date}T${attendanceForm.timeIn}:00Z`;
+      const checkOutISO = `${attendanceForm.date}T${attendanceForm.timeOut}:00Z`;
 
       // Calculate work hours (deduct 1 hour for lunch)
       const inTime = new Date(checkInISO).getTime();
@@ -1083,19 +971,6 @@ export default function AttendancePage() {
         status = 'half_day';
       }
 
-      // Capture browser geolocation for geofence validation
-      let locationLatitude: number | null = null;
-      let locationLongitude: number | null = null;
-      try {
-        const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
-        });
-        locationLatitude = pos.coords.latitude;
-        locationLongitude = pos.coords.longitude;
-      } catch {
-        // Location not available — proceed without it; server will skip geofence check
-      }
-
       const response = await fetch('/api/attendance', {
         method: 'POST',
         headers: {
@@ -1110,17 +985,11 @@ export default function AttendancePage() {
           status: status,
           checkInMethod: 'manual',
           notes: attendanceForm.notes,
-          locationLatitude,
-          locationLongitude,
         }),
       });
 
       if (response.ok) {
-        if (response.status === 202) {
-          toast.success('Attendance submitted! It is currently pending HR approval for the weekend.');
-        } else {
-          toast.success(`Attendance marked successfully! Status: ${status}, Work Hours: ${workHours.toFixed(2)}`);
-        }
+        toast.success(`Attendance marked successfully! Status: ${status}, Work Hours: ${workHours.toFixed(2)}`);
         setShowAttendanceDialog(false);
         setAttendanceForm({
           employeeId: '',
@@ -1332,7 +1201,7 @@ export default function AttendancePage() {
     };
   };
 
-  const isFullAccessUser = currentUser && (hasFullAccess(currentUser.role) || currentUser.role === 'project_manager');
+  const isFullAccessUser = currentUser && ['admin', 'cms_administrator', 'hr_manager', 'project_manager', 'management'].includes(currentUser.role);
   const canApproveLeaves = currentUser && hasPermission(currentUser.role, 'myAccount', 'canApprove');
   const canEditAttendance = currentUser && hasPermission(currentUser.role, 'myAccount', 'canEdit');
   const canDeleteRecords = currentUser && hasPermission(currentUser.role, 'myAccount', 'canDelete');
@@ -1357,13 +1226,28 @@ export default function AttendancePage() {
     );
   });
 
-  if (loading || isLoadingUser || !currentUser) {
+  if (isLoadingUser) {
     return (
       <div className="space-y-6">
-        <PageHeaderSkeleton />
-        <MetricCardGridSkeleton count={4} />
-        <div className="mt-8">
-          <TabsSkeleton count={isFullAccessUser ? 4 : 2} />
+        <div className="space-y-2">
+          <Skeleton className="h-10 w-1/3" />
+          <Skeleton className="h-4 w-1/2" />
+        </div>
+        <div className="grid grid-cols-5 gap-4">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+        <div className="space-y-4">
+          <div className="grid grid-cols-4 gap-4">
+            <StatsSkeleton />
+            <StatsSkeleton />
+            <StatsSkeleton />
+            <StatsSkeleton />
+          </div>
+          <TableSkeleton columns={7} rows={8} />
         </div>
       </div>
     );
@@ -1371,159 +1255,27 @@ export default function AttendancePage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-col gap-1">
+      <div>
         <h2 className="text-3xl font-bold tracking-tight">
-          {isFullAccessUser ? 'Attendance Management' : 'My Attendance'}
+          {isFullAccessUser ? 'Employee Attendance Management' : 'My Account'}
         </h2>
         <p className="text-muted-foreground">
-          {isFullAccessUser 
-            ? 'Monitor team availability and manage attendance records' 
-            : 'Track your daily clock-in/out times and work duration'}
+          {isFullAccessUser
+            ? 'Manage all employee leaves, attendance, and company holidays'
+            : 'Manage your leaves, attendance, and view company holidays'}
         </p>
-      </header>
+      </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         {/* Only show tabs for admin roles — employees get direct view without tab header */}
         {isFullAccessUser && (
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="all-attendance">All Attendance</TabsTrigger>
-            <TabsTrigger value="pending-attendance">Approvals 
-              {pendingRequests.filter(r => r.status === 'pending').length > 0 && 
-                <span className="ml-2 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">{pendingRequests.filter(r => r.status === 'pending').length}</span>
-              }
-            </TabsTrigger>
             <TabsTrigger value="attendance"><Clock className="mr-2 h-4 w-4" />My Attendance</TabsTrigger>
-            <TabsTrigger value="att-settings">⚙ Settings</TabsTrigger>
           </TabsList>
         )}
 
-
-        {isFullAccessUser && (
-          <TabsContent value="pending-attendance">
-            <Card>
-              <CardHeader>
-                <CardTitle>Attendance Approvals</CardTitle>
-                <CardDescription>Review and approve attendance logged on weekends</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {pendingRequests.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">No pending attendance requests</div>
-                ) : (
-                  <div className="rounded-md border overflow-hidden">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Employee</TableHead>
-                          <TableHead>Date</TableHead>
-                          <TableHead>Time In / Out</TableHead>
-                          <TableHead>Notes</TableHead>
-                          <TableHead>Method</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {pendingRequests.filter(r => r.status === 'pending').map((req, i) => (
-                          <TableRow key={req.id}>
-                            <TableCell className="font-medium whitespace-nowrap">
-                              {getEmployeeName(req.employee_id)}
-                              <div className="text-[10px] text-muted-foreground uppercase">{req.employees?.employee_id || req.employee_id}</div>
-                            </TableCell>
-                            <TableCell>{new Date(req.date).toLocaleDateString()}</TableCell>
-                            <TableCell>
-                              {new Date(req.time_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit'})} 
-                              {' - '} 
-                              {req.time_out ? new Date(req.time_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit'}) : 'Pending Out'}
-                            </TableCell>
-                             <TableCell className="max-w-[400px] whitespace-normal break-words py-4 leading-relaxed text-xs">
-                               {req.notes || <em className="text-muted-foreground opacity-50 italic">No notes provided</em>}
-                             </TableCell>
-                            <TableCell>
-                              <Badge variant="outline" className={req.check_in_method === 'nfc' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}>
-                                {req.check_in_method.toUpperCase()}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-right flex justify-end gap-2">
-                              <Button size="sm" variant="outline" className="text-green-600 border-green-200 bg-green-50 hover:bg-green-100" onClick={() => handleApproveRejectRequest(req.id, 'approve', i)}>
-                                <Check className="h-4 w-4 mr-1"/> Approve
-                              </Button>
-                              <Button size="sm" variant="outline" className="text-red-600 border-red-200 bg-red-50 hover:bg-red-100" onClick={() => handleApproveRejectRequest(req.id, 'reject', i)}>
-                                <X className="h-4 w-4 mr-1"/> Reject
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        )}
-
-        {/* Admin: Attendance Settings Tab */}
-        {isFullAccessUser && (
-          <TabsContent value="att-settings">
-            <Card>
-              <CardHeader>
-                <CardTitle>Attendance Configuration</CardTitle>
-                <CardDescription>Configure geofencing, network restrictions, and work hour policies. Changes apply to all employees.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-8">
-                {/* Geofencing Section */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold flex items-center gap-2">📍 Geofencing</h3>
-                  <p className="text-sm text-muted-foreground">Set your office coordinates. Employees punching in outside the radius will require admin approval.</p>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <Label>Office Latitude</Label>
-                      <Input type="number" step="any" placeholder="e.g. 19.0760" value={attendanceSettings.office_latitude} onChange={e => setAttendanceSettings({...attendanceSettings, office_latitude: e.target.value})} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Office Longitude</Label>
-                      <Input type="number" step="any" placeholder="e.g. 72.8777" value={attendanceSettings.office_longitude} onChange={e => setAttendanceSettings({...attendanceSettings, office_longitude: e.target.value})} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Allowed Radius (meters)</Label>
-                      <Input type="number" placeholder="500" value={attendanceSettings.geofence_radius_meters} onChange={e => setAttendanceSettings({...attendanceSettings, geofence_radius_meters: parseInt(e.target.value) || 500})} />
-                    </div>
-                  </div>
-                </div>
-
-                <hr />
-
-                {/* IP Restriction Section */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold flex items-center gap-2">🌐 Network / IP Restriction</h3>
-                  <p className="text-sm text-muted-foreground">Comma-separated list of allowed IPs. Leave empty to disable IP restriction. Employees punching in from other IPs will need approval.</p>
-                  <div className="space-y-2">
-                    <Label>Allowed IP Addresses</Label>
-                    <Input placeholder="e.g. 203.45.67.89,103.12.34.56" value={attendanceSettings.allowed_ips} onChange={e => setAttendanceSettings({...attendanceSettings, allowed_ips: e.target.value})} />
-                  </div>
-                </div>
-
-                <hr />
-
-                {/* Overtime Section */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold flex items-center gap-2">⏱ Work Hours & Overtime</h3>
-                  <p className="text-sm text-muted-foreground">Standard work hours per day (including lunch). Anything beyond this is tracked as overtime.</p>
-                  <div className="space-y-2 max-w-xs">
-                    <Label>Standard Work Hours (per day)</Label>
-                    <Input type="number" step="0.5" placeholder="9.0" value={attendanceSettings.standard_work_hours} onChange={e => setAttendanceSettings({...attendanceSettings, standard_work_hours: parseFloat(e.target.value) || 9.0})} />
-                  </div>
-                </div>
-
-                <div className="flex justify-end pt-4 border-t">
-                  <Button onClick={saveSettings} disabled={isSavingSettings}>
-                    {isSavingSettings && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Save Configuration
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        )}
+        
 
         {/* Admin/Manager: All Attendance Tab */}
         {isFullAccessUser && (
@@ -1605,11 +1357,7 @@ export default function AttendancePage() {
                           </div>
 
                           <div className="space-y-2">
-                            {(new Date(attendanceForm.date).getDay() === 0 || new Date(attendanceForm.date).getDay() === 6) ? (
-                              <Label>Notes *</Label>
-                            ) : (
-                              <Label>Notes (Optional)</Label>
-                            )}
+                            <Label>Notes (Optional)</Label>
                             <Textarea
                               value={attendanceForm.notes}
                               onChange={(e) => setAttendanceForm({ ...attendanceForm, notes: e.target.value })}
@@ -1663,37 +1411,6 @@ export default function AttendancePage() {
                         <Upload className="mr-2 h-4 w-4" />
                       )}
                       Import CSV
-                    </Button>
-                    <Button
-                      onClick={() => {
-                        const csvRows = [['Employee', 'Department', 'Date', 'Time In', 'Time Out', 'Duration (min)', 'Overtime (hrs)', 'Status', 'Method']];
-                        filteredAttendance.forEach(record => {
-                          const emp = record.employee;
-                          csvRows.push([
-                            `${emp?.firstName || ''} ${emp?.lastName || ''}`.trim(),
-                            emp?.department || '',
-                            record.date,
-                            record.timeIn ? new Date(record.timeIn).toLocaleTimeString() : '',
-                            record.timeOut ? new Date(record.timeOut).toLocaleTimeString() : '',
-                            String(record.duration || ''),
-                            String((record as any).overtime_hours || '0'),
-                            record.status,
-                            record.checkInMethod || 'manual'
-                          ]);
-                        });
-                        const csvContent = csvRows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
-                        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                        const link = document.createElement('a');
-                        link.href = URL.createObjectURL(blob);
-                        link.download = `attendance_report_${new Date().toISOString().slice(0,10)}.csv`;
-                        link.click();
-                        toast.success('Timesheet exported successfully');
-                      }}
-                      variant="outline"
-                      size="sm"
-                    >
-                      <Download className="mr-2 h-4 w-4" />
-                      Export CSV
                     </Button>
                   </div>
                 </div>
@@ -1953,29 +1670,6 @@ export default function AttendancePage() {
                   </div>
                 )}
 
-                {/* Pending Requests for Employee */}
-                {!isFullAccessUser && pendingRequests.length > 0 && (
-                   <div className="mb-6 rounded-md border border-amber-200 bg-amber-50/50 p-4">
-                     <h3 className="font-semibold text-amber-800 flex items-center mb-3">
-                       <Clock className="w-4 h-4 mr-2" /> Pending Weekend Approvals ({pendingRequests.length})
-                     </h3>
-                     <div className="space-y-2">
-                       {pendingRequests.map(req => (
-                         <div key={req.id} className="flex justify-between items-center text-sm bg-white p-3 rounded border shadow-sm">
-                           <div>
-                             <span className="font-semibold">{new Date(req.date).toLocaleDateString()}</span>
-                             <span className="text-muted-foreground ml-3 text-xs tracking-wide">
-                               {new Date(req.time_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} 
-                               {req.time_out ? ` - ${new Date(req.time_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
-                             </span>
-                           </div>
-                           <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300">Pending HR Approval</Badge>
-                         </div>
-                       ))}
-                     </div>
-                   </div>
-                )}
-
                 {/* Table */}
                 <div className="max-h-[600px] overflow-y-auto rounded-md border text-[13px]">
                   <Table>
@@ -1989,7 +1683,6 @@ export default function AttendancePage() {
                         <TableHead>Work Hours</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Method</TableHead>
-                        <TableHead>Notes</TableHead>
                         {(canDeleteRecords || canEditAttendance) && <TableHead className="text-right">Actions</TableHead>}
                       </TableRow>
                     </TableHeader>
@@ -2080,12 +1773,9 @@ export default function AttendancePage() {
                                     Manual
                                   </Badge>
                                 )}
-                            </TableCell>
-                            <TableCell className="max-w-[400px] whitespace-normal break-words text-xs leading-relaxed py-4">
-                              {record.notes || (record.metadata as any)?.notes || <span className="text-muted-foreground/30 italic">No notes</span>}
-                            </TableCell>
-                            {/* Actions */}
-                            {(canDeleteRecords || canEditAttendance) && (
+                              </TableCell>
+                              {/* Actions */}
+                              {(canDeleteRecords || canEditAttendance) && (
                                 <TableCell className="text-right">
                                   <div className="flex justify-end gap-2">
                                     {canEditAttendance && (
@@ -2229,11 +1919,7 @@ export default function AttendancePage() {
                         </div>
 
                         <div className="space-y-2">
-                          {(new Date(attendanceForm.date).getDay() === 0 || new Date(attendanceForm.date).getDay() === 6) ? (
-                            <Label>Notes *</Label>
-                          ) : (
-                            <Label>Notes (Optional)</Label>
-                          )}
+                          <Label>Notes (Optional)</Label>
                           <Textarea
                             value={attendanceForm.notes}
                             onChange={(e) => setAttendanceForm({ ...attendanceForm, notes: e.target.value })}
@@ -2397,7 +2083,6 @@ export default function AttendancePage() {
                         <TableHead>Work Hours</TableHead>
                         <TableHead>Method</TableHead>
                         <TableHead>Status</TableHead>
-                        <TableHead>Notes</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -2462,9 +2147,6 @@ export default function AttendancePage() {
                                 }>
                                   {record.status}
                                 </Badge>
-                              </TableCell>
-                              <TableCell className="max-w-[300px] whitespace-normal break-words text-xs py-4 italic text-muted-foreground">
-                                {record.notes || (record.metadata as any)?.notes || '—'}
                               </TableCell>
                             </TableRow>
                           );

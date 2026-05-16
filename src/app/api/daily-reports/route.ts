@@ -45,16 +45,15 @@ export const GET = withApiHandler(async (request, context) => {
   const user = context.auth!.user;
   // Allow authenticated users to read reports based on their role
   // Admin-like roles can see all reports, employees can see their own
-
-  const role = user.role?.toLowerCase() || '';
-  const isAdminLike = ['admin', 'superadmin', 'super_admin', 'manager', 'project_manager', 'hr_manager', 'ceo', 'cto'].includes(role);
+  
+  const isAdminLike = user.role === 'Admin' || user.role === 'SuperAdmin' || user.role === 'Manager';
   const searchParams = new URL(request.url).searchParams;
   const id = searchParams.get('id');
 
   const accessToken = context.auth?.accessToken;
   const tenantId = context.auth?.user.tenantId;
   if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
-
+  
   const actor = await getCurrentSupabaseActor(accessToken);
   const supabase = getAdminRouteSupabase();
 
@@ -87,41 +86,31 @@ export const GET = withApiHandler(async (request, context) => {
   const availableStatus = searchParams.get('availableStatus');
   let query = supabase
     .from('daily_reports')
-    .select('*, users(first_name,last_name,email)', { count: 'exact' })
+    .select('*, users!inner(first_name,last_name,email)', { count: 'exact' })
     .eq('tenant_id', tenantId);
   if (!isAdminLike) query = query.eq('user_id', actor.authUserId);
   if (availableStatus && availableStatus !== 'all') query = query.eq('available_status', availableStatus);
   if (startDate) query = query.gte('date', startDate);
   if (endDate) query = query.lte('date', endDate);
-  console.log('[DailyReports API] Fetching with:', { tenantId, isAdminLike, limit, offset, employeeId, startDate, endDate });
   const { data, count, error } = await query.order('created_at', { ascending: false }).range(offset, offset + limit - 1);
-  if (error) {
-    console.error('[DailyReports API] Supabase error:', error);
-    throw error;
-  }
-  
+  if (error) throw error;
   const rows = (data as Record<string, any>[] | null) ?? [];
-  console.log('[DailyReports API] Rows fetched:', rows.length, 'Total count:', count);
-  
   let filteredRows = rows;
   const authIds = rows.map((row) => String(row.user_id)).filter(Boolean);
   const employeeMap = await listSupabaseEmployeesByAuthIds(tenantId, authIds);
-  
-  if (isAdminLike && employeeId && employeeId !== 'all' && employeeId !== 'undefined' && employeeId !== 'null') {
+  if (isAdminLike && employeeId && employeeId !== 'all') {
     filteredRows = rows.filter((row) => employeeMap.get(String(row.user_id)) === Number(employeeId));
-    console.log('[DailyReports API] After filter rows:', filteredRows.length);
   }
   const userMap = await buildLegacyUserIdMap(accessToken, authIds, tenantId);
   return NextResponse.json({
     success: true,
     data: filteredRows.map((row) => normalizeSupabaseDailyReportRow({
       ...row,
-      user_first_name: row.users?.first_name || (Array.isArray(row.users) ? row.users[0]?.first_name : null),
-      user_last_name: row.users?.last_name || (Array.isArray(row.users) ? row.users[0]?.last_name : null),
-      user_email: row.users?.email || (Array.isArray(row.users) ? row.users[0]?.email : null),
+      user_first_name: row.users?.first_name ?? null,
+      user_last_name: row.users?.last_name ?? null,
+      user_email: row.users?.email ?? null,
     }, userMap, employeeMap)),
-    message: `Fetched ${filteredRows.length} reports out of ${count} total`,
-    debug: { limit, offset, rowsRaw: rows.length, filtered: filteredRows.length },
+    message: 'Daily reports fetched successfully',
     errors: null,
     meta: { page: Math.floor(offset / limit) + 1, limit, total: Number(count ?? 0) },
   });
@@ -131,13 +120,13 @@ export const POST = withApiHandler(async (request, context) => {
   const user = context.auth!.user;
   // Allow authenticated users to create their own daily reports
   // RBAC permission check removed - employees can create their own reports
-
+  
   const payload = createDailyReportSchema.parse(await request.json());
 
   const accessToken = context.auth?.accessToken;
   const tenantId = context.auth?.user.tenantId;
   if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
-
+  
   const actor = await getCurrentSupabaseActor(accessToken);
   const supabase = getAdminRouteSupabase();
   const { data: existing } = await supabase
@@ -147,19 +136,19 @@ export const POST = withApiHandler(async (request, context) => {
     .eq('date', payload.date)
     .eq('tenant_id', tenantId)
     .maybeSingle();
-
+  
   if (existing) {
     const { data: updated, error } = await supabase.from('daily_reports').update({
       available_status: payload.availableStatus,
       updated_at: new Date().toISOString(),
     }).eq('id', existing.id).select('*').single();
     if (error || !updated) throw error ?? new Error('Failed to update daily report');
-
+    
     const userMap = await buildLegacyUserIdMap(accessToken, [actor.authUserId], tenantId);
     const employeeMap = await listSupabaseEmployeesByAuthIds(tenantId, [actor.authUserId]);
     return NextResponse.json(normalizeSupabaseDailyReportRow(updated, userMap, employeeMap));
   }
-
+  
   const now = new Date().toISOString();
   const { data: created, error } = await supabase.from('daily_reports').insert({
     user_id: actor.authUserId,
@@ -170,7 +159,7 @@ export const POST = withApiHandler(async (request, context) => {
     updated_at: now,
   }).select('*').single();
   if (error || !created) throw error ?? new Error('Failed to create daily report');
-
+  
   const userMap = await buildLegacyUserIdMap(accessToken, [actor.authUserId], tenantId);
   const employeeMap = await listSupabaseEmployeesByAuthIds(tenantId, [actor.authUserId]);
   return NextResponse.json(normalizeSupabaseDailyReportRow(created, userMap, employeeMap), { status: 201 });
@@ -184,7 +173,7 @@ export const PUT = withApiHandler(async (request, context) => {
   const accessToken = context.auth?.accessToken;
   const tenantId = context.auth?.user.tenantId;
   if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
-
+  
   const actor = await getCurrentSupabaseActor(accessToken);
   const supabase = getAdminRouteSupabase();
   const { data: existing } = await supabase
@@ -194,18 +183,18 @@ export const PUT = withApiHandler(async (request, context) => {
     .eq('tenant_id', tenantId)
     .single();
   if (!existing) throw new NotFoundError('Daily report not found');
-
+  
   const { data: updated, error } = await supabase.from('daily_reports').update({
     ...(payload.date !== undefined ? { date: payload.date } : {}),
     ...(payload.availableStatus !== undefined ? { available_status: payload.availableStatus } : {}),
     updated_at: new Date().toISOString(),
   })
-    .eq('id', id)
-    .eq('tenant_id', tenantId)
-    .select('*')
-    .single();
+  .eq('id', id)
+  .eq('tenant_id', tenantId)
+  .select('*')
+  .single();
   if (error || !updated) throw error ?? new Error('Failed to update daily report');
-
+  
   const authIds = [String(updated.user_id)];
   const userMap = await buildLegacyUserIdMap(accessToken, authIds, tenantId);
   const employeeMap = await listSupabaseEmployeesByAuthIds(tenantId, authIds);
@@ -219,7 +208,7 @@ export const DELETE = withApiHandler(async (request, context) => {
   const accessToken = context.auth?.accessToken;
   const tenantId = context.auth?.user.tenantId;
   if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
-
+  
   const actor = await getCurrentSupabaseActor(accessToken);
   const supabase = getAdminRouteSupabase();
   const { data: existing } = await supabase
@@ -229,7 +218,7 @@ export const DELETE = withApiHandler(async (request, context) => {
     .eq('tenant_id', tenantId)
     .single();
   if (!existing) throw new NotFoundError('Daily report not found');
-
+  
   const { data: deleted, error } = await supabase
     .from('daily_reports')
     .delete()
@@ -238,12 +227,12 @@ export const DELETE = withApiHandler(async (request, context) => {
     .select('*')
     .single();
   if (error || !deleted) throw error ?? new Error('Failed to delete daily report');
-
+  
   const authIds = [String(deleted.user_id)];
   const userMap = await buildLegacyUserIdMap(accessToken, authIds, tenantId);
   const employeeMap = await listSupabaseEmployeesByAuthIds(tenantId, authIds);
-  return NextResponse.json({
-    message: 'Daily report deleted successfully',
-    dailyReport: normalizeSupabaseDailyReportRow(deleted, userMap, employeeMap)
+  return NextResponse.json({ 
+    message: 'Daily report deleted successfully', 
+    dailyReport: normalizeSupabaseDailyReportRow(deleted, userMap, employeeMap) 
   });
 }, { requireAuth: true, roles: ['Employee'] });

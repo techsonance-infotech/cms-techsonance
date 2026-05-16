@@ -35,7 +35,6 @@ function normalizeSupabaseLeaveRequestRow(
     leavePeriod: row.leave_period,
     actualDays: row.actual_days,
     approvedBy,
-    adminComment: row.admin_comment ?? null,
     createdAt: row.created_at ?? null,
     updatedAt: row.updated_at ?? null,
   };
@@ -138,18 +137,7 @@ export const POST = withApiHandler(async (request, context) => {
     .single();
   if (!employee) throw new NotFoundError('Employee not found');
   const now = new Date().toISOString();
-
-  // Manual ID Generation to bypass unreliable database sequences
-  const { data: maxRecord } = await supabase
-    .from('leave_requests')
-    .select('id')
-    .order('id', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  const nextId = (maxRecord?.id || 0) + 1;
-
   const { data: created, error } = await supabase.from('leave_requests').insert({
-    id: nextId,
     employee_id: employeeId,
     leave_type: payload.leaveType,
     start_date: payload.startDate,
@@ -204,9 +192,8 @@ export const PUT = withApiHandler(async (request, context) => {
     ...(payload.leavePeriod !== undefined ? { leave_period: payload.leavePeriod } : {}),
     ...(payload.actualDays !== undefined ? { actual_days: payload.actualDays } : {}),
     ...(payload.status !== undefined
-      ? { status: payload.status, approved_by: isAdminLike && (payload.status === 'approved' || payload.status === 'rejected') ? actor.authUserId : existing.approved_by }
+      ? { status: payload.status, approved_by: isAdminLike && payload.status === 'approved' ? actor.authUserId : existing.approved_by }
       : {}),
-    ...(payload.adminComment !== undefined ? { admin_comment: payload.adminComment } : {}),
     updated_at: new Date().toISOString(),
   })
   .eq('id', id)
