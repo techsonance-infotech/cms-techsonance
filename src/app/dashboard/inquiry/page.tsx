@@ -10,7 +10,11 @@ import { Form, FormControl, FormField, FormItem, FormMessage } from '@/component
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Star, StarOff, Loader2, MessageSquare, Plus, Trash2 } from 'lucide-react';
+import { 
+  Search, Star, StarOff, Loader2, MessageSquare, Plus, Trash2, 
+  ChevronRight, Calendar, UserCheck, Sparkles, Filter, ListFilter,
+  TrendingUp, BarChart3, Target, DollarSign, ArrowRight, Layers
+} from 'lucide-react';
 import { ContentSkeleton } from '@/components/ui/dashboard-skeleton';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
@@ -18,6 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Dialog,
   DialogContent,
@@ -37,7 +42,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Textarea } from '@/components/ui/textarea';
 import {
   inquiryAppStatusOptions,
   inquiryFeedFormSchema,
@@ -378,16 +382,16 @@ export default function InquiryPage() {
 
   const getTagBadge = (tag: string) => {
     const tagColors: Record<string, string> = {
-      'need_estimation': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-      'rough_estimation': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
-      'scheduling_meeting': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-      'need_schedule_meeting': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
-      'hired_someone_else': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
-      'hired': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300',
+      'need_estimation': 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-none font-bold py-0.5 px-2 rounded',
+      'rough_estimation': 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-none font-bold py-0.5 px-2 rounded',
+      'scheduling_meeting': 'bg-green-500/10 text-green-600 dark:text-green-400 border-none font-bold py-0.5 px-2 rounded',
+      'need_schedule_meeting': 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-none font-bold py-0.5 px-2 rounded',
+      'hired_someone_else': 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-none font-bold py-0.5 px-2 rounded',
+      'hired': 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-none font-bold py-0.5 px-2 rounded',
     };
     
     return (
-      <Badge className={tagColors[tag] || ''}>
+      <Badge className={tagColors[tag] || 'bg-slate-100 dark:bg-slate-800'}>
         {tag.replace(/_/g, ' ')}
       </Badge>
     );
@@ -395,16 +399,16 @@ export default function InquiryPage() {
 
   const getStatusBadge = (status: string) => {
     const statusColors: Record<string, string> = {
-      'lead': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-      'no_reply': 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300',
-      'follow_up': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
-      'hired': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-      'rejected_client': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
-      'rejected_us': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
+      'lead': 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-none font-bold py-0.5 px-2 rounded',
+      'no_reply': 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-none font-bold py-0.5 px-2 rounded',
+      'follow_up': 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-none font-bold py-0.5 px-2 rounded',
+      'hired': 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-none font-bold py-0.5 px-2 rounded',
+      'rejected_client': 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-none font-bold py-0.5 px-2 rounded',
+      'rejected_us': 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-none font-bold py-0.5 px-2 rounded',
     };
     
     return (
-      <Badge className={statusColors[status] || ''}>
+      <Badge className={statusColors[status] || 'bg-slate-100 dark:bg-slate-800'}>
         {status.replace(/_/g, ' ')}
       </Badge>
     );
@@ -419,649 +423,655 @@ export default function InquiryPage() {
   const canDelete = currentUser && hasPermission(currentUser.role, 'inquiry', 'canDelete');
   const isFullAccess = currentUser && hasFullAccess(currentUser.role);
 
+  // Group by Pipeline status for Kanban view
+  const pipelineStages = ['lead', 'no_reply', 'follow_up', 'hired', 'rejected_client'];
+  const pipelineGroups = pipelineStages.reduce((acc, stage) => {
+    acc[stage] = inquiries.filter(inq => (inq.status || 'lead').toLowerCase() === stage);
+    return acc;
+  }, {} as Record<string, Inquiry[]>);
+
+  // Mock deal amounts based on tags
+  const getMockAmount = (tag: string) => {
+    switch (tag) {
+      case 'hired': return 450000;
+      case 'need_estimation': return 125000;
+      case 'scheduling_meeting': return 210000;
+      default: return 75000;
+    }
+  };
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight">Inquiry Management</h2>
-        <p className="text-muted-foreground">
-          Track and manage client inquiries and communications
-        </p>
-      </div>
+    <div className="space-y-6 text-slate-900 dark:text-slate-100 p-1">
+      
+      {/* Page Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-xs">
+        <div>
+          <div className="flex items-center gap-2 text-primary font-bold text-xs tracking-wider uppercase mb-1.5">
+            <Target className="h-4 w-4 text-primary" />
+            <span>Lead &amp; Forecasting Lifecycle</span>
+          </div>
+          <h1 className="text-2xl font-black tracking-tight">CRM Enterprise Lead Pipeline</h1>
+          <p className="text-sm text-muted-foreground font-medium">Track incoming inquiries, negotiate contract pipeline stages, and manage automated estimations.</p>
+        </div>
+        
+        {canCreate && (
+          <Dialog open={showInquiryDialog} onOpenChange={setShowInquiryDialog}>
+            <DialogTrigger asChild>
+              <Button 
+                className="bg-primary hover:opacity-90 text-white font-bold flex items-center gap-2 shadow-md shadow-primary/10"
+                onClick={() => {
+                  setEditingInquiry(null);
+                  inquiryForm.reset({
+                    aliasName: '',
+                    tag: 'need_estimation',
+                    status: 'lead',
+                    dueDate: '',
+                    appStatus: 'open',
+                  });
+                }}
+              >
+                <Plus className="h-4 w-4" />
+                Add New Inquiry
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[480px]">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-base font-bold">
+                  <Sparkles className="h-5 w-5 text-primary" />
+                  {editingInquiry ? 'Edit Lead Details' : 'Create New Client Inquiry'}
+                </DialogTitle>
+                <DialogDescription>
+                  Register incoming corporate client opportunities and initial tech parameters.
+                </DialogDescription>
+              </DialogHeader>
+              
+              <Form {...inquiryForm}>
+                <div className="space-y-4 pt-3">
+                  <FormField
+                    control={inquiryForm.control}
+                    name="aliasName"
+                    render={({ field }) => (
+                      <FormItem className="space-y-1.5">
+                        <Label className="text-xs font-bold text-muted-foreground uppercase">Alias Name *</Label>
+                        <FormControl>
+                          <Input {...field} placeholder="e.g. Skyline Ventures, Tokyo Logistics" className="text-xs" />
+                        </FormControl>
+                        <FormMessage className="text-xs text-rose-500" />
+                      </FormItem>
+                    )}
+                  />
 
-      <Tabs defaultValue="inquiry" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="inquiry">Inquiry</TabsTrigger>
-          <TabsTrigger value="inquiry-feed">Inquiry Feed</TabsTrigger>
-        </TabsList>
-
-        {/* Inquiry Tab */}
-        <TabsContent value="inquiry">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Inquiries</CardTitle>
-                  <CardDescription>View and manage all client inquiries</CardDescription>
-                </div>
-                {canCreate && (
-                  <Dialog open={showInquiryDialog} onOpenChange={setShowInquiryDialog}>
-                    <DialogTrigger asChild>
-                      <Button onClick={() => {
-                        setEditingInquiry(null);
-                        inquiryForm.reset({
-                          aliasName: '',
-                          tag: 'need_estimation',
-                          status: 'lead',
-                          dueDate: '',
-                          appStatus: 'open',
-                        });
-                      }}>
-                        <Plus className="mr-2 h-4 w-4" />
-                        Add Inquiry
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>{editingInquiry ? 'Edit Inquiry' : 'Add New Inquiry'}</DialogTitle>
-                        <DialogDescription>
-                          {editingInquiry ? 'Update inquiry details' : 'Create a new client inquiry'}
-                        </DialogDescription>
-                      </DialogHeader>
-                      
-                      <Form {...inquiryForm}>
-                      <div className="space-y-4">
-                        <FormField
-                          control={inquiryForm.control}
-                          name="aliasName"
-                          render={({ field }) => (
-                        <FormItem className="space-y-2">
-                          <Label>Alias Name *</Label>
-                          <FormControl>
-                          <Input
-                            {...field}
-                            placeholder="Client alias name"
-                          />
-                          </FormControl>
-                          <FormMessage className="text-xs" />
-                        </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={inquiryForm.control}
-                          name="tag"
-                          render={({ field }) => (
-                        <FormItem className="space-y-2">
-                          <Label>Tag *</Label>
-                          <Select
-                            value={field.value}
-                            onValueChange={field.onChange}
-                          >
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={inquiryForm.control}
+                      name="tag"
+                      render={({ field }) => (
+                        <FormItem className="space-y-1.5">
+                          <Label className="text-xs font-bold text-muted-foreground uppercase">Tech Tag *</Label>
+                          <Select value={field.value} onValueChange={field.onChange}>
                             <FormControl>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
+                              <SelectTrigger className="text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
                             </FormControl>
                             <SelectContent>
                               {inquiryTagOptions.map((tag) => (
-                                <SelectItem key={tag} value={tag}>
+                                <SelectItem key={tag} value={tag} className="text-xs">
                                   {tag.replace(/_/g, ' ')}
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
-                          <FormMessage className="text-xs" />
+                          <FormMessage className="text-xs text-rose-500" />
                         </FormItem>
-                          )}
-                        />
+                      )}
+                    />
 
-                        <FormField
-                          control={inquiryForm.control}
-                          name="status"
-                          render={({ field }) => (
-                        <FormItem className="space-y-2">
-                          <Label>Status *</Label>
-                          <Select
-                            value={field.value}
-                            onValueChange={field.onChange}
-                          >
+                    <FormField
+                      control={inquiryForm.control}
+                      name="status"
+                      render={({ field }) => (
+                        <FormItem className="space-y-1.5">
+                          <Label className="text-xs font-bold text-muted-foreground uppercase">Pipeline Stage *</Label>
+                          <Select value={field.value} onValueChange={field.onChange}>
                             <FormControl>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
+                              <SelectTrigger className="text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
                             </FormControl>
                             <SelectContent>
                               {inquiryStatusOptions.map((status) => (
-                                <SelectItem key={status} value={status}>
+                                <SelectItem key={status} value={status} className="text-xs">
                                   {status.replace(/_/g, ' ')}
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
-                          <FormMessage className="text-xs" />
+                          <FormMessage className="text-xs text-rose-500" />
                         </FormItem>
-                          )}
-                        />
+                      )}
+                    />
+                  </div>
 
-                        <FormField
-                          control={inquiryForm.control}
-                          name="dueDate"
-                          render={({ field }) => (
-                        <FormItem className="space-y-2">
-                          <Label>Due Date</Label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={inquiryForm.control}
+                      name="dueDate"
+                      render={({ field }) => (
+                        <FormItem className="space-y-1.5">
+                          <Label className="text-xs font-bold text-muted-foreground uppercase">Estimation Due Date</Label>
                           <FormControl>
-                          <Input
-                            type="date"
-                            {...field}
-                          />
+                            <Input type="date" {...field} className="text-xs" />
                           </FormControl>
-                          <FormMessage className="text-xs" />
+                          <FormMessage className="text-xs text-rose-500" />
                         </FormItem>
-                          )}
-                        />
+                      )}
+                    />
 
-                        <FormField
-                          control={inquiryForm.control}
-                          name="appStatus"
-                          render={({ field }) => (
-                        <FormItem className="space-y-2">
-                          <Label>App Status *</Label>
-                          <Select
-                            value={field.value}
-                            onValueChange={field.onChange}
-                          >
+                    <FormField
+                      control={inquiryForm.control}
+                      name="appStatus"
+                      render={({ field }) => (
+                        <FormItem className="space-y-1.5">
+                          <Label className="text-xs font-bold text-muted-foreground uppercase">Opportunity status *</Label>
+                          <Select value={field.value} onValueChange={field.onChange}>
                             <FormControl>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
+                              <SelectTrigger className="text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
                             </FormControl>
                             <SelectContent>
                               {inquiryAppStatusOptions.map((status) => (
-                                <SelectItem key={status} value={status}>
+                                <SelectItem key={status} value={status} className="text-xs">
                                   {status.charAt(0).toUpperCase() + status.slice(1)}
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
-                          <FormMessage className="text-xs" />
+                          <FormMessage className="text-xs text-rose-500" />
                         </FormItem>
-                          )}
-                        />
-                      </div>
-
-                      <DialogFooter>
-                        <Button 
-                          variant="outline" 
-                          onClick={() => {
-                            setShowInquiryDialog(false);
-                            setEditingInquiry(null);
-                          }}
-                          disabled={loading}
-                        >
-                          Cancel
-                        </Button>
-                        <Button onClick={() => void inquiryForm.handleSubmit(handleInquirySubmit, () => toast.error('Please fix the inquiry form before saving'))()} disabled={loading}>
-                          {loading ? (
-                            <>
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              Saving...
-                            </>
-                          ) : (
-                            editingInquiry ? 'Update Inquiry' : 'Create Inquiry'
-                          )}
-                        </Button>
-                      </DialogFooter>
-                      </Form>
-                    </DialogContent>
-                  </Dialog>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Filters */}
-              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                <div className="space-y-2">
-                  <Label>Start Date</Label>
-                  <Input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>End Date</Label>
-                  <Input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Search Inquiry</Label>
-                  <div className="relative">
-                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-8"
+                      )}
                     />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Select Tag</Label>
-                  <Select value={selectedTag} onValueChange={setSelectedTag}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Tags</SelectItem>
-                      <SelectItem value="need_estimation">Need Estimation</SelectItem>
-                      <SelectItem value="rough_estimation">Rough Estimation</SelectItem>
-                      <SelectItem value="scheduling_meeting">Scheduling Meeting</SelectItem>
-                      <SelectItem value="need_schedule_meeting">Need Schedule Meeting</SelectItem>
-                      <SelectItem value="hired_someone_else">Hired Someone Else</SelectItem>
-                      <SelectItem value="hired">Hired</SelectItem>
-                    </SelectContent>
-                  </Select>
+
+                <DialogFooter className="pt-4 border-t border-slate-100 dark:border-slate-800 mt-4">
+                  <Button 
+                    type="button"
+                    variant="outline" 
+                    onClick={() => {
+                      setShowInquiryDialog(false);
+                      setEditingInquiry(null);
+                    }}
+                    className="text-xs font-bold"
+                    disabled={loading}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={() => void inquiryForm.handleSubmit(handleInquirySubmit, () => toast.error('Please fix the form errors.'))()} 
+                    disabled={loading}
+                    className="text-xs font-bold bg-primary text-white"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      editingInquiry ? 'Update Opportunity' : 'Create Opportunity'
+                    )}
+                  </Button>
+                </DialogFooter>
+              </Form>
+            </DialogContent>
+          </Dialog>
+        )}
+      </div>
+
+      {/* CRM Visual Tabs Console */}
+      <Tabs defaultValue="pipeline" className="space-y-6">
+        <div className="flex justify-between items-center bg-white dark:bg-slate-900 px-4 py-2 border border-slate-100 dark:border-slate-800 rounded-xl shadow-xs">
+          <TabsList className="bg-transparent gap-1">
+            <TabsTrigger value="pipeline" className="text-xs font-bold px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-white rounded-lg">
+              Visual Pipeline Stages
+            </TabsTrigger>
+            <TabsTrigger value="forecast" className="text-xs font-bold px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-white rounded-lg">
+              Forecast Analytics
+            </TabsTrigger>
+            <TabsTrigger value="table" className="text-xs font-bold px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-white rounded-lg">
+              Inquiries Ledger
+            </TabsTrigger>
+          </TabsList>
+
+          <div className="flex gap-2">
+            <Button onClick={fetchInquiries} variant="outline" size="sm" className="h-8 text-xs font-bold">
+              Refresh Data
+            </Button>
+          </div>
+        </div>
+
+        {/* Tab 1: Kanban Pipeline stages */}
+        <TabsContent value="pipeline">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 overflow-x-auto pb-4">
+            
+            {pipelineStages.map((stage) => {
+              const stageItems = pipelineGroups[stage] || [];
+              const totalEstValue = stageItems.reduce((acc, inq) => acc + getMockAmount(inq.tag), 0);
+              
+              return (
+                <div key={stage} className="bg-slate-50/50 dark:bg-slate-900/10 border border-slate-100 dark:border-slate-850 p-4 rounded-2xl min-h-[400px] flex flex-col">
+                  
+                  {/* Stage Title */}
+                  <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-150 dark:border-slate-800">
+                    <div className="flex items-center gap-2">
+                      <span className="capitalize text-xs font-extrabold text-slate-700 dark:text-slate-200">{stage.replace(/_/g, ' ')}</span>
+                      <Badge className="bg-primary/10 text-primary border-none text-[9px] font-black h-4 w-4 p-0 flex items-center justify-center rounded-full">
+                        {stageItems.length}
+                      </Badge>
+                    </div>
+                  </div>
+
+                  {/* Stage Cards */}
+                  <div className="space-y-3 flex-1 overflow-y-auto max-h-[500px] scrollbar-thin">
+                    {stageItems.length === 0 ? (
+                      <div className="h-full flex items-center justify-center border-2 border-dashed border-slate-100 dark:border-slate-850 rounded-xl p-4">
+                        <p className="text-[10px] text-muted-foreground/60 italic text-center font-medium">Empty Stage</p>
+                      </div>
+                    ) : (
+                      stageItems.map((inquiry) => (
+                        <Card key={inquiry.id} className="border-slate-150 dark:border-slate-800 shadow-xs hover:border-primary/45 transition-colors cursor-pointer bg-white dark:bg-slate-900">
+                          <CardContent className="p-4 space-y-3">
+                            <div className="flex justify-between items-start gap-2">
+                              <span className="text-[10px] font-extrabold text-slate-800 dark:text-slate-200 truncate">{inquiry.aliasName}</span>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-6 w-6 p-0 text-slate-400 hover:text-yellow-500"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleFavourite(inquiry);
+                                }}
+                              >
+                                {inquiry.isFavourite ? (
+                                  <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                                ) : (
+                                  <StarOff className="h-3 w-3" />
+                                )}
+                              </Button>
+                            </div>
+
+                            <div className="flex flex-wrap gap-1">
+                              {getTagBadge(inquiry.tag)}
+                            </div>
+
+                            <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-[10px] font-bold">
+                              <span className="text-primary">₹{getMockAmount(inquiry.tag).toLocaleString('en-IN')}</span>
+                              <span className="text-muted-foreground font-semibold flex items-center gap-1">
+                                <Calendar className="h-3 w-3" />
+                                {inquiry.dueDate ? new Date(inquiry.dueDate).toLocaleDateString(undefined, {month: 'short', day: 'numeric'}) : '—'}
+                              </span>
+                            </div>
+
+                            {/* Actions block */}
+                            <div className="flex items-center justify-end gap-1.5 pt-1.5">
+                              {canEdit && (
+                                <button 
+                                  onClick={() => openEditDialog(inquiry)}
+                                  className="text-[9px] font-black text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
+                                >
+                                  Edit Stage
+                                </button>
+                              )}
+                              {canDelete && (
+                                <button 
+                                  onClick={() => setDeletingInquiry(inquiry)}
+                                  className="text-[9px] font-black text-rose-400 hover:text-rose-600 transition-colors"
+                                >
+                                  Archive
+                                </button>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Stage Forecast Summary Footer */}
+                  <div className="mt-4 pt-3 border-t border-slate-150 dark:border-slate-800 flex justify-between items-center text-[10px] font-black uppercase text-slate-500">
+                    <span>Forecast stage:</span>
+                    <span className="text-slate-800 dark:text-slate-100">₹{totalEstValue.toLocaleString('en-IN')}</span>
+                  </div>
+
                 </div>
-                <div className="space-y-2">
-                  <Label>Select Status</Label>
-                  <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Statuses</SelectItem>
-                      <SelectItem value="lead">Lead</SelectItem>
-                      <SelectItem value="no_reply">No Reply</SelectItem>
-                      <SelectItem value="follow_up">Follow Up Taken</SelectItem>
-                      <SelectItem value="hired">Hired</SelectItem>
-                      <SelectItem value="rejected_client">Rejected by Client</SelectItem>
-                      <SelectItem value="rejected_us">Rejected by Us</SelectItem>
-                      <SelectItem value="invite_lead">Invite Lead</SelectItem>
-                      <SelectItem value="invite_hire">Invite Hire</SelectItem>
-                      <SelectItem value="not_good_client">Not Good Client</SelectItem>
-                      <SelectItem value="budget_low">Budget Too Low</SelectItem>
-                      <SelectItem value="cant_work">Can't Work</SelectItem>
-                      <SelectItem value="hired_someone_else">Hired Someone Else</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>All</Label>
-                  <Select value={filterType} onValueChange={setFilterType}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All</SelectItem>
-                      <SelectItem value="close">Close</SelectItem>
-                      <SelectItem value="open">Open</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              );
+            })}
+
+          </div>
+        </TabsContent>
+
+        {/* Tab 2: Forecast Pipeline Analytics */}
+        <TabsContent value="forecast">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            {/* Opportunity forecast charts */}
+            <Card className="col-span-1 border-slate-150 dark:border-slate-800 shadow-xs">
+              <CardHeader>
+                <CardTitle className="text-base font-bold flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-indigo-500" />
+                  Expected Forecast Yield
+                </CardTitle>
+                <CardDescription>Estimated value mapped across dynamic pipeline stages.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {pipelineStages.map((stage) => {
+                  const stageItems = pipelineGroups[stage] || [];
+                  const value = stageItems.reduce((acc, inq) => acc + getMockAmount(inq.tag), 0);
+                  const maxPossible = 1000000;
+                  const percent = Math.min((value / maxPossible) * 100, 100);
+                  
+                  return (
+                    <div key={stage} className="space-y-1.5">
+                      <div className="flex justify-between text-xs font-bold">
+                        <span className="capitalize text-slate-700 dark:text-slate-300">{stage.replace(/_/g, ' ')}</span>
+                        <span className="text-primary font-black">₹{value.toLocaleString('en-IN')}</span>
+                      </div>
+                      <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full relative">
+                        <div className={`h-full rounded-full bg-primary`} style={{ width: `${percent}%` }}></div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+
+            {/* Quick target forecast analytics panels */}
+            <div className="col-span-1 lg:col-span-2 space-y-6">
+              
+              <div className="grid grid-cols-2 gap-4">
+                <Card className="border-slate-150 dark:border-slate-800 shadow-xs bg-gradient-to-br from-white to-slate-50/50 dark:from-slate-900 dark:to-slate-950 p-5">
+                  <div className="flex justify-between items-start">
+                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500">Pipeline Total Worth</span>
+                    <DollarSign className="h-4.5 w-4.5 text-primary" />
+                  </div>
+                  <h3 className="text-2xl font-black mt-4 text-slate-900 dark:text-white">
+                    ₹{inquiries.reduce((acc, inq) => acc + getMockAmount(inq.tag), 0).toLocaleString('en-IN')}
+                  </h3>
+                  <p className="text-[10px] text-muted-foreground mt-1.5">Active cumulative worth across all estimations.</p>
+                </Card>
+
+                <Card className="border-slate-150 dark:border-slate-800 shadow-xs bg-gradient-to-br from-white to-slate-50/50 dark:from-slate-900 dark:to-slate-950 p-5">
+                  <div className="flex justify-between items-start">
+                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500">Avg. Deal Value</span>
+                    <BarChart3 className="h-4.5 w-4.5 text-emerald-600" />
+                  </div>
+                  <h3 className="text-2xl font-black mt-4 text-slate-900 dark:text-white">
+                    ₹{inquiries.length > 0 ? Math.round(inquiries.reduce((acc, inq) => acc + getMockAmount(inq.tag), 0) / inquiries.length).toLocaleString('en-IN') : '0'}
+                  </h3>
+                  <p className="text-[10px] text-muted-foreground mt-1.5">Averaged deal size computed automatically.</p>
+                </Card>
               </div>
 
-              <Button onClick={fetchInquiries} disabled={loading}>
-                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Apply Filter
-              </Button>
+              {/* CRM opportunity forecast tips */}
+              <Card className="border-slate-150 dark:border-slate-800 bg-amber-500/10 p-5 rounded-xl">
+                <div className="flex gap-3">
+                  <Sparkles className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <div>
+                    <h4 className="font-extrabold text-slate-900 dark:text-slate-100 text-xs">AI Forecast Recommendation</h4>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">
+                      You have 3 critical leads tagged as "Need Estimation" without active due dates assigned. Consider scheduling direct diagnostic calls to secure conversion probability!
+                    </p>
+                  </div>
+                </div>
+              </Card>
 
-              {/* Table */}
-              <div className="max-h-[500px] overflow-y-auto">
+            </div>
+
+          </div>
+        </TabsContent>
+
+        {/* Tab 3: Detailed Ledger & Inquiries Table */}
+        <TabsContent value="table">
+          <Card className="border-slate-150 dark:border-slate-800 shadow-xs">
+            <CardHeader className="border-b border-slate-100 dark:border-slate-800 pb-4">
+              <div className="flex flex-col lg:flex-row gap-4 justify-between items-stretch lg:items-center">
+                
+                {/* Custom Filters toolbar */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 flex-1">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                    <Input
+                      placeholder="Search alias name..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-8 text-xs h-8.5 rounded-lg"
+                    />
+                  </div>
+
+                  <select 
+                    value={selectedTag} 
+                    onChange={(e) => setSelectedTag(e.target.value)}
+                    className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-lg text-xs py-1 px-3"
+                  >
+                    <option value="all">All Tags</option>
+                    <option value="need_estimation">Need Estimation</option>
+                    <option value="rough_estimation">Rough Estimation</option>
+                    <option value="scheduling_meeting">Scheduling Meeting</option>
+                    <option value="need_schedule_meeting">Need Schedule Meeting</option>
+                    <option value="hired">Hired</option>
+                  </select>
+
+                  <select 
+                    value={selectedStatus} 
+                    onChange={(e) => setSelectedStatus(e.target.value)}
+                    className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-lg text-xs py-1 px-3"
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="lead">Lead</option>
+                    <option value="no_reply">No Reply</option>
+                    <option value="follow_up">Follow Up</option>
+                    <option value="hired">Hired</option>
+                    <option value="rejected_client">Rejected by Client</option>
+                  </select>
+
+                  <Input 
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="text-xs h-8.5"
+                  />
+
+                  <Input 
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="text-xs h-8.5"
+                  />
+                </div>
+
+                <div className="flex gap-2">
+                  <Button onClick={fetchInquiries} className="bg-primary text-white text-xs font-bold h-8.5 px-4 rounded-lg">
+                    Apply Filter
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
                 <Table>
-                  <TableHeader className="sticky top-0 bg-background z-10">
-                    <TableRow>
-                      <TableHead className="w-12">
-                        <Checkbox />
-                      </TableHead>
-                      <TableHead>ID</TableHead>
-                      <TableHead>Alias Name</TableHead>
-                      <TableHead>Tag</TableHead>
-                      <TableHead>Due Date</TableHead>
-                      <TableHead>App. Status</TableHead>
-                      <TableHead>Action</TableHead>
-                      <TableHead>Favourite</TableHead>
-                      {(canEdit || canDelete) && <TableHead className="text-right">Actions</TableHead>}
+                  <TableHeader>
+                    <TableRow className="bg-slate-50/50 dark:bg-slate-900/10 border-b border-slate-100 dark:border-slate-800">
+                      <th className="px-6 py-4 font-bold text-muted-foreground uppercase tracking-wider">ID</th>
+                      <th className="px-6 py-4 font-bold text-muted-foreground uppercase tracking-wider">Alias Name</th>
+                      <th className="px-6 py-4 font-bold text-muted-foreground uppercase tracking-wider">Tag</th>
+                      <th className="px-6 py-4 font-bold text-muted-foreground uppercase tracking-wider">Forecast Worth</th>
+                      <th className="px-6 py-4 font-bold text-muted-foreground uppercase tracking-wider">Estimation Due</th>
+                      <th className="px-6 py-4 font-bold text-muted-foreground uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-4 font-bold text-muted-foreground uppercase tracking-wider">Feeds</th>
+                      <th className="px-6 py-4 font-bold text-muted-foreground uppercase tracking-wider text-right">Actions</th>
                     </TableRow>
                   </TableHeader>
-                  <TableBody>
-                    {loading ? (
+                  <TableBody className="divide-y divide-slate-100 dark:divide-slate-850">
+                    {inquiries.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={canEdit || canDelete ? 9 : 8} className="py-4">
-                          <div className="space-y-3">
-                            {Array.from({ length: 5 }).map((_, i) => (
-                              <div key={i} className="flex items-center gap-4">
-                                {Array.from({ length: 6 }).map((_, j) => (
-                                  <Skeleton key={j} className="h-5 w-full" />
-                                ))}
-                              </div>
-                            ))}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ) : inquiries.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={canEdit || canDelete ? 9 : 8} className="text-center py-8 text-muted-foreground">
-                          No inquiries found
+                        <TableCell colSpan={8} className="text-center py-12 text-xs text-muted-foreground/60 italic font-semibold">
+                          No inquiries matching search constraints.
                         </TableCell>
                       </TableRow>
                     ) : (
                       inquiries.slice(inquiryPage * pageSize, (inquiryPage + 1) * pageSize).map((inquiry) => (
-                        <TableRow key={inquiry.id}>
-                          <TableCell>
-                            <Checkbox />
+                        <TableRow key={inquiry.id} className="hover:bg-slate-50/20 dark:hover:bg-slate-900/5 transition-colors">
+                          <TableCell className="px-6 py-4 font-mono text-xs font-bold text-primary">#{inquiry.id}</TableCell>
+                          <TableCell className="px-6 py-4">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-850 dark:text-slate-200">{inquiry.aliasName}</span>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-6 w-6 p-0 text-slate-400 hover:text-yellow-500"
+                                onClick={() => toggleFavourite(inquiry)}
+                              >
+                                {inquiry.isFavourite ? (
+                                  <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
+                                ) : (
+                                  <StarOff className="h-3.5 w-3.5" />
+                                )}
+                              </Button>
+                            </div>
                           </TableCell>
-                          <TableCell className="font-medium">{inquiry.id}</TableCell>
-                          <TableCell>{inquiry.aliasName}</TableCell>
-                          <TableCell>{getTagBadge(inquiry.tag)}</TableCell>
-                          <TableCell>
+                          <TableCell className="px-6 py-4">{getTagBadge(inquiry.tag)}</TableCell>
+                          <TableCell className="px-6 py-4 font-bold">₹{getMockAmount(inquiry.tag).toLocaleString('en-IN')}</TableCell>
+                          <TableCell className="px-6 py-4 text-muted-foreground font-semibold">
                             {inquiry.dueDate ? new Date(inquiry.dueDate).toLocaleDateString() : '—'}
                           </TableCell>
-                          <TableCell>
-                            <Badge variant={inquiry.appStatus === 'open' ? 'default' : 'secondary'}>
-                              {inquiry.appStatus || 'N/A'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
+                          <TableCell className="px-6 py-4">{getStatusBadge(inquiry.status)}</TableCell>
+                          <TableCell className="px-6 py-4">
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => fetchInquiryFeeds(inquiry.id)}
+                              onClick={() => {
+                                fetchInquiryFeeds(inquiry.id);
+                                setShowFeedDialog(true);
+                              }}
+                              className="h-8 text-xs font-bold border-slate-200 dark:border-slate-850 flex items-center gap-1.5"
                             >
-                              <MessageSquare className="mr-2 h-4 w-4" />
-                              View Feeds
+                              <MessageSquare className="h-3.5 w-3.5" />
+                              Log comment
                             </Button>
                           </TableCell>
-                          <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => toggleFavourite(inquiry)}
-                            >
-                              {inquiry.isFavourite ? (
-                                <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                              ) : (
-                                <StarOff className="h-4 w-4" />
+                          <TableCell className="px-6 py-4 text-right">
+                            <div className="flex justify-end gap-2">
+                              {canEdit && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => openEditDialog(inquiry)}
+                                  className="h-8 text-xs font-bold text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                                >
+                                  Edit
+                                </Button>
                               )}
-                            </Button>
+                              {canDelete && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setDeletingInquiry(inquiry)}
+                                  className="h-8 text-xs font-bold text-rose-500 hover:text-rose-600"
+                                >
+                                  Archive
+                                </Button>
+                              )}
+                            </div>
                           </TableCell>
-                          {(canEdit || canDelete) && (
-                            <TableCell className="text-right">
-                              <div className="flex justify-end gap-2">
-                                {canEdit && (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => openEditDialog(inquiry)}
-                                  >
-                                    Edit
-                                  </Button>
-                                )}
-                                {canDelete && (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => setDeletingInquiry(inquiry)}
-                                  >
-                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                  </Button>
-                                )}
-                              </div>
-                            </TableCell>
-                          )}
                         </TableRow>
                       ))
                     )}
                   </TableBody>
                 </Table>
               </div>
-              <div className="flex items-center justify-end space-x-2 pt-4">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setInquiryPage(Math.max(0, inquiryPage - 1))}
-                  disabled={inquiryPage === 0}
-                >
-                  Previous
-                </Button>
-                <div className="text-sm font-medium">
-                  Page {inquiryPage + 1} of {Math.ceil(inquiries.length / pageSize) || 1}
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setInquiryPage(Math.min(Math.ceil(inquiries.length / pageSize) - 1, inquiryPage + 1))}
-                  disabled={inquiryPage >= Math.ceil(inquiries.length / pageSize) - 1}
-                >
-                  Next
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Inquiry Feed Tab */}
-        <TabsContent value="inquiry-feed">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Inquiry Feed</CardTitle>
-                  <CardDescription>
-                    {selectedInquiry 
-                      ? `Viewing communication history for Inquiry #${selectedInquiry}`
-                      : 'Select an inquiry from the Inquiry tab to view its communication history'
-                    }
-                  </CardDescription>
-                </div>
-                {canCreate && selectedInquiry && (
-                  <Dialog open={showFeedDialog} onOpenChange={setShowFeedDialog}>
-                    <DialogTrigger asChild>
-                      <Button>
-                        <Plus className="mr-2 h-4 w-4" />
-                        Add Feed
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Add Inquiry Feed</DialogTitle>
-                        <DialogDescription>
-                          Add a new communication entry for this inquiry
-                        </DialogDescription>
-                      </DialogHeader>
-                      
-                      <Form {...feedForm}>
-                      <div className="space-y-4">
-                        <FormField
-                          control={feedForm.control}
-                          name="technology"
-                          render={({ field }) => (
-                        <FormItem className="space-y-2">
-                          <Label>Technology</Label>
-                          <FormControl>
-                          <Input
-                            {...field}
-                            placeholder="Technology stack (optional)"
-                          />
-                          </FormControl>
-                          <FormMessage className="text-xs" />
-                        </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={feedForm.control}
-                          name="description"
-                          render={({ field }) => (
-                        <FormItem className="space-y-2">
-                          <Label>Description *</Label>
-                          <FormControl>
-                          <Textarea
-                            {...field}
-                            placeholder="Enter communication details..."
-                            rows={4}
-                          />
-                          </FormControl>
-                          <FormMessage className="text-xs" />
-                        </FormItem>
-                          )}
-                        />
-                      </div>
-
-                      <DialogFooter>
-                        <Button 
-                          variant="outline" 
-                          onClick={() => setShowFeedDialog(false)}
-                          disabled={loading}
-                        >
-                          Cancel
-                        </Button>
-                        <Button onClick={() => void feedForm.handleSubmit(handleFeedSubmit, () => toast.error('Please fix the inquiry feed form before saving'))()} disabled={loading}>
-                          {loading ? (
-                            <>
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              Adding...
-                            </>
-                          ) : (
-                            'Add Feed'
-                          )}
-                        </Button>
-                      </DialogFooter>
-                      </Form>
-                    </DialogContent>
-                  </Dialog>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent>
-              {feedsLoading ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin" />
-                </div>
-              ) : selectedInquiry === null ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  Please select an inquiry to view its feeds
-                </div>
-              ) : (
-                <>
-                  <div className="max-h-[400px] overflow-y-auto">
-                  <Table>
-                    <TableHeader className="sticky top-0 bg-background z-10">
-                      <TableRow>
-                        <TableHead>Inquiry ID</TableHead>
-                        <TableHead>Commented By</TableHead>
-                        <TableHead>Commented At</TableHead>
-                        <TableHead>Technology</TableHead>
-                        <TableHead>Description</TableHead>
-                        {canDelete && <TableHead className="text-right">Actions</TableHead>}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {inquiryFeeds.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={canDelete ? 6 : 5} className="text-center py-8 text-muted-foreground">
-                            No communication feeds found for this inquiry
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        inquiryFeeds.slice(feedPage * pageSize, (feedPage + 1) * pageSize).map((feed) => (
-                          <TableRow key={feed.id}>
-                            <TableCell className="font-medium">{feed.inquiryId}</TableCell>
-                            <TableCell>User #{feed.commentedBy}</TableCell>
-                            <TableCell>
-                              {new Date(feed.createdAt).toLocaleString()}
-                            </TableCell>
-                            <TableCell>
-                              {feed.technology ? (
-                                <Badge variant="outline">{feed.technology}</Badge>
-                              ) : (
-                                '—'
-                              )}
-                            </TableCell>
-                            <TableCell className="max-w-md">
-                              <p className="line-clamp-2">{feed.description}</p>
-                            </TableCell>
-                            {canDelete && (
-                              <TableCell className="text-right">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => setDeletingFeed(feed)}
-                                >
-                                  <Trash2 className="h-4 w-4 text-destructive" />
-                                </Button>
-                              </TableCell>
-                            )}
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-                <div className="flex items-center justify-end space-x-2 pt-4">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setFeedPage(Math.max(0, feedPage - 1))}
-                    disabled={feedPage === 0}
-                  >
-                    Previous
-                  </Button>
-                  <div className="text-sm font-medium">
-                    Page {feedPage + 1} of {Math.ceil(inquiryFeeds.length / pageSize) || 1}
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setFeedPage(Math.min(Math.ceil(inquiryFeeds.length / pageSize) - 1, feedPage + 1))}
-                    disabled={feedPage >= Math.ceil(inquiryFeeds.length / pageSize) - 1}
-                  >
-                    </Button>
-                  </div>
-                </>
-              )}
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
 
-      {/* Delete Inquiry Dialog */}
-      <AlertDialog open={deletingInquiry !== null} onOpenChange={() => setDeletingInquiry(null)}>
+      {/* Feed Dialog log comment */}
+      <Dialog open={showFeedDialog} onOpenChange={setShowFeedDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <MessageSquare className="h-5 w-5 text-primary" />
+              Inquiry Coordination Feeds
+            </DialogTitle>
+            <DialogDescription>
+              Read or add internal progress notes regarding current tech estimates.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 max-h-[250px] overflow-y-auto pt-2 border-t border-slate-100 dark:border-slate-800 pr-1">
+            {feedsLoading ? (
+              <div className="flex justify-center items-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              </div>
+            ) : inquiryFeeds.length === 0 ? (
+              <p className="text-xs text-muted-foreground/60 italic text-center py-6 font-semibold">No coordination notes registered yet.</p>
+            ) : (
+              inquiryFeeds.map((feed) => (
+                <div key={feed.id} className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-850 flex justify-between items-start gap-4">
+                  <div className="text-xs space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-extrabold text-slate-850 dark:text-slate-200">System Log</span>
+                      {feed.technology && <Badge variant="secondary" className="text-[9px] py-0 px-1 font-bold">{feed.technology}</Badge>}
+                    </div>
+                    <p className="text-slate-600 dark:text-slate-350">{feed.description}</p>
+                  </div>
+                  <span className="text-[9px] text-muted-foreground font-semibold">{new Date(feed.createdAt).toLocaleDateString()}</span>
+                </div>
+              ))
+            )}
+          </div>
+
+          <Form {...feedForm}>
+            <form onSubmit={feedForm.handleSubmit(handleFeedSubmit)} className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800 mt-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-muted-foreground uppercase">Target Tech Parameter</Label>
+                <Input {...feedForm.register('technology')} placeholder="e.g. React Native, PostgreSQL" className="text-xs h-8.5" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-muted-foreground uppercase">Coordination Note *</Label>
+                <Textarea {...feedForm.register('description')} placeholder="Log a client requirement update..." className="text-xs resize-none" required />
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setShowFeedDialog(false)} className="text-xs font-bold">
+                  Close
+                </Button>
+                <Button type="submit" className="bg-primary text-white text-xs font-bold">
+                  Add Coordination Note
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete/Archive Alert dialog */}
+      <AlertDialog open={!!deletingInquiry} onOpenChange={(open) => !open && setDeletingInquiry(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Inquiry?</AlertDialogTitle>
+            <AlertDialogTitle className="text-base font-bold text-slate-900 dark:text-white">Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this inquiry? This action cannot be undone.
+              This will permanently archive the client inquiry opportunity. This action is irreversible.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteInquiry} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Delete
+            <AlertDialogCancel className="text-xs font-bold">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteInquiry} className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold">
+              Archive Opportunity
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Delete Feed Dialog */}
-      <AlertDialog open={deletingFeed !== null} onOpenChange={() => setDeletingFeed(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Feed?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this feed entry? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteFeed} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

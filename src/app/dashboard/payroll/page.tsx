@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Download, Check, DollarSign, Users, Calendar, TrendingUp, Settings2 } from 'lucide-react';
+import { Loader2, Download, Check, DollarSign, Users, Calendar, TrendingUp, Settings2, Sparkles, AlertCircle, FileSpreadsheet, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -93,7 +93,7 @@ export default function PayrollPage() {
     const [businessSettings, setBusinessSettings] = useState<BusinessSettings | null>(null);
     const [attendancePage, setAttendancePage] = useState(0);
     const [payrollPage, setPayrollPage] = useState(0);
-    const pageSize = 10;
+    const pageSize = 8;
 
     const [isAdjustmentDialogOpen, setIsAdjustmentDialogOpen] = useState(false);
     const [editingPayroll, setEditingPayroll] = useState<Payroll | null>(null);
@@ -535,7 +535,6 @@ export default function PayrollPage() {
                 const empName = user ? `${user.firstName} ${user.lastName}` : employee?.employeeId || 'Unknown';
                 const filename = `Payslip_${empName}_${payroll.month}_${payroll.year}.pdf`;
 
-                // Dynamic import to avoid SSR issues
                 const html2pdf = (await import('html2pdf.js')).default;
                 
                 const opt = {
@@ -546,9 +545,7 @@ export default function PayrollPage() {
                   jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' as const }
                 };
 
-                // Create a temporary container
                 const tempDiv = document.createElement('div');
-                // Hide it from view but keep it in normal document flow so html2canvas can render it
                 tempDiv.style.position = 'absolute';
                 tempDiv.style.left = '-9999px';
                 tempDiv.style.top = '0';
@@ -577,7 +574,6 @@ export default function PayrollPage() {
         toast.info('Downloading all payslips...');
         for (const payroll of generatedPayrolls) {
             await handleDownloadPayslip(payroll);
-            // Add a small delay to prevent browser from blocking multiple downloads
             await new Promise(resolve => setTimeout(resolve, 500));
         }
         toast.success('All payslips downloaded.');
@@ -613,235 +609,225 @@ export default function PayrollPage() {
     const totalDisbursement = attendanceSummary.reduce((sum, s) => sum + s.calculatedSalary, 0);
 
     return (
-        <div className="space-y-6">
-            <div>
-                <h2 className="text-3xl font-bold tracking-tight">Payroll Management</h2>
-                <p className="text-muted-foreground">Generate and manage employee payroll based on attendance</p>
-            </div>
-
-            {/* Filters */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>Filters</CardTitle>
-                    <CardDescription>Select month, year, and employee to fetch attendance data</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <div className="space-y-2">
-                            <Label>Month</Label>
-                            <Select
-                                value={selectedMonth.toString()}
-                                onValueChange={(value) => setSelectedMonth(parseInt(value))}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {Array.from({ length: 12 }, (_, i) => (
-                                        <SelectItem key={i + 1} value={(i + 1).toString()}>
-                                            {new Date(2024, i).toLocaleString('default', { month: 'long' })}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+        <div className="space-y-6 p-1 max-w-[1600px] mx-auto">
+            
+            {/* Premium Header */}
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#030712] via-[#0f172a] to-[#1e1b4b] p-6 text-white shadow-xl border border-zinc-800">
+                <div className="absolute right-0 top-0 -mr-6 -mt-6 h-32 w-32 rounded-full bg-violet-500/10 blur-2xl" />
+                <div className="absolute left-1/3 bottom-0 -mb-6 h-24 w-24 rounded-full bg-indigo-500/10 blur-xl" />
+                <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div>
+                        <div className="flex items-center gap-2 mb-1.5">
+                            <span className="h-2 w-2 rounded-full bg-indigo-400 animate-ping" />
+                            <span className="text-xs font-semibold uppercase tracking-wider text-indigo-200">HRM Financials Console</span>
                         </div>
-                        <div className="space-y-2">
-                            <Label>Year</Label>
-                            <Select
-                                value={selectedYear.toString()}
-                                onValueChange={(value) => setSelectedYear(parseInt(value))}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {Array.from({ length: 5 }, (_, i) => {
-                                        const year = new Date().getFullYear() - 2 + i;
-                                        return (
-                                            <SelectItem key={year} value={year.toString()}>
-                                                {year}
-                                            </SelectItem>
-                                        );
-                                    })}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Employee</Label>
-                            <Select value={selectedEmployeeFilter} onValueChange={setSelectedEmployeeFilter}>
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Employees</SelectItem>
-                                    {employees.map(emp => {
-                                        const user = users.find(u => u.id === emp.userId);
-                                        return (
-                                            <SelectItem key={emp.id} value={emp.id.toString()}>
-                                                {user ? `${user.firstName} ${user.lastName} (${emp.employeeId})` : emp.employeeId}
-                                            </SelectItem>
-                                        );
-                                    })}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="flex items-end">
-                            <Button onClick={fetchAttendanceSummary} disabled={isFetching} className="w-full">
-                                {isFetching && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Fetch Attendance
+                        <h2 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white via-zinc-100 to-zinc-200 bg-clip-text text-transparent">
+                            Payroll & Benefits Administration
+                        </h2>
+                        <p className="text-sm text-zinc-300 mt-1 max-w-xl">
+                            Generate multi-tenant monthly payroll schedules, apply bonuses or regulatory deductions, and export digital payslips.
+                        </p>
+                    </div>
+                    {generatedPayrolls.length > 0 && (
+                        <div className="flex gap-2">
+                            <Button onClick={handleDownloadAllPayslips} size="sm" variant="outline" className="border-zinc-700 bg-zinc-800 text-white hover:bg-zinc-700">
+                                <Download className="mr-1.5 h-4 w-4 text-indigo-400" /> Payslips PDF
+                            </Button>
+                            <Button onClick={handleExportCSV} size="sm" className="bg-indigo-600 text-white hover:bg-indigo-500 border-none shadow-sm">
+                                <FileSpreadsheet className="mr-1.5 h-4 w-4" /> Export Ledger CSV
                             </Button>
                         </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Config & Fetch Filters panel */}
+            <Card className="border border-indigo-100 dark:border-indigo-950">
+                <CardHeader>
+                    <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                        <Sparkles className="h-4.5 w-4.5 text-indigo-500 animate-pulse" />
+                        Select Accounting Interval
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="space-y-2">
+                        <Label className="text-xs font-bold uppercase text-muted-foreground">Month</Label>
+                        <Select value={selectedMonth.toString()} onValueChange={(val) => setSelectedMonth(parseInt(val))}>
+                            <SelectTrigger className="h-10 text-xs">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {Array.from({ length: 12 }, (_, i) => (
+                                    <SelectItem key={i + 1} value={(i + 1).toString()}>
+                                        {new Date(2024, i).toLocaleString('default', { month: 'long' })}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label className="text-xs font-bold uppercase text-muted-foreground">Year</Label>
+                        <Select value={selectedYear.toString()} onValueChange={(val) => setSelectedYear(parseInt(val))}>
+                            <SelectTrigger className="h-10 text-xs">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {Array.from({ length: 5 }, (_, i) => {
+                                    const yr = new Date().getFullYear() - 2 + i;
+                                    return <SelectItem key={yr} value={yr.toString()}>{yr}</SelectItem>;
+                                })}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label className="text-xs font-bold uppercase text-muted-foreground">Employee Focus</Label>
+                        <Select value={selectedEmployeeFilter} onValueChange={setSelectedEmployeeFilter}>
+                            <SelectTrigger className="h-10 text-xs">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Employees</SelectItem>
+                                {employees.map(emp => {
+                                    const user = users.find(u => u.id === emp.userId);
+                                    return (
+                                        <SelectItem key={emp.id} value={emp.id.toString()}>
+                                            {user ? `${user.firstName} ${user.lastName} (${emp.employeeId})` : emp.employeeId}
+                                        </SelectItem>
+                                    );
+                                })}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="flex items-end">
+                        <Button onClick={fetchAttendanceSummary} disabled={isFetching} className="w-full h-10 bg-indigo-600 hover:bg-indigo-500 text-white border-none shadow-sm text-xs font-bold">
+                            {isFetching && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Compile Timesheets & Fetch
+                        </Button>
                     </div>
                 </CardContent>
             </Card>
 
-            {/* Summary Cards */}
+            {/* Bento Stats Display */}
             {attendanceSummary.length > 0 && (
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-                    <Card className="bg-gradient-to-br from-blue-50 to-white dark:from-blue-900/20 dark:to-background border-none shadow-sm pb-1">
-                        <CardHeader className="pb-3">
-                            <CardDescription className="flex items-center gap-2 font-medium text-blue-600 dark:text-blue-400">
-                                <div className="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-lg">
-                                    <Calendar className="h-4 w-4" />
-                                </div>
-                                Working Days
-                            </CardDescription>
-                            <CardTitle className="text-3xl font-bold">{totalWorkingDays}</CardTitle>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                    <Card className="border-none shadow-sm relative overflow-hidden group">
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Cycle Working Days</CardTitle>
                         </CardHeader>
+                        <CardContent>
+                            <div className="text-3xl font-extrabold text-indigo-600">{totalWorkingDays} days</div>
+                            <p className="text-[10px] text-muted-foreground mt-2">Active business cycle</p>
+                        </CardContent>
                     </Card>
-                    <Card className="bg-gradient-to-br from-indigo-50 to-white dark:from-indigo-900/20 dark:to-background border-none shadow-sm pb-1">
-                        <CardHeader className="pb-3">
-                            <CardDescription className="flex items-center gap-2 font-medium text-indigo-600 dark:text-indigo-400">
-                                <div className="p-2 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg">
-                                    <Users className="h-4 w-4" />
-                                </div>
-                                Total Employees
-                            </CardDescription>
-                            <CardTitle className="text-3xl font-bold">{attendanceSummary.length}</CardTitle>
+
+                    <Card className="border-none shadow-sm relative overflow-hidden group">
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Active Members</CardTitle>
                         </CardHeader>
+                        <CardContent>
+                            <div className="text-3xl font-extrabold">{attendanceSummary.length} staff</div>
+                            <p className="text-[10px] text-muted-foreground mt-2">Timesheet verified</p>
+                        </CardContent>
                     </Card>
-                    <Card className="bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-900/20 dark:to-background border-none shadow-sm pb-1">
-                        <CardHeader className="pb-3">
-                            <CardDescription className="flex items-center gap-2 font-medium text-emerald-600 dark:text-emerald-400">
-                                <div className="p-2 bg-emerald-100 dark:bg-emerald-900/50 rounded-lg">
-                                    <TrendingUp className="h-4 w-4" />
-                                </div>
-                                Avg Attendance
-                            </CardDescription>
-                            <CardTitle className="text-3xl font-bold">{avgAttendance}%</CardTitle>
+
+                    <Card className="border-none shadow-sm relative overflow-hidden group">
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Avg Capacity Fill</CardTitle>
                         </CardHeader>
+                        <CardContent>
+                            <div className="text-3xl font-extrabold text-emerald-600">{avgAttendance}%</div>
+                            <p className="text-[10px] text-muted-foreground mt-2">Overall cohort productivity</p>
+                        </CardContent>
                     </Card>
-                    <Card className="bg-gradient-to-br from-violet-50 to-white dark:from-violet-900/20 dark:to-background border-none shadow-sm pb-1">
-                        <CardHeader className="pb-3">
-                            <CardDescription className="flex items-center gap-2 font-medium text-violet-600 dark:text-violet-400">
-                                <div className="p-2 bg-violet-100 dark:bg-violet-900/50 rounded-lg">
-                                    <DollarSign className="h-4 w-4" />
-                                </div>
-                                Expected Disb.
-                            </CardDescription>
-                            <CardTitle className="text-3xl font-bold">₹{totalDisbursement.toLocaleString()}</CardTitle>
+
+                    <Card className="border-none shadow-sm relative overflow-hidden group">
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Expected Liabilities</CardTitle>
                         </CardHeader>
+                        <CardContent>
+                            <div className="text-3xl font-extrabold">₹{totalDisbursement.toLocaleString()}</div>
+                            <p className="text-[10px] text-muted-foreground mt-2">Estimated base gross pay</p>
+                        </CardContent>
                     </Card>
                 </div>
             )}
 
-            {/* Attendance Summary Table */}
+            {/* Attendance & Time Ledger Table */}
             {attendanceSummary.length > 0 && (
                 <Card>
-                    <CardHeader>
-                        <div className="flex items-center justify-between">
+                    <CardHeader className="pb-3 border-b dark:border-zinc-900 bg-slate-50/50 dark:bg-zinc-950/20">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
                             <div>
-                                <CardTitle>Attendance Summary</CardTitle>
-                                <CardDescription>Select employees to generate payroll</CardDescription>
+                                <CardTitle>Cycle Timesheet Ledger</CardTitle>
+                                <CardDescription>Verify employee logs and launch payroll batches</CardDescription>
                             </div>
                             <div className="flex gap-2">
-                                <Button
-                                    onClick={() => handleGeneratePayroll(false)}
-                                    disabled={isGenerating || selectedEmployees.length === 0}
-                                >
+                                <Button onClick={() => handleGeneratePayroll(false)} disabled={isGenerating || selectedEmployees.length === 0} size="sm" className="bg-indigo-600 text-white hover:bg-indigo-500">
                                     {isGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                    Generate Selected
+                                    Generate Selected ({selectedEmployees.length})
                                 </Button>
-                                <Button
-                                    onClick={() => handleGeneratePayroll(true)}
-                                    disabled={isGenerating}
-                                    variant="outline"
-                                >
+                                <Button onClick={() => handleGeneratePayroll(true)} disabled={isGenerating} size="sm" variant="outline">
                                     {isGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                     Generate All
                                 </Button>
                             </div>
                         </div>
                     </CardHeader>
-                    <CardContent>
-                        <div className="max-h-[400px] overflow-y-auto">
-                            <Table>
-                                <TableHeader className="sticky top-0 bg-background z-10">
-                                    <TableRow>
-                                        <TableHead className="w-12">
-                                            <Checkbox
-                                                checked={selectedEmployees.length === attendanceSummary.length}
-                                                onCheckedChange={toggleSelectAll}
-                                            />
-                                        </TableHead>
-                                        <TableHead>Employee</TableHead>
-                                        <TableHead>Present</TableHead>
-                                        <TableHead>Half Days</TableHead>
-                                        <TableHead>Holidays</TableHead>
-                                        <TableHead>Paid Leave</TableHead>
-                                        <TableHead>Unpaid Leave</TableHead>
-                                        <TableHead>Absent</TableHead>
-                                        <TableHead>Work %</TableHead>
-                                        <TableHead>Estimated Salary</TableHead>
+                    <CardContent className="overflow-x-auto pt-4">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead className="w-12">
+                                        <Checkbox checked={selectedEmployees.length === attendanceSummary.length} onCheckedChange={toggleSelectAll} />
+                                    </TableHead>
+                                    <TableHead>Employee</TableHead>
+                                    <TableHead>Present</TableHead>
+                                    <TableHead>Half Days</TableHead>
+                                    <TableHead>Holidays</TableHead>
+                                    <TableHead>Paid Leave</TableHead>
+                                    <TableHead>Unpaid Leave</TableHead>
+                                    <TableHead>Absent</TableHead>
+                                    <TableHead>Work %</TableHead>
+                                    <TableHead className="text-right">Estimated Gross</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {attendanceSummary.slice(attendancePage * pageSize, (attendancePage + 1) * pageSize).map((summary) => (
+                                    <TableRow key={summary.employeeId} className="hover:bg-slate-50 dark:hover:bg-zinc-900/30 transition-colors">
+                                        <TableCell>
+                                            <Checkbox checked={selectedEmployees.includes(summary.employeeId)} onCheckedChange={() => toggleEmployeeSelection(summary.employeeId)} />
+                                        </TableCell>
+                                        <TableCell className="font-bold text-zinc-900 dark:text-zinc-50">{summary.employeeName}</TableCell>
+                                        <TableCell className="font-semibold">{summary.presentDays}</TableCell>
+                                        <TableCell>{summary.halfDays}</TableCell>
+                                        <TableCell>{summary.holidayDays}</TableCell>
+                                        <TableCell>{summary.paidLeaveDays}</TableCell>
+                                        <TableCell>{summary.unpaidLeaveDays}</TableCell>
+                                        <TableCell className="text-rose-500 font-bold">{summary.absentDays > 0 ? summary.absentDays : '-'}</TableCell>
+                                        <TableCell>
+                                            <Badge variant={summary.workPercentage >= 80 ? 'default' : 'secondary'} className="text-[10px] font-bold">
+                                                {summary.workPercentage}%
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell className="font-extrabold text-indigo-600 dark:text-indigo-400 text-right">
+                                            ₹{summary.calculatedSalary.toLocaleString()}
+                                        </TableCell>
                                     </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {attendanceSummary.slice(attendancePage * pageSize, (attendancePage + 1) * pageSize).map((summary) => (
-                                        <TableRow key={summary.employeeId}>
-                                            <TableCell>
-                                                <Checkbox
-                                                    checked={selectedEmployees.includes(summary.employeeId)}
-                                                    onCheckedChange={() => toggleEmployeeSelection(summary.employeeId)}
-                                                />
-                                            </TableCell>
-                                            <TableCell className="font-medium">{summary.employeeName}</TableCell>
-                                            <TableCell>{summary.presentDays}</TableCell>
-                                            <TableCell>{summary.halfDays}</TableCell>
-                                            <TableCell>{summary.holidayDays}</TableCell>
-                                            <TableCell>{summary.paidLeaveDays}</TableCell>
-                                            <TableCell>{summary.unpaidLeaveDays}</TableCell>
-                                            <TableCell className="text-destructive font-medium">{summary.absentDays > 0 ? summary.absentDays : '-'}</TableCell>
-                                            <TableCell>
-                                                <Badge variant={summary.workPercentage >= 80 ? 'default' : 'secondary'}>
-                                                    {summary.workPercentage}%
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell className="font-semibold text-emerald-600 dark:text-emerald-400">
-                                                ₹{summary.calculatedSalary.toLocaleString()}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </div>
-                        <div className="flex items-center justify-end space-x-2 py-4">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setAttendancePage(Math.max(0, attendancePage - 1))}
-                                disabled={attendancePage === 0}
-                            >
+                                ))}
+                            </TableBody>
+                        </Table>
+                        
+                        <div className="flex items-center justify-end space-x-2 py-4 border-t mt-4">
+                            <Button variant="outline" size="sm" onClick={() => setAttendancePage(Math.max(0, attendancePage - 1))} disabled={attendancePage === 0}>
                                 Previous
                             </Button>
-                            <div className="text-sm font-medium">
+                            <div className="text-xs font-semibold">
                                 Page {attendancePage + 1} of {Math.ceil(attendanceSummary.length / pageSize) || 1}
                             </div>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setAttendancePage(Math.min(Math.ceil(attendanceSummary.length / pageSize) - 1, attendancePage + 1))}
-                                disabled={attendancePage >= Math.ceil(attendanceSummary.length / pageSize) - 1}
-                            >
+                            <Button variant="outline" size="sm" onClick={() => setAttendancePage(Math.min(Math.ceil(attendanceSummary.length / pageSize) - 1, attendancePage + 1))} disabled={attendancePage >= Math.ceil(attendanceSummary.length / pageSize) - 1}>
                                 Next
                             </Button>
                         </div>
@@ -849,138 +835,87 @@ export default function PayrollPage() {
                 </Card>
             )}
 
-            {/* Generated Payrolls */}
+            {/* Generated Payroll Batches Ledger */}
             {generatedPayrolls.length > 0 && (
                 <Card>
-                    <CardHeader>
-                        <div className="flex items-center justify-between">
+                    <CardHeader className="pb-3 border-b dark:border-zinc-900 bg-slate-50/50 dark:bg-zinc-950/20">
+                        <div className="flex justify-between items-center">
                             <div>
-                                <CardTitle>Generated Payrolls</CardTitle>
-                                <CardDescription>Manage and export payroll records</CardDescription>
-                            </div>
-                            <div className="flex gap-2">
-                                <Button onClick={handleDownloadAllPayslips} variant="outline" disabled={generatedPayrolls.length === 0}>
-                                    <Download className="mr-2 h-4 w-4" />
-                                    Download All Payslips
-                                </Button>
-                                <Button onClick={handleExportCSV} variant="outline">
-                                    <Download className="mr-2 h-4 w-4" />
-                                    Export CSV
-                                </Button>
+                                <CardTitle>Calculated Payroll Ledger</CardTitle>
+                                <CardDescription>Disburse payments and review salary brackets</CardDescription>
                             </div>
                         </div>
                     </CardHeader>
-                    <CardContent>
-                        <div className="max-h-[400px] overflow-y-auto">
-                            <Table>
-                                <TableHeader className="sticky top-0 bg-background z-10">
-                                    <TableRow>
-                                        <TableHead>Employee</TableHead>
-                                        <TableHead>Month</TableHead>
-                                        <TableHead>Calc. Salary</TableHead>
-                                        <TableHead>Bonuses</TableHead>
-                                        <TableHead>Deductions</TableHead>
-                                        <TableHead>Net Salary</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead className="text-right">Actions</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {generatedPayrolls.slice(payrollPage * pageSize, (payrollPage + 1) * pageSize).map((payroll) => (
-                                        <TableRow key={payroll.id}>
-                                            <TableCell className="font-medium">{getEmployeeName(payroll.employeeId)}</TableCell>
-                                            <TableCell>{payroll.month}</TableCell>
-                                            <TableCell>₹{payroll.calculatedSalary?.toLocaleString() || payroll.baseSalary.toLocaleString()}</TableCell>
-                                            <TableCell className="text-emerald-600 dark:text-emerald-400">
-                                                {payroll.bonuses > 0 ? `+₹${payroll.bonuses.toLocaleString()}` : '-'}
-                                            </TableCell>
-                                            <TableCell className="text-destructive">
-                                                {payroll.deductions > 0 ? `-₹${payroll.deductions.toLocaleString()}` : '-'}
-                                            </TableCell>
-                                            <TableCell className="font-bold">₹{payroll.netSalary.toLocaleString()}</TableCell>
-                                            <TableCell>
-                                                <Badge
-                                                    variant={
-                                                        payroll.status === 'paid' ? 'default' :
-                                                            payroll.status === 'approved' ? 'secondary' :
-                                                                'outline'
-                                                    }
-                                                >
-                                                    {payroll.status}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                <div className="flex justify-end gap-2">
-                                                    <Button
-                                                        size="sm"
-                                                        variant="ghost"
-                                                        onClick={() => handleDownloadPayslip(payroll)}
-                                                        title="Download Payslip"
-                                                    >
-                                                        <Download className="h-4 w-4" />
-                                                    </Button>
-                                                    {payroll.status === 'draft' && (
-                                                        <>
-                                                            <Button
-                                                                size="sm"
-                                                                variant="ghost"
-                                                                onClick={() => handleOpenAdjustment(payroll)}
-                                                                title="Adjust Bonuses & Deductions"
-                                                            >
-                                                                <Settings2 className="h-4 w-4" />
-                                                            </Button>
-                                                            <Button
-                                                                size="sm"
-                                                                variant="ghost"
-                                                                onClick={() => handleUpdateStatus(payroll.id, 'approved')}
-                                                                title="Approve Payroll"
-                                                            >
-                                                                <Check className="h-4 w-4 text-emerald-500" />
-                                                            </Button>
-                                                            <Button
-                                                                size="sm"
-                                                                variant="ghost"
-                                                                className="text-destructive hover:text-destructive"
-                                                                onClick={() => handleDeletePayroll(payroll.id)}
-                                                            >
-                                                                Delete
-                                                            </Button>
-                                                        </>
-                                                    )}
-                                                    {payroll.status === 'approved' && (
-                                                        <Button
-                                                            size="sm"
-                                                            variant="ghost"
-                                                            onClick={() => handleUpdateStatus(payroll.id, 'paid')}
-                                                        >
-                                                            Mark Paid
+                    <CardContent className="overflow-x-auto pt-4">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Employee</TableHead>
+                                    <TableHead>Month</TableHead>
+                                    <TableHead>Calc. Salary</TableHead>
+                                    <TableHead>Bonuses</TableHead>
+                                    <TableHead>Deductions</TableHead>
+                                    <TableHead>Net Salary</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead className="text-right">Actions</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {generatedPayrolls.slice(payrollPage * pageSize, (payrollPage + 1) * pageSize).map((payroll) => (
+                                    <TableRow key={payroll.id} className="hover:bg-slate-50 dark:hover:bg-zinc-900/30 transition-colors">
+                                        <TableCell className="font-bold text-zinc-900 dark:text-zinc-50">{getEmployeeName(payroll.employeeId)}</TableCell>
+                                        <TableCell className="font-mono text-xs">{payroll.month}</TableCell>
+                                        <TableCell className="font-semibold">₹{(payroll.calculatedSalary || payroll.baseSalary).toLocaleString()}</TableCell>
+                                        <TableCell className="text-emerald-600 font-bold">
+                                            {payroll.bonuses > 0 ? `+₹${payroll.bonuses.toLocaleString()}` : '-'}
+                                        </TableCell>
+                                        <TableCell className="text-rose-500 font-bold">
+                                            {payroll.deductions > 0 ? `-₹${payroll.deductions.toLocaleString()}` : '-'}
+                                        </TableCell>
+                                        <TableCell className="font-extrabold text-zinc-900 dark:text-zinc-50">₹{payroll.netSalary.toLocaleString()}</TableCell>
+                                        <TableCell>
+                                            <Badge variant={payroll.status === 'paid' ? 'default' : payroll.status === 'approved' ? 'secondary' : 'outline'} className="text-[10px] uppercase font-bold">
+                                                {payroll.status}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <div className="flex justify-end gap-1.5">
+                                                <Button size="xs" variant="ghost" onClick={() => handleDownloadPayslip(payroll)} title="Download Payslip">
+                                                    <Download className="h-4 w-4 text-indigo-500" />
+                                                </Button>
+                                                {payroll.status === 'draft' && (
+                                                    <>
+                                                        <Button size="xs" variant="ghost" onClick={() => handleOpenAdjustment(payroll)} title="Adjust Parameters">
+                                                            <Settings2 className="h-4 w-4 text-amber-500" />
                                                         </Button>
-                                                    )}
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </div>
-                        <div className="flex items-center justify-end space-x-2 py-4">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setPayrollPage(Math.max(0, payrollPage - 1))}
-                                disabled={payrollPage === 0}
-                            >
+                                                        <Button size="xs" variant="ghost" onClick={() => handleUpdateStatus(payroll.id, 'approved')} title="Approve">
+                                                            <Check className="h-4 w-4 text-emerald-500" />
+                                                        </Button>
+                                                        <Button size="xs" variant="ghost" className="text-rose-500 hover:text-rose-600" onClick={() => handleDeletePayroll(payroll.id)}>
+                                                            Delete
+                                                        </Button>
+                                                    </>
+                                                )}
+                                                {payroll.status === 'approved' && (
+                                                    <Button size="xs" className="bg-emerald-600 hover:bg-emerald-500 text-white h-7" onClick={() => handleUpdateStatus(payroll.id, 'paid')}>
+                                                        Mark Paid
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                        
+                        <div className="flex items-center justify-end space-x-2 py-4 border-t mt-4">
+                            <Button variant="outline" size="sm" onClick={() => setPayrollPage(Math.max(0, payrollPage - 1))} disabled={payrollPage === 0}>
                                 Previous
                             </Button>
-                            <div className="text-sm font-medium">
+                            <div className="text-xs font-semibold">
                                 Page {payrollPage + 1} of {Math.ceil(generatedPayrolls.length / pageSize) || 1}
                             </div>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setPayrollPage(Math.min(Math.ceil(generatedPayrolls.length / pageSize) - 1, payrollPage + 1))}
-                                disabled={payrollPage >= Math.ceil(generatedPayrolls.length / pageSize) - 1}
-                            >
+                            <Button variant="outline" size="sm" onClick={() => setPayrollPage(Math.min(Math.ceil(generatedPayrolls.length / pageSize) - 1, payrollPage + 1))} disabled={payrollPage >= Math.ceil(generatedPayrolls.length / pageSize) - 1}>
                                 Next
                             </Button>
                         </div>
@@ -988,50 +923,34 @@ export default function PayrollPage() {
                 </Card>
             )}
 
+            {/* Adjustments Popup Dialog */}
             <Dialog open={isAdjustmentDialogOpen} onOpenChange={setIsAdjustmentDialogOpen}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Adjust Payroll</DialogTitle>
+                        <DialogTitle>Adjust Payroll Parameters</DialogTitle>
                         <DialogDescription>
-                            Add bonuses or deductions to the calculated salary for {editingPayroll ? getEmployeeName(editingPayroll.employeeId) : ''}.
+                            Configure additional bonuses or cycle deductions for {editingPayroll ? getEmployeeName(editingPayroll.employeeId) : ''}.
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-4 py-4">
-                        <div className="space-y-2">
-                            <Label>Bonuses (₹)</Label>
-                            <Input
-                                type="number"
-                                min="0"
-                                value={adjustmentBonuses}
-                                onChange={(e) => setAdjustmentBonuses(e.target.value)}
-                                placeholder="e.g. 5000"
-                            />
+                    <div className="space-y-4 py-3">
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-bold uppercase text-muted-foreground">Bonuses (₹)</Label>
+                            <Input type="number" min="0" value={adjustmentBonuses} onChange={(e) => setAdjustmentBonuses(e.target.value)} placeholder="e.g. 5000" className="text-xs" />
                         </div>
-                        <div className="space-y-2">
-                            <Label>Deductions (₹)</Label>
-                            <Input
-                                type="number"
-                                min="0"
-                                value={adjustmentDeductions}
-                                onChange={(e) => setAdjustmentDeductions(e.target.value)}
-                                placeholder="e.g. 2000"
-                            />
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-bold uppercase text-muted-foreground">Deductions (₹)</Label>
+                            <Input type="number" min="0" value={adjustmentDeductions} onChange={(e) => setAdjustmentDeductions(e.target.value)} placeholder="e.g. 2000" className="text-xs" />
                         </div>
-                        <div className="space-y-2">
-                            <Label>Notes</Label>
-                            <Textarea
-                                value={adjustmentNotes}
-                                onChange={(e) => setAdjustmentNotes(e.target.value)}
-                                placeholder="Reason for adjustments..."
-                                rows={3}
-                            />
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-bold uppercase text-muted-foreground">Adjustment Note</Label>
+                            <Textarea value={adjustmentNotes} onChange={(e) => setAdjustmentNotes(e.target.value)} placeholder="Reasoning for payroll adjustment..." rows={3} className="text-xs" />
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsAdjustmentDialogOpen(false)}>Cancel</Button>
-                        <Button onClick={handleSaveAdjustment} disabled={isSavingAdjustment}>
+                        <Button variant="outline" onClick={() => setIsAdjustmentDialogOpen(false)} size="sm">Cancel</Button>
+                        <Button onClick={handleSaveAdjustment} disabled={isSavingAdjustment} size="sm" className="bg-indigo-600 hover:bg-indigo-500 text-white">
                             {isSavingAdjustment && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Save Adjustments
+                            Apply & Save
                         </Button>
                     </DialogFooter>
                 </DialogContent>

@@ -342,92 +342,200 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">{isEmployee ? 'My Projects' : 'Project Management'}</h2>
-          <p className="text-muted-foreground">
-            {isEmployee ? 'Review and track your active project assignments' : 'Full pipeline oversight and resource management'}
-          </p>
+    <div className="space-y-6 p-1 max-w-[1600px] mx-auto">
+      {/* Brand Header */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#1e1b4b] via-[#312e81] to-[#111827] p-6 text-white shadow-xl border border-indigo-950/40">
+        <div className="absolute right-0 top-0 -mr-6 -mt-6 h-32 w-32 rounded-full bg-indigo-500/10 blur-2xl" />
+        <div className="absolute left-1/3 bottom-0 -mb-6 h-24 w-24 rounded-full bg-blue-400/10 blur-xl" />
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="h-2 w-2 rounded-full bg-indigo-400 animate-ping" />
+              <span className="text-xs font-semibold uppercase tracking-wider text-indigo-200">
+                {isEmployee ? 'My Assignments' : 'Portfolio Command Center'}
+              </span>
+            </div>
+            <h2 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white via-indigo-100 to-indigo-200 bg-clip-text text-transparent">
+              {isEmployee ? 'My Projects Hub' : 'Project Portfolio Overview'}
+            </h2>
+            <p className="text-sm text-indigo-200 mt-1 max-w-xl">
+              {isEmployee ? 'Review your active project assignments, timelines, and progress tracks.' : 'Global overview of strategic accounts, milestone progress tracks, and operational velocity.'}
+            </p>
+          </div>
+          {canEdit && (
+            <Button 
+              onClick={() => setShowAddDialog(true)}
+              className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold flex items-center gap-2 rounded-lg py-2.5 px-4 shadow-lg border-none transition-all"
+            >
+              <Plus className="h-4 w-4" /> Create Project
+            </Button>
+          )}
         </div>
-        {canEdit && (
-          <Button onClick={() => setShowAddDialog(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Create Project
-          </Button>
-        )}
       </div>
 
-      {/* Filters and Search */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg">Filters</CardTitle>
-            {hasActiveFilters && (
-              <Button variant="ghost" size="sm" onClick={clearFilters}>
-                <X className="mr-2 h-4 w-4" />
-                Clear Filters
-              </Button>
-            )}
+      {/* Overview Bento Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Total Pipeline */}
+        <Card className="border-none shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {isEmployee ? 'Active Assignments' : 'Total Pipeline'}
+            </CardTitle>
+            <FolderKanban className="h-5 w-5 text-indigo-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-black">{filteredProjects.filter(p => p.isActive).length}</div>
+            <p className="text-[10px] text-muted-foreground mt-2">Active project portfolio</p>
+          </CardContent>
+        </Card>
+
+        {/* Portfolio Budget */}
+        {!isEmployee ? (
+          <Card className="border-none shadow-sm hover:shadow-md transition-shadow relative overflow-hidden border-l-4 border-l-emerald-500">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+              <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Portfolio Budget</CardTitle>
+              <IndianRupee className="h-5 w-5 text-emerald-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-black text-emerald-600">
+                ₹{(filteredProjects.reduce((sum, p) => sum + (p.budget || 0), 0)).toLocaleString()}
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-2">Aggregated active budget</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="border-none shadow-sm hover:shadow-md transition-shadow relative overflow-hidden border-l-4 border-l-indigo-500">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+              <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Involved</CardTitle>
+              <FolderKanban className="h-5 w-5 text-indigo-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-black text-indigo-600">{filteredProjects.length}</div>
+              <p className="text-[10px] text-muted-foreground mt-2">Lifetime involvements</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Approaching Deadlines */}
+        <Card className="border-none shadow-sm hover:shadow-md transition-shadow relative overflow-hidden border-l-4 border-l-rose-500">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Due Soon</CardTitle>
+            <Clock className="h-5 w-5 text-rose-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-black text-rose-600">{approachingDeadlines}</div>
+            <p className="text-[10px] text-muted-foreground mt-2">Due within 7 days</p>
+          </CardContent>
+        </Card>
+
+        {/* Health Distribution */}
+        <Card className="border-none shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Health Dist.</CardTitle>
+            <TrendingUp className="h-5 w-5 text-indigo-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div className="flex items-baseline gap-1">
+                <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
+                <span className="text-lg font-bold">{filteredProjects.filter(p => getProjectHealth(p).label === 'On Track').length}</span>
+              </div>
+              <div className="flex items-baseline gap-1">
+                <span className="h-2 w-2 rounded-full bg-amber-500"></span>
+                <span className="text-lg font-bold">{filteredProjects.filter(p => getProjectHealth(p).label === 'At Risk').length}</span>
+              </div>
+              <div className="flex items-baseline gap-1">
+                <span className="h-2 w-2 rounded-full bg-rose-500"></span>
+                <span className="text-lg font-bold">{filteredProjects.filter(p => getProjectHealth(p).label === 'Behind Schedule').length}</span>
+              </div>
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-2">Track / Risk / Behind</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Advanced Filter Panel & View Toggles */}
+      <Card className="border border-indigo-100 dark:border-indigo-950/40 shadow-sm rounded-xl">
+        <CardHeader className="pb-3 border-b bg-slate-50/50 dark:bg-zinc-950/20">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <Filter className="h-4 w-4 text-indigo-500" />
+                Pipeline Matrix Filters
+              </CardTitle>
+              {hasActiveFilters && (
+                <Button variant="ghost" size="xs" onClick={clearFilters} className="text-rose-600 hover:text-rose-700 h-6 text-[10px] uppercase font-bold ml-2">
+                  <X className="mr-1 h-3 w-3" /> Clear
+                </Button>
+              )}
+            </div>
+            
+            {/* View Toggles */}
+            <div className="flex bg-slate-100 dark:bg-zinc-800 rounded-lg p-0.5 text-xs font-semibold">
+              <button onClick={() => setView('list')} className={`flex items-center px-3 py-1.5 rounded-md transition-colors ${view === 'list' ? 'bg-white dark:bg-zinc-700 shadow-sm text-zinc-900 dark:text-white' : 'text-muted-foreground'}`}>
+                <LayoutList className="mr-1.5 h-3.5 w-3.5" /> List
+              </button>
+              <button onClick={() => setView('kanban')} className={`flex items-center px-3 py-1.5 rounded-md transition-colors ${view === 'kanban' ? 'bg-white dark:bg-zinc-700 shadow-sm text-zinc-900 dark:text-white' : 'text-muted-foreground'}`}>
+                <LayoutGrid className="mr-1.5 h-3.5 w-3.5" /> Kanban
+              </button>
+            </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-            <div className="relative">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search projects..."
-                value={search}
-                onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
-                className="pl-8"
-              />
-            </div>
+        <CardContent className="pt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              placeholder="Search projects..."
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+              className="pl-8 text-xs h-9"
+            />
+          </div>
 
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Status" />
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-9 text-xs">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="planning">Planning</SelectItem>
+              <SelectItem value="in_progress">In Progress</SelectItem>
+              <SelectItem value="on_hold">On Hold</SelectItem>
+              <SelectItem value="completed">Completed</SelectItem>
+              <SelectItem value="cancelled">Cancelled</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+            <SelectTrigger className="h-9 text-xs">
+              <SelectValue placeholder="Priority" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Priorities</SelectItem>
+              <SelectItem value="low">Low</SelectItem>
+              <SelectItem value="medium">Medium</SelectItem>
+              <SelectItem value="high">High</SelectItem>
+              <SelectItem value="critical">Critical</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {!isEmployee ? (
+            <Select value={clientFilter} onValueChange={setClientFilter}>
+              <SelectTrigger className="h-9 text-xs">
+                <SelectValue placeholder="Client" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="planning">Planning</SelectItem>
-                <SelectItem value="in_progress">In Progress</SelectItem>
-                <SelectItem value="on_hold">On Hold</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
+                <SelectItem value="all">All Clients</SelectItem>
+                {clients.map(client => (
+                  <SelectItem key={client.id} value={client.id.toString()}>
+                    {client.companyName}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
-
-            <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Priority" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Priorities</SelectItem>
-                <SelectItem value="low">Low</SelectItem>
-                <SelectItem value="medium">Medium</SelectItem>
-                <SelectItem value="high">High</SelectItem>
-                <SelectItem value="critical">Critical</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {!isEmployee && (
-              <Select value={clientFilter} onValueChange={setClientFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Client" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Clients</SelectItem>
-                  {clients.map(client => (
-                    <SelectItem key={client.id} value={client.id.toString()}>
-                      {client.companyName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-
+          ) : (
             <Select value={activeFilter} onValueChange={setActiveFilter}>
-              <SelectTrigger>
+              <SelectTrigger className="h-9 text-xs">
                 <SelectValue placeholder="Active Status" />
               </SelectTrigger>
               <SelectContent>
@@ -436,346 +544,154 @@ export default function ProjectsPage() {
                 <SelectItem value="false">Inactive Only</SelectItem>
               </SelectContent>
             </Select>
-
-            <div className="space-y-2">
-              <Input
-                type="date"
-                value={startDateFilter}
-                onChange={(e) => setStartDateFilter(e.target.value)}
-                placeholder="Start date range"
-                className="w-full"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Input
-                type="date"
-                value={endDateFilter}
-                onChange={(e) => setEndDateFilter(e.target.value)}
-                placeholder="End date range"
-                className="w-full"
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="bg-gradient-to-br from-indigo-500/10 via-indigo-500/5 to-transparent border-indigo-500/20 shadow-sm">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-indigo-600/80 dark:text-indigo-400/80">
-                  {isEmployee ? 'My Active Assignments' : 'Total Pipeline'}
-                </p>
-                <h3 className="text-3xl font-black mt-1">{filteredProjects.filter(p => p.isActive).length}</h3>
-                {isAdmin && (
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {[
-                      { s: 'in_progress', label: 'Active', c: 'bg-emerald-500' },
-                      { s: 'planning', label: 'Planning', c: 'bg-blue-500' },
-                      { s: 'on_hold', label: 'On Hold', c: 'bg-amber-500' },
-                    ].map(item => {
-                      const count = filteredProjects.filter(p => p.status === item.s).length;
-                      return count > 0 ? (
-                        <span key={item.s} className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
-                          <span className={`h-1.5 w-1.5 rounded-full ${item.c}`} />
-                          {count} {item.label}
-                        </span>
-                      ) : null;
-                    })}
-                  </div>
-                )}
-              </div>
-              <div className="p-3 rounded-xl bg-indigo-500/20">
-                <FolderKanban className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {isAdmin && (
-          <Card className="bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent border-emerald-500/20 shadow-sm">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600/80 dark:text-emerald-400/80">Portfolio Budget</p>
-                  <h3 className="text-3xl font-black mt-1">
-                    ₹{(filteredProjects.reduce((sum, p) => sum + (p.budget || 0), 0)).toLocaleString()}
-                  </h3>
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    Across {filteredProjects.filter(p => p.budget && p.budget > 0).length} budgeted projects
-                  </p>
-                </div>
-                <div className="p-3 rounded-xl bg-emerald-500/20">
-                  <IndianRupee className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        <Card className="bg-gradient-to-br from-rose-500/10 via-rose-500/5 to-transparent border-rose-500/20 shadow-sm">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-rose-600/80 dark:text-rose-400/80">Approaching Deadlines</p>
-                <h3 className="text-3xl font-black mt-1 text-rose-600">{approachingDeadlines}</h3>
-                <p className="text-[10px] text-muted-foreground mt-1">Due within 7 days</p>
-              </div>
-              <div className="p-3 rounded-xl bg-rose-500/20">
-                <Clock className="h-5 w-5 text-rose-600 dark:text-rose-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {isAdmin && (
-          <Card className="bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border-amber-500/20 shadow-sm">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-amber-600/80 dark:text-amber-400/80">Health Distribution</p>
-                  <div className="flex flex-col gap-1 mt-2">
-                    {[
-                      { label: 'On Track', count: filteredProjects.filter(p => getProjectHealth(p).label === 'On Track').length, c: 'bg-emerald-500' },
-                      { label: 'At Risk', count: filteredProjects.filter(p => getProjectHealth(p).label === 'At Risk').length, c: 'bg-amber-500' },
-                      { label: 'Behind', count: filteredProjects.filter(p => getProjectHealth(p).label === 'Behind Schedule').length, c: 'bg-rose-500' },
-                    ].map(item => (
-                      <span key={item.label} className="inline-flex items-center gap-1.5 text-xs">
-                        <span className={`h-2 w-2 rounded-full ${item.c}`} />
-                        <span className="font-semibold">{item.count}</span>
-                        <span className="text-muted-foreground">{item.label}</span>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <div className="p-3 rounded-xl bg-amber-500/20">
-                  <TrendingUp className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {isEmployee && (
-          <Card className="bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border-amber-500/20 shadow-sm">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-amber-600/80 dark:text-amber-400/80">Total Involved</p>
-                  <h3 className="text-3xl font-black mt-1">{filteredProjects.length}</h3>
-                </div>
-                <div className="p-3 rounded-xl bg-amber-500/20">
-                  <FolderKanban className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-
-      {/* View Controls */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex gap-2">
-          <Button
-            variant={view === 'list' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setView('list')}
-          >
-            <LayoutList className="mr-2 h-4 w-4" />
-            List
-          </Button>
-          <Button
-            variant={view === 'kanban' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setView('kanban')}
-          >
-            <LayoutGrid className="mr-2 h-4 w-4" />
-            Kanban
-          </Button>
-        </div>
-
-        <div className="flex gap-2">
-          <Select value={sortBy} onValueChange={setSortBy}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Sort by" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="default">Default (Created)</SelectItem>
-              <SelectItem value="startDate">Start Date</SelectItem>
-              <SelectItem value="endDate">End Date</SelectItem>
-              {!isEmployee && <SelectItem value="budget">Budget</SelectItem>}
-            </SelectContent>
-          </Select>
-
-          {sortBy && sortBy !== 'default' && (
-            <Select value={sortOrder} onValueChange={(val) => setSortOrder(val as 'asc' | 'desc')}>
-              <SelectTrigger className="w-[120px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="asc">Ascending</SelectItem>
-                <SelectItem value="desc">Descending</SelectItem>
-              </SelectContent>
-            </Select>
           )}
 
           {!isEmployee && (
-            <Button variant="outline" size="sm" onClick={exportToCSV}>
-              <Download className="mr-2 h-4 w-4" />
-              Export CSV
+            <Button size="sm" className="h-9 w-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border-none font-bold text-xs" onClick={exportToCSV}>
+              <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
             </Button>
           )}
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
+      {/* Main View Area */}
       {view === 'kanban' ? (
         <ProjectKanban projects={filteredProjects} onUpdate={fetchProjects} />
       ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>All Projects</CardTitle>
-            <CardDescription>
-              Showing {paginatedProjects.length} of {filteredProjects.length} project{filteredProjects.length !== 1 ? 's' : ''}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="rounded-md border max-h-[600px] overflow-y-auto">
+        <Card className="shadow-sm rounded-xl overflow-hidden border-indigo-100/50">
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
               <Table>
-                <TableHeader className="sticky top-0 bg-background z-10">
+                <TableHeader className="bg-slate-50/80 dark:bg-slate-950/40 border-b">
                   <TableRow>
-                    <TableHead>Project Name</TableHead>
-                    {!isEmployee && <TableHead>Client</TableHead>}
-                    {!isEmployee && <TableHead>Budget</TableHead>}
-                    <TableHead>Timeline</TableHead>
-                    <TableHead>Health</TableHead>
-                    <TableHead>Priority</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Active</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead className="font-bold text-xs uppercase tracking-wider py-3 px-4">Project Name</TableHead>
+                    {!isEmployee && <TableHead className="font-bold text-xs uppercase tracking-wider py-3 px-4">Client</TableHead>}
+                    {!isEmployee && <TableHead className="font-bold text-xs uppercase tracking-wider py-3 px-4">Budget</TableHead>}
+                    <TableHead className="font-bold text-xs uppercase tracking-wider py-3 px-4">Timeline / Milestone</TableHead>
+                    <TableHead className="font-bold text-xs uppercase tracking-wider py-3 px-4">Health</TableHead>
+                    <TableHead className="font-bold text-xs uppercase tracking-wider py-3 px-4">Priority</TableHead>
+                    <TableHead className="font-bold text-xs uppercase tracking-wider py-3 px-4">Status</TableHead>
+                    <TableHead className="font-bold text-xs uppercase tracking-wider py-3 px-4">Active</TableHead>
+                    <TableHead className="font-bold text-xs uppercase tracking-wider py-3 px-4 text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
-                {paginatedProjects.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={isEmployee ? 7 : 9} className="text-center py-8 text-muted-foreground">
-                      No projects found
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  paginatedProjects.map((project) => (
-                    <TableRow key={project.id}>
-                      <TableCell className="font-medium">{project.name}</TableCell>
-                      {!isEmployee && <TableCell>{getClientName(project.clientId)}</TableCell>}
-                      {!isEmployee && (
-                        <TableCell>
-                          {project.budget ? `₹${(project.budget / 1000).toFixed(0)}K` : '—'}
-                        </TableCell>
-                      )}
-                      <TableCell>
-                        <div className="w-28">
+                <TableBody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {paginatedProjects.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={isEmployee ? 7 : 9} className="text-center py-12 text-muted-foreground text-xs font-semibold italic bg-slate-50/20">
+                        No projects match the current filter matrix.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    paginatedProjects.map((project) => (
+                      <TableRow key={project.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-900/40 transition-colors">
+                        <td className="py-4 px-4 font-bold text-slate-900 dark:text-slate-100 text-sm">
+                          {project.name}
+                        </td>
+                        {!isEmployee && (
+                          <td className="py-4 px-4 text-xs font-bold text-slate-700 dark:text-slate-300">
+                            {getClientName(project.clientId)}
+                          </td>
+                        )}
+                        {!isEmployee && (
+                          <td className="py-4 px-4 text-xs font-extrabold text-indigo-600 dark:text-indigo-400">
+                            {project.budget ? `₹${(project.budget / 1000).toFixed(0)}K` : '—'}
+                          </td>
+                        )}
+                        <td className="py-4 px-4 w-40">
                           {(() => {
                             const tl = getTimelineProgress(project);
                             return (
-                              <div>
-                                <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
+                              <div className="space-y-1">
+                                <div className="flex justify-between text-[9px] font-bold text-muted-foreground uppercase">
                                   <span>{project.startDate ? new Date(project.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—'}</span>
                                   <span>{project.endDate ? new Date(project.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—'}</span>
                                 </div>
-                                <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                                <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
                                   <div className={`h-full rounded-full transition-all ${tl.color}`} style={{ width: `${tl.percent}%` }} />
                                 </div>
-                                <p className="text-[10px] text-muted-foreground mt-0.5 text-right">{Math.round(tl.percent)}%</p>
                               </div>
                             );
                           })()}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {(() => {
-                          const health = getProjectHealth(project);
-                          return (
-                            <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${health.bgColor} ${health.color}`}>
-                              {health.label === 'On Track' && <CheckCircle2 className="h-3 w-3" />}
-                              {health.label === 'At Risk' && <AlertTriangle className="h-3 w-3" />}
-                              {health.label === 'Behind Schedule' && <Timer className="h-3 w-3" />}
-                              {health.label}
-                            </span>
-                          );
-                        })()}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="capitalize text-[11px]">
-                          {project.priority}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="capitalize text-[11px]">
-                          {project.status.replace('_', ' ')}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <span className={`inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full ${project.isActive ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-800'}`}>
-                          {project.isActive ? 'Active' : 'Inactive'}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Link href={`/dashboard/projects/${project.id}`}>
-                            <Button variant="ghost" size="sm">
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          </Link>
-                          {canEdit && (
-                            <>
-                              <Button 
-                                variant="ghost" 
-                                size="sm"
-                                onClick={() => setEditingProject(project)}
-                              >
-                                <Edit className="h-4 w-4" />
+                        </td>
+                        <td className="py-4 px-4">
+                          {(() => {
+                            const health = getProjectHealth(project);
+                            return (
+                              <Badge variant="outline" className={`text-[9px] uppercase font-bold border-0 px-2 ${health.bgColor} ${health.color}`}>
+                                {health.label}
+                              </Badge>
+                            );
+                          })()}
+                        </td>
+                        <td className="py-4 px-4">
+                          <Badge variant="secondary" className="text-[9px] uppercase font-bold px-2">
+                            {project.priority}
+                          </Badge>
+                        </td>
+                        <td className="py-4 px-4">
+                          <Badge 
+                            className={`text-[9px] uppercase font-bold px-2 ${
+                              project.status === 'completed' ? 'bg-emerald-500 text-white' :
+                              project.status === 'in_progress' ? 'bg-indigo-500 text-white' :
+                              'bg-slate-500 text-white'
+                            }`}
+                          >
+                            {project.status.replace('_', ' ')}
+                          </Badge>
+                        </td>
+                        <td className="py-4 px-4">
+                          <span className={`inline-flex items-center text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full ${
+                            project.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'
+                          }`}>
+                            {project.isActive ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td className="py-4 px-4 text-right">
+                          <div className="flex justify-end gap-1">
+                            <Link href={`/dashboard/projects/${project.id}`}>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-indigo-500 hover:text-indigo-600 hover:bg-indigo-50">
+                                <Eye className="h-3.5 w-3.5" />
                               </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="sm"
-                                onClick={() => setDeletingProject(project)}
-                              >
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                            </Link>
+                            {canEdit && (
+                              <>
+                                <Button 
+                                  variant="ghost" size="icon"
+                                  onClick={() => setEditingProject(project)}
+                                  className="h-7 w-7 text-slate-500 hover:text-indigo-600 hover:bg-slate-100"
+                                >
+                                  <Edit className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button 
+                                  variant="ghost" size="icon"
+                                  onClick={() => setDeletingProject(project)}
+                                  className="h-7 w-7 text-rose-400 hover:text-rose-600 hover:bg-rose-50"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
 
-            {/* Pagination */}
+            {/* Pagination Footer */}
             {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-4">
-                <p className="text-sm text-muted-foreground">
+              <div className="flex items-center justify-between border-t p-4 bg-slate-50/50 dark:bg-slate-900/20">
+                <p className="text-xs text-muted-foreground font-semibold">
                   Page {currentPage} of {totalPages}
                 </p>
                 <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                  >
+                  <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="h-8 text-xs">
                     Previous
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages}
-                  >
+                  <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="h-8 text-xs">
                     Next
                   </Button>
                 </div>
