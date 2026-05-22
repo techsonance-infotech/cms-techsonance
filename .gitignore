@@ -41,3 +41,11 @@ next-env.d.ts
 .env
 .env*.local
 .env.*
+
+# docs and design system references
+/stitch_enterprise_multi_tenant_design_system
+/prd_sections_1to6.js
+/prd_sections_7to14.js
+/prd_sections_15to24.js
+/docs/implementation-guide
+
