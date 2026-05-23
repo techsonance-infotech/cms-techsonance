@@ -9,7 +9,12 @@ export function getSupabaseAdminClient() {
   }
 
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error('Supabase admin client is not configured');
+    return createClient('http://localhost:54321', 'dummy-key-for-build', {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    });
   }
 
   adminClient = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {

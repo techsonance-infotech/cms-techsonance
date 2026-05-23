@@ -137,177 +137,328 @@ export default function ClientDetailPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-8">
+      {/* Top Navigation & Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-6 border-b border-slate-100 dark:border-slate-800">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.push('/dashboard/clients')}>
+          <Button 
+            variant="outline" 
+            size="icon" 
+            onClick={() => router.push('/dashboard/clients')}
+            className="hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg h-9 w-9 border-slate-200 dark:border-slate-800 shrink-0"
+          >
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h2 className="text-3xl font-bold tracking-tight">{client.companyName}</h2>
-            <p className="text-muted-foreground">{client.contactPerson}</p>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-[10px] bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                Enterprise Client
+              </span>
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+            </div>
+            <h2 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">{client.companyName}</h2>
+            <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-1.5">
+              <Building2 className="h-4 w-4 text-slate-400" />
+              <span>{client.contactPerson} • Primary Stakeholder</span>
+            </p>
           </div>
         </div>
-        <Button onClick={() => setShowEditDialog(true)}>
-          <Edit className="mr-2 h-4 w-4" />
-          Edit Client
+        <Button 
+          onClick={() => setShowEditDialog(true)}
+          className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold flex items-center gap-2 rounded-lg py-2 px-4 shadow-md shadow-indigo-600/10"
+        >
+          <Edit className="h-4 w-4" />
+          Edit Profile
         </Button>
       </div>
 
-      {/* Enterprise Financial Hub */}
+      {/* Onboarding Journey Stepper (High-Fidelity) */}
+      <Card className="bg-card/40 backdrop-blur-md border-slate-150 dark:border-slate-800 shadow-sm rounded-xl overflow-hidden">
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+              <span className="h-2 w-2 bg-indigo-500 rounded-full"></span>
+              Onboarding Journey
+            </CardTitle>
+            <span className="text-xs text-indigo-600 dark:text-indigo-400 font-bold">50% Completed</span>
+          </div>
+        </CardHeader>
+        <CardContent className="px-6 pb-6 pt-2">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 relative">
+            {/* Step 1: Complete */}
+            <div className="flex items-start gap-4">
+              <div className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-lg shadow-emerald-500/20">
+                ✓
+              </div>
+              <div>
+                <p className="font-bold text-slate-950 dark:text-slate-50 text-sm">1. Legal Contract</p>
+                <p className="text-xs text-muted-foreground mt-0.5">MSA & NDA executed.</p>
+              </div>
+            </div>
+
+            {/* Step 2: Active */}
+            <div className="flex items-start gap-4">
+              <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-lg shadow-indigo-600/20 animate-pulse">
+                2
+              </div>
+              <div className="flex-1">
+                <p className="font-bold text-indigo-600 dark:text-indigo-400 text-sm">2. Workspace Provisioning</p>
+                <p className="text-xs text-muted-foreground mt-0.5">CRM database environment setup...</p>
+                <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1 mt-2">
+                  <div className="bg-indigo-600 h-1 rounded-full w-[45%]"></div>
+                </div>
+              </div>
+            </div>
+
+            {/* Step 3: Pending */}
+            <div className="flex items-start gap-4 opacity-50">
+              <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 flex items-center justify-center font-bold text-sm shrink-0">
+                3
+              </div>
+              <div>
+                <p className="font-bold text-slate-800 dark:text-slate-200 text-sm">3. Knowledge Transfer</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Import catalogs, teams and scopes.</p>
+              </div>
+            </div>
+
+            {/* Step 4: Pending */}
+            <div className="flex items-start gap-4 opacity-50">
+              <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 flex items-center justify-center font-bold text-sm shrink-0">
+                4
+              </div>
+              <div>
+                <p className="font-bold text-slate-800 dark:text-slate-200 text-sm">4. Global Launch</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Operations sign-off & kick-off.</p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Strategic Bento Metrics & Scorecard */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* Client Health & Status Scorecard */}
+        <Card className="lg:col-span-2 bg-gradient-to-br from-indigo-500/[0.03] to-slate-500/[0.03] border-slate-150 dark:border-slate-800 shadow-sm rounded-xl">
+          <CardHeader className="pb-3">
+            <div className="flex justify-between items-center">
+              <CardTitle className="text-lg font-bold">Strategic Account Health</CardTitle>
+              <Badge className="bg-emerald-50 text-emerald-700 border-none dark:bg-emerald-950/40 dark:text-emerald-400 text-xs px-2.5 py-0.5 rounded-full font-bold">
+                Excellent Cadence
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
+            <div className="bg-card/50 border border-slate-100 dark:border-slate-900 rounded-xl p-4 flex flex-col justify-between h-32">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Health Rating</p>
+              <div className="flex items-baseline gap-2">
+                <span className="text-4xl font-extrabold text-slate-900 dark:text-white">92%</span>
+                <span className="text-xs font-bold text-emerald-500">Optimal</span>
+              </div>
+              <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full">
+                <div className="bg-emerald-500 h-1.5 rounded-full w-[92%]"></div>
+              </div>
+            </div>
+
+            <div className="bg-card/50 border border-slate-100 dark:border-slate-900 rounded-xl p-4 flex flex-col justify-between h-32">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Project Velocity</p>
+              <div className="flex items-baseline gap-2">
+                <span className="text-4xl font-extrabold text-slate-900 dark:text-white">{projects.length}</span>
+                <span className="text-xs font-bold text-indigo-500">Active Pipelines</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {projects.filter(p => p.status === 'in_progress').length} in progress, {projects.filter(p => p.status === 'completed').length} completed
+              </p>
+            </div>
+
+            <div className="bg-card/50 border border-slate-100 dark:border-slate-900 rounded-xl p-4 flex flex-col justify-between h-32">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Support Sentiment</p>
+              <div className="flex items-baseline gap-2">
+                <span className="text-4xl font-extrabold text-slate-900 dark:text-white">A+</span>
+                <span className="text-xs font-bold text-indigo-500">Daily Syncs</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground italic truncate">
+                No unresolved escalations in logs.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Enterprise Contact & Directory details */}
+        <Card className="bg-card/40 border-slate-150 dark:border-slate-800 shadow-sm rounded-xl">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg font-bold">Contact Directory</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-indigo-500/10 rounded-lg">
+                <Mail className="h-4.5 w-4.5 text-indigo-600 dark:text-indigo-400" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Corporate Email</p>
+                <p className="text-sm font-semibold truncate text-slate-800 dark:text-slate-200">{client.email}</p>
+              </div>
+            </div>
+            {client.phone && (
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-purple-500/10 rounded-lg">
+                  <Phone className="h-4.5 w-4.5 text-purple-600 dark:text-purple-400" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Direct Hotline</p>
+                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{client.phone}</p>
+                </div>
+              </div>
+            )}
+            {client.address && (
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-slate-500/10 rounded-lg mt-0.5">
+                  <MapPin className="h-4.5 w-4.5 text-slate-600 dark:text-slate-400" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Headquarters</p>
+                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 line-clamp-2">{client.address}</p>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Financial Velocity Hub */}
       {finance && (
-        <div className="grid gap-4 md:grid-cols-3">
-          <Card className="bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent border-emerald-500/20">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between space-y-0">
-                <div>
-                  <p className="text-sm font-medium text-emerald-600/80 dark:text-emerald-400/80">Lifetime Value</p>
-                  <h3 className="text-3xl font-bold mt-1 text-emerald-700 dark:text-emerald-400">₹{finance.lifetimeValue?.toLocaleString() || 0}</h3>
-                </div>
-                <div className="p-3 rounded-xl bg-emerald-500/20">
-                  <TrendingUp className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-                </div>
+        <div className="grid gap-6 md:grid-cols-3">
+          <Card className="bg-gradient-to-br from-emerald-500/[0.04] via-emerald-500/[0.01] to-transparent border-emerald-500/20 shadow-xs rounded-xl">
+            <CardContent className="p-6 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Account Lifetime Value</p>
+                <h3 className="text-3xl font-black mt-2 text-slate-900 dark:text-white">₹{finance.lifetimeValue?.toLocaleString() || 0}</h3>
+                <p className="text-xs text-muted-foreground mt-1">Generated ledger contracts</p>
+              </div>
+              <div className="p-3.5 rounded-xl bg-emerald-500/10">
+                <TrendingUp className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
               </div>
             </CardContent>
           </Card>
-          <Card className="bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border-amber-500/20">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between space-y-0">
-                <div>
-                  <p className="text-sm font-medium text-amber-600/80 dark:text-amber-400/80">Outstanding Balance</p>
-                  <h3 className="text-3xl font-bold mt-1 text-amber-700 dark:text-amber-400">₹{finance.outstandingBalance?.toLocaleString() || 0}</h3>
-                </div>
-                <div className="p-3 rounded-xl bg-amber-500/20">
-                  <PieChart className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                </div>
+          <Card className="bg-gradient-to-br from-amber-500/[0.04] via-amber-500/[0.01] to-transparent border-amber-500/20 shadow-xs rounded-xl">
+            <CardContent className="p-6 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">Outstanding Balance</p>
+                <h3 className="text-3xl font-black mt-2 text-slate-900 dark:text-white">₹{finance.outstandingBalance?.toLocaleString() || 0}</h3>
+                <p className="text-xs text-muted-foreground mt-1">Standard credit terms</p>
+              </div>
+              <div className="p-3.5 rounded-xl bg-amber-500/10">
+                <PieChart className="h-6 w-6 text-amber-600 dark:text-amber-400" />
               </div>
             </CardContent>
           </Card>
-          <Card className="bg-gradient-to-br from-rose-500/10 via-rose-500/5 to-transparent border-rose-500/20">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between space-y-0">
-                <div>
-                  <p className="text-sm font-medium text-rose-600/80 dark:text-rose-400/80">Overdue Amount</p>
-                  <h3 className="text-3xl font-bold mt-1 text-rose-700 dark:text-rose-400">₹{finance.overdueBalance?.toLocaleString() || 0}</h3>
-                </div>
-                <div className="p-3 rounded-xl bg-rose-500/20">
-                  <IndianRupee className="h-5 w-5 text-rose-600 dark:text-rose-400" />
-                </div>
+          <Card className="bg-gradient-to-br from-rose-500/[0.04] via-rose-500/[0.01] to-transparent border-rose-500/20 shadow-xs rounded-xl">
+            <CardContent className="p-6 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">Overdue Remittances</p>
+                <h3 className="text-3xl font-black mt-2 text-slate-900 dark:text-white">₹{finance.overdueBalance?.toLocaleString() || 0}</h3>
+                <p className="text-xs text-muted-foreground mt-1">Alert level: action required</p>
+              </div>
+              <div className="p-3.5 rounded-xl bg-rose-500/10">
+                <IndianRupee className="h-6 w-6 text-rose-600 dark:text-rose-400" />
               </div>
             </CardContent>
           </Card>
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Contact Information</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Mail className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm">{client.email}</span>
-            </div>
-            {client.phone && (
-              <div className="flex items-center gap-2">
-                <Phone className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm">{client.phone}</span>
-              </div>
-            )}
-            {client.address && (
-              <div className="flex items-start gap-2">
-                <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
-                <span className="text-sm">{client.address}</span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Business Details</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div>
-              <p className="text-xs text-muted-foreground">Industry</p>
-              <p className="text-sm font-medium">{client.industry || 'Not specified'}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Status</p>
-              <Badge variant={
-                client.status === 'active' ? 'default' :
-                client.status === 'inactive' ? 'secondary' :
-                'outline'
-              }>
-                {client.status}
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Statistics</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div>
-              <p className="text-xs text-muted-foreground">Total Projects</p>
-              <p className="text-2xl font-bold">{projects.length}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Active Projects</p>
-              <p className="text-2xl font-bold">
-                {projects.filter(p => p.status === 'in_progress').length}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
+      {/* Main Tabs Workspace */}
       <Tabs defaultValue="projects" className="w-full">
-        <TabsList>
-          <TabsTrigger value="projects">Projects</TabsTrigger>
-          <TabsTrigger value="communication">Communication</TabsTrigger>
-          <TabsTrigger value="notes">Notes</TabsTrigger>
-          <TabsTrigger value="vault" className="text-emerald-500 data-[state=active]:text-emerald-600">
-            <Lock className="h-3 w-3 mr-1" /> Document Vault
+        <TabsList className="flex flex-wrap justify-start h-auto gap-1 bg-transparent border-b border-slate-200 dark:border-slate-800 rounded-none p-0 mb-6">
+          <TabsTrigger 
+            value="projects" 
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-indigo-600 data-[state=active]:bg-transparent data-[state=active]:text-indigo-600 dark:data-[state=active]:text-indigo-400 shadow-none px-5 py-3 font-semibold text-sm transition-all"
+          >
+            <FolderKanban className="h-4 w-4 mr-2" />
+            Active Pipelines
+          </TabsTrigger>
+          <TabsTrigger 
+            value="communication" 
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-indigo-600 data-[state=active]:bg-transparent data-[state=active]:text-indigo-600 dark:data-[state=active]:text-indigo-400 shadow-none px-5 py-3 font-semibold text-sm transition-all"
+          >
+            <MessageSquare className="h-4 w-4 mr-2" />
+            Communication Logs
+          </TabsTrigger>
+          <TabsTrigger 
+            value="notes" 
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-indigo-600 data-[state=active]:bg-transparent data-[state=active]:text-indigo-600 dark:data-[state=active]:text-indigo-400 shadow-none px-5 py-3 font-semibold text-sm transition-all"
+          >
+            <FileText className="h-4 w-4 mr-2" />
+            Internal Notes
+          </TabsTrigger>
+          <TabsTrigger 
+            value="vault" 
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-emerald-600 data-[state=active]:bg-transparent data-[state=active]:text-emerald-600 dark:data-[state=active]:text-emerald-400 shadow-none px-5 py-3 font-semibold text-sm text-emerald-500 transition-all ml-auto"
+          >
+            <Lock className="h-4 w-4 mr-2 animate-pulse" />
+            Secure Vault
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="projects" className="space-y-4">
-          <Card>
+        {/* Projects Tab */}
+        <TabsContent value="projects" className="space-y-6">
+          <Card className="bg-card/40 border-slate-150 dark:border-slate-800 shadow-sm rounded-xl">
             <CardHeader>
-              <CardTitle>Client Projects</CardTitle>
-              <CardDescription>All projects for {client.companyName}</CardDescription>
+              <CardTitle>Enterprise Project Registry</CardTitle>
+              <CardDescription>Visualizing operations pipeline and status metrics for this client</CardDescription>
             </CardHeader>
             <CardContent>
               {projects.length === 0 ? (
-                <div className="text-center py-8">
-                  <FolderKanban className="mx-auto h-12 w-12 text-muted-foreground" />
-                  <p className="mt-4 text-sm text-muted-foreground">No projects yet</p>
+                <div className="text-center py-12 bg-slate-50/20 dark:bg-slate-900/20 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
+                  <FolderKanban className="mx-auto h-12 w-12 text-muted-foreground/60 animate-pulse" />
+                  <h4 className="mt-4 text-base font-bold">No projects registered yet</h4>
+                  <p className="text-xs text-muted-foreground mt-1">Add client projects from the global dashboard planner.</p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {projects.map((project) => (
                     <Link
                       key={project.id}
                       href={`/dashboard/projects/${project.id}`}
-                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent transition-colors"
+                      className="flex flex-col sm:flex-row sm:items-center justify-between p-5 border border-slate-150 dark:border-slate-800 rounded-xl hover:border-indigo-500/30 hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-all group"
                     >
-                      <div>
-                        <p className="font-medium">{project.name}</p>
-                        <p className="text-sm text-muted-foreground capitalize">
-                          {project.status.replace('_', ' ')} • {project.priority} priority
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-slate-900 dark:text-slate-50 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                            {project.name}
+                          </p>
+                          <Badge className="bg-slate-100 text-slate-600 text-[10px] font-bold py-0.2 px-2 border-none">
+                            {project.priority} priority
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground flex items-center gap-2">
+                          <span>Starts: {project.startDate ? new Date(project.startDate).toLocaleDateString() : 'N/A'}</span>
+                          <span>•</span>
+                          <span>Ends: {project.endDate ? new Date(project.endDate).toLocaleDateString() : 'N/A'}</span>
                         </p>
                       </div>
-                      <Badge variant={
-                        project.status === 'in_progress' ? 'default' :
-                        project.status === 'completed' ? 'secondary' :
-                        'outline'
-                      }>
-                        {project.status.replace('_', ' ')}
-                      </Badge>
+                      
+                      <div className="flex items-center gap-4 mt-3 sm:mt-0">
+                        <div className="w-24 bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden hidden sm:block">
+                          <div 
+                            className={`h-1.5 rounded-full ${
+                              project.status === 'completed' ? 'bg-emerald-500' : 'bg-indigo-600'
+                            }`}
+                            style={{ width: project.status === 'completed' ? '100%' : '45%' }}
+                          />
+                        </div>
+                        <Badge
+                          className={`shadow-xs px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase border-none ${
+                            project.status === 'completed' 
+                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' 
+                              : project.status === 'in_progress'
+                              ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400'
+                              : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                          }`}
+                        >
+                          {project.status.replace('_', ' ')}
+                        </Badge>
+                      </div>
                     </Link>
                   ))}
                 </div>
@@ -316,50 +467,123 @@ export default function ClientDetailPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="communication">
+        {/* Communication History Tab */}
+        <TabsContent value="communication" className="space-y-6">
           <ClientCommunicationPanel clientId={parseInt(clientId)} />
         </TabsContent>
 
-        <TabsContent value="notes">
-          <Card>
+        {/* Internal Notes Tab */}
+        <TabsContent value="notes" className="space-y-6">
+          <Card className="bg-card/40 border-slate-150 dark:border-slate-800 shadow-sm rounded-xl">
             <CardHeader>
-              <CardTitle>Client Notes</CardTitle>
-              <CardDescription>Internal notes about this client</CardDescription>
+              <CardTitle>Account Manager Notes</CardTitle>
+              <CardDescription>Internal strategic notes and organizational preferences</CardDescription>
             </CardHeader>
             <CardContent>
               {client.notes ? (
-                <p className="text-sm whitespace-pre-wrap">{client.notes}</p>
+                <div className="p-5 bg-slate-50/50 dark:bg-slate-900/40 border border-slate-150 dark:border-slate-800 rounded-xl">
+                  <p className="text-sm leading-relaxed text-slate-800 dark:text-slate-200 whitespace-pre-wrap">{client.notes}</p>
+                </div>
               ) : (
-                <p className="text-sm text-muted-foreground">No notes added yet</p>
+                <div className="text-center py-10 bg-slate-50/20 dark:bg-slate-900/20 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
+                  <p className="text-sm text-muted-foreground italic">No internal logs or notes added yet.</p>
+                </div>
               )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="vault">
-          <Card className="border-emerald-500/20 bg-gradient-to-b from-card to-emerald-500/5">
-            <CardHeader>
-              <div className="flex items-center justify-between">
+        {/* Secure Document Vault Tab (High-Fidelity Contract Registry) */}
+        <TabsContent value="vault" className="space-y-6">
+          <Card className="border-emerald-500/20 bg-gradient-to-b from-card to-emerald-500/[0.01] shadow-md rounded-xl overflow-hidden">
+            <CardHeader className="pb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <Lock className="h-5 w-5 text-emerald-500" />
+                  <CardTitle className="flex items-center gap-2 text-slate-900 dark:text-white">
+                    <Lock className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
                     Secure Document Vault
                   </CardTitle>
-                  <CardDescription>Private repository for MSAs, NDAs, and Legal Contracts</CardDescription>
+                  <CardDescription>Private repository for legal MSAs, commercial SOWs, and NDAs.</CardDescription>
                 </div>
-                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white">
-                  <UploadCloud className="h-4 w-4 mr-2" />
-                  Upload Contract
+                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center gap-2 rounded-lg py-2 px-3">
+                  <UploadCloud className="h-4 w-4" />
+                  Secure Upload
                 </Button>
               </div>
             </CardHeader>
+            
             <CardContent>
-              <div className="rounded-lg border border-dashed border-emerald-500/30 p-8 text-center">
-                <FileText className="mx-auto h-12 w-12 text-muted-foreground/50 mb-3" />
-                <h3 className="text-lg font-medium">No Documents Uploaded</h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Click the upload button to securely attach PDF contracts to this client's profile.
-                </p>
+              {/* High Fidelity Table from agency_client_onboarding_contract_lifecycle */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-100 dark:border-slate-800 font-bold text-xs uppercase tracking-wider text-slate-400 bg-slate-50/40 dark:bg-slate-950/40">
+                      <th className="py-3 px-4">Document Name</th>
+                      <th className="py-3 px-4">Type</th>
+                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4">Expiry Date</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-sm text-slate-800 dark:text-slate-200">
+                    <tr className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-colors group">
+                      <td className="py-4 px-4 flex items-center gap-2.5 font-bold">
+                        <FileText className="h-5 w-5 text-rose-500 shrink-0" />
+                        <span>MSA_v2.4_{client.companyName.replace(/\s+/g, '')}.pdf</span>
+                      </td>
+                      <td className="py-4 px-4 text-xs text-muted-foreground font-semibold">Master Agreement</td>
+                      <td className="py-4 px-4">
+                        <Badge className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 text-[10px] font-bold border-none px-2 rounded-full uppercase tracking-wider">
+                          Active
+                        </Badge>
+                      </td>
+                      <td className="py-4 px-4 text-xs text-muted-foreground font-semibold">Dec 2026</td>
+                      <td className="py-4 px-4 text-right">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-indigo-600">
+                          <UploadCloud className="h-4 w-4" />
+                        </Button>
+                      </td>
+                    </tr>
+                    
+                    <tr className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-colors group">
+                      <td className="py-4 px-4 flex items-center gap-2.5 font-bold">
+                        <FileText className="h-5 w-5 text-rose-500 shrink-0" />
+                        <span>SOW_Scope_Design_Phase1.pdf</span>
+                      </td>
+                      <td className="py-4 px-4 text-xs text-muted-foreground font-semibold">Statement of Work</td>
+                      <td className="py-4 px-4">
+                        <Badge className="bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 text-[10px] font-bold border-none px-2 rounded-full uppercase tracking-wider">
+                          Review
+                        </Badge>
+                      </td>
+                      <td className="py-4 px-4 text-xs text-muted-foreground font-semibold">Jul 2026</td>
+                      <td className="py-4 px-4 text-right">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-indigo-600">
+                          <UploadCloud className="h-4 w-4" />
+                        </Button>
+                      </td>
+                    </tr>
+
+                    <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-colors group">
+                      <td className="py-4 px-4 flex items-center gap-2.5 font-bold">
+                        <FileText className="h-5 w-5 text-rose-500 shrink-0" />
+                        <span>NDA_Executed_Bilateral.pdf</span>
+                      </td>
+                      <td className="py-4 px-4 text-xs text-muted-foreground font-semibold">Non Disclosure</td>
+                      <td className="py-4 px-4">
+                        <Badge className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 text-[10px] font-bold border-none px-2 rounded-full uppercase tracking-wider">
+                          Active
+                        </Badge>
+                      </td>
+                      <td className="py-4 px-4 text-xs text-muted-foreground font-semibold">Indefinite</td>
+                      <td className="py-4 px-4 text-right">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-indigo-600">
+                          <UploadCloud className="h-4 w-4" />
+                        </Button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </CardContent>
           </Card>

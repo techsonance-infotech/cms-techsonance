@@ -237,38 +237,51 @@ export default function TasksPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <header className="flex justify-between items-center">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Task Workspace</h2>
-          <p className="text-muted-foreground">
-            {isEmployee ? 'Review and manage your assigned responsibilities' : 'System-wide pipeline and sprint coordination'}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {!isEmployee && (
-            <Button
-              onClick={() => setSprintDialogOpen(true)}
-              variant="outline"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              New Sprint
+    <div className="space-y-6 p-1 max-w-[1600px] mx-auto">
+      {/* Brand Header */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#111827] via-[#0f172a] to-[#312e81] p-6 text-white shadow-xl border border-indigo-950/40">
+        <div className="absolute right-0 top-0 -mr-6 -mt-6 h-32 w-32 rounded-full bg-indigo-500/10 blur-2xl" />
+        <div className="absolute left-1/3 bottom-0 -mb-6 h-24 w-24 rounded-full bg-blue-400/10 blur-xl" />
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="h-2 w-2 rounded-full bg-indigo-400 animate-ping" />
+              <span className="text-xs font-semibold uppercase tracking-wider text-indigo-200">
+                {isEmployee ? 'My Active Sprints' : 'Pipeline Task Board'}
+              </span>
+            </div>
+            <h2 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white via-indigo-100 to-indigo-200 bg-clip-text text-transparent">
+              {isEmployee ? 'Task Workspace' : 'Project Task Board (Kanban)'}
+            </h2>
+            <p className="text-sm text-indigo-200 mt-1 max-w-xl">
+              {isEmployee ? 'Review and manage your assigned responsibilities across active projects.' : 'System-wide pipeline tracker, sprint velocity coordination, and high-contrast drag indicators.'}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            {!isEmployee && (
+              <Button
+                onClick={() => setSprintDialogOpen(true)}
+                variant="outline"
+                className="border-indigo-400/50 bg-indigo-950/50 text-white hover:bg-indigo-900"
+              >
+                <Plus className="mr-1.5 h-4 w-4" /> New Sprint
+              </Button>
+            )}
+            <Button onClick={() => handleCreateTask('todo')} className="bg-indigo-600 hover:bg-indigo-500 text-white border-none font-bold">
+              <Plus className="mr-1.5 h-4 w-4" /> New Task
             </Button>
-          )}
-          <Button onClick={() => handleCreateTask('todo')}>
-            <Plus className="mr-2 h-4 w-4" />
-            New Task
-          </Button>
+          </div>
         </div>
-      </header>
+      </div>
 
-      <div className="flex gap-4">
-        <div className="flex-1">
+      <div className="flex flex-col sm:flex-row gap-4 bg-slate-50/50 dark:bg-zinc-950/40 p-4 rounded-xl border border-slate-100 dark:border-zinc-900">
+        <div className="flex-1 relative">
+          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground absolute -top-2 left-2 bg-slate-50 dark:bg-zinc-950 px-1 z-10">Select Project</label>
           <Select
             value={selectedProject?.toString() || ''}
             onValueChange={(value) => setSelectedProject(parseInt(value))}
           >
-            <SelectTrigger className="bg-card/50 backdrop-blur-sm border-muted/60 h-10">
+            <SelectTrigger className="h-11 bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 rounded-lg shadow-sm font-semibold">
               <SelectValue placeholder="Select project" />
             </SelectTrigger>
             <SelectContent>
@@ -281,13 +294,14 @@ export default function TasksPage() {
           </Select>
         </div>
 
-        <div className="flex-1">
+        <div className="flex-1 relative">
+          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground absolute -top-2 left-2 bg-slate-50 dark:bg-zinc-950 px-1 z-10">Select Sprint / Backlog</label>
           <Select
             value={selectedSprint?.toString() || 'none'}
             onValueChange={(value) => setSelectedSprint(value === 'none' ? null : parseInt(value))}
             disabled={!selectedProject || sprints.length === 0}
           >
-            <SelectTrigger className="bg-card/50 backdrop-blur-sm border-muted/60 h-10">
+            <SelectTrigger className="h-11 bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 rounded-lg shadow-sm font-semibold">
               <SelectValue placeholder={sprints.length === 0 ? 'No sprints available' : 'Select sprint'} />
             </SelectTrigger>
             <SelectContent>
@@ -299,7 +313,7 @@ export default function TasksPage() {
                       <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
                     )}
                     {sprint.name}
-                    <span className="text-muted-foreground text-xs">
+                    <span className="text-muted-foreground text-xs font-normal">
                       ({sprint.status === 'active' ? 'Active' : sprint.status})
                     </span>
                   </span>
@@ -313,79 +327,79 @@ export default function TasksPage() {
       {currentSprint && (
         <div className="space-y-4">
           <div className="flex items-center justify-between px-1">
-            <h3 className="text-sm font-semibold flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-amber-500" />
-              Sprint Health & Velocity
+            <h3 className="text-sm font-bold flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-indigo-500" />
+              Sprint Health & Velocity Dashboard
             </h3>
-            <div className="flex items-center gap-4 text-[10px] font-medium text-muted-foreground">
-              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" /> {stats.completedTasks} Done</span>
-              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-500" /> {stats.totalTasks - stats.completedTasks} Pending</span>
+            <div className="flex items-center gap-4 text-xs font-bold text-muted-foreground">
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> {stats.completedTasks} Done</span>
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-amber-500" /> {stats.totalTasks - stats.completedTasks} Pending</span>
             </div>
           </div>
           
           <div className="grid gap-4 md:grid-cols-4">
-            <Card className="bg-gradient-to-br from-indigo-500/10 via-indigo-500/5 to-transparent border-indigo-500/20 shadow-sm relative overflow-hidden group">
+            <Card className="border-none shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
               <CardContent className="p-5">
                 <div className="flex justify-between items-start">
                   <div className="space-y-1">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-600">Sprint Goal</p>
-                    <h4 className="text-sm font-bold truncate max-w-[150px]">{currentSprint.goal || 'No goal set'}</h4>
+                    <h4 className="text-sm font-extrabold truncate max-w-[150px]">{currentSprint.goal || 'No goal set'}</h4>
                   </div>
-                  <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-600">
+                  <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40">
                     <Target className="h-4 w-4" />
                   </div>
                 </div>
-                <div className="mt-4 h-1 w-full bg-indigo-500/10 rounded-full overflow-hidden">
+                <div className="mt-4 h-1 w-full bg-indigo-50 dark:bg-indigo-950/40 rounded-full overflow-hidden">
                   <div className="h-full bg-indigo-500 rounded-full w-1/3 group-hover:w-1/2 transition-all duration-500" />
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="bg-gradient-to-br from-rose-500/10 via-rose-500/5 to-transparent border-rose-500/20 shadow-sm relative overflow-hidden group">
+            <Card className="border-none shadow-sm hover:shadow-md transition-shadow relative overflow-hidden border-l-4 border-l-rose-500 group">
               <CardContent className="p-5">
                 <div className="flex justify-between items-start">
                   <div className="space-y-1">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-rose-600">Time Linear</p>
-                    <h4 className="text-2xl font-black">{daysRemaining > 0 ? `${daysRemaining}d` : 'Ended'}</h4>
+                    <h4 className="text-3xl font-black text-rose-600">{daysRemaining > 0 ? `${daysRemaining}d` : 'Ended'}</h4>
                   </div>
-                  <div className="p-2 rounded-lg bg-rose-500/10 text-rose-600">
+                  <div className="p-2 rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-950/40">
                     <Clock className="h-4 w-4" />
                   </div>
                 </div>
-                <p className="text-[9px] text-muted-foreground mt-1 font-medium italic">Ends {new Date(currentSprint.endDate).toLocaleDateString()}</p>
+                <p className="text-[10px] text-muted-foreground mt-1 font-bold">Ends {new Date(currentSprint.endDate).toLocaleDateString()}</p>
               </CardContent>
             </Card>
 
-            <Card className="bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent border-emerald-500/20 shadow-sm relative overflow-hidden group">
+            <Card className="border-none shadow-sm hover:shadow-md transition-shadow relative overflow-hidden border-l-4 border-l-emerald-500 group">
               <CardContent className="p-5">
                 <div className="flex justify-between items-start">
                   <div className="space-y-1">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">Task Velocity</p>
-                    <h4 className="text-2xl font-black">{stats.totalTasks > 0 ? Math.round((stats.completedTasks / stats.totalTasks) * 100) : 0}%</h4>
+                    <h4 className="text-3xl font-black text-emerald-600">{stats.totalTasks > 0 ? Math.round((stats.completedTasks / stats.totalTasks) * 100) : 0}%</h4>
                   </div>
-                  <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600">
+                  <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40">
                     <BarChart3 className="h-4 w-4" />
                   </div>
                 </div>
-                <div className="mt-4 flex items-center justify-between text-[10px] font-bold">
-                  <span className="text-emerald-600">{stats.completedTasks} Closed</span>
+                <div className="mt-3 flex items-center justify-between text-[10px] font-bold">
+                  <span className="text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded">{stats.completedTasks} Closed</span>
                   <span className="text-muted-foreground">/ {stats.totalTasks} Total</span>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border-amber-500/20 shadow-sm relative overflow-hidden group">
+            <Card className="border-none shadow-sm hover:shadow-md transition-shadow relative overflow-hidden border-l-4 border-l-amber-500 group">
               <CardContent className="p-5">
                 <div className="flex justify-between items-start">
                   <div className="space-y-1">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-amber-600">Capacity Load</p>
-                    <h4 className="text-2xl font-black">{stats.completedPoints} / {stats.totalPoints}</h4>
+                    <h4 className="text-3xl font-black text-amber-600">{stats.completedPoints} <span className="text-sm text-muted-foreground">/ {stats.totalPoints}</span></h4>
                   </div>
-                  <div className="p-2 rounded-lg bg-amber-500/10 text-amber-600">
+                  <div className="p-2 rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-950/40">
                     <TrendingUp className="h-4 w-4" />
                   </div>
                 </div>
-                <p className="text-[9px] text-muted-foreground mt-1 font-medium">{stats.totalPoints > 0 ? Math.round((stats.completedPoints / stats.totalPoints) * 100) : 0}% Delivered</p>
+                <p className="text-[10px] text-muted-foreground mt-2 font-bold">{stats.totalPoints > 0 ? Math.round((stats.completedPoints / stats.totalPoints) * 100) : 0}% Points Delivered</p>
               </CardContent>
             </Card>
           </div>
@@ -393,21 +407,23 @@ export default function TasksPage() {
       )}
 
       {selectedProject ? (
-        <KanbanBoard
-          key={refreshKey}
-          sprintId={selectedSprint}
-          projectId={selectedProject}
-          currentUser={currentUser}
-          onTaskClick={handleTaskClick}
-          onCreateTask={handleCreateTask}
-        />
+        <div className="rounded-2xl border border-indigo-100 dark:border-zinc-800 bg-slate-50/20 dark:bg-zinc-950/20 p-2 shadow-inner">
+          <KanbanBoard
+            key={refreshKey}
+            sprintId={selectedSprint}
+            projectId={selectedProject}
+            currentUser={currentUser}
+            onTaskClick={handleTaskClick}
+            onCreateTask={handleCreateTask}
+          />
+        </div>
       ) : (
-        <Card className="border-dashed bg-card/30">
-          <CardHeader className="flex flex-col items-center justify-center py-12 text-center">
-            <Target className="h-12 w-12 text-muted-foreground opacity-20 mb-4" />
-            <CardTitle>Welcome to the Task Workspace</CardTitle>
-            <CardDescription>
-              {isEmployee ? 'Select an assigned project above to start tracking your tasks.' : 'Please select a project to manage sprints and development tasks.'}
+        <Card className="border-dashed bg-card/30 border-2">
+          <CardHeader className="flex flex-col items-center justify-center py-20 text-center">
+            <Target className="h-16 w-16 text-indigo-500/20 mb-4 animate-pulse" />
+            <CardTitle className="text-2xl font-bold">Welcome to the Task Workspace</CardTitle>
+            <CardDescription className="max-w-md mt-2 text-sm">
+              {isEmployee ? 'Select an assigned project above to start tracking your tasks in the Kanban board.' : 'Please select a project to manage sprints, development tasks, and coordinate with the team.'}
             </CardDescription>
           </CardHeader>
         </Card>

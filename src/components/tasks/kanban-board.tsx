@@ -10,6 +10,8 @@ import {
 import { isEmployeeRole, type UserRole } from '@/lib/permissions';
 import { toast } from 'sonner';
 import { KanbanSkeleton } from '@/components/ui/dashboard-skeleton';
+import { getSupabaseBrowserClient } from '@/lib/supabase/client';
+
 
 interface Task {
   id: number;
@@ -128,6 +130,45 @@ export function KanbanBoard({
   useEffect(() => {
     fetchTasks();
   }, [fetchTasks]);
+
+  // Real-time synchronization using Supabase channels
+  useEffect(() => {
+    if (!projectId) return;
+
+    let channel: any;
+    try {
+      const supabase = getSupabaseBrowserClient();
+      channel = supabase
+        .channel(`tasks-realtime-${projectId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'tasks',
+            filter: `project_id=eq.${projectId}`,
+          },
+          () => {
+            fetchTasks();
+          }
+        )
+        .subscribe();
+    } catch (err) {
+      console.warn('Supabase real-time subscription failed:', err);
+    }
+
+    return () => {
+      if (channel) {
+        try {
+          const supabase = getSupabaseBrowserClient();
+          supabase.removeChannel(channel);
+        } catch (err) {
+          console.warn('Failed to clean up realtime channel:', err);
+        }
+      }
+    };
+  }, [projectId, fetchTasks]);
+
 
   /* ── Drag & drop ── */
   const handleDragStart = (task: Task) => setDraggedTask(task);

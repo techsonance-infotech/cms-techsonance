@@ -10,9 +10,11 @@ import { Form, FormControl, FormField, FormItem, FormMessage } from '@/component
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Save, Building2, Palette, Users, Plug, Plus, Key, User as UserIcon, Calendar, Mail, Shield, Briefcase, Phone, Banknote, Award, Globe, Fingerprint, Activity } from 'lucide-react';
+import { Loader2, Save, Building2, Palette, Users, Plug, Plus, Key, User as UserIcon, Calendar, Mail, Shield, Briefcase, Phone, Banknote, Award, Globe, Fingerprint, Activity, Database } from 'lucide-react';
 import { DetailedPageSkeleton } from '@/components/ui/dashboard-skeleton';
 import { toast } from 'sonner';
+import { DynamicSchemaTab } from '@/components/settings/dynamic-schema-tab';
+
 import { passwordChangeFormSchema, type PasswordChangeFormValues } from '@/lib/forms/schemas';
 import { UserRole, hasFullAccess, getRoleName } from '@/lib/permissions';
 
@@ -291,8 +293,13 @@ export default function SettingsPage() {
                 <Building2 className="mr-2 h-4 w-4" />
                 Invoice Settings
               </TabsTrigger>
+              <TabsTrigger value="dynamic" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent shadow-none px-4 py-2">
+                <Database className="mr-2 h-4 w-4" />
+                Dynamic Schema Engine
+              </TabsTrigger>
             </>
           )}
+
 
           <TabsTrigger value="password" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent shadow-none px-4 py-2">
             <Key className="mr-2 h-4 w-4" />
@@ -591,37 +598,269 @@ export default function SettingsPage() {
             </TabsContent>
 
             <TabsContent value="integrations">
-              <Card>
-                <CardHeader>
-                  <CardTitle>API Integrations</CardTitle>
-                  <CardDescription>Connect third-party services</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between p-4 border rounded-lg">
-                      <div>
-                        <p className="font-medium">Google Analytics</p>
-                        <p className="text-sm text-muted-foreground">Track website analytics</p>
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                
+                {/* Connected Channels & Templates (Left/Mid) */}
+                <div className="xl:col-span-2 space-y-6">
+                  
+                  {/* Connected Channels */}
+                  <Card className="border-slate-100 dark:border-slate-800 shadow-xs">
+                    <CardHeader className="pb-4">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <CardTitle className="text-lg font-bold flex items-center gap-2">
+                            <Plug className="h-5 w-5 text-primary" />
+                            Connected Communication Channels
+                          </CardTitle>
+                          <CardDescription>Manage your active enterprise omnichannel integrations.</CardDescription>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => toast.info('Integration manager launching...')}>
+                          Add Integration
+                        </Button>
                       </div>
-                      <Badge variant="outline">Not Connected</Badge>
-                    </div>
-                    <div className="flex items-center justify-between p-4 border rounded-lg">
-                      <div>
-                        <p className="font-medium">Stripe Payment Gateway</p>
-                        <p className="text-sm text-muted-foreground">Process payments</p>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        
+                        {/* Gmail/Outlook */}
+                        <div className="p-4 border border-slate-100 dark:border-slate-800 rounded-xl hover:border-primary/45 transition-colors flex items-start gap-4 bg-slate-50/30 dark:bg-slate-900/10">
+                          <div className="w-10 h-10 rounded bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
+                            <Mail className="h-5 w-5" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <h4 className="font-bold text-slate-900 dark:text-slate-100 text-xs truncate">Gmail Workspace</h4>
+                              <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-none font-bold text-[9px] py-0.5 px-2.5 rounded-full uppercase tracking-wider">
+                                Active
+                              </Badge>
+                            </div>
+                            <p className="text-[11px] text-muted-foreground mt-1 truncate">support@techsonance.com</p>
+                            <div className="flex items-center gap-3 mt-3">
+                              <button onClick={() => toast.success('Synchronized successfully')} className="text-[10px] font-bold text-slate-500 hover:text-slate-950 dark:hover:text-white transition-colors">Sync Settings</button>
+                              <button onClick={() => toast.error('Connection protected')} className="text-[10px] font-bold text-red-500 hover:opacity-80 transition-opacity">Disconnect</button>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* WhatsApp API */}
+                        <div className="p-4 border border-slate-100 dark:border-slate-800 rounded-xl hover:border-primary/45 transition-colors flex items-start gap-4 bg-slate-50/30 dark:bg-slate-900/10">
+                          <div className="w-10 h-10 rounded bg-green-50 dark:bg-green-900/20 flex items-center justify-center text-green-600 dark:text-green-400 shrink-0">
+                            <Phone className="h-5 w-5" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <h4 className="font-bold text-slate-900 dark:text-slate-100 text-xs truncate">WhatsApp Business</h4>
+                              <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-none font-bold text-[9px] py-0.5 px-2.5 rounded-full uppercase tracking-wider">
+                                Active
+                              </Badge>
+                            </div>
+                            <p className="text-[11px] text-muted-foreground mt-1 truncate">+91 (987) 654-3210</p>
+                            <div className="flex items-center gap-3 mt-3">
+                              <button onClick={() => toast.info('Webhook configuration updated')} className="text-[10px] font-bold text-slate-500 hover:text-slate-950 dark:hover:text-white transition-colors">Webhook Config</button>
+                              <button onClick={() => toast.error('Connection protected')} className="text-[10px] font-bold text-red-500 hover:opacity-80 transition-opacity">Disconnect</button>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Slack */}
+                        <div className="p-4 border border-slate-100 dark:border-slate-800 rounded-xl hover:border-primary/45 transition-colors flex items-start gap-4 bg-slate-50/30 dark:bg-slate-900/10 opacity-75">
+                          <div className="w-10 h-10 rounded bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center text-purple-600 dark:text-purple-400 shrink-0">
+                            <Users className="h-5 w-5" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <h4 className="font-bold text-slate-900 dark:text-slate-100 text-xs truncate">Slack Enterprise</h4>
+                              <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-none font-bold text-[9px] py-0.5 px-2.5 rounded-full uppercase tracking-wider">
+                                Pending
+                              </Badge>
+                            </div>
+                            <p className="text-[11px] text-muted-foreground mt-1 truncate">Re-authentication required</p>
+                            <div className="mt-3">
+                              <Button onClick={() => toast.success('Slack Enterprise reconnected')} size="sm" className="bg-primary hover:opacity-90 text-white font-bold text-[10px] h-7 px-3 rounded-lg">
+                                Reconnect
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Twilio SMS */}
+                        <div className="p-4 border border-slate-100 dark:border-slate-800 rounded-xl hover:border-primary/45 transition-colors flex items-start gap-4 bg-slate-50/30 dark:bg-slate-900/10">
+                          <div className="w-10 h-10 rounded bg-red-50 dark:bg-red-900/20 flex items-center justify-center text-red-600 dark:text-red-400 shrink-0">
+                            <Globe className="h-5 w-5" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <h4 className="font-bold text-slate-900 dark:text-slate-100 text-xs truncate">Twilio SMS Gateway</h4>
+                              <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-none font-bold text-[9px] py-0.5 px-2.5 rounded-full uppercase tracking-wider">
+                                Active
+                              </Badge>
+                            </div>
+                            <p className="text-[11px] text-muted-foreground mt-1 truncate">Credit Bal: $1,240.45</p>
+                            <div className="flex items-center gap-3 mt-3">
+                              <button onClick={() => toast.success('Payment portal active')} className="text-[10px] font-bold text-slate-500 hover:text-slate-950 dark:hover:text-white transition-colors">Add Credit</button>
+                              <button onClick={() => toast.info('Redirecting to logs...')} className="text-[10px] font-bold text-slate-500 hover:text-slate-950 dark:hover:text-white transition-colors">Logs</button>
+                            </div>
+                          </div>
+                        </div>
+
                       </div>
-                      <Badge variant="outline">Not Connected</Badge>
-                    </div>
-                    <div className="flex items-center justify-between p-4 border rounded-lg">
-                      <div>
-                        <p className="font-medium">SMTP Email Service</p>
-                        <p className="text-sm text-muted-foreground">Send emails</p>
+                    </CardContent>
+                  </Card>
+
+                  {/* Global Templates Library */}
+                  <Card className="border-slate-100 dark:border-slate-800 shadow-xs">
+                    <CardHeader className="pb-4">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <CardTitle className="text-lg font-bold">Global Enterprise Templates</CardTitle>
+                          <CardDescription>Consolidated templates across all connected networks.</CardDescription>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => toast.info('Template creator starting...')}>
+                          Create Template
+                        </Button>
                       </div>
-                      <Badge variant="outline">Not Connected</Badge>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/10">
+                              <th className="py-3 px-6 text-xs font-bold uppercase tracking-wider text-muted-foreground">Template Name</th>
+                              <th className="py-3 px-6 text-xs font-bold uppercase tracking-wider text-muted-foreground">Channel</th>
+                              <th className="py-3 px-6 text-xs font-bold uppercase tracking-wider text-muted-foreground">Usage</th>
+                              <th className="py-3 px-6 text-xs font-bold uppercase tracking-wider text-muted-foreground text-right">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                            <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-900/5 transition-colors">
+                              <td className="py-4 px-6">
+                                <div className="font-semibold text-slate-900 dark:text-slate-100 text-xs">Welcome Series - CRM Onboarding</div>
+                                <div className="text-[10px] text-muted-foreground mt-0.5">Updated 2 hours ago</div>
+                              </td>
+                              <td className="py-4 px-6">
+                                <Badge variant="secondary" className="text-[9px] bg-slate-100 dark:bg-slate-800 border-none font-bold py-0.5 px-2 rounded">
+                                  Email
+                                </Badge>
+                              </td>
+                              <td className="py-4 px-6 text-xs text-muted-foreground">4,204 sends</td>
+                              <td className="py-4 px-6 text-right">
+                                <Button onClick={() => toast.info('Template editor active')} variant="ghost" size="sm" className="h-8 px-2 text-slate-500 hover:text-slate-900 dark:hover:text-white">
+                                  Configure
+                                </Button>
+                              </td>
+                            </tr>
+
+                            <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-900/5 transition-colors">
+                              <td className="py-4 px-6">
+                                <div className="font-semibold text-slate-900 dark:text-slate-100 text-xs">Overdue Invoice Warning</div>
+                                <div className="text-[10px] text-muted-foreground mt-0.5">Updated yesterday</div>
+                              </td>
+                              <td className="py-4 px-6">
+                                <div className="flex gap-1.5">
+                                  <Badge variant="secondary" className="text-[9px] bg-slate-100 dark:bg-slate-800 border-none font-bold py-0.5 px-2 rounded">
+                                    SMS
+                                  </Badge>
+                                  <Badge variant="secondary" className="text-[9px] bg-slate-100 dark:bg-slate-800 border-none font-bold py-0.5 px-2 rounded">
+                                    WA
+                                  </Badge>
+                                </div>
+                              </td>
+                              <td className="py-4 px-6 text-xs text-muted-foreground">842 sends</td>
+                              <td className="py-4 px-6 text-right">
+                                <Button onClick={() => toast.info('Template editor active')} variant="ghost" size="sm" className="h-8 px-2 text-slate-500 hover:text-slate-900 dark:hover:text-white">
+                                  Configure
+                                </Button>
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                </div>
+
+                {/* AI Tone & Style secondary configurations (Right) */}
+                <div className="space-y-6">
+                  
+                  {/* AI Brand voice config */}
+                  <Card className="border-slate-100 dark:border-slate-800 shadow-xs relative overflow-hidden bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-950">
+                    <CardHeader className="pb-4">
+                      <CardTitle className="text-lg font-bold flex items-center gap-2">
+                        <Palette className="h-5 w-5 text-indigo-500" />
+                        AI Brand Voice & Persona
+                      </CardTitle>
+                      <CardDescription>Configure corporate messaging guidelines.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-5">
+                      
+                      <div className="space-y-2">
+                        <Label className="text-xs text-muted-foreground uppercase tracking-wider font-bold">Organization Persona</Label>
+                        <select className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-xs outline-none text-slate-900 dark:text-slate-100">
+                          <option>Professional & Empathetic (Recommended)</option>
+                          <option>Concise, Direct & Data-Driven</option>
+                          <option>Energetic, Casual & Friendly</option>
+                          <option>Formal, Executive & Authoritative</option>
+                        </select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center text-xs font-bold">
+                          <Label className="text-muted-foreground uppercase tracking-wider">Creativity Factor</Label>
+                          <span className="text-primary">70%</span>
+                        </div>
+                        <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full relative">
+                          <div className="absolute left-0 top-0 h-full w-[70%] bg-primary rounded-full"></div>
+                          <div className="absolute left-[70%] top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white dark:bg-slate-900 border-2 border-primary rounded-full shadow-xs"></div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3 pt-2">
+                        <Label className="text-xs text-muted-foreground uppercase tracking-wider font-bold block mb-1">Tone Constraints</Label>
+                        <div className="flex items-center gap-2.5">
+                          <input defaultChecked type="checkbox" id="noJargon" className="rounded border-slate-350 text-primary focus:ring-primary w-4 h-4" />
+                          <label htmlFor="noJargon" className="text-xs text-slate-700 dark:text-slate-300 font-semibold cursor-pointer">Avoid industry jargon</label>
+                        </div>
+                        <div className="flex items-center gap-2.5">
+                          <input defaultChecked type="checkbox" id="solFirst" className="rounded border-slate-350 text-primary focus:ring-primary w-4 h-4" />
+                          <label htmlFor="solFirst" className="text-xs text-slate-700 dark:text-slate-300 font-semibold cursor-pointer">Prioritize customer solutions first</label>
+                        </div>
+                        <div className="flex items-center gap-2.5">
+                          <input type="checkbox" id="addEmojis" className="rounded border-slate-350 text-primary focus:ring-primary w-4 h-4" />
+                          <label htmlFor="addEmojis" className="text-xs text-slate-700 dark:text-slate-300 font-semibold cursor-pointer">Allow light emojis in drafts</label>
+                        </div>
+                      </div>
+
+                      <div className="pt-4 border-t border-slate-150 dark:border-slate-800">
+                        <Button 
+                          onClick={() => toast.success('Brand voice simulator passed! Corporate communications validated.')} 
+                          variant="outline" 
+                          className="w-full text-xs font-bold text-primary border-primary/20 hover:bg-primary/5 h-9"
+                        >
+                          Test Brand Voice Simulator
+                        </Button>
+                      </div>
+
+                    </CardContent>
+                  </Card>
+
+                  {/* Limits and safety alerts */}
+                  <Card className="border-slate-100 dark:border-slate-800 bg-amber-500/10 p-5 rounded-xl">
+                    <div className="flex items-start gap-3">
+                      <Shield className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
+                      <div>
+                        <h4 className="font-bold text-slate-900 dark:text-slate-100 text-xs">Omnichannel Integration Threshold</h4>
+                        <p className="text-[11px] text-muted-foreground mt-1">You are currently utilizing 4 of 5 available channels in your enterprise cluster.</p>
+                        <button onClick={() => toast.info('Opening plan manager')} className="text-primary font-black text-[11px] mt-3 hover:underline flex items-center gap-1">
+                          Upgrade Tier Plan &rarr;
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </Card>
+
+                </div>
+
+              </div>
             </TabsContent>
 
             <TabsContent value="business">
@@ -691,8 +930,12 @@ export default function SettingsPage() {
                 </CardContent>
               </Card>
             </TabsContent>
+            <TabsContent value="dynamic">
+              <DynamicSchemaTab />
+            </TabsContent>
           </>
         )}
+
 
         <TabsContent value="password">
           <Card>

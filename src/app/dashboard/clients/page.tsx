@@ -58,43 +58,34 @@ export default function ClientsPage() {
     if (initializedRef.current) return;
     initializedRef.current = true;
 
-    const checkAuth = async () => {
-      const token = localStorage.getItem('session_token');
-      if (!token) {
-        router.push('/login');
-        return;
-      }
+    const token = localStorage.getItem('session_token');
+    const role = localStorage.getItem('user_role') as UserRole;
+    
+    if (!token || !role) {
+      router.push('/login');
+      return;
+    }
 
-      try {
-        const res = await fetch('/api/auth/me', {
-          headers: { 'Authorization': `Bearer ${token}` },
-        });
-        if (!res.ok) {
-          router.push('/login');
-          return;
-        }
-        const data = await res.json();
-        if (getDashboardType(data.user.role as UserRole) !== 'admin') {
-          router.push('/dashboard');
-          return;
-        }
-        setAuthorized(true);
-        fetchClients();
-      } catch {
-        router.push('/dashboard');
-      }
-    };
+    const dashboardType = getDashboardType(role);
+    if (dashboardType !== 'admin') {
+      router.push('/dashboard');
+      return;
+    }
 
-    checkAuth();
-  }, [fetchClients, router]);
+    setAuthorized(true);
+    fetchClients();
+  }, [router, fetchClients]);
 
   const handleSearchChange = (value: string) => {
     setSearch(value);
     setCurrentPage(0);
   };
 
+  if (!authorized) {
+    return <InlineTableSkeleton rows={5} columns={7} />;
+  }
+
   const filteredClients = clients.filter((client) => {
-    if (!search) return true;
     const q = search.toLowerCase();
     return (
       client.companyName.toLowerCase().includes(q) ||
@@ -108,8 +99,6 @@ export default function ClientsPage() {
     currentPage * pageSize,
     (currentPage + 1) * pageSize
   );
-
-  if (!authorized) return null;
 
   return (
     <div className="space-y-6">
@@ -153,6 +142,11 @@ export default function ClientsPage() {
               <p className="text-sm text-muted-foreground mt-1">
                 {search ? 'Try adjusting your search criteria' : 'Add your first client profile to get started'}
               </p>
+              {!search && (
+                <Button onClick={() => setShowAddDialog(true)} variant="outline" className="mt-4">
+                  Onboard Your First Client
+                </Button>
+              )}
             </div>
           ) : (
             <>
@@ -183,6 +177,7 @@ export default function ClientsPage() {
                       size="sm"
                       onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
                       disabled={currentPage === 0}
+                      className="rounded-lg"
                     >
                       Previous
                     </Button>
@@ -191,6 +186,7 @@ export default function ClientsPage() {
                       size="sm"
                       onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
                       disabled={currentPage >= totalPages - 1}
+                      className="rounded-lg"
                     >
                       Next
                     </Button>

@@ -372,6 +372,20 @@ export const POST = withApiHandler(async (request, context) => {
   }).select('*').single();
 
   if (error || !data) throw error ?? new Error('Failed to create attendance');
+
+  // Trigger automation workflow
+  try {
+    const { triggerAutomationWorkflow } = await import('@/server/automation/runner');
+    await triggerAutomationWorkflow(tenantId, 'attendance_logged', {
+      employeeId: data.employee_id,
+      date: data.date,
+      status: data.status,
+      violationFlags: data.violation_flags,
+    });
+  } catch (err: any) {
+    console.error('Failed to trigger automation workflow for attendance log:', err.message);
+  }
+
   return NextResponse.json({
     id: data.id,
     employeeId: Number(data.employee_id),
