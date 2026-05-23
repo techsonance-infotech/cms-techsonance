@@ -3,7 +3,7 @@ import path from 'node:path';
 
 const projectRoot = process.cwd();
 const apiRoot = path.join(projectRoot, 'src', 'app', 'api');
-const docsDir = path.join(projectRoot, 'docs');
+const docsDir = path.join(projectRoot, 'public', 'docs');
 
 const methodSummary = {
   GET: 'Retrieve resource',
@@ -39,7 +39,15 @@ export function toOpenApiPath(filePath) {
 }
 
 export function inferTag(openApiPath) {
-  const [, , first = 'misc'] = openApiPath.split('/');
+  const parts = openApiPath.split('/').filter(Boolean);
+  let first = parts[1] || 'misc';
+  if (first === 'v1' || first === 'v2') {
+    first = parts[2] || 'misc';
+  }
+  if (first.startsWith('{') && first.endsWith('}')) {
+    first = 'misc';
+  }
+
   const tagMap = {
     auth: 'auth',
     employees: 'employees',
@@ -135,6 +143,19 @@ export function createSpec() {
     }
   }
 
+  // Dynamically compile the list of all tags present in the spec operations
+  const uniqueTags = new Set();
+  for (const pathObj of Object.values(paths)) {
+    for (const opObj of Object.values(pathObj)) {
+      if (opObj.tags) {
+        for (const tag of opObj.tags) {
+          uniqueTags.add(tag);
+        }
+      }
+    }
+  }
+  const tagsList = Array.from(uniqueTags).sort().map((tag) => ({ name: tag }));
+
   return {
     openapi: '3.0.3',
     info: {
@@ -143,16 +164,7 @@ export function createSpec() {
       description: 'Generated OpenAPI specification for the TechSonance CMS routes.',
     },
     servers: [{ url: '/'}],
-    tags: [
-      { name: 'auth' },
-      { name: 'employees' },
-      { name: 'payroll' },
-      { name: 'attendance' },
-      { name: 'projects' },
-      { name: 'tasks' },
-      { name: 'sprints' },
-      { name: 'expenses' },
-    ],
+    tags: tagsList,
     paths,
     components: {
       securitySchemes: {
@@ -254,5 +266,5 @@ export function writeSpecFiles() {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname)) {
   writeSpecFiles();
-  console.log('OpenAPI spec generated at docs/swagger.json and docs/swagger.yaml');
+  console.log('OpenAPI spec generated at public/docs/swagger.json and public/docs/swagger.yaml');
 }

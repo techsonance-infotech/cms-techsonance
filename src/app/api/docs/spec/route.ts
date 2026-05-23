@@ -3,7 +3,7 @@ import path from 'node:path';
 import { withApiHandler } from '@/server/http/handler';
 
 export const GET = withApiHandler(async () => {
-  const filePath = path.join(process.cwd(), 'docs', 'swagger.json');
+  const filePath = path.join(process.cwd(), 'public', 'docs', 'swagger.json');
   const content = await fs.readFile(filePath, 'utf8');
   return new Response(content, {
     status: 200,

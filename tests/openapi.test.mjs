@@ -16,8 +16,8 @@ test('openapi generator writes swagger files with populated paths', () => {
   assert.ok(Object.keys(spec.paths).length > 20);
 
   writeSpecFiles();
-  const swaggerJsonPath = path.join(process.cwd(), 'docs', 'swagger.json');
-  const swaggerYamlPath = path.join(process.cwd(), 'docs', 'swagger.yaml');
+  const swaggerJsonPath = path.join(process.cwd(), 'public', 'docs', 'swagger.json');
+  const swaggerYamlPath = path.join(process.cwd(), 'public', 'docs', 'swagger.yaml');
   assert.ok(fs.existsSync(swaggerJsonPath));
   assert.ok(fs.existsSync(swaggerYamlPath));
 });

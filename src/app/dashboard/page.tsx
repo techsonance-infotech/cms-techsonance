@@ -33,6 +33,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { PerformanceCharts, FinancialRunRateChart } from '@/components/dashboard/performance-charts';
 import { DashboardAnnouncements, DashboardApprovalQueue, DashboardBroadcaster } from '@/components/dashboard/dashboard-widgets';
+import { PageHeader } from '@/components/ui/page-header';
 
 interface DashboardStats {
   activeClients: number;
@@ -179,10 +180,11 @@ export default function DashboardPage() {
   if (dashboardType === 'employee') {
     return (
       <div className="space-y-6">
-        <header className="flex flex-col gap-1">
-          <h2 className="text-3xl font-bold tracking-tight">Welcome back, {currentUser.firstName}!</h2>
-          <p className="text-muted-foreground">Here is an overview of your work and productivity metrics.</p>
-        </header>
+        <PageHeader 
+          title={`Welcome back, ${currentUser.firstName}!`}
+          description="Here is an overview of your work and productivity metrics."
+          breadcrumbs={[{ label: 'Dashboard' }]}
+        />
 
         {employeeStats && (
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
@@ -377,19 +379,18 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">System Overview</h2>
-          <p className="text-muted-foreground">Aggregated business metrics and organizational health.</p>
-        </div>
-        <div className="flex gap-2">
-          <Link href="/dashboard/settings">
+      <PageHeader 
+        title="System Overview"
+        description="Aggregated business metrics and organizational health."
+        actions={[
+          <Link key="config" href="/dashboard/settings">
             <Button variant="outline" size="sm">
               <UserCog className="mr-2 h-4 w-4" /> Config
             </Button>
           </Link>
-        </div>
-      </header>
+        ]}
+        breadcrumbs={[{ label: 'Dashboard' }]}
+      />
 
       {adminStats && (
         <>

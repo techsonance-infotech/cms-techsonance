@@ -307,8 +307,8 @@ Each role has four permission levels per module:
 
 The project includes **auto-generated OpenAPI/Swagger documentation**:
 
-- **Swagger JSON**: `docs/swagger.json` (344KB)
-- **Swagger YAML**: `docs/swagger.yaml` (252KB)
+- **Swagger JSON**: `public/docs/swagger.json` (344KB)
+- **Swagger YAML**: `public/docs/swagger.yaml` (252KB)
 - **Generation**: `npm run generate:openapi` — parses API route AST to extract endpoints
 - **Pre-build hook**: Automatically regenerates before `npm run build`
 
@@ -498,8 +498,8 @@ Checkout → Setup Node 20 → Install → Generate OpenAPI → Lint → Typeche
 ```
 cms-techsonance/
 ├── .github/workflows/       # CI/CD pipeline
-├── docs/                    # Auto-generated Swagger + RBAC documentation
-├── public/                  # Static assets
+├── docs/                    # RBAC documentation and guides
+├── public/                  # Static assets (including generated Swagger spec)
 ├── scripts/                 # Build & utility scripts
 ├── supabase/migrations/     # Database migration SQL files
 ├── tests/                   # Test suite

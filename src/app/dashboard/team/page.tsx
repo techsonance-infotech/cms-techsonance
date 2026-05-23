@@ -30,6 +30,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
+import { PageHeader } from '@/components/ui/page-header';
+import { StatusBadge } from '@/components/ui/status-badge';
 
 interface Employee {
   id: number;
@@ -202,25 +204,17 @@ export default function TeamPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-primary/10 ring-1 ring-primary/20">
-              <UsersRound className="h-6 w-6 text-primary" />
-            </div>
-            Team Management
-          </h2>
-          <p className="text-muted-foreground mt-2">
-            {isAdmin ? 'Manage employees, attendance, and monitor HR performance' : 'View team members and their details'}
-          </p>
-        </div>
-        {isAdmin && (
-          <Button onClick={() => setAddDialogOpen(true)}>
+      <PageHeader
+        title="Team Management"
+        description={isAdmin ? 'Manage employees, attendance, and monitor HR performance' : 'View team members and their details'}
+        actions={isAdmin ? [
+          <Button key="add" onClick={() => setAddDialogOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Add Employee
           </Button>
-        )}
-      </div>
+        ] : []}
+        breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Team' }]}
+      />
 
       {isAdmin && (
         <div className="grid gap-4 md:grid-cols-4">
@@ -331,13 +325,7 @@ export default function TeamPage() {
                             {new Date(employee.dateOfJoining).toLocaleDateString()}
                           </TableCell>
                           <TableCell>
-                            <Badge variant={
-                              employee.status === 'active' ? 'default' :
-                              employee.status === 'on_leave' ? 'secondary' :
-                              'outline'
-                            }>
-                              {employee.status.replace('_', ' ')}
-                            </Badge>
+                            <StatusBadge status={employee.status} />
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">

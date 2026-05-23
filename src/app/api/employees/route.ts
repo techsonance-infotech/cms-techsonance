@@ -49,7 +49,11 @@ export const GET = withApiHandler(async (request, context) => {
     query = query.or(`employee_id.ilike.%${search}%,department.ilike.%${search}%,designation.ilike.%${search}%`);
   }
   if (userId) {
-    const authUserId = await resolveAuthUserIdFromLegacyUserId(accessToken, Number(userId), tenantId);
+    const parsedUserId = Number(userId);
+    if (isNaN(parsedUserId)) {
+      throw new BadRequestError('Invalid userId parameter - must be a valid numeric ID');
+    }
+    const authUserId = await resolveAuthUserIdFromLegacyUserId(accessToken, parsedUserId, tenantId);
     query = query.eq('user_id', authUserId);
   }
   if (department) {

@@ -12,28 +12,145 @@
   ],
   "tags": [
     {
-      "name": "auth"
-    },
-    {
-      "name": "employees"
-    },
-    {
-      "name": "payroll"
+      "name": "activity-logs"
     },
     {
       "name": "attendance"
     },
     {
+      "name": "auth"
+    },
+    {
+      "name": "blogs"
+    },
+    {
+      "name": "business-settings"
+    },
+    {
+      "name": "chat-messages"
+    },
+    {
+      "name": "client-communications"
+    },
+    {
+      "name": "clients"
+    },
+    {
+      "name": "company-holidays"
+    },
+    {
+      "name": "company-settings"
+    },
+    {
+      "name": "daily-report-projects"
+    },
+    {
+      "name": "daily-reports"
+    },
+    {
+      "name": "dashboard"
+    },
+    {
+      "name": "docs"
+    },
+    {
+      "name": "employees"
+    },
+    {
+      "name": "enrollments"
+    },
+    {
+      "name": "expenses"
+    },
+    {
+      "name": "firebase"
+    },
+    {
+      "name": "health"
+    },
+    {
+      "name": "inquiries"
+    },
+    {
+      "name": "inquiry-feeds"
+    },
+    {
+      "name": "invoice-items"
+    },
+    {
+      "name": "invoices"
+    },
+    {
+      "name": "leave-policies"
+    },
+    {
+      "name": "leave-requests"
+    },
+    {
+      "name": "media-library"
+    },
+    {
+      "name": "notifications"
+    },
+    {
+      "name": "pages"
+    },
+    {
+      "name": "payments"
+    },
+    {
+      "name": "payroll"
+    },
+    {
+      "name": "performance-reviews"
+    },
+    {
+      "name": "portfolio"
+    },
+    {
       "name": "projects"
     },
     {
-      "name": "tasks"
+      "name": "purchases"
+    },
+    {
+      "name": "rbac"
+    },
+    {
+      "name": "readers"
+    },
+    {
+      "name": "ready"
+    },
+    {
+      "name": "sessions"
     },
     {
       "name": "sprints"
     },
     {
-      "name": "expenses"
+      "name": "tasks"
+    },
+    {
+      "name": "tenants"
+    },
+    {
+      "name": "ticket-responses"
+    },
+    {
+      "name": "tickets"
+    },
+    {
+      "name": "time-tracking"
+    },
+    {
+      "name": "upload"
+    },
+    {
+      "name": "users"
+    },
+    {
+      "name": "vendors"
     }
   ],
   "paths": {
@@ -1544,6 +1661,64 @@
             "example": 0
           }
         ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SuccessResponse"
+          },
+          "201": {
+            "$ref": "#/components/responses/CreatedResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationErrorResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedResponse"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundResponse"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableResponse"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalErrorResponse"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Update resource for /api/auth/me",
+        "description": "Auto-generated documentation for PUT /api/auth/me.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenericPayload"
+              },
+              "examples": {
+                "sample": {
+                  "summary": "PUT request payload",
+                  "value": {
+                    "name": "Example",
+                    "status": "active"
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "$ref": "#/components/responses/SuccessResponse"
@@ -3767,6 +3942,160 @@
           },
           "201": {
             "$ref": "#/components/responses/CreatedResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationErrorResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedResponse"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundResponse"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableResponse"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/employees/documents": {
+      "get": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "Retrieve resource for /api/employees/documents",
+        "description": "Auto-generated documentation for GET /api/employees/documents.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "example": 10
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "example": 0
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SuccessResponse"
+          },
+          "201": {
+            "$ref": "#/components/responses/CreatedResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationErrorResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedResponse"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundResponse"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableResponse"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalErrorResponse"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "Create resource for /api/employees/documents",
+        "description": "Auto-generated documentation for POST /api/employees/documents.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenericPayload"
+              },
+              "examples": {
+                "sample": {
+                  "summary": "POST request payload",
+                  "value": {
+                    "name": "Example",
+                    "status": "active"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "$ref": "#/components/responses/CreatedResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationErrorResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedResponse"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundResponse"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableResponse"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalErrorResponse"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "Delete resource for /api/employees/documents",
+        "description": "Auto-generated documentation for DELETE /api/employees/documents.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SuccessResponse"
           },
           "400": {
             "$ref": "#/components/responses/ValidationErrorResponse"
@@ -11394,7 +11723,7 @@
     "/api/v1/auth/change-password": {
       "put": {
         "tags": [
-          "v1"
+          "auth"
         ],
         "summary": "Update resource for /api/v1/auth/change-password",
         "description": "Auto-generated documentation for PUT /api/v1/auth/change-password.",
@@ -11454,7 +11783,7 @@
     "/api/v1/auth/forgot-password/request": {
       "post": {
         "tags": [
-          "v1"
+          "auth"
         ],
         "summary": "Create resource for /api/v1/auth/forgot-password/request",
         "description": "Auto-generated documentation for POST /api/v1/auth/forgot-password/request.",
@@ -11511,7 +11840,7 @@
     "/api/v1/auth/forgot-password/reset": {
       "post": {
         "tags": [
-          "v1"
+          "auth"
         ],
         "summary": "Create resource for /api/v1/auth/forgot-password/reset",
         "description": "Auto-generated documentation for POST /api/v1/auth/forgot-password/reset.",
@@ -11568,7 +11897,7 @@
     "/api/v1/auth/forgot-password/verify": {
       "post": {
         "tags": [
-          "v1"
+          "auth"
         ],
         "summary": "Create resource for /api/v1/auth/forgot-password/verify",
         "description": "Auto-generated documentation for POST /api/v1/auth/forgot-password/verify.",
@@ -11625,7 +11954,7 @@
     "/api/v1/auth/login": {
       "post": {
         "tags": [
-          "v1"
+          "auth"
         ],
         "summary": "Create resource for /api/v1/auth/login",
         "description": "Auto-generated documentation for POST /api/v1/auth/login.",
@@ -11682,7 +12011,7 @@
     "/api/v1/auth/logout": {
       "post": {
         "tags": [
-          "v1"
+          "auth"
         ],
         "summary": "Create resource for /api/v1/auth/logout",
         "description": "Auto-generated documentation for POST /api/v1/auth/logout.",
@@ -11739,7 +12068,7 @@
     "/api/v1/auth/me": {
       "get": {
         "tags": [
-          "v1"
+          "auth"
         ],
         "summary": "Retrieve resource for /api/v1/auth/me",
         "description": "Auto-generated documentation for GET /api/v1/auth/me.",
@@ -11802,7 +12131,7 @@
     "/api/v1/auth/refresh": {
       "post": {
         "tags": [
-          "v1"
+          "auth"
         ],
         "summary": "Create resource for /api/v1/auth/refresh",
         "description": "Auto-generated documentation for POST /api/v1/auth/refresh.",
@@ -11859,7 +12188,7 @@
     "/api/v1/health": {
       "get": {
         "tags": [
-          "v1"
+          "health"
         ],
         "summary": "Retrieve resource for /api/v1/health",
         "description": "Auto-generated documentation for GET /api/v1/health.",
@@ -11922,7 +12251,7 @@
     "/api/v1/ready": {
       "get": {
         "tags": [
-          "v1"
+          "ready"
         ],
         "summary": "Retrieve resource for /api/v1/ready",
         "description": "Auto-generated documentation for GET /api/v1/ready.",

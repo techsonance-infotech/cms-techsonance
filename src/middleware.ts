@@ -91,7 +91,7 @@ export async function middleware(request: NextRequest) {
     response.headers.set('strict-transport-security', 'max-age=63072000; includeSubDomains; preload');
     response.headers.set(
       'content-security-policy',
-      "default-src 'self'; img-src 'self' data: https: http:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline'; connect-src 'self' https: http:; frame-ancestors 'none';"
+      "default-src 'self'; img-src 'self' data: https: http:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' https: data:; connect-src 'self' https: http:; frame-ancestors 'none';"
     );
     return response;
   }
@@ -109,7 +109,7 @@ export async function middleware(request: NextRequest) {
   response.headers.set('strict-transport-security', 'max-age=63072000; includeSubDomains; preload');
   response.headers.set(
     'content-security-policy',
-    "default-src 'self'; img-src 'self' data: https: http:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline'; connect-src 'self' https: http:; frame-ancestors 'none';"
+    "default-src 'self'; img-src 'self' data: https: http:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' https: data:; connect-src 'self' https: http:; frame-ancestors 'none';"
   );
 
   return response;

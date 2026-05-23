@@ -38,6 +38,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { useDebouncedValue } from '@/lib/hooks/use-debounced-value';
+import { PageHeader } from '@/components/ui/page-header';
+import { StatusBadge } from '@/components/ui/status-badge';
 
 interface Project {
   id: number;
@@ -343,20 +345,17 @@ export default function ProjectsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">{isEmployee ? 'My Projects' : 'Project Management'}</h2>
-          <p className="text-muted-foreground">
-            {isEmployee ? 'Review and track your active project assignments' : 'Full pipeline oversight and resource management'}
-          </p>
-        </div>
-        {canEdit && (
-          <Button onClick={() => setShowAddDialog(true)}>
+      <PageHeader 
+        title={isEmployee ? 'My Projects' : 'Project Management'}
+        description={isEmployee ? 'Review and track your active project assignments' : 'Full pipeline oversight and resource management'}
+        actions={canEdit ? [
+          <Button key="create" onClick={() => setShowAddDialog(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Create Project
           </Button>
-        )}
-      </div>
+        ] : []}
+        breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Projects' }]}
+      />
 
       {/* Filters and Search */}
       <Card>
@@ -712,14 +711,10 @@ export default function ProjectsPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="secondary" className="capitalize text-[11px]">
-                          {project.status.replace('_', ' ')}
-                        </Badge>
+                        <StatusBadge status={project.status} />
                       </TableCell>
                       <TableCell>
-                        <span className={`inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full ${project.isActive ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-800'}`}>
-                          {project.isActive ? 'Active' : 'Inactive'}
-                        </span>
+                        <StatusBadge status={project.isActive ? 'active' : 'inactive'} />
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">

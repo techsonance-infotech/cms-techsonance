@@ -41,3 +41,16 @@ next-env.d.ts
 .env
 .env*.local
 .env.*
+
+# internal developer documentation
+/docs/
+CMS_Portal_UI_Prompt.md
+
+# local development utility scripts
+/scripts/test-db.ts
+/scripts/check-tables.mjs
+
+# non-Vercel deployment & pipeline scripts (Docker, coverage, scans)
+/scripts/docker-entrypoint.sh
+/scripts/run-tests-with-coverage.mjs
+/scripts/security-scan.mjs
