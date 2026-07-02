@@ -84,13 +84,13 @@ export async function authenticateRequest(request: Request, options?: { required
     const supabaseUser = await getSupabaseUserFromAccessToken(bearerToken);
     const profile = await getSupabaseProfileByAuthUserId(supabaseUser.id, { useAdmin: true });
 
-    if (!profile.is_active || profile.legacy_user_id === null) {
+    if (!profile.is_active) {
       throw new UnauthorizedError();
     }
 
     const authContext: AuthContext = {
       user: {
-        id: profile.legacy_user_id,
+        id: profile.legacy_user_id ?? 0,
         email: profile.email,
         firstName: profile.first_name,
         lastName: profile.last_name,

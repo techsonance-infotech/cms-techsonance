@@ -232,7 +232,7 @@ export function AppRuntimeProvider({ children }: Props) {
                   ? 'Unable to complete this request right now. Please try again.'
                   : message;
 
-              if (!isAuthRefresh && !isAuthLogin) {
+              if (!isAuthRefresh && !isAuthLogin && !isAuthMe) {
                 toast.error(safeMessage);
               }
 

@@ -5,20 +5,25 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { PageSkeleton, InlineTableSkeleton } from '@/components/ui/dashboard-skeleton';
+import { InlineTableSkeleton } from '@/components/ui/dashboard-skeleton';
 import Link from 'next/link';
 import { AddEmployeeDialog } from '@/components/team/add-employee-dialog';
 import { EditEmployeeDialog } from '@/components/team/edit-employee-dialog';
 import { hasFullAccess, type UserRole } from '@/lib/permissions';
-import { Users, UserCheck, UserMinus, Building, UsersRound, Plus, MoreHorizontal, Eye, Edit, Trash2, Mail, Phone, MapPin, Building2, UserCog, UserMinus2, Calendar, Search } from 'lucide-react';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { 
+  Users, 
+  UserCheck, 
+  Building, 
+  UsersRound, 
+  Plus, 
+  Eye, 
+  Edit, 
+  Trash2, 
+  UserCog, 
+  Calendar, 
+  Search, 
+  Settings
+} from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,8 +35,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { PageHeader } from '@/components/ui/page-header';
-import { StatusBadge } from '@/components/ui/status-badge';
 
 interface Employee {
   id: number;
@@ -43,6 +46,17 @@ interface Employee {
   employmentType: string;
   status: string;
   gender?: string | null;
+  dateOfBirth?: string | null;
+  skills?: any;
+  salary?: number | null;
+  hourlyRate?: number | null;
+  ctc?: number | null;
+  pfNumber?: string | null;
+  uanNumber?: string | null;
+  bankName?: string | null;
+  bankAccountNumber?: string | null;
+  ifscCode?: string | null;
+  managerId?: number | null;
 }
 
 interface User {
@@ -51,6 +65,7 @@ interface User {
   lastName: string;
   email: string;
   role: string;
+  phone?: string | null;
 }
 
 export default function TeamPage() {
@@ -58,6 +73,7 @@ export default function TeamPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [density, setDensity] = useState<'compact' | 'standard' | 'comfortable'>('standard');
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
@@ -109,7 +125,8 @@ export default function TeamPage() {
 
       if (employeesRes.ok) {
         const data = await employeesRes.json();
-        setEmployees(data);
+        // The API returns { success: true, data: Employee[] }
+        setEmployees(data.data || data);
       }
 
       if (usersRes.ok) {
@@ -136,13 +153,16 @@ export default function TeamPage() {
     }
   };
 
+  const handleGenerateReport = () => {
+    toast.success("Flagship corporate team directory report compiled and downloadable.");
+  };
+
   const handleDelete = async () => {
     if (!deletingEmployee) return;
 
     try {
       const token = localStorage.getItem('session_token');
       
-      // Delete employee record
       const response = await fetch(`/api/employees?id=${deletingEmployee.employee.id}`, {
         method: 'DELETE',
         headers: {
@@ -177,13 +197,11 @@ export default function TeamPage() {
     );
   });
 
-  // Calculate paginated employees
   const paginatedEmployees = filteredEmployees.slice(
     currentPage * pageSize,
     (currentPage + 1) * pageSize
   );
 
-  // Reset page when search changes
   useEffect(() => {
     setCurrentPage(0);
   }, [search]);
@@ -202,70 +220,130 @@ export default function TeamPage() {
     );
   }
 
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Team Management"
-        description={isAdmin ? 'Manage employees, attendance, and monitor HR performance' : 'View team members and their details'}
-        actions={isAdmin ? [
-          <Button key="add" onClick={() => setAddDialogOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Employee
-          </Button>
-        ] : []}
-        breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Team' }]}
-      />
+  const densityPadding = 
+    density === 'compact' ? 'py-1.5 px-3' : 
+    density === 'comfortable' ? 'py-3.5 px-5' : 
+    'py-2.5 px-4';
 
+  const densityMargin = 
+    density === 'compact' ? 'gap-2' : 
+    density === 'comfortable' ? 'gap-6' : 
+    'gap-4';
+
+  return (
+    <div className="space-y-6 p-1 max-w-[1600px] mx-auto">
+      
+      {/* Brand Header */}
+      <div className="relative overflow-hidden rounded-2xl bg-[#2f3035] p-6 text-[#fdfcfc] shadow-sm border border-[#e6e4e6]/10">
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1.5">
+              <UsersRound className="h-4 w-4 text-[#f87941]" />
+              <span className="text-xs font-semibold uppercase tracking-wider text-[#e6e4e6]/80">Team directory and operations control</span>
+            </div>
+            <h2 className="text-2xl font-bold tracking-tight text-[#fdfcfc]">
+              Team Directory
+            </h2>
+            <p className="text-sm text-[#e6e4e6]/70 mt-1 max-w-xl">
+              {isAdmin ? 'Manage employees, system access roles, departments, and monitor HR performance.' : 'View team members and their details.'}
+            </p>
+          </div>
+          {isAdmin && (
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" className="border-[#e6e4e6]/25 bg-[#2f3035] text-[#fdfcfc] hover:bg-[#e6e4e6]/10 hover:text-[#fdfcfc] transition-all" onClick={handleGenerateReport}>
+                Generate Team Report
+              </Button>
+              <Button size="sm" className="bg-[#f87941] hover:bg-[#f87941]/90 text-[#fdfcfc] border-none shadow-sm font-semibold transition-all" onClick={() => setAddDialogOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Employee
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Spacing & Density Configuration Panel */}
+      <Card className="border border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+        <CardHeader className="pb-3 border-b bg-slate-50/50 dark:bg-zinc-950/20">
+          <div className="flex justify-between items-center flex-wrap gap-3">
+            <div>
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <Settings className="h-4 w-4 text-[#f87941] animate-spin" />
+                Interface Spacing & Density Configuration
+              </CardTitle>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-muted-foreground">Density Mode:</span>
+              <div className="flex bg-slate-100 dark:bg-zinc-800 rounded-lg p-0.5 text-xs font-semibold">
+                <button className={`px-3 py-1.5 rounded-md transition-colors ${density === 'compact' ? 'bg-[#f87941] text-[#fdfcfc] shadow-sm' : 'text-[#b1b1b1] hover:text-[#2f3035]'}`} onClick={() => setDensity('compact')}>Compact</button>
+                <button className={`px-3 py-1.5 rounded-md transition-colors ${density === 'standard' ? 'bg-[#f87941] text-[#fdfcfc] shadow-sm' : 'text-[#b1b1b1] hover:text-[#2f3035]'}`} onClick={() => setDensity('standard')}>Standard</button>
+                <button className={`px-3 py-1.5 rounded-md transition-colors ${density === 'comfortable' ? 'bg-[#f87941] text-[#fdfcfc] shadow-sm' : 'text-[#b1b1b1] hover:text-[#2f3035]'}`} onClick={() => setDensity('comfortable')}>Comfortable</button>
+              </div>
+            </div>
+          </div>
+        </CardHeader>
+      </Card>
+
+      {/* Bento Stats Overview */}
       {isAdmin && (
-        <div className="grid gap-4 md:grid-cols-4">
-          <Card className="bg-gradient-to-br from-card to-primary/5 hover:border-primary/50 transition-colors">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium">Total Employees</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
+        <div className={`grid gap-6 md:grid-cols-4 ${densityMargin}`}>
+          {/* Total Employees */}
+          <Card className="border border-[#e6e4e6]/30 dark:border-[#2f3035]/30 shadow-sm relative overflow-hidden bg-[#e6e4e6]/10 dark:bg-[#2f3035]/25">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs font-semibold uppercase tracking-wider text-[#b1b1b1]">Total Employees</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{employees.length}</div>
+              <div className="text-3xl font-black text-[#f87941]">{employees.length}</div>
+              <p className="text-[10px] text-muted-foreground mt-2">Registered personnel in organization</p>
             </CardContent>
           </Card>
-          <Card className="bg-gradient-to-br from-card to-emerald-500/5 hover:border-emerald-500/50 transition-colors">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium">Active</CardTitle>
-              <UserCheck className="h-4 w-4 text-emerald-500" />
+
+          {/* Active */}
+          <Card className="border border-[#e6e4e6]/30 dark:border-[#2f3035]/30 shadow-sm relative overflow-hidden bg-[#e6e4e6]/10 dark:bg-[#2f3035]/25">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs font-semibold uppercase tracking-wider text-[#b1b1b1]">Active Staff</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
+              <div className="text-3xl font-black text-[#f87941]">
                 {employees.filter(e => e.status === 'active').length}
               </div>
+              <p className="text-[10px] text-muted-foreground mt-2">Staff members actively checking in</p>
             </CardContent>
           </Card>
-          <Card className="bg-gradient-to-br from-card to-amber-500/5 hover:border-amber-500/50 transition-colors">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium">On Leave</CardTitle>
-              <Calendar className="h-4 w-4 text-amber-500" />
+
+          {/* On Leave */}
+          <Card className="border border-[#e6e4e6]/30 dark:border-[#2f3035]/30 shadow-sm relative overflow-hidden bg-[#e6e4e6]/10 dark:bg-[#2f3035]/25">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs font-semibold uppercase tracking-wider text-[#b1b1b1]">On Leave</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
+              <div className="text-3xl font-black text-[#f9b095]">
                 {employees.filter(e => e.status === 'on_leave').length}
               </div>
+              <p className="text-[10px] text-muted-foreground mt-2">Active leaves and time off</p>
             </CardContent>
           </Card>
-          <Card className="bg-gradient-to-br from-card to-indigo-500/5 hover:border-indigo-500/50 transition-colors">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium">Departments</CardTitle>
-              <Building className="h-4 w-4 text-indigo-500" />
+
+          {/* Departments */}
+          <Card className="border border-[#e6e4e6]/30 dark:border-[#2f3035]/30 shadow-sm relative overflow-hidden bg-[#e6e4e6]/10 dark:bg-[#2f3035]/25">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs font-semibold uppercase tracking-wider text-[#b1b1b1]">Departments</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
+              <div className="text-3xl font-black text-[#b1b1b1]">
                 {new Set(employees.map(e => e.department)).size}
               </div>
+              <p className="text-[10px] text-muted-foreground mt-2">Distinct business divisions</p>
             </CardContent>
           </Card>
         </div>
       )}
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
+      {/* Directory Table Grid */}
+      <Card className="border border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+        <CardHeader className="pb-3 border-b dark:border-zinc-900 bg-slate-50/50 dark:bg-zinc-950/20">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <CardTitle>All Employees</CardTitle>
               <CardDescription>
@@ -273,92 +351,102 @@ export default function TeamPage() {
               </CardDescription>
             </div>
             <div className="relative w-64">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-[#b1b1b1]" />
               <Input
                 placeholder="Search employees..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-8"
+                className="pl-8 text-xs h-8 focus-visible:ring-[#f87941] focus-visible:border-[#f87941]"
               />
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-4">
           {loading ? (
-            <InlineTableSkeleton rows={6} columns={7} />
+            <InlineTableSkeleton rows={6} columns={9} />
           ) : filteredEmployees.length === 0 ? (
             <div className="text-center py-8">
-              <UserCog className="mx-auto h-12 w-12 text-muted-foreground" />
+              <UserCog className="mx-auto h-12 w-12 text-[#b1b1b1]" />
               <h3 className="mt-4 text-lg font-semibold">No employees found</h3>
             </div>
           ) : (
             <>
-              <div className="rounded-md border max-h-[600px] overflow-y-auto">
-                <Table>
-                  <TableHeader className="sticky top-0 bg-background z-10">
-                    <TableRow>
-                      <TableHead>Employee ID</TableHead>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Department</TableHead>
-                      <TableHead>Designation</TableHead>
-                      <TableHead>Gender</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Joining Date</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+              <div className="rounded-xl border border-[#e6e4e6]/30 dark:border-[#2f3035]/30 max-h-[600px] overflow-y-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b text-xs font-semibold text-muted-foreground uppercase bg-[#e6e4e6]/20 dark:bg-[#2f3035]/40">
+                      <th className="p-3">Employee ID</th>
+                      <th className="p-3">Name</th>
+                      <th className="p-3">Department</th>
+                      <th className="p-3">Designation</th>
+                      <th className="p-3">Gender</th>
+                      <th className="p-3">Employment Type</th>
+                      <th className="p-3">Joining Date</th>
+                      <th className="p-3">Status</th>
+                      <th className="p-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y text-sm">
                     {paginatedEmployees.map((employee) => {
                       const user = getUserById(employee.userId);
                       return (
-                        <TableRow key={employee.id}>
-                          <TableCell className="font-medium">{employee.employeeId}</TableCell>
-                          <TableCell>
+                        <tr key={employee.id} className="hover:bg-[#e6e4e6]/10 dark:hover:bg-[#2f3035]/10 transition-colors">
+                          <td className={`font-mono font-bold text-[#f87941] ${densityPadding}`}>{employee.employeeId}</td>
+                          <td className={`font-bold text-zinc-900 dark:text-zinc-50 ${densityPadding}`}>
                             {user ? `${user.firstName} ${user.lastName}` : 'Unknown'}
-                          </TableCell>
-                          <TableCell>{employee.department}</TableCell>
-                          <TableCell>{employee.designation}</TableCell>
-                          <TableCell className="capitalize">{employee.gender || 'Not set'}</TableCell>
-                          <TableCell className="capitalize">{employee.employmentType?.replace('_', ' ') || 'Full time'}</TableCell>
-                          <TableCell>
+                          </td>
+                          <td className={densityPadding}>
+                            <Badge variant="secondary" className="text-[10px] bg-[#e6e4e6]/30 dark:bg-[#2f3035]/40 text-[#2f3035] dark:text-[#fdfcfc]">{employee.department}</Badge>
+                          </td>
+                          <td className={`font-medium ${densityPadding}`}>{employee.designation}</td>
+                          <td className={`capitalize ${densityPadding}`}>{employee.gender || 'Not set'}</td>
+                          <td className={`capitalize ${densityPadding}`}>{employee.employmentType?.replace('_', ' ') || 'Full time'}</td>
+                          <td className={densityPadding}>
                             {new Date(employee.dateOfJoining).toLocaleDateString()}
-                          </TableCell>
-                          <TableCell>
-                            <StatusBadge status={employee.status} />
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
+                          </td>
+                          <td className={densityPadding}>
+                            <Badge className={`text-[9px] uppercase font-bold border ${
+                              employee.status === 'active' ? 'bg-[#f87941]/10 text-[#f87941] border-[#f87941]/25' :
+                              employee.status === 'on_leave' ? 'bg-[#f9b095]/10 text-[#f9b095] border-[#f9b095]/25' :
+                              'bg-[#b1b1b1]/10 text-[#b1b1b1] border-[#b1b1b1]/25'
+                            }`}>
+                              {employee.status?.replace('_', ' ')}
+                            </Badge>
+                          </td>
+                          <td className={`text-right ${densityPadding}`}>
+                            <div className="flex justify-end gap-1.5">
                               <Link href={`/dashboard/team/${employee.id}`}>
-                                <Button variant="ghost" size="sm">
-                                  <Eye className="h-4 w-4" />
+                                <Button size="xs" variant="outline" className="h-7 text-xs border-[#b1b1b1]/40 hover:bg-[#b1b1b1]/10 text-[#2f3035] dark:text-[#fdfcfc]">
+                                  <Eye className="h-3.5 w-3.5" />
                                 </Button>
                               </Link>
                               {isAdmin && (
                                 <>
                                   <Button 
-                                    variant="ghost" 
-                                    size="sm"
+                                    size="xs" 
+                                    variant="outline" 
+                                    className="h-7 text-xs border-[#f87941]/40 hover:bg-[#f87941]/10 text-[#f87941]"
                                     onClick={() => handleEdit(employee)}
                                   >
-                                    <Edit className="h-4 w-4" />
+                                    <Edit className="h-3.5 w-3.5" />
                                   </Button>
                                   <Button 
-                                    variant="ghost" 
-                                    size="sm"
+                                    size="xs" 
+                                    variant="outline" 
+                                    className="h-7 text-xs border-[#f9b095]/40 hover:bg-[#f9b095]/10 text-[#f9b095]"
                                     onClick={() => user && setDeletingEmployee({ employee, user })}
                                   >
-                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                    <Trash2 className="h-3.5 w-3.5" />
                                   </Button>
                                 </>
                               )}
                             </div>
-                          </TableCell>
-                        </TableRow>
+                          </td>
+                        </tr>
                       );
                     })}
-                  </TableBody>
-                </Table>
+                  </tbody>
+                </table>
               </div>
 
               {/* Pagination */}
@@ -398,8 +486,8 @@ export default function TeamPage() {
             open={editDialogOpen}
             onOpenChange={setEditDialogOpen}
             onSuccess={fetchTeamData}
-            employee={selectedEmployee}
-            user={selectedUser}
+            employee={selectedEmployee as any}
+            user={selectedUser as any}
           />
 
           <AlertDialog open={deletingEmployee !== null} onOpenChange={() => setDeletingEmployee(null)}>

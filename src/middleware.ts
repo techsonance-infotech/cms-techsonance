@@ -10,10 +10,27 @@ function isPublicRoute(pathname: string) {
 }
 
 function getRequestKey(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
   const authHeader = request.headers.get('authorization');
   const hasAuth = Boolean(authHeader?.startsWith('Bearer ') || request.cookies.get('refresh_token'));
   const forwardedFor = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
   const ip = forwardedFor || 'unknown';
+
+  // Apply a stricter rate limit for critical authentication & registration paths
+  const isAuthCriticalRoute = 
+    pathname.startsWith('/api/auth/login') ||
+    pathname.startsWith('/api/auth/register') ||
+    pathname.startsWith('/api/auth/resend-verification') ||
+    pathname.startsWith('/api/auth/verify-email') ||
+    pathname.startsWith('/api/auth/forgot-password');
+
+  if (isAuthCriticalRoute) {
+    return {
+      bucket: `auth_critical:${ip}`,
+      limit: 5,
+    };
+  }
+
   return {
     bucket: `${hasAuth ? 'auth' : 'public'}:${ip}`,
     limit: hasAuth ? env.AUTH_RATE_LIMIT_PER_MINUTE : env.PUBLIC_RATE_LIMIT_PER_MINUTE,

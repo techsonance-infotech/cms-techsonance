@@ -121,6 +121,19 @@ export async function loginUser(input: {
 
   const userId = user.legacy_user_id;
 
+  if (user.is_email_verified === false) {
+    await writeAuthTelemetry({
+      action: 'auth.login',
+      request: input.request,
+      requestId: input.requestId,
+      userId,
+      email: user.email,
+      status: 'failed',
+      details: { reason: 'email_unverified', provider: 'supabase' },
+    });
+    throw new UnauthorizedError('EMAIL_NOT_VERIFIED');
+  }
+
   if (!user.is_active) {
     await writeAuthTelemetry({
       action: 'auth.login',
@@ -199,8 +212,18 @@ export async function loginUser(input: {
       },
     });
 
+    const { data: settings } = await admin
+      .from('company_settings')
+      .select('company_name, phone, address')
+      .eq('tenant_id', user.tenant_id)
+      .limit(1)
+      .maybeSingle();
+
+    const requiresOnboarding = !settings || !settings.company_name || !settings.phone;
+
     return {
       accessToken: authData.session.access_token,
+      requiresOnboarding,
       user: {
         id: userId ?? 0,
         email: user.email,
@@ -256,7 +279,7 @@ export async function refreshUserSession(request: Request, requestId?: string) {
   }
 
   const supabaseProfile = await getCurrentSupabaseProfile(session.access_token);
-  if (!supabaseProfile.isActive || supabaseProfile.legacyUserId === null) {
+  if (!supabaseProfile.isActive) {
     throw new UnauthorizedError();
   }
 

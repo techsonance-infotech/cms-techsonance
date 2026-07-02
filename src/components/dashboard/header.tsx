@@ -17,7 +17,11 @@ import {
   Sparkles,
   Building,
   Briefcase,
-  Loader2
+  Loader2,
+  ChevronRight,
+  Users,
+  Wallet,
+  Command
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -45,12 +49,13 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
   const [timeString, setTimeString] = useState('');
   const [dateString, setDateString] = useState('');
   
-  // Search state
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [showResults, setShowResults] = useState(false);
-  const searchContainerRef = useRef<HTMLDivElement>(null);
+  // Command Palette State
+  const [openPalette, setOpenPalette] = useState(false);
+  const [paletteSearch, setPaletteSearch] = useState('');
+  const [allProjects, setAllProjects] = useState<any[]>([]);
+  const [allClients, setAllClients] = useState<any[]>([]);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [shortcutLabel, setShortcutLabel] = useState('⌘K');
 
   // Logout routine
   const handleLogout = async () => {
@@ -95,51 +100,74 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
     return () => clearInterval(interval);
   }, []);
 
-  // Close search dropdown on click outside
+  // Shortcut key detection (OS-aware)
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
-        setShowResults(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    if (typeof window !== 'undefined') {
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      setShortcutLabel(isMac ? '⌘K' : 'Ctrl+K');
+    }
   }, []);
 
-  // Global Project Search handler
-  const handleSearch = async (query: string) => {
-    setSearchQuery(query);
-    if (!query.trim()) {
-      setSearchResults([]);
-      setShowResults(false);
-      return;
-    }
-
-    setSearching(true);
-    setShowResults(true);
-
-    try {
-      const token = localStorage.getItem('session_token');
-      const response = await fetch('/api/projects?limit=100', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        const projects = Array.isArray(data) ? data : (data.data ?? []);
-        
-        // Match query against project name or description
-        const filtered = projects.filter((p: any) => 
-          p.name.toLowerCase().includes(query.toLowerCase()) ||
-          (p.description || '').toLowerCase().includes(query.toLowerCase())
-        );
-        setSearchResults(filtered.slice(0, 5));
+  // Global Command Palette Hotkey Listener (Cmd+K / Ctrl+K)
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setOpenPalette((prev) => !prev);
       }
-    } catch (err) {
-      console.error('Global search fetch failed:', err);
-    } finally {
-      setSearching(false);
-    }
-  };
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []);
+
+  // Close command palette when clicking outside the dialog area anywhere on the page
+  useEffect(() => {
+    if (!openPalette) return;
+    const handleDocumentClick = (e: MouseEvent) => {
+      const modalCard = document.getElementById('command-palette-card');
+      const searchTrigger = document.getElementById('header-search-trigger');
+      
+      if (modalCard && !modalCard.contains(e.target as Node) && 
+          searchTrigger && !searchTrigger.contains(e.target as Node)) {
+        setOpenPalette(false);
+      }
+    };
+    document.addEventListener('mousedown', handleDocumentClick);
+    return () => document.removeEventListener('mousedown', handleDocumentClick);
+  }, [openPalette]);
+
+  // Fetch all projects & clients from the API for command palette search
+  useEffect(() => {
+    if (!openPalette) return;
+
+    setPaletteSearch('');
+    setSelectedIndex(0);
+
+    const loadPaletteData = async () => {
+      try {
+        const token = localStorage.getItem('session_token');
+        const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+        // Fetch projects
+        const projRes = await fetch('/api/projects?limit=100', { headers });
+        if (projRes.ok) {
+          const raw = await projRes.json();
+          setAllProjects(Array.isArray(raw) ? raw : (raw.data ?? []));
+        }
+
+        // Fetch clients
+        const clientRes = await fetch('/api/clients?limit=100', { headers });
+        if (clientRes.ok) {
+          const raw = await clientRes.json();
+          setAllClients(Array.isArray(raw) ? raw : (raw.data ?? []));
+        }
+      } catch (err) {
+        console.error('Command Palette fetch failed:', err);
+      }
+    };
+
+    loadPaletteData();
+  }, [openPalette]);
 
   // Greeting helper
   const getGreeting = () => {
@@ -147,6 +175,135 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
     if (hours < 12) return 'Good morning';
     if (hours < 17) return 'Good afternoon';
     return 'Good evening';
+  };
+
+  // Command Palette items & actions definition
+  const staticItems = [
+    {
+      id: 'nav-dashboard',
+      title: 'Go to Dashboard',
+      description: 'Workspace main overview and KPIs',
+      category: 'Navigation',
+      icon: Building,
+      action: () => router.push('/dashboard')
+    },
+    {
+      id: 'nav-projects',
+      title: 'Go to Projects',
+      description: 'Kanban board, sprints, and tasks',
+      category: 'Navigation',
+      icon: Briefcase,
+      action: () => router.push('/dashboard/projects')
+    },
+    {
+      id: 'nav-clients',
+      title: 'Go to Clients',
+      description: 'Customer list and communication panel',
+      category: 'Navigation',
+      icon: Users,
+      action: () => router.push('/dashboard/clients')
+    },
+    {
+      id: 'nav-team',
+      title: 'Go to Team Roster',
+      description: 'Employee details, document vault, and hierarchy',
+      category: 'Navigation',
+      icon: UserIcon,
+      action: () => router.push('/dashboard/team')
+    },
+    {
+      id: 'nav-reimbursements',
+      title: 'Go to Claims & Reimbursements',
+      description: 'Submit and approve team expense claims',
+      category: 'Navigation',
+      icon: Wallet,
+      action: () => router.push('/dashboard/reimbursements')
+    },
+    {
+      id: 'nav-settings',
+      title: 'Go to Agency Settings',
+      description: 'Organization info, policies, and schemas',
+      category: 'Navigation',
+      icon: Settings,
+      action: () => router.push('/dashboard/settings')
+    },
+    {
+      id: 'action-theme',
+      title: 'Toggle Light/Dark Theme',
+      description: 'Switch between light and dark visual themes',
+      category: 'System Actions',
+      icon: theme === 'dark' ? Sun : Moon,
+      action: () => setTheme(theme === 'dark' ? 'light' : 'dark')
+    },
+    {
+      id: 'action-logout',
+      title: 'Sign Out',
+      description: 'Log out of current cockpit session safely',
+      category: 'System Actions',
+      icon: LogOut,
+      action: handleLogout
+    }
+  ];
+
+  // Dynamic project search filtering
+  const filteredProjects = allProjects.filter((p: any) =>
+    p.name.toLowerCase().includes(paletteSearch.toLowerCase()) ||
+    (p.description || '').toLowerCase().includes(paletteSearch.toLowerCase())
+  ).map((p: any) => ({
+    id: `project-${p.id}`,
+    title: p.name,
+    description: `Project • Status: ${p.status.toUpperCase()} • ${p.description || 'No description'}`,
+    category: 'Projects',
+    icon: Briefcase,
+    action: () => router.push(`/dashboard/projects`)
+  }));
+
+  // Dynamic client search filtering
+  const filteredClients = allClients.filter((c: any) =>
+    c.companyName.toLowerCase().includes(paletteSearch.toLowerCase()) ||
+    (c.contactName || '').toLowerCase().includes(paletteSearch.toLowerCase())
+  ).map((c: any) => ({
+    id: `client-${c.id}`,
+    title: c.companyName,
+    description: `Client • Contact: ${c.contactName} • ${c.industry || 'Business Services'}`,
+    category: 'Clients',
+    icon: Users,
+    action: () => router.push(`/dashboard/clients`)
+  }));
+
+  // Combine static actions with matching projects & clients
+  const matchingItems = [
+    ...staticItems.filter(item => 
+      item.title.toLowerCase().includes(paletteSearch.toLowerCase()) ||
+      item.description.toLowerCase().includes(paletteSearch.toLowerCase())
+    ),
+    ...filteredProjects,
+    ...filteredClients
+  ];
+
+  // Reset selected item index whenever search query changes
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [paletteSearch]);
+
+  // Handle keyboard navigation inside the palette modal
+  const handlePaletteKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIndex((prev) => (prev + 1) % Math.max(1, matchingItems.length));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedIndex((prev) => (prev - 1 + matchingItems.length) % Math.max(1, matchingItems.length));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (matchingItems[selectedIndex]) {
+        matchingItems[selectedIndex].action();
+        setOpenPalette(false);
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setOpenPalette(false);
+    }
   };
 
   return (
@@ -175,69 +332,26 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
         </div>
       </div>
 
-      {/* Right: Search UI + Quick Actions + User Menu grouped together in ml-auto to prevent massive gaps */}
-      <div className="flex items-center gap-4 ml-auto w-full max-w-xl md:max-w-2xl justify-end">
-        {/* Global Project Search UI with Popup Results */}
-        <div ref={searchContainerRef} className="relative w-full max-w-[180px] sm:max-w-xs md:max-w-sm">
-          <div className="relative">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Search projects..."
-              value={searchQuery}
-              onChange={(e) => handleSearch(e.target.value)}
-              onFocus={() => searchQuery && setShowResults(true)}
-              className="pl-9 pr-4 py-1.5 text-xs bg-muted/40 hover:bg-muted/60 focus:bg-background border-muted/80 rounded-xl transition-all duration-200 w-full"
-            />
-            {searching && (
-              <Loader2 className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground animate-spin" />
-            )}
-          </div>
-
-          {/* Floating results overlay */}
-          {showResults && searchQuery && (
-            <div className="absolute top-full left-0 right-0 mt-2 bg-card/95 border border-muted rounded-xl shadow-2xl overflow-hidden z-50 backdrop-blur-sm animate-in fade-in slide-in-from-top-2 duration-200">
-              <div className="p-2 border-b border-muted bg-muted/10 flex items-center justify-between">
-                <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground">Global Projects</span>
-                <span className="text-[10px] text-muted-foreground font-mono">{searchResults.length} matches</span>
-              </div>
-              <div className="p-1 max-h-64 overflow-y-auto">
-                {searchResults.length === 0 ? (
-                  <div className="py-8 text-center text-xs text-muted-foreground flex flex-col items-center justify-center gap-1">
-                    <Briefcase className="h-8 w-8 text-muted-foreground/30" />
-                    <span>No matching projects found</span>
-                  </div>
-                ) : (
-                  searchResults.map((project) => (
-                    <Link 
-                      key={project.id} 
-                      href={`/dashboard/projects`} 
-                      onClick={() => setShowResults(false)}
-                      className="block"
-                    >
-                      <div className="flex items-center justify-between p-2.5 rounded-lg hover:bg-accent/80 transition-colors cursor-pointer group">
-                        <div className="flex flex-col min-w-0">
-                          <span className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors truncate">
-                            {project.name}
-                          </span>
-                          {project.description && (
-                            <span className="text-[10px] text-muted-foreground truncate max-w-[200px]">
-                              {project.description}
-                            </span>
-                          )}
-                        </div>
-                        <StatusBadge status={project.status} className="scale-90" />
-                      </div>
-                    </Link>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
+      {/* Center Section: Centered, wide command palette search trigger matching image design */}
+      <div className="flex-1 flex justify-center max-w-lg md:max-w-xl lg:max-w-2xl mx-auto w-full px-4">
+        <div className="relative w-full">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-primary" />
+          <input
+            id="header-search-trigger"
+            type="text"
+            placeholder="Search actions, tools, macros, or dashboards..."
+            readOnly
+            onClick={() => setOpenPalette(true)}
+            className="w-full pl-11 pr-16 py-3 text-xs bg-slate-50 dark:bg-zinc-900/60 border border-border/80 dark:border-border/40 rounded-full hover:border-primary/50 dark:hover:border-primary/40 focus:border-primary shadow-xs cursor-pointer select-none transition-all duration-200 text-slate-900 dark:text-zinc-100"
+          />
+          <kbd className="absolute right-4 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded bg-muted/80 border border-muted-foreground/10 text-[9px] font-mono text-muted-foreground select-none pointer-events-none">
+            {shortcutLabel}
+          </kbd>
         </div>
+      </div>
 
-        {/* Right Actions: Quick actions, Alerts, and Production Profile Dropdown */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+      {/* Right Actions: Quick actions, Alerts, and Production Profile Dropdown */}
+      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
         {/* Theme Toggler */}
         <Button
           variant="ghost"
@@ -316,7 +430,114 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-    </div>
+
+    {/* Global Command Palette Modal */}
+    {openPalette && (
+      <div 
+        className="fixed inset-0 bg-zinc-950/60 backdrop-blur-sm z-50 flex items-start justify-center pt-[15vh] p-4 animate-in fade-in duration-200"
+        onClick={() => setOpenPalette(false)}
+      >
+        <div 
+          id="command-palette-card"
+          className="bg-card/95 border border-border rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden backdrop-blur-md flex flex-col max-h-[70vh] animate-in fade-in zoom-in-95 duration-200"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Search Input Area */}
+          <div className="flex items-center gap-3 px-4 py-4 border-b border-border/60">
+            <Search className="h-5 w-5 text-muted-foreground" />
+            <input
+              type="text"
+              autoFocus
+              placeholder="Search resources, actions, pages..."
+              value={paletteSearch}
+              onChange={(e) => setPaletteSearch(e.target.value)}
+              onKeyDown={handlePaletteKeyDown}
+              className="w-full bg-transparent border-none outline-none text-sm placeholder-muted-foreground focus:ring-0 text-slate-900 dark:text-white"
+            />
+            <span className="px-2 py-0.5 rounded bg-muted/80 border border-muted-foreground/10 text-[10px] font-mono text-muted-foreground select-none">
+              ESC
+            </span>
+          </div>
+
+          {/* Scrollable Results List */}
+          <div className="overflow-y-auto p-2 space-y-4 max-h-[50vh]">
+            {/* Grouped results */}
+            {matchingItems.length > 0 && (
+              <div className="space-y-1">
+                {Array.from(new Set(matchingItems.map(item => item.category))).map(category => {
+                  const categoryItems = matchingItems.filter(item => item.category === category);
+                  return (
+                    <div key={category} className="space-y-1">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80 px-3 mt-3 mb-1">
+                        {category}
+                      </div>
+                      {categoryItems.map(item => {
+                        const index = matchingItems.indexOf(item);
+                        const ItemIcon = item.icon;
+                        return (
+                          <div
+                            key={item.id}
+                            onClick={() => {
+                              item.action();
+                              setOpenPalette(false);
+                            }}
+                            onMouseEnter={() => setSelectedIndex(index)}
+                            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-left cursor-pointer transition-colors duration-150 ${
+                              index === selectedIndex 
+                                ? 'bg-primary/10 text-primary' 
+                                : 'text-slate-700 dark:text-zinc-300 hover:bg-accent/40'
+                            }`}
+                          >
+                            <div className={`p-2 rounded-lg ${
+                              index === selectedIndex ? 'bg-primary text-primary-foreground' : 'bg-muted/50'
+                            } transition-colors`}>
+                              <ItemIcon className="h-4 w-4" />
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-xs font-semibold truncate">{item.title}</span>
+                              {item.description && (
+                                <span className="text-[10px] text-muted-foreground truncate max-w-[450px]">
+                                  {item.description}
+                                </span>
+                              )}
+                            </div>
+                            {index === selectedIndex && (
+                              <span className="ml-auto text-[10px] text-primary font-bold flex items-center gap-0.5 animate-in slide-in-from-right-1 duration-150">
+                                Select <ChevronRight className="h-3 w-3" />
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {matchingItems.length === 0 && (
+              <div className="py-12 text-center text-xs text-muted-foreground flex flex-col items-center justify-center gap-2">
+                <Command className="h-10 w-10 text-muted-foreground/30 animate-pulse" />
+                <span className="font-bold">No results found for "{paletteSearch}"</span>
+                <span>Try typing another query or look for navigation pages</span>
+              </div>
+            )}
+          </div>
+
+          {/* Footer help guide */}
+          <div className="px-4 py-3 border-t border-slate-200 dark:border-zinc-800/80 bg-muted/10 flex items-center justify-between text-[10px] text-muted-foreground font-semibold">
+            <div className="flex items-center gap-4">
+              <span>↑↓ to navigate</span>
+              <span>↵ to select</span>
+              <span>esc to close</span>
+            </div>
+            <div className="flex items-center gap-1 font-mono text-[9px] bg-muted/50 px-2 py-0.5 rounded border border-muted-foreground/10">
+              <Command className="h-3 w-3" /> {shortcutLabel}
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
   </header>
   );
 }

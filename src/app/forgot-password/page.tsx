@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { Label } from '@/components/ui/label';
-import { Loader2, Mail, KeyRound, Lock } from 'lucide-react';
+import { Loader2, Mail, KeyRound, Lock, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 
 type ResetStep = 1 | 2 | 3;
@@ -27,6 +27,15 @@ export default function ForgotPasswordPage() {
     { id: 2, icon: KeyRound, label: 'Verify' },
     { id: 3, icon: Lock, label: 'Reset' },
   ]), []);
+
+  const hasMinLength = newPassword.length >= 12;
+  const hasUppercase = /[A-Z]/.test(newPassword);
+  const hasLowercase = /[a-z]/.test(newPassword);
+  const hasNumber = /[0-9]/.test(newPassword);
+  const hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(newPassword);
+  const isPasswordStrong = hasMinLength && hasUppercase && hasLowercase && hasNumber && hasSpecial;
+  const passwordsMatch = newPassword === confirmPassword && confirmPassword !== '';
+  const isFormValid = isPasswordStrong && passwordsMatch;
 
   const handleRequestOtp = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -345,10 +354,46 @@ export default function ForgotPasswordPage() {
                 </div>
               </div>
 
+              {/* Password Strength Panel */}
+              {newPassword !== '' && (
+                <div className="p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/60 rounded-xl space-y-2 animate-in fade-in duration-200">
+                  <div className="text-xs font-bold text-slate-700 dark:text-slate-350 flex items-center gap-1.5">
+                    <Sparkles className="h-3.5 w-3.5 text-primary" />
+                    Security Strength Indicators
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className={`h-2 w-2 rounded-full transition-colors duration-300 ${hasMinLength ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`} />
+                      <span className={hasMinLength ? 'text-slate-900 dark:text-slate-200 font-medium' : 'text-slate-400'}>Min 12 characters</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className={`h-2 w-2 rounded-full transition-colors duration-300 ${hasUppercase ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`} />
+                      <span className={hasUppercase ? 'text-slate-900 dark:text-slate-200 font-medium' : 'text-slate-400'}>Uppercase letter</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className={`h-2 w-2 rounded-full transition-colors duration-300 ${hasLowercase ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`} />
+                      <span className={hasLowercase ? 'text-slate-900 dark:text-slate-200 font-medium' : 'text-slate-400'}>Lowercase letter</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className={`h-2 w-2 rounded-full transition-colors duration-300 ${hasNumber ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`} />
+                      <span className={hasNumber ? 'text-slate-900 dark:text-slate-200 font-medium' : 'text-slate-400'}>Number indicator</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className={`h-2 w-2 rounded-full transition-colors duration-300 ${hasSpecial ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`} />
+                      <span className={hasSpecial ? 'text-slate-900 dark:text-slate-200 font-medium' : 'text-slate-400'}>Special symbol</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs col-span-2 border-t border-slate-200/50 dark:border-slate-800/50 pt-1.5 mt-1">
+                      <span className={`h-2 w-2 rounded-full transition-colors duration-300 ${passwordsMatch ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`} />
+                      <span className={passwordsMatch ? 'text-slate-900 dark:text-slate-200 font-medium' : 'text-slate-400'}>Passwords match exactly</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <Button
                 type="submit"
                 className="w-full h-12 text-base font-semibold shadow-xl shadow-primary/20 bg-primary hover:bg-primary/90 transition-all active:scale-[0.98]"
-                disabled={loading}
+                disabled={loading || !isFormValid}
               >
                 {loading ? (
                   <>

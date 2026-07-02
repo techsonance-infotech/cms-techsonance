@@ -28,7 +28,7 @@ export default function UserPermissionsAccessControl() {
           <Button variant="outline" className="gap-2 font-semibold">
             <Download className="h-4 w-4" /> Export Audit Log
           </Button>
-          <Button className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-sm">
+          <Button className="gap-2 font-bold shadow-sm">
             <Plus className="h-4 w-4" /> Create Custom Role
           </Button>
         </div>
@@ -41,7 +41,7 @@ export default function UserPermissionsAccessControl() {
           <CardContent className="p-6 flex flex-col justify-between h-full">
             <div className="flex justify-between items-start mb-4">
               <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Total Users</span>
-              <div className="p-2 bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400 rounded-lg">
+              <div className="p-2 bg-secondary text-primary dark:bg-primary-light/10 dark:text-primary-light rounded-lg">
                 <Users className="h-5 w-5" />
               </div>
             </div>
@@ -105,10 +105,10 @@ export default function UserPermissionsAccessControl() {
           <div className="divide-y divide-slate-100 dark:divide-zinc-800">
             
             {/* Role Item Active */}
-            <div className="p-4 bg-indigo-50/50 dark:bg-indigo-900/20 border-l-4 border-l-indigo-600 dark:border-l-indigo-500 cursor-pointer">
+            <div className="p-4 bg-secondary/40 dark:bg-primary-light/5 border-l-4 border-l-primary cursor-pointer">
               <div className="flex justify-between items-start mb-2">
                 <span className="font-bold text-sm text-slate-900 dark:text-white">Super Admin</span>
-                <Badge className="bg-indigo-600 hover:bg-indigo-700 font-bold uppercase tracking-wider text-[10px]">SYSTEM</Badge>
+                <Badge className="bg-primary text-white font-bold uppercase tracking-wider text-[10px]">SYSTEM</Badge>
               </div>
               <div className="flex justify-between text-xs font-medium text-muted-foreground">
                 <span>3 Users</span>
@@ -119,7 +119,7 @@ export default function UserPermissionsAccessControl() {
             {/* Role Items */}
             <div className="p-4 hover:bg-slate-50 dark:hover:bg-zinc-900/50 transition-colors cursor-pointer group border-l-4 border-l-transparent">
               <div className="flex justify-between items-start mb-2">
-                <span className="font-bold text-sm text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">Manager</span>
+                <span className="font-bold text-sm text-slate-900 dark:text-white group-hover:text-primary dark:group-hover:text-primary-light transition-colors">Manager</span>
                 <Badge variant="secondary" className="bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider text-[10px]">SYSTEM</Badge>
               </div>
               <div className="flex justify-between text-xs font-medium text-muted-foreground">
@@ -130,7 +130,7 @@ export default function UserPermissionsAccessControl() {
 
             <div className="p-4 hover:bg-slate-50 dark:hover:bg-zinc-900/50 transition-colors cursor-pointer group border-l-4 border-l-transparent">
               <div className="flex justify-between items-start mb-2">
-                <span className="font-bold text-sm text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">Editor</span>
+                <span className="font-bold text-sm text-slate-900 dark:text-white group-hover:text-primary dark:group-hover:text-primary-light transition-colors">Editor</span>
                 <Badge variant="secondary" className="bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider text-[10px]">SYSTEM</Badge>
               </div>
               <div className="flex justify-between text-xs font-medium text-muted-foreground">
@@ -141,7 +141,7 @@ export default function UserPermissionsAccessControl() {
 
             <div className="p-4 hover:bg-slate-50 dark:hover:bg-zinc-900/50 transition-colors cursor-pointer group border-l-4 border-l-transparent">
               <div className="flex justify-between items-start mb-2">
-                <span className="font-bold text-sm text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">Viewer</span>
+                <span className="font-bold text-sm text-slate-900 dark:text-white group-hover:text-primary dark:group-hover:text-primary-light transition-colors">Viewer</span>
                 <Badge variant="secondary" className="bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider text-[10px]">SYSTEM</Badge>
               </div>
               <div className="flex justify-between text-xs font-medium text-muted-foreground">
@@ -152,7 +152,7 @@ export default function UserPermissionsAccessControl() {
 
             <div className="p-4 hover:bg-slate-50 dark:hover:bg-zinc-900/50 transition-colors cursor-pointer group border-l-4 border-l-transparent">
               <div className="flex justify-between items-start mb-2">
-                <span className="font-bold text-sm text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">Support Tier 1</span>
+                <span className="font-bold text-sm text-slate-900 dark:text-white group-hover:text-primary dark:group-hover:text-primary-light transition-colors">Support Tier 1</span>
                 <Badge variant="secondary" className="bg-sky-50 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400 font-bold uppercase tracking-wider text-[10px]">CUSTOM</Badge>
               </div>
               <div className="flex justify-between text-xs font-medium text-muted-foreground">
@@ -194,7 +194,7 @@ export default function UserPermissionsAccessControl() {
                   
                   <tr className="hover:bg-slate-50 dark:hover:bg-zinc-900/50 transition-colors">
                     <td className="p-4 flex items-center gap-3">
-                      <Network className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                      <Network className="h-4 w-4 text-primary dark:text-primary-light" />
                       <span className="font-bold text-sm text-slate-900 dark:text-white">CRM Modules</span>
                     </td>
                     <td className="p-4 text-center"><Checkbox defaultChecked className="border-slate-300 dark:border-zinc-700" /></td>
@@ -206,7 +206,7 @@ export default function UserPermissionsAccessControl() {
 
                   <tr className="hover:bg-slate-50 dark:hover:bg-zinc-900/50 transition-colors">
                     <td className="p-4 flex items-center gap-3">
-                      <Briefcase className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                      <Briefcase className="h-4 w-4 text-primary dark:text-primary-light" />
                       <span className="font-bold text-sm text-slate-900 dark:text-white">Financial Records (ERP)</span>
                     </td>
                     <td className="p-4 text-center"><Checkbox defaultChecked className="border-slate-300 dark:border-zinc-700" /></td>
@@ -218,7 +218,7 @@ export default function UserPermissionsAccessControl() {
 
                   <tr className="hover:bg-slate-50 dark:hover:bg-zinc-900/50 transition-colors">
                     <td className="p-4 flex items-center gap-3">
-                      <Users2 className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                      <Users2 className="h-4 w-4 text-primary dark:text-primary-light" />
                       <span className="font-bold text-sm text-slate-900 dark:text-white">Employee Data (HRM)</span>
                     </td>
                     <td className="p-4 text-center"><Checkbox defaultChecked className="border-slate-300 dark:border-zinc-700" /></td>
@@ -230,7 +230,7 @@ export default function UserPermissionsAccessControl() {
 
                   <tr className="hover:bg-slate-50 dark:hover:bg-zinc-900/50 transition-colors">
                     <td className="p-4 flex items-center gap-3">
-                      <Shield className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                      <Shield className="h-4 w-4 text-primary dark:text-primary-light" />
                       <span className="font-bold text-sm text-slate-900 dark:text-white">IAM & Identity</span>
                     </td>
                     <td className="p-4 text-center"><Checkbox defaultChecked className="border-slate-300 dark:border-zinc-700" /></td>
@@ -245,14 +245,14 @@ export default function UserPermissionsAccessControl() {
             </div>
             <div className="p-4 bg-slate-50 dark:bg-zinc-900/50 border-t border-slate-200 dark:border-zinc-800 flex justify-end gap-3">
               <Button variant="ghost" className="font-bold text-muted-foreground">Discard Changes</Button>
-              <Button className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-sm">Save Matrix</Button>
+              <Button className="font-bold shadow-sm">Save Matrix</Button>
             </div>
           </Card>
 
           {/* Security Policies Section */}
           <Card className="shadow-sm border-slate-200 dark:border-zinc-800">
             <CardHeader className="flex flex-row items-center gap-2 pb-4">
-              <Shield className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+              <Shield className="h-5 w-5 text-primary" />
               <CardTitle className="text-lg font-bold">Global Security Policies</CardTitle>
             </CardHeader>
             <CardContent>
@@ -319,7 +319,7 @@ export default function UserPermissionsAccessControl() {
         <CardHeader className="bg-slate-50 dark:bg-zinc-900/50 border-b border-slate-200 dark:border-zinc-800 flex flex-row flex-wrap justify-between items-center py-4 gap-4">
           <div className="flex items-center gap-4 flex-wrap">
             <CardTitle className="text-sm font-bold">Active Admin Sessions</CardTitle>
-            <div className="flex items-center gap-2 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-md px-3 py-1.5 focus-within:ring-2 focus-within:ring-indigo-500 transition-shadow">
+            <div className="flex items-center gap-2 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-md px-3 py-1.5 focus-within:ring-2 focus-within:ring-primary transition-shadow">
               <Search className="h-4 w-4 text-muted-foreground" />
               <input className="border-none bg-transparent p-0 text-sm font-medium focus:ring-0 outline-none placeholder:text-muted-foreground w-40" placeholder="Search admins..." type="text" />
             </div>
@@ -345,7 +345,7 @@ export default function UserPermissionsAccessControl() {
               
               <tr className="hover:bg-slate-50 dark:hover:bg-zinc-900/50 transition-colors">
                 <td className="p-4 flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-700 dark:text-indigo-400 font-bold text-xs shrink-0">JD</div>
+                  <div className="w-8 h-8 rounded-full bg-secondary text-primary font-bold text-xs shrink-0 flex items-center justify-center">JD</div>
                   <div>
                     <p className="font-bold text-sm text-slate-900 dark:text-white">John Doe</p>
                     <p className="text-xs font-medium text-muted-foreground">john.d@enterprise.com</p>

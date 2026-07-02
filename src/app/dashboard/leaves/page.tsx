@@ -213,7 +213,7 @@ export default function LeavesPage() {
         const json = await response.json();
         setAllLeaveRequests(Array.isArray(json) ? json : json?.data ?? []);
       }
-    } catch {}
+    } catch { }
   };
 
   const fetchLeaveRequests = async () => {
@@ -485,7 +485,7 @@ export default function LeavesPage() {
                     </TableBody>
                   </Table>
                 </div>
-                
+
                 <div className="flex items-center justify-between space-x-2 py-4 border-t">
                   <div className="text-sm text-muted-foreground">Page {leavePage + 1}</div>
                   <div className="space-x-2">
@@ -659,7 +659,7 @@ export default function LeavesPage() {
                       </div>
                     ))}
                   </div>
-                  
+
                   <div className="flex items-center justify-between pt-4 border-t">
                     <div className="text-sm text-muted-foreground">
                       Page {holidayPage + 1}

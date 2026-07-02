@@ -80,10 +80,10 @@ export default function StudentDashboardPage() {
         <div className="flex items-center gap-2 text-slate-500 text-xs tracking-wider uppercase">
           <span>Academic Command Center</span>
           <span>/</span>
-          <span className="text-indigo-600 dark:text-indigo-400 font-bold">Student Profiles</span>
+          <span className="text-primary dark:text-primary-light font-bold">Student Profiles</span>
         </div>
         <div className="flex gap-2">
-          <Badge className="bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400 border-none font-bold uppercase text-[10px]">
+          <Badge className="bg-primary-light/10 text-primary dark:bg-primary-light/5 dark:text-primary-light border-none font-bold uppercase text-[10px]">
             Academic Year 2023/24
           </Badge>
         </div>
@@ -103,7 +103,7 @@ export default function StudentDashboardPage() {
           <Button onClick={handleExportRecord} variant="outline" size="sm" className="font-semibold text-xs flex items-center gap-2">
             <Download className="h-4 w-4" /> Export Record
           </Button>
-          <Button onClick={handleModifyEnrollment} size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-2">
+          <Button onClick={handleModifyEnrollment} size="sm" className="bg-brand-gradient hover:opacity-90 text-white font-bold text-xs flex items-center gap-2">
             <Edit3 className="h-4 w-4" /> Modify Enrollment
           </Button>
         </div>
@@ -117,9 +117,9 @@ export default function StudentDashboardPage() {
           
           {/* Card: Demographic */}
           <Card className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 flex flex-col items-center text-center space-y-4 shadow-sm relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-16 h-16 bg-indigo-50 dark:bg-indigo-950/30 rounded-bl-full pointer-events-none"></div>
+            <div className="absolute top-0 right-0 w-16 h-16 bg-primary-light/10 dark:bg-primary-light/5 rounded-bl-full pointer-events-none"></div>
             
-            <div className="w-20 h-20 bg-indigo-50 dark:bg-indigo-950/50 rounded-full flex items-center justify-center font-black text-2xl text-indigo-600">
+            <div className="w-20 h-20 bg-primary-light/15 dark:bg-primary-light/10 rounded-full flex items-center justify-center font-black text-2xl text-primary">
               ER
             </div>
             
@@ -130,7 +130,7 @@ export default function StudentDashboardPage() {
 
             <div className="flex flex-wrap justify-center gap-1.5 pt-1">
               <Badge className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 border-none font-bold text-[8px] uppercase tracking-wide">Active</Badge>
-              <Badge className="bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 border-none font-bold text-[8px] uppercase tracking-wide">Dean&apos;s List</Badge>
+              <Badge className="bg-primary-light/10 text-primary dark:bg-primary-light/5 dark:text-primary-light border-none font-bold text-[8px] uppercase tracking-wide">Dean&apos;s List</Badge>
             </div>
 
             <div className="w-full h-px bg-slate-100 dark:bg-slate-800 my-4" />
@@ -151,7 +151,7 @@ export default function StudentDashboardPage() {
           <Card className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 space-y-4 shadow-sm">
             <h4 className="font-bold text-slate-900 dark:text-white text-xs uppercase tracking-wider flex justify-between items-center">
               <span>Financial Status</span>
-              <Wallet className="h-4 w-4 text-indigo-500" />
+              <Wallet className="h-4 w-4 text-primary" />
             </h4>
             <div className="space-y-3">
               <div className="flex justify-between items-start">
@@ -162,7 +162,7 @@ export default function StudentDashboardPage() {
                 <Badge className="bg-rose-50 text-rose-700 dark:bg-rose-950/40 border-none font-bold text-[8px] uppercase animate-pulse">Overdue 4d</Badge>
               </div>
               <div className="space-y-1">
-                <Progress value={82} className="h-1 bg-slate-100 dark:bg-slate-800 [&>div]:bg-indigo-600" />
+                <Progress value={82} className="h-1 bg-slate-100 dark:bg-slate-800 [&>div]:bg-primary" />
                 <div className="flex justify-between text-[9px] text-slate-400 font-semibold">
                   <span>Tuition Paid: $24,000</span>
                   <span>82% Paid</span>
@@ -183,7 +183,7 @@ export default function StudentDashboardPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             
             <Card className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-4 flex items-center gap-3 shadow-sm">
-              <div className="bg-indigo-50 dark:bg-indigo-950/50 p-2 rounded-lg text-indigo-600 dark:text-indigo-400">
+              <div className="bg-primary-light/10 dark:bg-primary-light/5 p-2 rounded-lg text-primary dark:text-primary-light">
                 <CalendarDays className="h-5 w-5" />
               </div>
               <div>
@@ -203,7 +203,7 @@ export default function StudentDashboardPage() {
             </Card>
 
             <Card className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-4 flex items-center gap-3 shadow-sm">
-              <div className="bg-indigo-50 dark:bg-indigo-950/50 p-2 rounded-lg text-indigo-600 dark:text-indigo-400">
+              <div className="bg-primary-light/10 dark:bg-primary-light/5 p-2 rounded-lg text-primary dark:text-primary-light">
                 <BookOpen className="h-5 w-5" />
               </div>
               <div>
@@ -213,7 +213,7 @@ export default function StudentDashboardPage() {
             </Card>
 
             <Card className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-4 flex items-center gap-3 shadow-sm">
-              <div className="bg-indigo-50 dark:bg-indigo-950/50 p-2 rounded-lg text-indigo-600 dark:text-indigo-400">
+              <div className="bg-primary-light/10 dark:bg-primary-light/5 p-2 rounded-lg text-primary dark:text-primary-light">
                 <UserCheck className="h-5 w-5" />
               </div>
               <div>
@@ -229,7 +229,7 @@ export default function StudentDashboardPage() {
             <div>
               <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/20">
                 <h3 className="font-bold text-slate-900 dark:text-white text-base">Academic Transcript Records</h3>
-                <select className="bg-white border-slate-200 rounded py-1 px-2 text-xs focus:ring-indigo-500">
+                <select className="bg-white border-slate-200 rounded py-1 px-2 text-xs focus:ring-primary">
                   <option>Fall Semester 2023</option>
                   <option>Spring Semester 2023</option>
                 </select>
@@ -259,13 +259,13 @@ export default function StudentDashboardPage() {
                         {item.credits.toFixed(1)}
                       </td>
                       <td className="px-6 py-4 text-center">
-                        <span className="font-extrabold text-indigo-600 dark:text-indigo-400 text-sm">{item.grade}</span>
+                        <span className="font-extrabold text-primary dark:text-primary-light text-sm">{item.grade}</span>
                       </td>
                       <td className="px-6 py-4 text-right">
                         {item.status === 'COMPLETED' ? (
                           <Badge className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 border-none font-bold text-[9px] uppercase tracking-wider">Completed</Badge>
                         ) : (
-                          <Badge className="bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 border-none font-bold text-[9px] uppercase tracking-wider animate-pulse">In Progress</Badge>
+                          <Badge className="bg-primary-light/10 text-primary dark:bg-primary-light/5 border-none font-bold text-[9px] uppercase tracking-wider animate-pulse">In Progress</Badge>
                         )}
                       </td>
                     </tr>
@@ -317,8 +317,8 @@ export default function StudentDashboardPage() {
                     </div>
                     <p className="text-[10px] text-slate-550 dark:text-slate-400">Exceptional first-place finish at the regional Fall Hackathon.</p>
                   </div>
-                  <div className="p-2.5 rounded-lg bg-indigo-50/50 dark:bg-indigo-950/20 border-l-4 border-indigo-500 space-y-1">
-                    <div className="flex items-center gap-1.5 text-indigo-800 dark:text-indigo-400 font-bold text-xs">
+                  <div className="p-2.5 rounded-lg bg-primary-light/10 dark:bg-primary-light/5 border-l-4 border-primary space-y-1">
+                    <div className="flex items-center gap-1.5 text-primary dark:text-primary-light font-bold text-xs">
                       <Users className="h-4 w-4" /> Leadership Commendation
                     </div>
                     <p className="text-[10px] text-slate-550 dark:text-slate-400">Elected unanimously as Cohort CS-401 Group Representative.</p>
@@ -344,11 +344,11 @@ export default function StudentDashboardPage() {
               className="p-4 border border-slate-150 dark:border-slate-800 hover:shadow-md cursor-pointer transition-all bg-white dark:bg-slate-950 group"
             >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-bold text-indigo-600">
+                <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-bold text-primary">
                   {student.initials}
                 </div>
                 <div className="overflow-hidden">
-                  <div className="font-bold text-slate-900 dark:text-white text-xs truncate group-hover:text-indigo-600 transition-colors">
+                  <div className="font-bold text-slate-900 dark:text-white text-xs truncate group-hover:text-primary transition-colors">
                     {student.name}
                   </div>
                   <div className="text-[10px] text-slate-400 truncate mt-0.5">

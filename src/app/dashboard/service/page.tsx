@@ -349,7 +349,7 @@ export default function ServiceTicketsPage() {
         <Card className="col-span-12 lg:col-span-4 border-slate-150 dark:border-slate-800 shadow-xs flex flex-col justify-between">
           <CardHeader className="pb-4">
             <CardTitle className="text-base font-bold flex items-center gap-2">
-              <Laptop className="h-4.5 w-4.5 text-indigo-500" />
+              <Laptop className="h-4.5 w-4.5 text-primary" />
               Workshop Stock Levels
             </CardTitle>
             <CardDescription>Critical hardware spares and components units.</CardDescription>
@@ -529,7 +529,7 @@ export default function ServiceTicketsPage() {
         </Card>
 
         {/* Customer feedback glassmorphism block */}
-        <Card className="col-span-12 lg:col-span-7 border-slate-150 dark:border-slate-800 bg-gradient-to-br from-indigo-50/10 to-transparent p-5 shadow-xs">
+        <Card className="col-span-12 lg:col-span-7 border-slate-150 dark:border-slate-800 bg-gradient-to-br from-primary-light/5 to-transparent p-5 shadow-xs">
           <h3 className="text-sm font-black mb-4 uppercase tracking-wider text-slate-500">Recent Diagnostic Feedback</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="p-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl shadow-xs">

@@ -30,12 +30,12 @@ export function DashboardAnnouncements({ announcements, alerts }: { announcement
         <div className="flex items-center justify-between">
           <div>
             <CardTitle className="text-lg flex items-center gap-2">
-              <Megaphone className="h-5 w-5 text-blue-500" />
+              <Megaphone className="h-5 w-5 text-primary" />
               Announcements & Alerts
             </CardTitle>
             <CardDescription>Stay updated with company & system notices</CardDescription>
           </div>
-          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+          <Badge variant="outline" className="bg-secondary text-primary border-primary/20">
             {announcements.length + alerts.length} New
           </Badge>
         </div>
@@ -54,8 +54,8 @@ export function DashboardAnnouncements({ announcements, alerts }: { announcement
             
             {/* Company Announcements */}
             {announcements.map((item) => (
-              <div key={`ann-${item.id}`} className="group relative flex gap-4 p-3 rounded-xl border border-blue-100 bg-blue-50/30 hover:bg-blue-50 transition-colors">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
+              <div key={`ann-${item.id}`} className="group relative flex gap-4 p-3 rounded-xl border border-primary-light/10 bg-primary-light/5 hover:bg-primary-light/10 transition-colors">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-primary">
                   <Megaphone className="h-5 w-5" />
                 </div>
                 <div className="flex flex-col gap-1">
@@ -143,7 +143,7 @@ export function DashboardApprovalQueue({ items }: { items: ApprovalItem[] }) {
 
   return (
     <Card className="bg-card/50 backdrop-blur-sm border-none shadow-lg">
-      <CardHeader className="pb-3 border-b border-white/10 mb-4">
+      <CardHeader className="pb-3 border-b border-border/40 mb-4">
         <div className="flex items-center justify-between">
           <div>
             <CardTitle className="text-lg flex items-center gap-2">
@@ -152,7 +152,7 @@ export function DashboardApprovalQueue({ items }: { items: ApprovalItem[] }) {
             </CardTitle>
             <CardDescription>Actions required for your team</CardDescription>
           </div>
-          <Badge className="bg-emerald-500 hover:bg-emerald-600 uppercase tracking-wider text-[10px]">
+          <Badge className="bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border border-emerald-500/20 font-bold uppercase tracking-wider text-[9px]">
             High Priority
           </Badge>
         </div>
@@ -161,12 +161,12 @@ export function DashboardApprovalQueue({ items }: { items: ApprovalItem[] }) {
         <ScrollArea className="h-[300px] pr-4">
           <div className="space-y-3">
             {queue.map((item) => (
-              <div key={`${item.type}-${item.id}`} className="flex items-center justify-between p-3 rounded-xl bg-muted/30 border border-white/5 hover:bg-muted/50 transition-colors">
+              <div key={`${item.type}-${item.id}`} className="flex items-center justify-between p-3 rounded-xl bg-muted/30 border border-border/40 hover:bg-muted/50 transition-colors">
                 <div className="flex items-center gap-4">
                   <div className={`p-2 rounded-lg ${
-                    item.type === 'leave' ? 'bg-amber-100 text-amber-600' : 
-                    item.type === 'attendance' ? 'bg-blue-100 text-blue-600' :
-                    'bg-green-100 text-green-600'
+                    item.type === 'leave' ? 'bg-amber-500/10 text-amber-600' : 
+                    item.type === 'attendance' ? 'bg-secondary text-primary' :
+                    'bg-emerald-500/10 text-emerald-600'
                   }`}>
                     {item.type === 'leave' ? <Clock className="h-5 w-5" /> : 
                      item.type === 'attendance' ? <CheckCircle2 className="h-5 w-5" /> :
@@ -175,7 +175,7 @@ export function DashboardApprovalQueue({ items }: { items: ApprovalItem[] }) {
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="font-semibold text-sm">{item.employee}</p>
-                      <Badge variant="outline" className="text-[9px] py-0 px-1 border-white/20 capitalize">
+                      <Badge variant="outline" className="text-[9px] py-0 px-1.5 border-border/60 capitalize text-muted-foreground font-semibold">
                         {item.type}
                       </Badge>
                     </div>
@@ -191,7 +191,7 @@ export function DashboardApprovalQueue({ items }: { items: ApprovalItem[] }) {
                     <button 
                       disabled={processing === item.id}
                       onClick={() => handleAction(item, 'approved')}
-                      className="p-1.5 rounded-md hover:bg-emerald-100 hover:text-emerald-600 text-muted-foreground transition-colors disabled:opacity-50"
+                      className="p-1.5 rounded-lg hover:bg-emerald-100 hover:text-emerald-600 text-muted-foreground transition-all disabled:opacity-50"
                       title="Approve"
                     >
                       {processing === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
@@ -199,7 +199,7 @@ export function DashboardApprovalQueue({ items }: { items: ApprovalItem[] }) {
                     <button 
                       disabled={processing === item.id}
                       onClick={() => handleAction(item, 'rejected')}
-                      className="p-1.5 rounded-md hover:bg-rose-100 hover:text-rose-600 text-muted-foreground transition-colors disabled:opacity-50"
+                      className="p-1.5 rounded-lg hover:bg-rose-100 hover:text-rose-600 text-muted-foreground transition-all disabled:opacity-50"
                       title="Reject"
                     >
                       <X className="h-4 w-4" />
@@ -254,9 +254,9 @@ export function DashboardBroadcaster() {
 
   return (
     <Card className="bg-card/50 backdrop-blur-sm border-none shadow-lg mt-6">
-      <CardHeader className="pb-3 border-b border-white/10 mb-4">
+      <CardHeader className="pb-3 border-b border-border/40 mb-4">
         <CardTitle className="text-lg flex items-center gap-2">
-          <Megaphone className="h-5 w-5 text-blue-500" />
+          <Megaphone className="h-5 w-5 text-primary" />
           Quick Broadcaster
         </CardTitle>
         <CardDescription>Instantly push announcements to all active employees</CardDescription>
@@ -270,14 +270,14 @@ export function DashboardBroadcaster() {
                 placeholder="Announcement Title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-10 w-full rounded-xl border border-input bg-transparent px-3.5 py-1 text-sm shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:border-primary disabled:cursor-not-allowed disabled:opacity-50"
                 required
               />
             </div>
             <select 
               value={type}
               onChange={(e) => setType(e.target.value)}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="flex h-10 w-full rounded-xl border border-input bg-transparent px-3.5 py-1 text-sm shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:border-primary"
             >
               <option value="info">Info</option>
               <option value="success">Success</option>
@@ -289,13 +289,13 @@ export function DashboardBroadcaster() {
             placeholder="Type your message here..."
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex min-h-[90px] w-full rounded-xl border border-input bg-transparent px-3.5 py-2 text-sm shadow-sm placeholder:text-muted-foreground transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:border-primary disabled:cursor-not-allowed disabled:opacity-50"
             required
           />
           <button 
             type="submit" 
             disabled={sending || !title.trim() || !message.trim()}
-            className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-9 px-4 py-2 w-full"
+            className="inline-flex items-center justify-center rounded-xl text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:pointer-events-none disabled:opacity-50 bg-primary text-white shadow-sm hover:bg-[#f87941]/90 h-10 px-4 py-2 w-full"
           >
             {sending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Megaphone className="h-4 w-4 mr-2" />}
             {sending ? 'Broadcasting...' : 'Broadcast to Organization'}

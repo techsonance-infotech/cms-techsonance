@@ -115,7 +115,7 @@ export default function CurriculumPage() {
           <Button onClick={handleExport} variant="outline" size="sm" className="font-semibold text-xs flex items-center gap-2">
             <Download className="h-4 w-4" /> Export Report
           </Button>
-          <Button onClick={handleWizard} size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-2">
+          <Button onClick={handleWizard} size="sm" className="bg-brand-gradient hover:opacity-90 text-white font-bold text-xs flex items-center gap-2">
             <Sparkles className="h-4 w-4" /> New Course Wizard
           </Button>
         </div>
@@ -132,7 +132,7 @@ export default function CurriculumPage() {
               <p className="text-xs text-slate-400">Student sign-up trajectory for Fall Semester 2024</p>
             </div>
             <div className="flex border border-slate-200 dark:border-slate-800 rounded-lg p-0.5 bg-slate-50 dark:bg-slate-950 text-xs font-semibold">
-              <button className="px-3 py-1 bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 rounded shadow-sm">Daily</button>
+              <button className="px-3 py-1 bg-white dark:bg-slate-900 text-primary dark:text-primary-light rounded shadow-sm">Daily</button>
               <button className="px-3 py-1 text-slate-400">Weekly</button>
               <button className="px-3 py-1 text-slate-400">Monthly</button>
             </div>
@@ -144,13 +144,13 @@ export default function CurriculumPage() {
               <div className="border-b border-slate-100 dark:border-slate-800 w-full h-0"></div>
               <div className="border-b border-slate-100 dark:border-slate-800 w-full h-0"></div>
             </div>
-            <div className="flex-1 bg-indigo-50 hover:bg-indigo-600/10 dark:bg-indigo-950/20 rounded-t-lg h-[40%] group relative transition-all" />
-            <div className="flex-1 bg-indigo-100 hover:bg-indigo-600/10 dark:bg-indigo-950/30 rounded-t-lg h-[55%] group relative transition-all" />
-            <div className="flex-1 bg-indigo-100 hover:bg-indigo-600/10 dark:bg-indigo-950/30 rounded-t-lg h-[45%] group relative transition-all" />
-            <div className="flex-1 bg-indigo-200 hover:bg-indigo-600/10 dark:bg-indigo-950/40 rounded-t-lg h-[70%] group relative transition-all" />
-            <div className="flex-1 bg-indigo-300 hover:bg-indigo-600/10 dark:bg-indigo-950/50 rounded-t-lg h-[60%] group relative transition-all" />
-            <div className="flex-1 bg-indigo-400 hover:bg-indigo-600/10 dark:bg-indigo-950/60 rounded-t-lg h-[85%] group relative transition-all" />
-            <div className="flex-1 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 rounded-t-lg h-[95%] group relative transition-all" />
+            <div className="flex-1 bg-primary-light/10 hover:bg-primary-light/20 dark:bg-primary-light/5 rounded-t-lg h-[40%] group relative transition-all" />
+            <div className="flex-1 bg-primary-light/20 hover:bg-primary-light/30 dark:bg-primary-light/10 rounded-t-lg h-[55%] group relative transition-all" />
+            <div className="flex-1 bg-primary-light/25 hover:bg-primary-light/35 dark:bg-primary-light/10 rounded-t-lg h-[45%] group relative transition-all" />
+            <div className="flex-1 bg-primary-light/40 hover:bg-primary-light/50 dark:bg-primary-light/15 rounded-t-lg h-[70%] group relative transition-all" />
+            <div className="flex-1 bg-primary-light/60 hover:bg-primary-light/70 dark:bg-primary-light/20 rounded-t-lg h-[60%] group relative transition-all" />
+            <div className="flex-1 bg-primary-light/80 hover:bg-primary-light/90 dark:bg-primary-light/25 rounded-t-lg h-[85%] group relative transition-all" />
+            <div className="flex-1 bg-primary hover:brightness-95 dark:bg-primary rounded-t-lg h-[95%] group relative transition-all" />
           </div>
           <div className="flex justify-between px-2 text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-4">
             <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
@@ -161,9 +161,9 @@ export default function CurriculumPage() {
         <div className="col-span-12 lg:col-span-4 grid grid-rows-2 gap-6">
           
           {/* Active Students */}
-          <div className="bg-gradient-to-br from-slate-900 to-indigo-950 text-white rounded-2xl p-6 relative overflow-hidden flex flex-col justify-between shadow-lg">
+          <div className="bg-gradient-to-br from-slate-900 to-primary-dark text-white rounded-2xl p-6 relative overflow-hidden flex flex-col justify-between shadow-lg">
             <div className="relative z-10 space-y-1">
-              <span className="text-indigo-300 font-extrabold text-[10px] uppercase tracking-wider">Active Students</span>
+              <span className="text-primary-light font-extrabold text-[10px] uppercase tracking-wider">Active Students</span>
               <h3 className="text-3xl font-extrabold text-white">24,812</h3>
               <div className="flex items-center gap-1.5 text-emerald-400 text-xs font-semibold">
                 <ArrowUpRight className="h-4 w-4" /> <span>+12.4% vs last semester</span>
@@ -179,7 +179,7 @@ export default function CurriculumPage() {
             <div>
               <h3 className="font-bold text-slate-900 dark:text-white text-sm flex items-center justify-between">
                 <span>Waitlist Priorities</span>
-                <Clock className="h-4 w-4 text-indigo-500" />
+                <Clock className="h-4 w-4 text-primary" />
               </h3>
               <div className="space-y-3 mt-4">
                 {waitlist.map((w) => (
@@ -197,7 +197,7 @@ export default function CurriculumPage() {
                 ))}
               </div>
             </div>
-            <button className="text-indigo-600 dark:text-indigo-400 text-xs font-bold text-center mt-4 hover:underline">
+            <button className="text-primary dark:text-primary-light text-xs font-bold text-center mt-4 hover:underline">
               Resolve Waitlists
             </button>
           </Card>
@@ -220,10 +220,10 @@ export default function CurriculumPage() {
             <div className="space-y-1">
               <div 
                 onClick={() => toggleDept('cs')}
-                className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-950 hover:bg-indigo-50/50 hover:text-indigo-600 cursor-pointer transition-all"
+                className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-950 hover:bg-primary-light/10 hover:text-primary cursor-pointer transition-all"
               >
                 <div className="flex items-center gap-2 font-bold text-xs text-slate-850 dark:text-slate-200">
-                  <School className="h-4 w-4 text-indigo-500" />
+                  <School className="h-4 w-4 text-primary" />
                   <span>Dept. of Computer Science</span>
                 </div>
                 {openDepts.cs ? <ChevronDown className="h-4 w-4 text-slate-450" /> : <ChevronRight className="h-4 w-4 text-slate-450" />}
@@ -247,10 +247,10 @@ export default function CurriculumPage() {
             <div className="space-y-1">
               <div 
                 onClick={() => toggleDept('biotech')}
-                className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-950 hover:bg-indigo-50/50 hover:text-indigo-600 cursor-pointer transition-all"
+                className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-950 hover:bg-primary-light/10 hover:text-primary cursor-pointer transition-all"
               >
                 <div className="flex items-center gap-2 font-bold text-xs text-slate-850 dark:text-slate-200">
-                  <School className="h-4 w-4 text-indigo-500" />
+                  <School className="h-4 w-4 text-primary" />
                   <span>Dept. of Biotechnology</span>
                 </div>
                 {openDepts.biotech ? <ChevronDown className="h-4 w-4 text-slate-450" /> : <ChevronRight className="h-4 w-4 text-slate-450" />}
@@ -270,10 +270,10 @@ export default function CurriculumPage() {
             <div className="space-y-1">
               <div 
                 onClick={() => toggleDept('engineering')}
-                className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-950 hover:bg-indigo-50/50 hover:text-indigo-600 cursor-pointer transition-all"
+                className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-950 hover:bg-primary-light/10 hover:text-primary cursor-pointer transition-all"
               >
                 <div className="flex items-center gap-2 font-bold text-xs text-slate-850 dark:text-slate-200">
-                  <School className="h-4 w-4 text-indigo-500" />
+                  <School className="h-4 w-4 text-primary" />
                   <span>Dept. of Engineering</span>
                 </div>
                 {openDepts.engineering ? <ChevronDown className="h-4 w-4 text-slate-450" /> : <ChevronRight className="h-4 w-4 text-slate-450" />}
@@ -327,7 +327,7 @@ export default function CurriculumPage() {
                     >
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-bold text-indigo-600">
+                          <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-bold text-primary">
                             {student.name.split(' ').map(n => n[0]).join('')}
                           </div>
                           <div>
@@ -354,7 +354,7 @@ export default function CurriculumPage() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <Progress value={student.progress} className="h-1.5 w-16 bg-slate-100 dark:bg-slate-800 [&>div]:bg-indigo-600" />
+                          <Progress value={student.progress} className="h-1.5 w-16 bg-slate-100 dark:bg-slate-800 [&>div]:bg-primary" />
                           <span className="font-bold font-mono text-slate-700 dark:text-slate-350">{student.gpa} GPA</span>
                         </div>
                       </td>
@@ -372,7 +372,7 @@ export default function CurriculumPage() {
                   <Button variant="outline" size="icon" className="h-7 w-7" disabled>
                     <ChevronRight className="h-3.5 w-3.5 rotate-180" />
                   </Button>
-                  <Button variant="outline" size="icon" className="h-7 w-7 bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700">
+                  <Button variant="outline" size="icon" className="h-7 w-7 bg-primary text-white border-primary hover:bg-primary-dark">
                     <span>1</span>
                   </Button>
                   <Button variant="outline" size="icon" className="h-7 w-7" disabled>

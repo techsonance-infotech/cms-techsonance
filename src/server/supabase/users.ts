@@ -18,6 +18,9 @@ export type SupabaseUserProfile = {
   failed_login_attempts?: number | null;
   locked_until?: string | null;
   last_login?: string | null;
+  is_email_verified?: boolean;
+  verification_token?: string | null;
+  verification_token_expires_at?: string | null;
 };
 
 export interface ProfileLookupOptions {
@@ -31,6 +34,33 @@ function getClient(options?: ProfileLookupOptions) {
     return getSupabaseAdminClient();
   }
   return getSupabaseServerClient(options?.accessToken) as any;
+}
+
+async function selfHealLegacyUserId(data: any) {
+  if (data && data.legacy_user_id === null) {
+    try {
+      const admin = getSupabaseAdminClient();
+      const { data: maxQuery } = await admin
+        .from('users')
+        .select('legacy_user_id')
+        .eq('tenant_id', data.tenant_id)
+        .order('legacy_user_id', { ascending: false })
+        .limit(1);
+      
+      const maxId = Number(maxQuery?.[0]?.legacy_user_id ?? 0);
+      const nextId = maxId + 1;
+      
+      await admin
+        .from('users')
+        .update({ legacy_user_id: nextId })
+        .eq('id', data.id);
+      
+      data.legacy_user_id = nextId;
+      console.log(`Self-healed missing legacy_user_id for user ${data.email} -> ${nextId}`);
+    } catch (e) {
+      console.error('Failed to self-heal missing legacy_user_id:', e);
+    }
+  }
 }
 
 export async function getSupabaseProfileByAuthUserId(authUserId: string, options?: ProfileLookupOptions) {
@@ -50,6 +80,7 @@ export async function getSupabaseProfileByAuthUserId(authUserId: string, options
     throw new UnauthorizedError(error?.message ?? 'Profile lookup failed');
   }
 
+  await selfHealLegacyUserId(data);
 
   return data as SupabaseUserProfile;
 }
@@ -73,22 +104,30 @@ export async function getCurrentSupabaseProfile(accessToken: string) {
   };
 }
 
-export async function getSupabaseProfileByEmail(email: string, options?: ProfileLookupOptions) {
+export async function getSupabaseProfileByEmail(emailOrUsername: string, options?: ProfileLookupOptions) {
   const supabase = getClient(options);
-  let query = supabase
-    .from('users')
-    .select('*')
-    .eq('email', email.toLowerCase().trim());
+  const searchKey = emailOrUsername.toLowerCase().trim();
+  const isEmail = searchKey.includes('@');
+
+  let query = supabase.from('users').select('*');
+  
+  if (isEmail) {
+    query = query.eq('email', searchKey);
+  } else {
+    query = query.eq('username', searchKey);
+  }
     
   if (options?.tenantId) {
     query = query.eq('tenant_id', options.tenantId);
   }
   
-  const { data, error } = await query.single();
+  const { data, error } = await query.maybeSingle();
 
   if (error || !data) {
-    throw new UnauthorizedError(error?.message ?? 'User not found');
+    throw new UnauthorizedError(error?.message ?? 'User profile lookup failed');
   }
+
+  await selfHealLegacyUserId(data);
 
   return data as SupabaseUserProfile;
 }

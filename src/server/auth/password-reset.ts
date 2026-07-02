@@ -117,11 +117,10 @@ export async function verifyPasswordResetOtp(input: { email: string; otp: string
     throw new UnauthorizedError('OTP is invalid or expired');
   }
 
-  const expectedHash = hashOtp(normalizedEmail, input.otp);
-  if (latest.otp_hash !== expectedHash) {
+  if (Number(latest.attempts ?? 0) >= 5) {
     await supabase
       .from('password_reset_otps')
-      .update({ attempts: Number(latest.attempts ?? 0) + 1 })
+      .update({ consumed_at: new Date().toISOString() })
       .eq('id', latest.id);
 
     await logAuthEvent({
@@ -129,10 +128,49 @@ export async function verifyPasswordResetOtp(input: { email: string; otp: string
       email: normalizedEmail,
       userId: null,
       status: 'failed',
-      details: { reason: 'invalid_otp' },
+      details: { reason: 'max_attempts_exceeded' },
     });
+    throw new BadRequestError('Too many failed attempts. Please request a new password reset link.');
+  }
 
-    throw new UnauthorizedError('OTP is invalid or expired');
+  const expectedHash = hashOtp(normalizedEmail, input.otp);
+  if (latest.otp_hash !== expectedHash) {
+    const nextAttempts = Number(latest.attempts ?? 0) + 1;
+
+    if (nextAttempts >= 5) {
+      await supabase
+        .from('password_reset_otps')
+        .update({
+          attempts: nextAttempts,
+          consumed_at: new Date().toISOString()
+        })
+        .eq('id', latest.id);
+
+      await logAuthEvent({
+        action: 'auth.password_reset.verify',
+        email: normalizedEmail,
+        userId: null,
+        status: 'failed',
+        details: { reason: 'max_attempts_exceeded_on_entry' },
+      });
+
+      throw new BadRequestError('Too many failed attempts. Please request a new password reset link.');
+    } else {
+      await supabase
+        .from('password_reset_otps')
+        .update({ attempts: nextAttempts })
+        .eq('id', latest.id);
+
+      await logAuthEvent({
+        action: 'auth.password_reset.verify',
+        email: normalizedEmail,
+        userId: null,
+        status: 'failed',
+        details: { reason: 'invalid_otp' },
+      });
+
+      throw new UnauthorizedError('OTP is invalid or expired');
+    }
   }
 
   await supabase
