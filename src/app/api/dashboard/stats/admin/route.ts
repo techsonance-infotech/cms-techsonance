@@ -44,7 +44,7 @@ export const GET = withApiHandler(async (request, context) => {
     expensesRes
   ] = await Promise.all([
     supabase.from('clients').select('*').eq('tenant_id', tenantId),
-    supabase.from('projects').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId).eq('status', 'in_progress'),
+    supabase.from('projects').select('id, status').eq('tenant_id', tenantId),
     supabase.from('invoices').select('*').eq('tenant_id', tenantId),
     supabase.from('employees').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId).eq('status', 'active'),
     supabase.from('attendance_records').select('employee_id').eq('tenant_id', tenantId).eq('date', todayStr),
@@ -70,6 +70,9 @@ export const GET = withApiHandler(async (request, context) => {
   });
 
   // Aggregate specialized stats
+  const allProjects = projectsRes.data || [];
+  const activeProjectsCount = allProjects.filter((p: any) => p.status === 'in_progress').length;
+  
   const allInvoices = invoicesRes.data || [];
   const totalRevenue = allInvoices.reduce((acc: number, inv: any) => acc + (Number(inv.total_amount) || 0), 0);
   const totalEmployees = employeesRes.count || 0;
@@ -229,9 +232,41 @@ export const GET = withApiHandler(async (request, context) => {
     delete f._yearMonth; // Cleanup
   });
 
+  // Calculate dynamic insights based on current tenant database records
+  const completedProjectsCount = allProjects.filter((p: any) => p.status === 'completed').length;
+  const totalProjects = allProjects.length;
+  const projectDeliveryRate = totalProjects > 0 
+    ? Math.round((completedProjectsCount / totalProjects) * 100) 
+    : 100;
+
+  const attendanceRate = totalEmployees > 0 
+    ? Math.round((presentToday / totalEmployees) * 100) 
+    : 100;
+
+  const allClaims = claimsRes.data || [];
+  const approvedClaimsCount = allClaims.filter((c: any) => c.status === 'approved').length;
+  const settledClaimsCount = allClaims.filter((c: any) => c.status === 'approved' || c.status === 'rejected').length;
+  const complianceRate = settledClaimsCount > 0 
+    ? Math.round((approvedClaimsCount / settledClaimsCount) * 100) 
+    : 100;
+
+  let recommendationTitle = 'Optimal Operations Confirmed';
+  let recommendationMessage = 'All tenant metrics are within normal bounds. Resource levels and financial flows are stable.';
+  
+  if (pendingInvoicesCount > 0) {
+    recommendationTitle = 'Awaiting Settlement Action';
+    recommendationMessage = `You have ${pendingInvoicesCount} pending invoices totaling ₹${pendingInvoicesValue.toLocaleString()}. We suggest sending automated reminders to clients to accelerate cash inflow.`;
+  } else if (pendingApprovals.length > 0) {
+    recommendationTitle = 'Pending Approvals Pending Review';
+    recommendationMessage = `There are ${pendingApprovals.length} pending team requests (leaves, reimbursements, or attendance) in your queue. Resolving these will maintain team productivity.`;
+  } else if (attendanceRate < 80) {
+    recommendationTitle = 'Schedule Coverage Adjustment';
+    recommendationMessage = `Today's attendance is at ${attendanceRate}%. Review shift schedules to ensure client deliverables are unaffected.`;
+  }
+
   return NextResponse.json({
     activeClients: activeClientsCount,
-    activeProjects: projectsRes.count || 0,
+    activeProjects: activeProjectsCount,
     totalRevenue,
     totalEmployees,
     monthlyRevenue,
@@ -248,6 +283,13 @@ export const GET = withApiHandler(async (request, context) => {
     },
     pendingApprovals,
     recentProjects: recentProjectsRes.data || [],
-    financialRunRate
+    financialRunRate,
+    insights: {
+      projectDeliveryRate,
+      attendanceRate,
+      complianceRate,
+      recommendationTitle,
+      recommendationMessage
+    }
   });
 }, { requireAuth: true });

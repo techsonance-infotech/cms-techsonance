@@ -204,12 +204,12 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
       action: () => router.push('/dashboard/clients')
     },
     {
-      id: 'nav-team',
-      title: 'Go to Team Roster',
+      id: 'nav-employees',
+      title: 'Go to Employees Roster',
       description: 'Employee details, document vault, and hierarchy',
       category: 'Navigation',
       icon: UserIcon,
-      action: () => router.push('/dashboard/team')
+      action: () => router.push('/dashboard/employees')
     },
     {
       id: 'nav-reimbursements',

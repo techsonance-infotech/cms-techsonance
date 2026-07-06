@@ -7,6 +7,17 @@ import { getCurrentSupabaseActor, getAdminRouteSupabase } from '@/server/supabas
 import { getSupabaseProfileByEmail, getSupabaseProfileByLegacyUserId } from '@/server/supabase/users';
 import { normalizeAppRole } from '@/server/auth/rbac';
 
+let usersColumnsCache: string[] | null = null;
+async function getUsersColumns(supabase: any) {
+  if (usersColumnsCache) return usersColumnsCache;
+  const { data, error } = await supabase.from('users').select('*').limit(1);
+  if (!error && data && data.length > 0) {
+    usersColumnsCache = Object.keys(data[0]);
+    return usersColumnsCache;
+  }
+  return ['id', 'tenant_id', 'legacy_user_id', 'email', 'first_name', 'last_name', 'role', 'avatar_url', 'phone', 'last_login', 'is_active', 'two_factor_enabled', 'failed_login_attempts', 'locked_until', 'created_at', 'updated_at'];
+}
+
 function normalizeSupabaseUser(user: Record<string, unknown>) {
   return {
     id: Number(user.legacy_user_id),
@@ -21,6 +32,11 @@ function normalizeSupabaseUser(user: Record<string, unknown>) {
     lastLogin: user.last_login ?? null,
     createdAt: user.created_at ?? null,
     updatedAt: user.updated_at ?? null,
+    username: user.username ?? null,
+    middleName: user.middle_name ?? null,
+    gender: user.gender ?? null,
+    officeEmail: user.office_email ?? null,
+    accountExpiryDate: user.account_expiry_date ?? null,
   };
 }
 
@@ -120,6 +136,8 @@ export const POST = withApiHandler(async (request, context) => {
 
   const legacyUserId = await getNextLegacyUserId(tenantId);
   const authUserId = crypto.randomUUID();
+  const columns = await getUsersColumns(supabase);
+
   const { error: authError } = await admin.auth.admin.createUser({
     id: authUserId,
     email: normalizedEmail,
@@ -128,6 +146,11 @@ export const POST = withApiHandler(async (request, context) => {
     user_metadata: {
       firstName: payload.firstName.trim(),
       lastName: payload.lastName.trim(),
+      username: payload.username?.trim() || null,
+      middleName: payload.middleName?.trim() || null,
+      gender: payload.gender || null,
+      officeEmail: payload.officeEmail?.trim() || null,
+      accountExpiryDate: payload.accountExpiryDate || null,
     },
     app_metadata: {
       tenant_id: actor.tenantId,
@@ -152,7 +175,7 @@ export const POST = withApiHandler(async (request, context) => {
   });
   if (tenantUserError) throw tenantUserError;
 
-  const { data, error } = await admin.from('users').insert({
+  const usersInsertPayload: Record<string, any> = {
     id: authUserId,
     tenant_id: actor.tenantId,
     legacy_user_id: legacyUserId,
@@ -167,7 +190,15 @@ export const POST = withApiHandler(async (request, context) => {
     created_at: now,
     updated_at: now,
     last_login: null,
-  }).select('*').single();
+  };
+
+  if (columns.includes('username') && payload.username) usersInsertPayload.username = payload.username.trim();
+  if (columns.includes('middle_name') && payload.middleName) usersInsertPayload.middle_name = payload.middleName.trim();
+  if (columns.includes('gender') && payload.gender) usersInsertPayload.gender = payload.gender;
+  if (columns.includes('office_email') && payload.officeEmail) usersInsertPayload.office_email = payload.officeEmail.trim();
+  if (columns.includes('account_expiry_date') && payload.accountExpiryDate) usersInsertPayload.account_expiry_date = payload.accountExpiryDate;
+
+  const { data, error } = await admin.from('users').insert(usersInsertPayload).select('*').single();
 
   if (error || !data) throw error ?? new Error('Failed to create user');
   return NextResponse.json(normalizeSupabaseUser(data), { status: 201 });
@@ -200,6 +231,7 @@ export const PUT = withApiHandler(async (request, context) => {
     throw new NotFoundError(`User lookup failed for ID ${id}. Log: ${lookupError?.message || 'Not found'}`);
   }
 
+  const columns = await getUsersColumns(admin);
   const updates: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
   };
@@ -228,10 +260,28 @@ export const PUT = withApiHandler(async (request, context) => {
   if (payload.isActive !== undefined) updates.is_active = payload.isActive;
   if (payload.lastLogin !== undefined) updates.last_login = payload.lastLogin;
 
-  if (payload.email !== undefined || payload.password || payload.role !== undefined) {
+  if (payload.username !== undefined && columns.includes('username')) updates.username = payload.username?.trim() || null;
+  if (payload.middleName !== undefined && columns.includes('middle_name')) updates.middle_name = payload.middleName?.trim() || null;
+  if (payload.gender !== undefined && columns.includes('gender')) updates.gender = payload.gender || null;
+  if (payload.officeEmail !== undefined && columns.includes('office_email')) updates.office_email = payload.officeEmail?.trim() || null;
+  if (payload.accountExpiryDate !== undefined && columns.includes('account_expiry_date')) updates.account_expiry_date = payload.accountExpiryDate || null;
+
+  if (payload.email !== undefined || payload.password || payload.role !== undefined || payload.firstName !== undefined || payload.lastName !== undefined || payload.username !== undefined || payload.middleName !== undefined || payload.gender !== undefined || payload.officeEmail !== undefined || payload.accountExpiryDate !== undefined) {
+    const { data: authUserData } = await admin.auth.admin.getUser(existingUser.id);
+    const existingMeta = authUserData?.user?.user_metadata || {};
     const adminPayload: Record<string, unknown> = {
       ...(payload.email !== undefined ? { email: payload.email.toLowerCase().trim() } : {}),
       ...(payload.password ? { password: payload.password } : {}),
+      user_metadata: {
+        ...existingMeta,
+        ...(payload.firstName !== undefined ? { firstName: payload.firstName.trim() } : {}),
+        ...(payload.lastName !== undefined ? { lastName: payload.lastName.trim() } : {}),
+        ...(payload.username !== undefined ? { username: payload.username?.trim() || null } : {}),
+        ...(payload.middleName !== undefined ? { middleName: payload.middleName?.trim() || null } : {}),
+        ...(payload.gender !== undefined ? { gender: payload.gender || null } : {}),
+        ...(payload.officeEmail !== undefined ? { officeEmail: payload.officeEmail?.trim() || null } : {}),
+        ...(payload.accountExpiryDate !== undefined ? { accountExpiryDate: payload.accountExpiryDate || null } : {}),
+      }
     };
     if (payload.role !== undefined) {
       adminPayload.app_metadata = {

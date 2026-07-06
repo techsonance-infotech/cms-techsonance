@@ -127,44 +127,15 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="flex h-screen bg-background overflow-hidden font-sans">
-      <div className="hidden lg:flex lg:w-1/2 relative flex-col justify-center items-center p-12 bg-[#F8FAFC] dark:bg-[#0A1A2F] gap-12">
-        <div className="relative z-10 w-full flex flex-col items-center">
-          <div className="flex flex-col items-center gap-4 mb-2 animate-in slide-in-from-top duration-700">
-            <div className="relative h-12 w-12">
-              <Image
-                src="/logo-icon.png"
-                alt="TechSonance Logo"
-                fill
-                className="object-contain"
-                priority
-              />
-            </div>
-            <span className="text-2xl font-bold text-[#0A1A2F] dark:text-white tracking-tight">
-              TechSonance InfoTech LLP
-            </span>
-          </div>
-
-          <p className="text-base font-medium text-muted-foreground whitespace-nowrap animate-in fade-in duration-1000 delay-300">
-            Secure account recovery for your CMS workspace
-          </p>
-        </div>
-
-        <div className="relative w-full aspect-square max-w-[450px] animate-in zoom-in duration-1000 delay-500">
-          <Image
-            src="/login-illustration.png"
-            alt="Forgot password illustration"
-            fill
-            className="object-contain"
-            priority
-          />
-        </div>
-
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 text-xs text-muted-foreground opacity-60">
-          <span>&copy; {new Date().getFullYear()} TechSonance InfoTech LLP. All rights reserved.</span>
-        </div>
-
-        <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -mr-32 -mt-32" />
-        <div className="absolute bottom-0 left-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl -ml-48 -mb-48" />
+      {/* Left Column: Visuals & Branding */}
+      <div className="hidden lg:block lg:w-1/2 relative h-full overflow-hidden">
+        <Image
+          src="/login-left-banner.jpg"
+          alt="CMS Portal Banner"
+          fill
+          className="object-cover"
+          priority
+        />
       </div>
 
       <div className="w-full lg:w-1/2 flex items-center justify-center bg-white dark:bg-[#0A1A2F] p-8 lg:p-12 relative overflow-y-auto">
@@ -214,17 +185,17 @@ export default function ForgotPasswordPage() {
 
           {step === 1 ? (
             <form onSubmit={handleRequestOtp} className="space-y-5" autoComplete="off">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email Address</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="email" className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">Email Address</Label>
                 <div className="relative group">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-[#F87941] transition-colors" />
                   <Input
                     id="email"
                     type="email"
                     placeholder="Enter your registered email"
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
-                    className="pl-10 h-12 border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900 focus-visible:ring-primary"
+                    className="pl-11 h-12 border-slate-200 dark:border-slate-800 bg-white dark:bg-zinc-900 focus-visible:ring-[#F87941] focus-visible:border-[#F87941] rounded-xl hover:border-slate-300 dark:hover:border-slate-700 transition-colors duration-200"
                     autoComplete="email"
                     autoCapitalize="none"
                     autoCorrect="off"
@@ -237,12 +208,12 @@ export default function ForgotPasswordPage() {
 
               <Button
                 type="submit"
-                className="w-full h-12 text-base font-semibold shadow-xl shadow-primary/20 bg-primary hover:bg-primary/90 transition-all active:scale-[0.98]"
+                className="w-full h-12 text-base font-bold text-white bg-[#F87941] hover:bg-[#F4662B] transition-all rounded-xl shadow-lg shadow-primary/20 flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
                 disabled={loading}
               >
                 {loading ? (
                   <>
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    <Loader2 className="h-5 w-5 animate-spin" />
                     Sending OTP...
                   </>
                 ) : 'Send OTP'}
@@ -252,8 +223,8 @@ export default function ForgotPasswordPage() {
 
           {step === 2 ? (
             <form onSubmit={handleVerifyOtp} className="space-y-5" autoComplete="off">
-              <div className="space-y-2">
-                <Label>Enter 6-digit OTP</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">Enter 6-digit OTP</Label>
                 <InputOTP
                   maxLength={6}
                   value={otp}
@@ -265,13 +236,13 @@ export default function ForgotPasswordPage() {
                       <InputOTPSlot
                         key={index}
                         index={index}
-                        className="h-12 w-12 rounded-md border text-base"
+                        className="h-12 w-12 rounded-xl border border-slate-200 dark:border-slate-800 text-base font-bold bg-white dark:bg-zinc-900 focus-visible:ring-[#F87941] focus-visible:border-[#F87941]"
                       />
                     ))}
                   </InputOTPGroup>
                 </InputOTP>
                 <p className="text-xs text-muted-foreground">
-                  We sent the OTP to <span className="font-medium text-foreground">{email}</span>
+                  We sent the OTP to <span className="font-semibold text-[#F87941]">{email}</span>
                 </p>
               </div>
 
@@ -279,7 +250,7 @@ export default function ForgotPasswordPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-12"
+                  className="h-12 border-slate-200 dark:border-slate-800 bg-white dark:bg-zinc-900 rounded-xl font-bold text-slate-700 dark:text-slate-350 cursor-pointer"
                   onClick={() => {
                     setStep(1);
                     setOtp('');
@@ -290,12 +261,12 @@ export default function ForgotPasswordPage() {
                 </Button>
                 <Button
                   type="submit"
-                  className="h-12 text-base font-semibold shadow-xl shadow-primary/20 bg-primary hover:bg-primary/90 transition-all active:scale-[0.98]"
+                  className="h-12 text-base font-bold text-white bg-[#F87941] hover:bg-[#F4662B] transition-all rounded-xl shadow-lg shadow-primary/20 flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
                   disabled={loading || otp.length !== 6}
                 >
                   {loading ? (
                     <>
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      <Loader2 className="h-5 w-5 animate-spin" />
                       Verifying...
                     </>
                   ) : 'Verify OTP'}
@@ -306,17 +277,17 @@ export default function ForgotPasswordPage() {
 
           {step === 3 ? (
             <form onSubmit={handleResetPassword} className="space-y-5" autoComplete="off">
-              <div className="space-y-2">
-                <Label htmlFor="new-password">New Password</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="new-password" className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">New Password</Label>
                 <div className="relative group">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-[#F87941] transition-colors" />
                   <Input
                     id="new-password"
                     type="password"
                     placeholder="Enter your new password"
                     value={newPassword}
                     onChange={(event) => setNewPassword(event.target.value)}
-                    className="pl-10 h-12 border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900 focus-visible:ring-primary"
+                    className="pl-11 h-12 border-slate-200 dark:border-slate-800 bg-white dark:bg-zinc-900 focus-visible:ring-[#F87941] focus-visible:border-[#F87941] rounded-xl hover:border-slate-300 dark:hover:border-slate-700 transition-colors duration-200"
                     autoComplete="new-password"
                     autoCapitalize="none"
                     autoCorrect="off"
@@ -330,17 +301,17 @@ export default function ForgotPasswordPage() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="confirm-password">Confirm Password</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="confirm-password" className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">Confirm Password</Label>
                 <div className="relative group">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-[#F87941] transition-colors" />
                   <Input
                     id="confirm-password"
                     type="password"
                     placeholder="Confirm your new password"
                     value={confirmPassword}
                     onChange={(event) => setConfirmPassword(event.target.value)}
-                    className="pl-10 h-12 border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900 focus-visible:ring-primary"
+                    className="pl-11 h-12 border-slate-200 dark:border-slate-800 bg-white dark:bg-zinc-900 focus-visible:ring-[#F87941] focus-visible:border-[#F87941] rounded-xl hover:border-slate-300 dark:hover:border-slate-700 transition-colors duration-200"
                     autoComplete="new-password"
                     autoCapitalize="none"
                     autoCorrect="off"
@@ -392,12 +363,12 @@ export default function ForgotPasswordPage() {
 
               <Button
                 type="submit"
-                className="w-full h-12 text-base font-semibold shadow-xl shadow-primary/20 bg-primary hover:bg-primary/90 transition-all active:scale-[0.98]"
+                className="w-full h-12 text-base font-bold text-white bg-[#F87941] hover:bg-[#F4662B] transition-all rounded-xl shadow-lg shadow-primary/20 flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
                 disabled={loading || !isFormValid}
               >
                 {loading ? (
                   <>
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    <Loader2 className="h-5 w-5 animate-spin" />
                     Updating Password...
                   </>
                 ) : 'Reset Password'}
@@ -405,9 +376,9 @@ export default function ForgotPasswordPage() {
             </form>
           ) : null}
 
-          <div className="text-center text-sm text-muted-foreground">
+          <div className="mt-6 text-center text-sm text-slate-500">
             Remember your password?{' '}
-            <Link href="/login" className="font-semibold text-primary hover:underline underline-offset-4">
+            <Link href="/login" className="font-bold text-[#F87941] hover:underline underline-offset-4 cursor-pointer">
               Back to Login
             </Link>
           </div>

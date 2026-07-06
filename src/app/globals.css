@@ -160,14 +160,14 @@
   --chart-4: #2F3035;
   --chart-5: #B1B1B1;
 
-  /* Sidebar maintains clean styling */
-  --sidebar: #FFFFFF;
-  --sidebar-foreground: #66676A;
-  --sidebar-primary: #FFE9DE;
+  /* Sidebar dark/black mode theme */
+  --sidebar: #1E1F22;
+  --sidebar-foreground: #B5B7BA;
+  --sidebar-primary: #382319;
   --sidebar-primary-foreground: #F87941;
-  --sidebar-accent: #FFF5F1;
+  --sidebar-accent: #2E2F33;
   --sidebar-accent-foreground: #F87941;
-  --sidebar-border: #ECEBEC;
+  --sidebar-border: #2E2F33;
   --sidebar-ring: #F87941;
 }
 
@@ -217,5 +217,5 @@ nextjs-portal {
 }
 
 .bg-brand-gradient {
-  background: #f87941 !important;
+  background: linear-gradient(135deg, #F87941 0%, #F4662B 100%) !important;
 }

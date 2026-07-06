@@ -1,13 +1,26 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Check, Loader2, Eye, EyeOff, AlertCircle, Sparkles } from 'lucide-react';
+import { Check, Loader2, Eye, EyeOff, AlertCircle, User, Lock, Mail, Phone, Building2, ShieldCheck, ArrowRight } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { LegalModal } from '@/components/auth/legal-modal';
 
 export function RegisterForm() {
   const router = useRouter();
   
+  const [legalModalOpen, setLegalModalOpen] = useState(false);
+  const [legalModalType, setLegalModalType] = useState<'terms' | 'privacy'>('terms');
+
+  const openLegalModal = (type: 'terms' | 'privacy') => {
+    setLegalModalType(type);
+    setLegalModalOpen(true);
+  };
+
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [username, setUsername] = useState('');
@@ -16,6 +29,7 @@ export function RegisterForm() {
   const [companyName, setCompanyName] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [agreed, setAgreed] = useState(false);
   
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -48,7 +62,8 @@ export function RegisterForm() {
     isPhoneValid && 
     isCompanyNameValid && 
     isPasswordStrong && 
-    passwordsMatch;
+    passwordsMatch &&
+    agreed;
 
   const handleAlphabetChange = (setter: React.Dispatch<React.SetStateAction<string>>) => (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.replace(/[^a-zA-Z]/g, '');
@@ -65,17 +80,17 @@ export function RegisterForm() {
   };
 
   const getInputClass = (isValid: boolean, field: string, value: string) => {
-    const base = 'w-full h-11 px-4 bg-slate-50 border rounded-xl text-sm text-slate-900 placeholder:text-slate-400 transition-all duration-300 outline-none focus:bg-white focus:ring-4 focus:ring-primary/10';
-    if (!touched[field] || value === '') return `${base} border-slate-200 focus:border-[#337BAA]`;
+    const base = 'pl-11 h-12 border-slate-200 dark:border-slate-800 bg-white dark:bg-zinc-900 focus-visible:ring-[#F87941] focus-visible:border-[#F87941] rounded-xl hover:border-slate-300 dark:hover:border-slate-700 transition-colors duration-200';
+    if (!touched[field] || value === '') return base;
     return isValid
-      ? `${base} border-emerald-500/30 focus:border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.02)]`
-      : `${base} border-rose-500/30 focus:border-rose-500 shadow-[0_0_10px_rgba(239,68,68,0.02)]`;
+      ? 'pl-11 h-12 border-emerald-500 bg-white dark:bg-zinc-900 focus-visible:ring-emerald-500 focus-visible:border-emerald-500 rounded-xl transition-colors duration-200'
+      : 'pl-11 h-12 border-rose-500 bg-white dark:bg-zinc-900 focus-visible:ring-rose-500 focus-visible:border-rose-500 rounded-xl transition-colors duration-200';
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isFormValid) {
-      setErrorMsg('Please complete all fields correctly.');
+      setErrorMsg('Please complete all fields correctly and accept the terms.');
       return;
     }
 
@@ -113,22 +128,22 @@ export function RegisterForm() {
 
   if (success) {
     return (
-      <div className="text-center py-10 px-6 bg-emerald-50/50 border border-emerald-500/10 rounded-2xl animate-in fade-in zoom-in duration-300">
+      <div className="text-center py-10 px-6 bg-emerald-50/50 dark:bg-emerald-950/10 border border-emerald-500/10 rounded-2xl animate-in fade-in zoom-in duration-300">
         <div className="w-16 h-16 bg-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl shadow-emerald-500/20">
           <Check className="h-8 w-8 text-white" />
         </div>
-        <h3 className="text-xl font-bold text-slate-900 mb-3">Verification Email Sent!</h3>
-        <p className="text-slate-600 text-sm max-w-sm mx-auto leading-relaxed mb-6">
-          We've sent a verification link to <span className="text-emerald-600 font-bold">{email}</span>. Please check your inbox and click the link to activate your account and begin your 14-day free trial.
+        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">Verification Email Sent!</h3>
+        <p className="text-slate-600 dark:text-slate-400 text-sm max-w-sm mx-auto leading-relaxed mb-6">
+          We've sent a verification link to <span className="text-emerald-600 dark:text-emerald-400 font-bold">{email}</span>. Please check your inbox and click the link to activate your account and begin your 14-day free trial.
         </p>
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-center gap-2 text-slate-400">
-            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            <Loader2 className="h-4 w-4 animate-spin text-[#F87941]" />
             <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Waiting for verification…</span>
           </div>
           <Link
             href="/login"
-            className="text-sm font-semibold text-[#337BAA] hover:text-[#245C80] transition-colors mt-2"
+            className="text-sm font-semibold text-[#F87941] hover:text-[#F4662B] transition-colors mt-2"
           >
             Return to Login
           </Link>
@@ -140,7 +155,7 @@ export function RegisterForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {errorMsg && (
-        <div className="flex items-start gap-3 p-4 bg-rose-50 border border-rose-500/10 rounded-xl text-rose-600 text-xs leading-relaxed animate-in fade-in slide-in-from-top-1 duration-200">
+        <div className="flex items-start gap-3 p-4 bg-rose-50 dark:bg-rose-950/20 border border-rose-500/10 rounded-xl text-rose-600 dark:text-rose-400 text-xs leading-relaxed animate-in fade-in slide-in-from-top-1 duration-200">
           <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
           <div>{errorMsg}</div>
         </div>
@@ -150,19 +165,22 @@ export function RegisterForm() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* First Name */}
         <div className="space-y-1.5">
-          <label htmlFor="reg-firstName" className="text-xs font-bold text-slate-700 ml-1">
+          <Label htmlFor="reg-firstName" className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide ml-1">
             First Name <span className="text-rose-500">*</span>
-          </label>
-          <input
-            id="reg-firstName"
-            type="text"
-            placeholder="John"
-            required
-            value={firstName}
-            onChange={handleAlphabetChange(setFirstName)}
-            onBlur={() => handleBlur('firstName')}
-            className={getInputClass(isFirstNameValid, 'firstName', firstName)}
-          />
+          </Label>
+          <div className="relative group">
+            <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-[#F87941] transition-colors z-10" />
+            <Input
+              id="reg-firstName"
+              type="text"
+              placeholder="Enter your first name"
+              required
+              value={firstName}
+              onChange={handleAlphabetChange(setFirstName)}
+              onBlur={() => handleBlur('firstName')}
+              className={getInputClass(isFirstNameValid, 'firstName', firstName)}
+            />
+          </div>
           {touched.firstName && !isFirstNameValid && (
             <p className="text-[10px] text-rose-500 ml-1 font-semibold">
               Must be at least 2 characters (letters only).
@@ -172,19 +190,22 @@ export function RegisterForm() {
 
         {/* Last Name */}
         <div className="space-y-1.5">
-          <label htmlFor="reg-lastName" className="text-xs font-bold text-slate-700 ml-1">
+          <Label htmlFor="reg-lastName" className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide ml-1">
             Last Name <span className="text-rose-500">*</span>
-          </label>
-          <input
-            id="reg-lastName"
-            type="text"
-            placeholder="Doe"
-            required
-            value={lastName}
-            onChange={handleAlphabetChange(setLastName)}
-            onBlur={() => handleBlur('lastName')}
-            className={getInputClass(isLastNameValid, 'lastName', lastName)}
-          />
+          </Label>
+          <div className="relative group">
+            <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-[#F87941] transition-colors z-10" />
+            <Input
+              id="reg-lastName"
+              type="text"
+              placeholder="Enter your last name"
+              required
+              value={lastName}
+              onChange={handleAlphabetChange(setLastName)}
+              onBlur={() => handleBlur('lastName')}
+              className={getInputClass(isLastNameValid, 'lastName', lastName)}
+            />
+          </div>
           {touched.lastName && !isLastNameValid && (
             <p className="text-[10px] text-rose-500 ml-1 font-semibold">
               Must be at least 2 characters (letters only).
@@ -195,19 +216,22 @@ export function RegisterForm() {
 
       {/* Username */}
       <div className="space-y-1.5">
-        <label htmlFor="reg-username" className="text-xs font-bold text-slate-700 ml-1">
+        <Label htmlFor="reg-username" className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide ml-1">
           Username <span className="text-rose-500">*</span>
-        </label>
-        <input
-          id="reg-username"
-          type="text"
-          placeholder="johndoe_99"
-          required
-          value={username}
-          onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-          onBlur={() => handleBlur('username')}
-          className={getInputClass(isUsernameValid, 'username', username)}
-        />
+        </Label>
+        <div className="relative group">
+          <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-[#F87941] transition-colors z-10" />
+          <Input
+            id="reg-username"
+            type="text"
+            placeholder="Choose a username"
+            required
+            value={username}
+            onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+            onBlur={() => handleBlur('username')}
+            className={getInputClass(isUsernameValid, 'username', username)}
+          />
+        </div>
         {touched.username && !isUsernameValid && username !== '' && (
           <p className="text-[10px] text-rose-500 ml-1 font-semibold">
             Use 3-20 characters: letters, numbers, or underscores only.
@@ -217,55 +241,64 @@ export function RegisterForm() {
 
       {/* Company Name */}
       <div className="space-y-1.5">
-        <label htmlFor="reg-companyName" className="text-xs font-bold text-slate-700 ml-1">
-          Company/Organization <span className="text-rose-500">*</span>
-        </label>
-        <input
-          id="reg-companyName"
-          type="text"
-          placeholder="TechSonance Corp"
-          required
-          value={companyName}
-          onChange={(e) => setCompanyName(e.target.value)}
-          onBlur={() => handleBlur('companyName')}
-          className={getInputClass(isCompanyNameValid, 'companyName', companyName)}
-        />
+        <Label htmlFor="reg-companyName" className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide ml-1">
+          Company / Organization <span className="text-rose-500">*</span>
+        </Label>
+        <div className="relative group">
+          <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-[#F87941] transition-colors z-10" />
+          <Input
+            id="reg-companyName"
+            type="text"
+            placeholder="Enter your company or organization name"
+            required
+            value={companyName}
+            onChange={(e) => setCompanyName(e.target.value)}
+            onBlur={() => handleBlur('companyName')}
+            className={getInputClass(isCompanyNameValid, 'companyName', companyName)}
+          />
+        </div>
       </div>
 
       {/* Email & Phone */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Email */}
         <div className="space-y-1.5">
-          <label htmlFor="reg-email" className="text-xs font-bold text-slate-700 ml-1">
+          <Label htmlFor="reg-email" className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide ml-1">
             Email Address <span className="text-rose-500">*</span>
-          </label>
-          <input
-            id="reg-email"
-            type="email"
-            placeholder="john@example.com"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            onBlur={() => handleBlur('email')}
-            className={getInputClass(isEmailValid, 'email', email)}
-          />
+          </Label>
+          <div className="relative group">
+            <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-[#F87941] transition-colors z-10" />
+            <Input
+              id="reg-email"
+              type="email"
+              placeholder="Enter your email address"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              onBlur={() => handleBlur('email')}
+              className={getInputClass(isEmailValid, 'email', email)}
+            />
+          </div>
         </div>
 
         {/* Phone */}
         <div className="space-y-1.5">
-          <label htmlFor="reg-phone" className="text-xs font-bold text-slate-700 ml-1">
+          <Label htmlFor="reg-phone" className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide ml-1">
             Phone Number <span className="text-rose-500">*</span>
-          </label>
-          <input
-            id="reg-phone"
-            type="tel"
-            placeholder="9876543210"
-            required
-            value={phone}
-            onChange={handlePhoneChange}
-            onBlur={() => handleBlur('phone')}
-            className={getInputClass(isPhoneValid, 'phone', phone)}
-          />
+          </Label>
+          <div className="relative group">
+            <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-[#F87941] transition-colors z-10" />
+            <Input
+              id="reg-phone"
+              type="tel"
+              placeholder="Enter your phone number"
+              required
+              value={phone}
+              onChange={handlePhoneChange}
+              onBlur={() => handleBlur('phone')}
+              className={getInputClass(isPhoneValid, 'phone', phone)}
+            />
+          </div>
           {touched.phone && !isPhoneValid && (
             <p className="text-[10px] text-rose-500 ml-1 font-semibold">
               Phone number must be exactly 10 digits.
@@ -278,14 +311,15 @@ export function RegisterForm() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Password */}
         <div className="space-y-1.5 relative">
-          <label htmlFor="reg-password" className="text-xs font-bold text-slate-700 ml-1">
+          <Label htmlFor="reg-password" className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide ml-1">
             Password <span className="text-rose-500">*</span>
-          </label>
-          <div className="relative">
-            <input
+          </Label>
+          <div className="relative group">
+            <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-[#F87941] transition-colors z-10" />
+            <Input
               id="reg-password"
               type={showPassword ? 'text' : 'password'}
-              placeholder="••••••••"
+              placeholder="Create a password"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -295,23 +329,24 @@ export function RegisterForm() {
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors z-20"
             >
-              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
             </button>
           </div>
         </div>
 
         {/* Confirm Password */}
         <div className="space-y-1.5 relative">
-          <label htmlFor="reg-confirmPassword" className="text-xs font-bold text-slate-700 ml-1">
+          <Label htmlFor="reg-confirmPassword" className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide ml-1">
             Confirm Password <span className="text-rose-500">*</span>
-          </label>
-          <div className="relative">
-            <input
+          </Label>
+          <div className="relative group">
+            <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-[#F87941] transition-colors z-10" />
+            <Input
               id="reg-confirmPassword"
               type={showConfirmPassword ? 'text' : 'password'}
-              placeholder="••••••••"
+              placeholder="Confirm your password"
               required
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
@@ -321,9 +356,9 @@ export function RegisterForm() {
             <button
               type="button"
               onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors z-20"
             >
-              {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
             </button>
           </div>
         </div>
@@ -331,62 +366,146 @@ export function RegisterForm() {
 
       {/* Password Strength Panel */}
       {password !== '' && (
-        <div className="p-4 bg-slate-50 border border-slate-200/60 rounded-xl space-y-2 animate-in fade-in duration-200">
-          <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-            <Sparkles className="h-3.5 w-3.5 text-primary" />
-            Security Strength Indicators
+        <div className="p-3.5 bg-orange-50/50 dark:bg-orange-950/15 border border-orange-100 dark:border-orange-900/20 rounded-xl space-y-1.5 animate-in fade-in duration-200">
+          <div className="text-xs font-bold text-slate-700 dark:text-slate-300">
+            Password must contain:
           </div>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-            <div className="flex items-center gap-2 text-xs">
-              <span className={`h-2 w-2 rounded-full transition-colors duration-300 ${hasMinLength ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-              <span className={hasMinLength ? 'text-slate-900 font-medium' : 'text-slate-400'}>Min 8 characters</span>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-slate-500 dark:text-slate-400">
+            <div className="flex items-center gap-1.5 text-xs">
+              <Check className={`h-3.5 w-3.5 ${hasMinLength ? 'text-emerald-500' : 'text-slate-300 dark:text-slate-600'}`} />
+              <span className={hasMinLength ? 'text-emerald-700 dark:text-emerald-400 font-semibold' : ''}>8+ characters</span>
             </div>
-            <div className="flex items-center gap-2 text-xs">
-              <span className={`h-2 w-2 rounded-full transition-colors duration-300 ${hasUppercase ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-              <span className={hasUppercase ? 'text-slate-900 font-medium' : 'text-slate-400'}>Uppercase letter</span>
+            <div className="flex items-center gap-1.5 text-xs">
+              <Check className={`h-3.5 w-3.5 ${hasUppercase ? 'text-emerald-500' : 'text-slate-300 dark:text-slate-600'}`} />
+              <span className={hasUppercase ? 'text-emerald-700 dark:text-emerald-400 font-semibold' : ''}>1 uppercase letter</span>
             </div>
-            <div className="flex items-center gap-2 text-xs">
-              <span className={`h-2 w-2 rounded-full transition-colors duration-300 ${hasLowercase ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-              <span className={hasLowercase ? 'text-slate-900 font-medium' : 'text-slate-400'}>Lowercase letter</span>
+            <div className="flex items-center gap-1.5 text-xs">
+              <Check className={`h-3.5 w-3.5 ${hasNumber ? 'text-emerald-500' : 'text-slate-300 dark:text-slate-600'}`} />
+              <span className={hasNumber ? 'text-emerald-700 dark:text-emerald-400 font-semibold' : ''}>1 number</span>
             </div>
-            <div className="flex items-center gap-2 text-xs">
-              <span className={`h-2 w-2 rounded-full transition-colors duration-300 ${hasNumber ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-              <span className={hasNumber ? 'text-slate-900 font-medium' : 'text-slate-400'}>Number indicator</span>
-            </div>
-            <div className="flex items-center gap-2 text-xs">
-              <span className={`h-2 w-2 rounded-full transition-colors duration-300 ${hasSpecial ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-              <span className={hasSpecial ? 'text-slate-900 font-medium' : 'text-slate-400'}>Special symbol</span>
-            </div>
-            <div className="flex items-center gap-2 text-xs col-span-2 border-t border-slate-200/50 pt-1.5 mt-1">
-              <span className={`h-2 w-2 rounded-full transition-colors duration-300 ${passwordsMatch ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-              <span className={passwordsMatch ? 'text-slate-900 font-medium' : 'text-slate-400'}>Passwords match exactly</span>
+            <div className="flex items-center gap-1.5 text-xs">
+              <Check className={`h-3.5 w-3.5 ${hasSpecial ? 'text-emerald-500' : 'text-slate-300 dark:text-slate-600'}`} />
+              <span className={hasSpecial ? 'text-emerald-700 dark:text-emerald-400 font-semibold' : ''}>1 special character</span>
             </div>
           </div>
         </div>
       )}
 
+      {/* Agreement Checkbox */}
+      <div className="flex items-center space-x-2 py-1 select-none">
+        <Checkbox
+          id="terms"
+          checked={agreed}
+          onCheckedChange={(checked) => setAgreed(Boolean(checked))}
+          className="data-[state=checked]:bg-[#F87941] data-[state=checked]:border-[#F87941] border-slate-300 flex h-[18px] w-[18px] items-center justify-center rounded-md shrink-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#F87941] disabled:cursor-not-allowed disabled:opacity-50"
+        />
+        <label
+          htmlFor="terms"
+          className="text-sm font-semibold text-slate-600 dark:text-slate-400 cursor-pointer"
+        >
+          I agree to the{' '}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              openLegalModal('terms');
+            }}
+            className="text-[#F87941] hover:underline font-bold focus:outline-none cursor-pointer"
+          >
+            Terms of Service
+          </button>{' '}
+          and{' '}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              openLegalModal('privacy');
+            }}
+            className="text-[#F87941] hover:underline font-bold focus:outline-none cursor-pointer"
+          >
+            Privacy Policy
+          </button>
+        </label>
+      </div>
+
       {/* Form Action Button */}
-      <button
+      <Button
         type="submit"
         disabled={loading || !isFormValid}
-        className="w-full h-11 rounded-xl bg-gradient-to-r from-[#245C80] to-[#337BAA] hover:opacity-95 text-white font-bold text-sm tracking-wide shadow-md transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-4"
+        className="w-full h-12 text-base font-bold text-white bg-[#F87941] hover:bg-[#F4662B] transition-all rounded-xl shadow-lg shadow-primary/20 flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
       >
         {loading ? (
           <>
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Creating Corporate Account...
+            <Loader2 className="h-5 w-5 animate-spin" />
+            Creating Account...
           </>
         ) : (
-          'Activate 14-Day Free Trial'
+          <>
+            Create Account
+            <ArrowRight className="h-5 w-5" />
+          </>
         )}
-      </button>
+      </Button>
 
-      <div className="text-center pt-2 text-xs text-slate-500 font-medium">
-        Already have a corporate profile?{' '}
-        <Link href="/login" className="text-[#337BAA] hover:underline font-bold">
+      {/* Social Divider */}
+      <div className="relative flex items-center justify-center my-4">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-slate-200 dark:border-slate-800"></div>
+        </div>
+        <span className="relative px-3 bg-white dark:bg-[#0A1A2F] text-xs font-semibold text-slate-400 uppercase tracking-wider">
+          or sign up with
+        </span>
+      </div>
+
+      {/* Social Buttons */}
+      <div className="flex gap-3">
+        <button
+          type="button"
+          className="flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900 rounded-xl h-11 px-4 text-sm font-semibold text-slate-700 dark:text-slate-300 transition-colors flex-1 cursor-pointer"
+        >
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05" />
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335" />
+          </svg>
+          Google
+        </button>
+        
+        <button
+          type="button"
+          className="flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900 rounded-xl h-11 px-4 text-sm font-semibold text-slate-700 dark:text-slate-300 transition-colors flex-1 cursor-pointer"
+        >
+          <svg className="h-4 w-4" viewBox="0 0 23 23" fill="currentColor">
+            <rect x="0" y="0" width="11" height="11" fill="#f25022" />
+            <rect x="12" y="0" width="11" height="11" fill="#7fba00" />
+            <rect x="0" y="12" width="11" height="11" fill="#00a4ef" />
+            <rect x="12" y="12" width="11" height="11" fill="#ffb900" />
+          </svg>
+          Microsoft
+        </button>
+
+        <button
+          type="button"
+          className="flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900 rounded-xl h-11 px-4 text-sm font-semibold text-slate-700 dark:text-slate-300 transition-colors flex-1 cursor-pointer"
+        >
+          <ShieldCheck className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+          SSO Login
+        </button>
+      </div>
+
+      <div className="mt-6 text-center text-sm text-slate-500">
+        Already have an account?{' '}
+        <Link href="/login" className="font-bold text-[#F87941] hover:underline underline-offset-4 cursor-pointer">
           Login here
         </Link>
       </div>
+
+      <LegalModal
+        isOpen={legalModalOpen}
+        onClose={setLegalModalOpen}
+        type={legalModalType}
+      />
     </form>
   );
 }

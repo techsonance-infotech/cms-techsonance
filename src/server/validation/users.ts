@@ -30,6 +30,11 @@ export const createUserSchema = z.object({
   phone: z.string().trim().max(20).optional().nullable(),
   twoFactorEnabled: z.boolean().optional(),
   isActive: z.boolean().optional(),
+  username: z.string().trim().min(3).max(50).optional().nullable().or(z.literal('')),
+  middleName: z.string().trim().max(100).optional().nullable().or(z.literal('')),
+  gender: z.string().trim().optional().nullable().or(z.literal('')),
+  officeEmail: z.string().trim().email().max(255).optional().nullable().or(z.literal('')),
+  accountExpiryDate: z.string().date().optional().nullable().or(z.literal('')),
 });
 
 export const updateUserSchema = createUserSchema.partial().extend({

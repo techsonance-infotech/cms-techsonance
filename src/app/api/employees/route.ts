@@ -9,6 +9,23 @@ import {
   resolveAuthUserIdFromLegacyUserId,
 } from '@/server/supabase/route-helpers';
 
+let employeesColumnsCache: string[] | null = null;
+async function getEmployeesColumns(supabase: any) {
+  if (employeesColumnsCache) return employeesColumnsCache;
+  const { data, error } = await supabase.from('employees').select('*').limit(1);
+  if (!error && data && data.length > 0) {
+    employeesColumnsCache = Object.keys(data[0]);
+    return employeesColumnsCache;
+  }
+  return [
+    'id', 'tenant_id', 'user_id', 'employee_id', 'nfc_card_id', 'department',
+    'designation', 'date_of_joining', 'date_of_birth', 'skills', 'salary',
+    'status', 'created_at', 'updated_at', 'deleted_at', 'employment_type',
+    'hourly_rate', 'ctc', 'pf_number', 'uan_number', 'bank_name',
+    'bank_account_number', 'ifsc_code', 'manager_id'
+  ];
+}
+
 export const GET = withApiHandler(async (request, context) => {
   const searchParams = new URL(request.url).searchParams;
   const id = searchParams.get('id');
@@ -135,37 +152,100 @@ export const POST = withApiHandler(async (request, context) => {
     managerAuthId = await resolveAuthUserIdFromLegacyUserId(accessToken, payload.managerId, tenantId);
   }
 
+  const columns = await getEmployeesColumns(supabase);
   const now = new Date().toISOString();
-  const { data, error } = await supabase.from('employees').insert({
+
+  // 1. Base Insert payload with guaranteed columns
+  const insertPayload: Record<string, any> = {
     user_id: authUserId,
     employee_id: payload.employeeId.trim(),
     department: payload.department.trim(),
     designation: payload.designation.trim(),
-    employment_type: payload.employmentType,
     date_of_joining: payload.dateOfJoining,
     date_of_birth: payload.dateOfBirth ?? null,
-    skills: [
-      ...(payload.skills || []),
-      ...(payload.gender ? [`__gender:${payload.gender}`] : []),
-      ...(payload.role ? [`__role:${payload.role}`] : []),
-    ],
     salary: payload.salary ?? null,
-    hourly_rate: payload.hourlyRate ?? null,
-    ctc: payload.ctc ?? null,
-    pf_number: payload.pfNumber?.trim() ?? null,
-    uan_number: payload.uanNumber?.trim() ?? null,
-    bank_name: payload.bankName?.trim() ?? null,
-    bank_account_number: payload.bankAccountNumber?.trim() ?? null,
-    ifsc_code: payload.ifscCode?.trim() ?? null,
-    manager_id: managerAuthId,
     status: payload.status ?? 'active',
     tenant_id: tenantId,
     created_at: now,
     updated_at: now,
-  }).select('*').single();
+  };
+
+  // 2. Add HR extensions (20260418 migration) if columns exist
+  if (columns.includes('employment_type')) insertPayload.employment_type = payload.employmentType;
+  if (columns.includes('hourly_rate')) insertPayload.hourly_rate = payload.hourlyRate ?? null;
+  if (columns.includes('ctc')) insertPayload.ctc = payload.ctc ?? null;
+  if (columns.includes('pf_number')) insertPayload.pf_number = payload.pfNumber?.trim() ?? null;
+  if (columns.includes('uan_number')) insertPayload.uan_number = payload.uanNumber?.trim() ?? null;
+  if (columns.includes('bank_name')) insertPayload.bank_name = payload.bankName?.trim() ?? null;
+  if (columns.includes('bank_account_number')) insertPayload.bank_account_number = payload.bankAccountNumber?.trim() ?? null;
+  if (columns.includes('ifsc_code')) insertPayload.ifsc_code = payload.ifscCode?.trim() ?? null;
+  if (columns.includes('manager_id')) insertPayload.manager_id = managerAuthId;
+
+  // 3. Map new onboarding fields
+  const extraFields: Record<string, any> = {};
+  const newFieldsMapping: Record<string, string> = {
+    maritalStatus: 'marital_status',
+    bloodGroup: 'blood_group',
+    nationality: 'nationality',
+    personalIdNumber: 'personal_id_number',
+    probationPeriod: 'probation_period',
+    confirmationDate: 'confirmation_date',
+    workLocation: 'work_location',
+    workShift: 'work_shift',
+    noticePeriod: 'notice_period',
+    currency: 'currency',
+    branchName: 'branch_name',
+    esiNumber: 'esi_number',
+    panNumber: 'pan_number',
+    aadhaarNumber: 'aadhaar_number',
+    aadhaarCardUrl: 'aadhaar_card_url',
+    panCardUrl: 'pan_card_url',
+    addressProofUrl: 'address_proof_url',
+    educationCertificateUrl: 'education_certificate_url',
+    experienceCertificateUrl: 'experience_certificate_url',
+    resumeUrl: 'resume_url',
+    permissions: 'permissions',
+    emergencyContactName: 'emergency_contact_name',
+    emergencyContactRelationship: 'emergency_contact_relationship',
+    emergencyContactPhone: 'emergency_contact_phone',
+    emergencyContactAddress: 'emergency_contact_address',
+    languagesKnown: 'languages_known',
+    linkedinProfile: 'linkedin_profile',
+    githubProfile: 'github_profile',
+    previousCompany: 'previous_company',
+    referralSource: 'referral_source',
+    notes: 'notes',
+    gender: 'gender',
+  };
+
+  Object.entries(newFieldsMapping).forEach(([camelKey, dbColumn]) => {
+    const value = (payload as any)[camelKey];
+    if (value !== undefined) {
+      if (columns.includes(dbColumn)) {
+        insertPayload[dbColumn] = value;
+      } else {
+        extraFields[camelKey] = value;
+      }
+    }
+  });
+
+  // Store user-level properties in employees.skills if user table columns do not exist
+  ['middleName', 'officeEmail', 'accountExpiryDate'].forEach((field) => {
+    const value = (payload as any)[field];
+    if (value !== undefined) {
+      extraFields[field] = value;
+    }
+  });
+
+  // Prepare fallback structure inside skills
+  insertPayload.skills = {
+    skills_list: payload.skills || [],
+    ...extraFields,
+  };
+
+  const { data, error } = await supabase.from('employees').insert(insertPayload).select('*').single();
 
   if (error || !data) throw error ? new Error(error.message) : new Error('Failed to create employee');
-  // Need to add managerAuthId to user map resolution
   const userMap = await buildLegacyUserIdMap(accessToken, [authUserId, managerAuthId].filter(Boolean) as string[], tenantId);
   return NextResponse.json(normalizeSupabaseEmployeeRecord(data, userMap), { status: 201 });
 }, { requireAuth: true, roles: ['Manager'] });
@@ -207,36 +287,129 @@ export const PUT = withApiHandler(async (request, context) => {
     managerAuthId = payload.managerId ? await resolveAuthUserIdFromLegacyUserId(accessToken, payload.managerId, tenantId) : null;
   }
 
-  const { data, error } = await supabase.from('employees').update({
-    ...(payload.employeeId !== undefined ? { employee_id: payload.employeeId.trim() } : {}),
-    ...(payload.department !== undefined ? { department: payload.department.trim() } : {}),
-    ...(payload.designation !== undefined ? { designation: payload.designation.trim() } : {}),
-    ...('employmentType' in payload && payload.employmentType !== undefined ? { employment_type: payload.employmentType } : {}),
-    ...(payload.dateOfJoining !== undefined ? { date_of_joining: payload.dateOfJoining } : {}),
-    ...(payload.dateOfBirth !== undefined ? { date_of_birth: payload.dateOfBirth ?? null } : {}),
-    ...(payload.status !== undefined ? { status: payload.status } : {}),
-    ...(payload.skills !== undefined || payload.gender !== undefined || payload.role !== undefined ? {
-      skills: [
-        ...(payload.skills !== undefined ? (payload.skills || []) : (Array.isArray(existingEmployee.skills) ? (existingEmployee.skills as string[]).filter(s => !s.startsWith('__')) : [])),
-        ...(payload.gender !== undefined ? (payload.gender ? [`__gender:${payload.gender}`] : []) : (Array.isArray(existingEmployee.skills) ? (existingEmployee.skills as string[]).filter(s => s.startsWith('__gender:')) : [])),
-        ...(payload.role !== undefined ? (payload.role ? [`__role:${payload.role}`] : []) : (Array.isArray(existingEmployee.skills) ? (existingEmployee.skills as string[]).filter(s => s.startsWith('__role:')) : [])),
-      ]
-    } : {}),
-    ...('salary' in payload && payload.salary !== undefined ? { salary: payload.salary ?? null } : {}),
-    ...('hourlyRate' in payload && payload.hourlyRate !== undefined ? { hourly_rate: payload.hourlyRate ?? null } : {}),
-    ...('ctc' in payload && payload.ctc !== undefined ? { ctc: payload.ctc ?? null } : {}),
-    ...('pfNumber' in payload && payload.pfNumber !== undefined ? { pf_number: payload.pfNumber?.trim() ?? null } : {}),
-    ...('uanNumber' in payload && payload.uanNumber !== undefined ? { uan_number: payload.uanNumber?.trim() ?? null } : {}),
-    ...('bankName' in payload && payload.bankName !== undefined ? { bank_name: payload.bankName?.trim() ?? null } : {}),
-    ...('bankAccountNumber' in payload && payload.bankAccountNumber !== undefined ? { bank_account_number: payload.bankAccountNumber?.trim() ?? null } : {}),
-    ...('ifscCode' in payload && payload.ifscCode !== undefined ? { ifsc_code: payload.ifscCode?.trim() ?? null } : {}),
-    ...('managerId' in payload ? { manager_id: managerAuthId } : {}),
+  const columns = await getEmployeesColumns(supabase);
+  const updates: Record<string, any> = {
     updated_at: new Date().toISOString(),
-  })
-  .eq('id', id)
-  .eq('tenant_id', tenantId)
-  .select('*')
-  .single();
+  };
+
+  if (payload.employeeId !== undefined) updates.employee_id = payload.employeeId.trim();
+  if (payload.department !== undefined) updates.department = payload.department.trim();
+  if (payload.designation !== undefined) updates.designation = payload.designation.trim();
+  if (payload.dateOfJoining !== undefined) updates.date_of_joining = payload.dateOfJoining;
+  if (payload.dateOfBirth !== undefined) updates.date_of_birth = payload.dateOfBirth ?? null;
+  if (payload.status !== undefined) updates.status = payload.status;
+  if (payload.salary !== undefined) updates.salary = payload.salary ?? null;
+
+  if ('employmentType' in payload && payload.employmentType !== undefined && columns.includes('employment_type')) {
+    updates.employment_type = payload.employmentType;
+  }
+  if ('hourlyRate' in payload && payload.hourlyRate !== undefined && columns.includes('hourly_rate')) {
+    updates.hourly_rate = payload.hourlyRate ?? null;
+  }
+  if ('ctc' in payload && payload.ctc !== undefined && columns.includes('ctc')) {
+    updates.ctc = payload.ctc ?? null;
+  }
+  if ('pfNumber' in payload && payload.pfNumber !== undefined && columns.includes('pf_number')) {
+    updates.pf_number = payload.pfNumber?.trim() ?? null;
+  }
+  if ('uanNumber' in payload && payload.uanNumber !== undefined && columns.includes('uan_number')) {
+    updates.uan_number = payload.uanNumber?.trim() ?? null;
+  }
+  if ('bankName' in payload && payload.bankName !== undefined && columns.includes('bank_name')) {
+    updates.bank_name = payload.bankName?.trim() ?? null;
+  }
+  if ('bankAccountNumber' in payload && payload.bankAccountNumber !== undefined && columns.includes('bank_account_number')) {
+    updates.bank_account_number = payload.bankAccountNumber?.trim() ?? null;
+  }
+  if ('ifscCode' in payload && payload.ifscCode !== undefined && columns.includes('ifsc_code')) {
+    updates.ifsc_code = payload.ifscCode?.trim() ?? null;
+  }
+  if ('managerId' in payload && columns.includes('manager_id')) {
+    updates.manager_id = managerAuthId;
+  }
+
+  // Parse existing skills
+  let existingSkillsObj: any = {};
+  if (typeof existingEmployee.skills === 'string') {
+    try {
+      existingSkillsObj = JSON.parse(existingEmployee.skills);
+    } catch {}
+  } else if (existingEmployee.skills && typeof existingEmployee.skills === 'object') {
+    existingSkillsObj = existingEmployee.skills;
+  }
+
+  const extraFields: Record<string, any> = {
+    ...(existingSkillsObj && typeof existingSkillsObj === 'object' && !Array.isArray(existingSkillsObj) ? existingSkillsObj : {}),
+  };
+
+  const newFieldsMapping: Record<string, string> = {
+    maritalStatus: 'marital_status',
+    bloodGroup: 'blood_group',
+    nationality: 'nationality',
+    personalIdNumber: 'personal_id_number',
+    probationPeriod: 'probation_period',
+    confirmationDate: 'confirmation_date',
+    workLocation: 'work_location',
+    workShift: 'work_shift',
+    noticePeriod: 'notice_period',
+    currency: 'currency',
+    branchName: 'branch_name',
+    esiNumber: 'esi_number',
+    panNumber: 'pan_number',
+    aadhaarNumber: 'aadhaar_number',
+    aadhaarCardUrl: 'aadhaar_card_url',
+    panCardUrl: 'pan_card_url',
+    addressProofUrl: 'address_proof_url',
+    educationCertificateUrl: 'education_certificate_url',
+    experienceCertificateUrl: 'experience_certificate_url',
+    resumeUrl: 'resume_url',
+    permissions: 'permissions',
+    emergencyContactName: 'emergency_contact_name',
+    emergencyContactRelationship: 'emergency_contact_relationship',
+    emergencyContactPhone: 'emergency_contact_phone',
+    emergencyContactAddress: 'emergency_contact_address',
+    languagesKnown: 'languages_known',
+    linkedinProfile: 'linkedin_profile',
+    githubProfile: 'github_profile',
+    previousCompany: 'previous_company',
+    referralSource: 'referral_source',
+    notes: 'notes',
+    gender: 'gender',
+  };
+
+  Object.entries(newFieldsMapping).forEach(([camelKey, dbColumn]) => {
+    const value = (payload as any)[camelKey];
+    if (value !== undefined) {
+      if (columns.includes(dbColumn)) {
+        updates[dbColumn] = value;
+        delete extraFields[camelKey];
+      } else {
+        extraFields[camelKey] = value;
+      }
+    }
+  });
+
+  ['middleName', 'officeEmail', 'accountExpiryDate'].forEach((field) => {
+    const value = (payload as any)[field];
+    if (value !== undefined) {
+      extraFields[field] = value;
+    }
+  });
+
+  const skillsArray = payload.skills !== undefined ? (payload.skills || []) : null;
+  if (skillsArray !== null) {
+    extraFields.skills_list = skillsArray;
+  } else if (!extraFields.skills_list) {
+    extraFields.skills_list = Array.isArray(existingSkillsObj) ? existingSkillsObj : (existingSkillsObj?.skills_list || []);
+  }
+
+  updates.skills = extraFields;
+
+  const { data, error } = await supabase.from('employees').update(updates)
+    .eq('id', id)
+    .eq('tenant_id', tenantId)
+    .select('*')
+    .single();
 
   if (error || !data) throw error ? new Error(error.message) : new Error('Failed to update employee');
   const userMap = await buildLegacyUserIdMap(accessToken, [String(data.user_id), data.manager_id ? String(data.manager_id) : ''].filter(Boolean), tenantId);

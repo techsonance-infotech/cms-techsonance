@@ -19,6 +19,7 @@ import {
   TrendingUp
 } from 'lucide-react';
 import { getStoredSessionToken } from '@/lib/client-session';
+import { Input } from '@/components/ui/input';
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -284,14 +285,14 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-[#07111E] py-12 px-6 flex flex-col items-center justify-center relative font-sans overflow-hidden">
+    <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#0A1A2F] py-12 px-6 flex flex-col items-center justify-center relative font-sans overflow-hidden">
       {/* Decorative Orbs Container */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
         <div className="absolute top-0 right-0 w-80 h-80 bg-primary/5 rounded-full blur-3xl -mr-32 -mt-32" />
-        <div className="absolute bottom-0 left-0 w-96 h-96 bg-[#67D7E8]/5 rounded-full blur-3xl -ml-48 -mb-48" />
+        <div className="absolute bottom-0 left-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl -ml-48 -mb-48" />
       </div>
 
-      <div className="w-full max-w-2xl">
+      <div className="w-full max-w-2xl z-10">
         
         {/* Logo Banner */}
         <div className="flex flex-col items-center text-center mb-8 animate-in slide-in-from-top duration-500">
@@ -319,10 +320,10 @@ export default function OnboardingPage() {
                 <div
                   className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-300 ${
                     idx === currentStep
-                      ? 'bg-gradient-to-r from-[#245C80] to-[#337BAA] text-white shadow-md shadow-primary/20'
+                      ? 'bg-gradient-to-r from-[#F87941] to-[#F4662B] text-white shadow-lg shadow-primary/20'
                       : idx < currentStep
-                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                        : 'bg-white dark:bg-[#0A1A2F] text-slate-400 border border-slate-200 dark:border-slate-800'
+                        ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-350 border border-emerald-200 dark:border-emerald-900/30'
+                        : 'bg-white dark:bg-zinc-900 text-slate-400 border border-slate-200 dark:border-slate-800'
                   }`}
                 >
                   {idx < currentStep ? (
@@ -341,7 +342,7 @@ export default function OnboardingPage() {
         </div>
 
         {/* Form Container */}
-        <div className="bg-white dark:bg-[#0A1A2F] rounded-3xl border border-slate-100 dark:border-slate-850 shadow-2xl p-6 sm:p-8 animate-in fade-in duration-300 relative">
+        <div className="bg-white dark:bg-[#0D1D30] rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl p-6 sm:p-8 animate-in fade-in duration-300 relative">
           
           {errorMsg && (
             <div className="mb-6 flex items-start gap-3 p-4 bg-rose-50 border border-rose-500/10 rounded-xl text-rose-600 text-xs leading-relaxed animate-in fade-in duration-200">
@@ -353,9 +354,9 @@ export default function OnboardingPage() {
           {/* ────────────────── Step 0: Company Details ────────────────── */}
           {currentStep === 0 && (
             <div className="space-y-5 animate-in fade-in duration-300">
-              <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-4 mb-4">
+              <div className="flex items-center gap-3 border-b border-slate-200 dark:border-slate-800 pb-4 mb-4">
                 <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
-                  <Building2 className="h-5 w-5 text-primary" />
+                  <Building2 className="h-5 w-5 text-[#F87941]" />
                 </div>
                 <div>
                   <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100">Corporate Identity</h2>
@@ -365,30 +366,30 @@ export default function OnboardingPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 ml-1">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-wide">
                     Company Legal Name <span className="text-rose-500">*</span>
                   </label>
-                  <input
+                  <Input
                     type="text"
                     required
                     value={companyName}
                     onChange={(e) => setCompanyName(e.target.value)}
                     placeholder="Enter legal entity name"
-                    className="w-full h-11 px-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:border-[#337BAA] rounded-xl text-sm outline-none focus:bg-white transition-all focus:ring-4 focus:ring-primary/10"
+                    className="w-full h-12 border-slate-200 dark:border-slate-800 bg-white dark:bg-zinc-900 focus-visible:ring-[#F87941] focus-visible:border-[#F87941] rounded-xl hover:border-slate-350 dark:hover:border-slate-700 transition-colors duration-200"
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 ml-1">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-wide">
                     Official Telephone <span className="text-rose-500">*</span>
                   </label>
-                  <input
+                  <Input
                     type="tel"
                     required
                     value={phone}
                     onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, ''))}
                     placeholder="Corporate phone number"
-                    className={`w-full h-11 px-4 bg-slate-50 dark:bg-slate-900 border ${phone.trim() !== '' && !isPhoneValid ? 'border-rose-500/80 focus:border-rose-500 focus:ring-rose-500/10' : 'border-slate-200 dark:border-slate-800 focus:border-[#337BAA] focus:ring-primary/10'} rounded-xl text-sm outline-none focus:bg-white transition-all focus:ring-4`}
+                    className={`w-full h-12 border ${phone.trim() !== '' && !isPhoneValid ? 'border-rose-500/80 focus-visible:ring-rose-500 focus-visible:border-rose-500' : 'border-slate-200 dark:border-slate-800 focus-visible:ring-[#F87941] focus-visible:border-[#F87941]'} bg-white dark:bg-zinc-900 rounded-xl hover:border-slate-350 dark:hover:border-slate-700 transition-all duration-200`}
                   />
                   {phone.trim() !== '' && !isPhoneValid && (
                     <span className="text-[10px] text-rose-500 font-medium ml-1 block">Phone number must be exactly 10 digits</span>
@@ -397,15 +398,15 @@ export default function OnboardingPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 ml-1">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-wide">
                   Corporate Website URL
                 </label>
-                <input
+                <Input
                   type="url"
                   value={website}
                   onChange={(e) => setWebsite(e.target.value)}
                   placeholder="https://example.com"
-                  className={`w-full h-11 px-4 bg-slate-50 dark:bg-slate-900 border ${website.trim() !== '' && !isWebsiteValid ? 'border-rose-500/80 focus:border-rose-500 focus:ring-rose-500/10' : 'border-slate-200 dark:border-slate-800 focus:border-[#337BAA] focus:ring-primary/10'} rounded-xl text-sm outline-none focus:bg-white transition-all focus:ring-4`}
+                  className={`w-full h-12 border ${website.trim() !== '' && !isWebsiteValid ? 'border-rose-500/80 focus-visible:ring-rose-500 focus-visible:border-rose-500' : 'border-slate-200 dark:border-slate-800 focus-visible:ring-[#F87941] focus-visible:border-[#F87941]'} bg-white dark:bg-zinc-900 rounded-xl hover:border-slate-350 dark:hover:border-slate-700 transition-all duration-200`}
                 />
                 {website.trim() !== '' && !isWebsiteValid && (
                   <span className="text-[10px] text-rose-500 font-medium ml-1 block">Please enter a valid website URL (e.g. https://example.com)</span>
@@ -413,7 +414,7 @@ export default function OnboardingPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 ml-1">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-wide">
                   Physical Business Address
                 </label>
                 <textarea
@@ -421,7 +422,7 @@ export default function OnboardingPage() {
                   onChange={(e) => setAddress(e.target.value)}
                   placeholder="Street, City, State, ZIP details..."
                   rows={3}
-                  className="w-full p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:border-[#337BAA] rounded-xl text-sm outline-none focus:bg-white transition-all focus:ring-4 focus:ring-primary/10 resize-none"
+                  className="w-full p-4 border-slate-200 dark:border-slate-800 bg-white dark:bg-zinc-900 focus:border-[#F87941] focus:ring-[#F87941]/25 focus:ring-2 rounded-xl text-sm outline-none transition-all hover:border-slate-350 dark:hover:border-slate-700 resize-none"
                 />
               </div>
             </div>
@@ -430,9 +431,9 @@ export default function OnboardingPage() {
           {/* ────────────────── Step 1: Compliance Setup ────────────────── */}
           {currentStep === 1 && (
             <div className="space-y-5 animate-in fade-in duration-300">
-              <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-4 mb-4">
+              <div className="flex items-center gap-3 border-b border-slate-200 dark:border-slate-800 pb-4 mb-4">
                 <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
-                  <FileCheck2 className="h-5 w-5 text-primary" />
+                  <FileCheck2 className="h-5 w-5 text-[#F87941]" />
                 </div>
                 <div>
                   <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100">Compliance & KYC</h2>
@@ -442,15 +443,15 @@ export default function OnboardingPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 ml-1">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-wide">
                     GSTIN Number
                   </label>
-                  <input
+                  <Input
                     type="text"
                     value={gstin}
                     onChange={(e) => setGstin(e.target.value.toUpperCase())}
                     placeholder="22AAAAA0000A1Z5"
-                    className={`w-full h-11 px-4 bg-slate-50 dark:bg-slate-900 border ${gstin.trim() !== '' && !isGstinValid ? 'border-rose-500/80 focus:border-rose-500 focus:ring-rose-500/10' : 'border-slate-200 dark:border-slate-800 focus:border-[#337BAA] focus:ring-primary/10'} rounded-xl text-sm outline-none focus:bg-white transition-all focus:ring-4`}
+                    className={`w-full h-12 border ${gstin.trim() !== '' && !isGstinValid ? 'border-rose-500/80 focus-visible:ring-rose-500 focus-visible:border-rose-500' : 'border-slate-200 dark:border-slate-800 focus-visible:ring-[#F87941] focus-visible:border-[#F87941]'} bg-white dark:bg-zinc-900 rounded-xl hover:border-slate-350 dark:hover:border-slate-700 transition-all duration-200`}
                   />
                   {gstin.trim() !== '' && !isGstinValid && (
                     <span className="text-[10px] text-rose-500 font-medium ml-1 block">Invalid GSTIN format (e.g. 22AAAAA0000A1Z5)</span>
@@ -458,15 +459,15 @@ export default function OnboardingPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 ml-1">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-wide">
                     Permanent Account Number (PAN)
                   </label>
-                  <input
+                  <Input
                     type="text"
                     value={pan}
                     onChange={(e) => setPan(e.target.value.toUpperCase())}
                     placeholder="ABCDE1234F"
-                    className={`w-full h-11 px-4 bg-slate-50 dark:bg-slate-900 border ${pan.trim() !== '' && !isPanValid ? 'border-rose-500/80 focus:border-rose-500 focus:ring-rose-500/10' : 'border-slate-200 dark:border-slate-800 focus:border-[#337BAA] focus:ring-primary/10'} rounded-xl text-sm outline-none focus:bg-white transition-all focus:ring-4`}
+                    className={`w-full h-12 border ${pan.trim() !== '' && !isPanValid ? 'border-rose-500/80 focus-visible:ring-rose-500 focus-visible:border-rose-500' : 'border-slate-200 dark:border-slate-800 focus-visible:ring-[#F87941] focus-visible:border-[#F87941]'} bg-white dark:bg-zinc-900 rounded-xl hover:border-slate-350 dark:hover:border-slate-700 transition-all duration-200`}
                   />
                   {pan.trim() !== '' && !isPanValid && (
                     <span className="text-[10px] text-rose-500 font-medium ml-1 block">Invalid PAN format (e.g. ABCDE1234F)</span>
@@ -476,7 +477,7 @@ export default function OnboardingPage() {
 
               {/* Document Upload Panels */}
               <div className="space-y-4 pt-2">
-                <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">KYC Document Photocopies</h3>
+                <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wide">KYC Document Photocopies</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {/* File Upload Slot 1 */}
                   <div className="space-y-1.5">
@@ -484,7 +485,7 @@ export default function OnboardingPage() {
                     <div 
                       onDragOver={handleDragOver}
                       onDrop={(e) => handleDrop('registrationCert', e)}
-                      className="border-2 border-dashed border-slate-200 dark:border-slate-800 hover:border-[#337BAA] rounded-xl p-3 text-center transition-all bg-slate-50/50 dark:bg-slate-900 flex flex-col items-center justify-center min-h-[110px] relative cursor-pointer group"
+                      className="border-2 border-dashed border-slate-200 dark:border-slate-800 hover:border-[#F87941] rounded-xl p-3 text-center transition-all bg-slate-50/50 dark:bg-slate-900 flex flex-col items-center justify-center min-h-[110px] relative cursor-pointer group"
                     >
                       <input
                         type="file"
@@ -494,7 +495,7 @@ export default function OnboardingPage() {
                       />
                       {files.registrationCert ? (
                         <div className="space-y-1 text-center w-full">
-                          <FileText className="h-6 w-6 text-emerald-500 mx-auto" />
+                          <FileText className="h-6 w-6 text-[#F87941] mx-auto" />
                           <p className="text-[10px] text-slate-700 dark:text-slate-350 truncate font-semibold px-2">{files.registrationCert.name}</p>
                           <div className="w-full bg-slate-200 rounded-full h-1 mt-1 px-3">
                             <div className="bg-emerald-500 h-1 rounded-full" style={{ width: `${files.registrationCert.progress}%` }}></div>
@@ -502,7 +503,7 @@ export default function OnboardingPage() {
                         </div>
                       ) : (
                         <>
-                          <Upload className="h-5 w-5 text-slate-400 group-hover:text-primary transition-colors mb-1.5" />
+                          <Upload className="h-5 w-5 text-slate-400 group-hover:text-[#F87941] transition-colors mb-1.5" />
                           <span className="text-[10px] text-slate-400 font-medium">Drag or Click to upload</span>
                         </>
                       )}
@@ -511,11 +512,11 @@ export default function OnboardingPage() {
 
                   {/* File Upload Slot 2 */}
                   <div className="space-y-1.5">
-                    <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400">PAN Card Document</span>
+                    <span className="text-[11px] font-bold text-slate-655 dark:text-slate-400">PAN Card Document</span>
                     <div 
                       onDragOver={handleDragOver}
                       onDrop={(e) => handleDrop('panCard', e)}
-                      className="border-2 border-dashed border-slate-200 dark:border-slate-800 hover:border-[#337BAA] rounded-xl p-3 text-center transition-all bg-slate-50/50 dark:bg-slate-900 flex flex-col items-center justify-center min-h-[110px] relative cursor-pointer group"
+                      className="border-2 border-dashed border-slate-200 dark:border-slate-800 hover:border-[#F87941] rounded-xl p-3 text-center transition-all bg-slate-50/50 dark:bg-slate-900 flex flex-col items-center justify-center min-h-[110px] relative cursor-pointer group"
                     >
                       <input
                         type="file"
@@ -525,7 +526,7 @@ export default function OnboardingPage() {
                       />
                       {files.panCard ? (
                         <div className="space-y-1 text-center w-full">
-                          <FileText className="h-6 w-6 text-emerald-500 mx-auto" />
+                          <FileText className="h-6 w-6 text-[#F87941] mx-auto" />
                           <p className="text-[10px] text-slate-700 dark:text-slate-350 truncate font-semibold px-2">{files.panCard.name}</p>
                           <div className="w-full bg-slate-200 rounded-full h-1 mt-1 px-3">
                             <div className="bg-emerald-500 h-1 rounded-full" style={{ width: `${files.panCard.progress}%` }}></div>
@@ -533,7 +534,7 @@ export default function OnboardingPage() {
                         </div>
                       ) : (
                         <>
-                          <Upload className="h-5 w-5 text-slate-400 group-hover:text-primary transition-colors mb-1.5" />
+                          <Upload className="h-5 w-5 text-slate-400 group-hover:text-[#F87941] transition-colors mb-1.5" />
                           <span className="text-[10px] text-slate-400 font-medium">Drag or Click to upload</span>
                         </>
                       )}
@@ -542,11 +543,11 @@ export default function OnboardingPage() {
 
                   {/* File Upload Slot 3 */}
                   <div className="space-y-1.5">
-                    <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400">GST Certificate</span>
+                    <span className="text-[11px] font-bold text-slate-655 dark:text-slate-400">GST Certificate</span>
                     <div 
                       onDragOver={handleDragOver}
                       onDrop={(e) => handleDrop('gstCert', e)}
-                      className="border-2 border-dashed border-slate-200 dark:border-slate-800 hover:border-[#337BAA] rounded-xl p-3 text-center transition-all bg-slate-50/50 dark:bg-slate-900 flex flex-col items-center justify-center min-h-[110px] relative cursor-pointer group"
+                      className="border-2 border-dashed border-slate-200 dark:border-slate-800 hover:border-[#F87941] rounded-xl p-3 text-center transition-all bg-slate-50/50 dark:bg-slate-900 flex flex-col items-center justify-center min-h-[110px] relative cursor-pointer group"
                     >
                       <input
                         type="file"
@@ -556,7 +557,7 @@ export default function OnboardingPage() {
                       />
                       {files.gstCert ? (
                         <div className="space-y-1 text-center w-full">
-                          <FileText className="h-6 w-6 text-emerald-500 mx-auto" />
+                          <FileText className="h-6 w-6 text-[#F87941] mx-auto" />
                           <p className="text-[10px] text-slate-700 dark:text-slate-350 truncate font-semibold px-2">{files.gstCert.name}</p>
                           <div className="w-full bg-slate-200 rounded-full h-1 mt-1 px-3">
                             <div className="bg-emerald-500 h-1 rounded-full" style={{ width: `${files.gstCert.progress}%` }}></div>
@@ -564,7 +565,7 @@ export default function OnboardingPage() {
                         </div>
                       ) : (
                         <>
-                          <Upload className="h-5 w-5 text-slate-400 group-hover:text-primary transition-colors mb-1.5" />
+                          <Upload className="h-5 w-5 text-slate-400 group-hover:text-[#F87941] transition-colors mb-1.5" />
                           <span className="text-[10px] text-slate-400 font-medium">Drag or Click to upload</span>
                         </>
                       )}
@@ -615,13 +616,13 @@ export default function OnboardingPage() {
           )}
 
           {/* Action Row Buttons */}
-          <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-800 pt-6 mt-8">
+          <div className="flex items-center justify-between border-t border-slate-200 dark:border-slate-800 pt-6 mt-8">
             {currentStep > 0 ? (
               <button
                 type="button"
                 onClick={handleBack}
                 disabled={saving}
-                className="h-11 px-5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900 text-xs font-bold text-slate-650 dark:text-slate-350 transition-all flex items-center gap-1.5 cursor-pointer"
+                className="h-12 px-5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-zinc-900 hover:bg-slate-50 dark:hover:bg-slate-900 rounded-xl font-bold text-slate-700 dark:text-slate-350 transition-all flex items-center gap-1.5 cursor-pointer active:scale-[0.99]"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
                 Back
@@ -634,7 +635,7 @@ export default function OnboardingPage() {
               <button
                 type="button"
                 onClick={handleNext}
-                className="h-11 px-6 bg-gradient-to-r from-[#245C80] to-[#337BAA] hover:opacity-95 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                className="h-12 px-6 bg-[#F87941] hover:bg-[#F4662B] text-white text-sm font-bold rounded-xl shadow-lg shadow-primary/20 transition-all flex items-center gap-1.5 cursor-pointer active:scale-[0.99]"
               >
                 Continue
                 <ChevronRight className="h-4 w-4" />
@@ -644,11 +645,11 @@ export default function OnboardingPage() {
                 type="button"
                 onClick={handleSaveAndSubmit}
                 disabled={saving}
-                className="h-11 px-6 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:opacity-95 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                className="h-12 px-6 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded-xl shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer active:scale-[0.99]"
               >
                 {saving ? (
                   <>
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <Loader2 className="h-5 w-5 animate-spin" />
                     Initializing Environment...
                   </>
                 ) : (

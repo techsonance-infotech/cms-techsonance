@@ -37,7 +37,15 @@ import {
   CalendarDays,
   Terminal,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Network,
+  Star,
+  Upload,
+  ScrollText,
+  Contact,
+  BadgeCheck,
+  BarChart3,
+  UserPlus,
 } from 'lucide-react';
 import { User } from '@/lib/auth';
 
@@ -90,10 +98,22 @@ const categories: NavCategory[] = [
     items: []
   },
   {
-    name: 'HR & Collaboration',
+    name: 'Employees',
     icon: Users,
     items: [
-      { name: 'Team Directory', href: '/dashboard/team', icon: UserCog, roles: ['admin'] },
+      { name: 'Workforce Dashboard', href: '/dashboard/employees', icon: BarChart3, roles: ['admin', 'project_manager'] },
+      { name: 'Employee Directory', href: '/dashboard/employees/directory', icon: Contact, roles: ['admin', 'project_manager'] },
+      { name: 'Add Employee', href: '/dashboard/employees/new', icon: UserPlus, roles: ['admin'] },
+      { name: 'Org Chart', href: '/dashboard/employees/org-chart', icon: Network, roles: ['admin', 'project_manager', 'developer'] },
+      { name: 'Reviews & Appraisals', href: '/dashboard/employees/reviews', icon: Star, roles: ['admin', 'project_manager'] },
+      { name: 'Bulk Import', href: '/dashboard/employees/import', icon: Upload, roles: ['admin'] },
+      { name: 'Audit Logs', href: '/dashboard/employees/audit-logs', icon: ScrollText, roles: ['admin'] },
+    ]
+  },
+  {
+    name: 'HR Operations',
+    icon: BadgeCheck,
+    items: [
       { name: 'Attendance Register', href: '/dashboard/attendance', icon: Clock, roles: ['admin', 'project_manager', 'developer', 'client'] },
       { name: 'Leaves & Time Off', href: '/dashboard/leaves', icon: Calendar, roles: ['admin', 'project_manager', 'developer', 'client'] },
       { name: 'Daily Updates', href: '/dashboard/daily-update', icon: ClipboardList, roles: ['admin', 'project_manager', 'developer'] },
@@ -227,11 +247,11 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
 
   return (
     <aside className="hidden lg:flex lg:flex-col w-64 border-r border-sidebar-border bg-sidebar text-sidebar-foreground h-full">
-      <div className="flex items-center gap-3 h-16 px-6 border-b border-sidebar-border">
-        <div className="relative h-9 w-9 bg-white rounded-xl p-1 flex items-center justify-center border border-slate-100 shadow-sm overflow-hidden shrink-0">
-          <Image src="/logo-icon.png" alt="TechSonance" fill className="object-contain p-1" />
+      <div className="flex items-center gap-3 h-16 px-6 bg-gradient-to-r from-[#F87941] to-[#F4662B] text-white border-b border-[#F4662B]/10 shadow-sm shrink-0">
+        <div className="relative h-9 w-9 bg-white/95 rounded-xl p-1.5 flex items-center justify-center border border-white/20 shadow-sm overflow-hidden shrink-0 transition-transform duration-200 hover:scale-[1.03]">
+          <Image src="/logo-icon.png" alt="TechSonance" fill className="object-contain p-1.5" />
         </div>
-        <span className="font-bold text-base text-sidebar-foreground tracking-tight">{companyName}</span>
+        <span className="font-bold text-base text-white tracking-tight truncate">{companyName}</span>
       </div>
 
       <nav className="flex-1 overflow-y-auto p-4 space-y-1">

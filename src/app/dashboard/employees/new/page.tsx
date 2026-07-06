@@ -19,10 +19,12 @@ import {
   PhoneCall, 
   Info,
   ChevronRight,
+  ChevronLeft,
   Loader2
 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import { getStoredSessionToken } from '@/lib/client-session';
 
 interface Manager {
   id: number;
@@ -144,7 +146,7 @@ export default function NewEmployeePage() {
     async function fetchManagers() {
       setLoadingManagers(true);
       try {
-        const token = localStorage.getItem('session_token');
+        const token = getStoredSessionToken();
         const res = await fetch('/api/users?limit=100', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -163,48 +165,68 @@ export default function NewEmployeePage() {
     fetchManagers();
   }, []);
 
-  // Intersection Observer to update sidebar on scroll
-  useEffect(() => {
-    const observerOptions = {
-      root: null,
-      rootMargin: '-20% 0px -60% 0px',
-      threshold: 0,
-    };
+  // Step-specific validation for wizard navigation
+  const validateStep = (stepId: string) => {
+    const newErrors: Record<string, string> = {};
 
-    const handleIntersection = (entries: IntersectionObserverEntry[]) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          setActiveStep(entry.target.id);
-        }
-      });
-    };
-
-    const observer = new IntersectionObserver(handleIntersection, observerOptions);
-
-    Object.values(sectionRefs).forEach((ref) => {
-      if (ref.current) {
-        observer.observe(ref.current);
+    if (stepId === 'personal') {
+      if (!formData.firstName.trim()) newErrors.firstName = 'First name is required';
+      if (!formData.lastName.trim()) newErrors.lastName = 'Last name is required';
+      if (!formData.email.trim()) {
+        newErrors.email = 'Email is required';
+      } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+        newErrors.email = 'Valid email is required';
       }
-    });
-
-    return () => {
-      Object.values(sectionRefs).forEach((ref) => {
-        if (ref.current) {
-          observer.unobserve(ref.current);
-        }
-      });
-    };
-  }, []);
-
-  const scrollToSection = (id: string) => {
-    setActiveStep(id);
-    const targetRef = sectionRefs[id as keyof typeof sectionRefs];
-    if (targetRef.current) {
-      targetRef.current.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start',
-      });
+    } else if (stepId === 'work') {
+      if (!formData.employeeId.trim()) newErrors.employeeId = 'Employee ID is required';
+      if (!formData.department.trim()) newErrors.department = 'Department is required';
+      if (!formData.designation.trim()) newErrors.designation = 'Designation is required';
+      if (!formData.dateOfJoining) newErrors.dateOfJoining = 'Joining Date is required';
+    } else if (stepId === 'access') {
+      if (!formData.password) {
+        newErrors.password = 'Initial password is required';
+      } else if (formData.password.length < 6) {
+        newErrors.password = 'Password must be at least 6 characters';
+      }
     }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handlePrevStep = () => {
+    const currentIndex = STEPS.findIndex((s) => s.id === activeStep);
+    if (currentIndex > 0) {
+      setActiveStep(STEPS[currentIndex - 1].id);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const handleNextStep = () => {
+    if (!validateStep(activeStep)) {
+      toast.error('Please resolve validation errors before continuing.');
+      return;
+    }
+    const currentIndex = STEPS.findIndex((s) => s.id === activeStep);
+    if (currentIndex < STEPS.length - 1) {
+      setActiveStep(STEPS[currentIndex + 1].id);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const handleStepClick = (stepId: string) => {
+    const targetIdx = STEPS.findIndex((s) => s.id === stepId);
+    const currentIdx = STEPS.findIndex((s) => s.id === activeStep);
+
+    if (targetIdx > currentIdx) {
+      if (!validateStep(activeStep)) {
+        toast.error('Please resolve validation errors in the current section.');
+        return;
+      }
+    }
+
+    setActiveStep(stepId);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -273,18 +295,21 @@ export default function NewEmployeePage() {
       toast.error('Please check validation errors in the form.');
       // Scroll to the first error section
       if (errors.firstName || errors.lastName || errors.email) {
-        scrollToSection('personal');
+        setActiveStep('personal');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       } else if (errors.employeeId || errors.department || errors.designation) {
-        scrollToSection('work');
+        setActiveStep('work');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       } else if (errors.password) {
-        scrollToSection('access');
+        setActiveStep('access');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       }
       return;
     }
 
     setSubmitting(true);
     try {
-      const token = localStorage.getItem('session_token');
+      const token = getStoredSessionToken();
 
       // 1. Create User
       const userPayload = {
@@ -417,10 +442,11 @@ export default function NewEmployeePage() {
           <div className="flex flex-col gap-1 border-l border-[#e6e4e6]/30 dark:border-[#2f3035]/30 ml-4 py-2">
             {STEPS.map((step, idx) => {
               const isActive = activeStep === step.id;
+              const isCompleted = idx < STEPS.findIndex((s) => s.id === activeStep);
               return (
                 <button
                   key={step.id}
-                  onClick={() => scrollToSection(step.id)}
+                  onClick={() => handleStepClick(step.id)}
                   className="flex items-start gap-4 pl-4 py-3 text-left relative transition-all duration-300 group outline-none"
                 >
                   {/* Indicator Line segment */}
@@ -432,9 +458,11 @@ export default function NewEmployeePage() {
                   <div className={`flex items-center justify-center h-8 w-8 rounded-full border transition-all duration-300 text-xs font-bold ${
                     isActive 
                       ? 'border-[#f87941] bg-[#f87941] text-white shadow-[0_0_12px_rgba(248,121,65,0.2)]' 
-                      : 'border-[#e6e4e6]/30 dark:border-[#2f3035]/30 bg-white dark:bg-[#1E1F22] text-[#b1b1b1] group-hover:border-[#e6e4e6]/50 dark:group-hover:border-[#2f3035]/50 group-hover:text-slate-700 dark:group-hover:text-zinc-100'
+                      : isCompleted
+                        ? 'border-emerald-500 bg-emerald-500/10 text-emerald-500'
+                        : 'border-[#e6e4e6]/30 dark:border-[#2f3035]/30 bg-white dark:bg-[#1E1F22] text-[#b1b1b1] group-hover:border-[#e6e4e6]/50 dark:group-hover:border-[#2f3035]/50 group-hover:text-slate-700 dark:group-hover:text-zinc-100'
                   }`}>
-                    {idx + 1}
+                    {isCompleted ? <Check className="h-4 w-4 stroke-[3]" /> : idx + 1}
                   </div>
 
                   <div>
@@ -451,7 +479,13 @@ export default function NewEmployeePage() {
           </div>
         </div>
 
+        {/* Right Side: Active Section Content */}
+        <div className="lg:col-span-9 flex flex-col gap-8">
+
+        {/* Right Side: Active Section Content */}
+        <div className="lg:col-span-9 flex flex-col gap-8">
           {/* Section 1: Personal Info */}
+          {activeStep === 'personal' && (
           <div ref={sectionRefs.personal} id="personal" className="scroll-mt-24">
             <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30 shadow-sm">
               <CardHeader className="border-b border-[#e6e4e6]/30 dark:border-[#2f3035]/30 pb-4">
@@ -594,11 +628,32 @@ export default function NewEmployeePage() {
                     placeholder="Enter personal identification number"
                   />
                 </div>
+                {/* Wizard Navigation Footer */}
+                <div className="col-span-1 md:col-span-3 flex justify-between items-center mt-8 pt-6 border-t border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handlePrevStep}
+                    className="border-[#e6e4e6]/30 dark:border-[#2f3035]/30 hover:bg-[#e6e4e6]/10 dark:hover:bg-[#2f3035]/10 text-slate-700 dark:text-[#fdfcfc] font-semibold flex items-center gap-2"
+                    disabled={true}
+                  >
+                    <ChevronLeft className="h-4 w-4" /> Previous
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleNextStep}
+                    className="bg-[#f87941] text-white hover:bg-[#e06634] font-semibold flex items-center gap-2 shadow-[0_4px_12px_rgba(248,121,65,0.2)] transition-all duration-300"
+                  >
+                    Save & Continue <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </div>
+          )}
 
           {/* Section 2: Work Info */}
+          {activeStep === 'work' && (
           <div ref={sectionRefs.work} id="work" className="scroll-mt-24">
             <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30 shadow-sm">
               <CardHeader className="border-b border-[#e6e4e6]/30 dark:border-[#2f3035]/30 pb-4">
@@ -744,11 +799,31 @@ export default function NewEmployeePage() {
                     placeholder="e.g. 90"
                   />
                 </div>
+                {/* Wizard Navigation Footer */}
+                <div className="col-span-1 md:col-span-3 flex justify-between items-center mt-8 pt-6 border-t border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handlePrevStep}
+                    className="border-[#e6e4e6]/30 dark:border-[#2f3035]/30 hover:bg-[#e6e4e6]/10 dark:hover:bg-[#2f3035]/10 text-slate-700 dark:text-[#fdfcfc] font-semibold flex items-center gap-2"
+                  >
+                    <ChevronLeft className="h-4 w-4" /> Previous
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleNextStep}
+                    className="bg-[#f87941] text-white hover:bg-[#e06634] font-semibold flex items-center gap-2 shadow-[0_4px_12px_rgba(248,121,65,0.2)] transition-all duration-300"
+                  >
+                    Save & Continue <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </div>
+          )}
 
           {/* Section 3: Compensation & Payroll */}
+          {activeStep === 'payroll' && (
           <div ref={sectionRefs.payroll} id="payroll" className="scroll-mt-24">
             <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30 shadow-sm">
               <CardHeader className="border-b border-[#e6e4e6]/30 dark:border-[#2f3035]/30 pb-4">
@@ -904,11 +979,31 @@ export default function NewEmployeePage() {
                     placeholder="12-digit number"
                   />
                 </div>
+                {/* Wizard Navigation Footer */}
+                <div className="col-span-1 md:col-span-3 flex justify-between items-center mt-8 pt-6 border-t border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handlePrevStep}
+                    className="border-[#e6e4e6]/30 dark:border-[#2f3035]/30 hover:bg-[#e6e4e6]/10 dark:hover:bg-[#2f3035]/10 text-slate-700 dark:text-[#fdfcfc] font-semibold flex items-center gap-2"
+                  >
+                    <ChevronLeft className="h-4 w-4" /> Previous
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleNextStep}
+                    className="bg-[#f87941] text-white hover:bg-[#e06634] font-semibold flex items-center gap-2 shadow-[0_4px_12px_rgba(248,121,65,0.2)] transition-all duration-300"
+                  >
+                    Save & Continue <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </div>
+          )}
 
           {/* Section 4: Documents & Compliance */}
+          {activeStep === 'documents' && (
           <div ref={sectionRefs.documents} id="documents" className="scroll-mt-24">
             <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30 shadow-sm">
               <CardHeader className="border-b border-[#e6e4e6]/30 dark:border-[#2f3035]/30 pb-4">
@@ -953,11 +1048,31 @@ export default function NewEmployeePage() {
                     </div>
                   </div>
                 ))}
+                {/* Wizard Navigation Footer */}
+                <div className="col-span-1 md:col-span-2 flex justify-between items-center mt-8 pt-6 border-t border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handlePrevStep}
+                    className="border-[#e6e4e6]/30 dark:border-[#2f3035]/30 hover:bg-[#e6e4e6]/10 dark:hover:bg-[#2f3035]/10 text-slate-700 dark:text-[#fdfcfc] font-semibold flex items-center gap-2"
+                  >
+                    <ChevronLeft className="h-4 w-4" /> Previous
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleNextStep}
+                    className="bg-[#f87941] text-white hover:bg-[#e06634] font-semibold flex items-center gap-2 shadow-[0_4px_12px_rgba(248,121,65,0.2)] transition-all duration-300"
+                  >
+                    Save & Continue <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </div>
+          )}
 
           {/* Section 5: System Access */}
+          {activeStep === 'access' && (
           <div ref={sectionRefs.access} id="access" className="scroll-mt-24">
             <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30 shadow-sm">
               <CardHeader className="border-b border-[#e6e4e6]/30 dark:border-[#2f3035]/30 pb-4">
@@ -1039,11 +1154,31 @@ export default function NewEmployeePage() {
                     placeholder='["read:dashboard"]'
                   />
                 </div>
+                {/* Wizard Navigation Footer */}
+                <div className="col-span-1 md:col-span-3 flex justify-between items-center mt-8 pt-6 border-t border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handlePrevStep}
+                    className="border-[#e6e4e6]/30 dark:border-[#2f3035]/30 hover:bg-[#e6e4e6]/10 dark:hover:bg-[#2f3035]/10 text-slate-700 dark:text-[#fdfcfc] font-semibold flex items-center gap-2"
+                  >
+                    <ChevronLeft className="h-4 w-4" /> Previous
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleNextStep}
+                    className="bg-[#f87941] text-white hover:bg-[#e06634] font-semibold flex items-center gap-2 shadow-[0_4px_12px_rgba(248,121,65,0.2)] transition-all duration-300"
+                  >
+                    Save & Continue <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </div>
+          )}
 
           {/* Section 6: Emergency Contact */}
+          {activeStep === 'emergency' && (
           <div ref={sectionRefs.emergency} id="emergency" className="scroll-mt-24">
             <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30 shadow-sm">
               <CardHeader className="border-b border-[#e6e4e6]/30 dark:border-[#2f3035]/30 pb-4">
@@ -1098,11 +1233,31 @@ export default function NewEmployeePage() {
                     placeholder="Enter full address details"
                   />
                 </div>
+                {/* Wizard Navigation Footer */}
+                <div className="col-span-1 md:col-span-3 flex justify-between items-center mt-8 pt-6 border-t border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handlePrevStep}
+                    className="border-[#e6e4e6]/30 dark:border-[#2f3035]/30 hover:bg-[#e6e4e6]/10 dark:hover:bg-[#2f3035]/10 text-slate-700 dark:text-[#fdfcfc] font-semibold flex items-center gap-2"
+                  >
+                    <ChevronLeft className="h-4 w-4" /> Previous
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleNextStep}
+                    className="bg-[#f87941] text-white hover:bg-[#e06634] font-semibold flex items-center gap-2 shadow-[0_4px_12px_rgba(248,121,65,0.2)] transition-all duration-300"
+                  >
+                    Save & Continue <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </div>
+          )}
 
           {/* Section 7: Additional Info */}
+          {activeStep === 'additional' && (
           <div ref={sectionRefs.additional} id="additional" className="scroll-mt-24">
             <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30 shadow-sm">
               <CardHeader className="border-b border-[#e6e4e6]/30 dark:border-[#2f3035]/30 pb-4">
@@ -1179,11 +1334,31 @@ export default function NewEmployeePage() {
                     placeholder="Any specific comments or notes regarding candidates onboarding..."
                   />
                 </div>
+                {/* Wizard Navigation Footer */}
+                <div className="col-span-1 md:col-span-3 flex justify-between items-center mt-8 pt-6 border-t border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handlePrevStep}
+                    className="border-[#e6e4e6]/30 dark:border-[#2f3035]/30 hover:bg-[#e6e4e6]/10 dark:hover:bg-[#2f3035]/10 text-slate-700 dark:text-[#fdfcfc] font-semibold flex items-center gap-2"
+                  >
+                    <ChevronLeft className="h-4 w-4" /> Previous
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleNextStep}
+                    className="bg-[#f87941] text-white hover:bg-[#e06634] font-semibold flex items-center gap-2 shadow-[0_4px_12px_rgba(248,121,65,0.2)] transition-all duration-300"
+                  >
+                    Save & Continue <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </div>
+          )}
 
           {/* Section 8: Review & Confirm */}
+          {activeStep === 'review' && (
           <div ref={sectionRefs.review} id="review" className="scroll-mt-24">
             <Card className="bg-white dark:bg-slate-900/40 border-slate-200 dark:border-[#f87941]/30 shadow-sm">
               <CardHeader className="border-b border-[#e6e4e6]/30 dark:border-[#2f3035]/30 pb-4">
@@ -1216,31 +1391,44 @@ export default function NewEmployeePage() {
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-4">
-                  <Link href="/dashboard/employees">
-                    <Button variant="outline" className="border-[#e6e4e6]/30 dark:border-[#2f3035]/30 hover:bg-[#e6e4e6]/10 dark:hover:bg-[#2f3035]/10 text-slate-700 dark:text-[#fdfcfc]">
-                      Cancel
-                    </Button>
-                  </Link>
-                  <Button 
-                    onClick={handleSubmit} 
-                    className="bg-[#f87941] text-white hover:bg-[#e06634] font-semibold flex items-center gap-2 shadow-[0_4px_12px_rgba(248,121,65,0.2)] transition-all duration-300"
-                    disabled={submitting}
+                {/* Wizard Navigation Footer */}
+                <div className="flex justify-between items-center mt-8 pt-6 border-t border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handlePrevStep}
+                    className="border-[#e6e4e6]/30 dark:border-[#2f3035]/30 hover:bg-[#e6e4e6]/10 dark:hover:bg-[#2f3035]/10 text-slate-700 dark:text-[#fdfcfc] font-semibold flex items-center gap-2"
                   >
-                    {submitting ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" /> Onboarding Employee...
-                      </>
-                    ) : (
-                      <>
-                        Complete Registration <ChevronRight className="h-4 w-4" />
-                      </>
-                    )}
+                    <ChevronLeft className="h-4 w-4" /> Previous
                   </Button>
+                  <div className="flex gap-4">
+                    <Link href="/dashboard/employees">
+                      <Button variant="outline" className="border-[#e6e4e6]/30 dark:border-[#2f3035]/30 hover:bg-[#e6e4e6]/10 dark:hover:bg-[#2f3035]/10 text-slate-700 dark:text-[#fdfcfc]">
+                        Cancel
+                      </Button>
+                    </Link>
+                    <Button 
+                      onClick={handleSubmit} 
+                      className="bg-[#f87941] text-white hover:bg-[#e06634] font-semibold flex items-center gap-2 shadow-[0_4px_12px_rgba(248,121,65,0.2)] transition-all duration-300"
+                      disabled={submitting}
+                    >
+                      {submitting ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" /> Onboarding...
+                        </>
+                      ) : (
+                        <>
+                          Complete Onboarding <ChevronRight className="h-4 w-4" />
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
           </div>
+          )}
+        </div>
         </div>
       </div>
     </div>

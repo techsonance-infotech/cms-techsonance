@@ -70,6 +70,13 @@ interface DashboardStats {
   pendingApprovals: any[];
   recentProjects: any[];
   financialRunRate?: any[];
+  insights?: {
+    projectDeliveryRate: number;
+    attendanceRate: number;
+    complianceRate: number;
+    recommendationTitle: string;
+    recommendationMessage: string;
+  };
 }
 
 interface EmployeeDashboardStats {
@@ -307,7 +314,7 @@ export default function DashboardPage() {
                 <CardDescription>Your latest project assignments</CardDescription>
               </div>
               <Link href="/dashboard/projects">
-                <Button variant="ghost" size="sm" className="text-[#f87941] hover:text-[#f87941]/90">
+                <Button variant="ghost" size="sm" className="text-[#f87941] hover:text-[#f4662b] hover:bg-[#f87941]/10">
                   View All <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
@@ -507,7 +514,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* C-Suite Premium Welcome Banner */}
-      <div className="relative overflow-hidden rounded-2xl bg-[#2f3035] p-6 text-[#fdfcfc] shadow-sm border border-[#e6e4e6]/10">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#1e1f22] to-[#2b2d31] p-6 text-[#fdfcfc] shadow-md border border-[#e6e4e6]/10 dark:border-[#2e2f33]">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1.5">
@@ -521,17 +528,17 @@ export default function DashboardPage() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Link href="/dashboard/finance/invoices">
-              <Button variant="outline" className="border-[#e6e4e6]/20 bg-[#2f3035] text-[#fdfcfc] hover:bg-[#e6e4e6]/10 hover:text-[#fdfcfc] gap-2 font-semibold transition-all">
+              <Button variant="outline" className="border-[#f87941]/30 bg-transparent text-[#fdfcfc] hover:bg-[#f87941]/10 hover:text-white hover:border-[#f87941] gap-2 font-semibold transition-all">
                 <Receipt className="h-4 w-4" /> Create Invoice
               </Button>
             </Link>
             <Link href="/dashboard/reimbursements">
-              <Button variant="outline" className="border-[#e6e4e6]/20 bg-[#2f3035] text-[#fdfcfc] hover:bg-[#e6e4e6]/10 hover:text-[#fdfcfc] gap-2 font-semibold transition-all">
+              <Button variant="outline" className="border-[#f87941]/30 bg-transparent text-[#fdfcfc] hover:bg-[#f87941]/10 hover:text-white hover:border-[#f87941] gap-2 font-semibold transition-all">
                 <Wallet className="h-4 w-4" /> Add Expense
               </Button>
             </Link>
             <Link href="/dashboard/clients">
-              <Button className="gap-2 font-semibold bg-[#f87941] text-[#fdfcfc] hover:bg-[#f87941]/90 transition-all border-none shadow-sm">
+              <Button className="gap-2 font-semibold bg-gradient-to-r from-[#F87941] to-[#F4662B] text-white hover:from-[#F4662B] hover:to-[#E95B1F] hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all border-none shadow-md cursor-pointer">
                 <UserPlus className="h-4 w-4" /> New Customer
               </Button>
             </Link>
@@ -621,24 +628,24 @@ export default function DashboardPage() {
                 <CardContent className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="p-4 border rounded-xl bg-slate-50/50 dark:bg-zinc-900/50 hover:bg-slate-50 dark:hover:bg-zinc-900 transition-colors">
-                      <p className="text-xs font-bold text-[#f87941]">CRM Conversion Pipeline</p>
-                      <p className="text-lg font-black mt-1">94% Target Met</p>
-                      <Progress value={94} className="h-1.5 mt-2 bg-slate-100 dark:bg-slate-800" />
-                      <p className="text-[10px] text-muted-foreground mt-2">AI projects $1.4M pipeline close in 30 days</p>
+                      <p className="text-xs font-bold text-[#f87941]">Project Delivery Rate</p>
+                      <p className="text-lg font-black mt-1">{adminStats?.insights?.projectDeliveryRate ?? 100}% Completed</p>
+                      <Progress value={adminStats?.insights?.projectDeliveryRate ?? 100} className="h-1.5 mt-2 bg-slate-100 dark:bg-slate-800" />
+                      <p className="text-[10px] text-muted-foreground mt-2">{adminStats?.activeProjects ?? 0} active projects in progress</p>
                     </div>
 
                     <div className="p-4 border rounded-xl bg-slate-50/50 dark:bg-zinc-900/50 hover:bg-slate-50 dark:hover:bg-zinc-900 transition-colors">
-                      <p className="text-xs font-bold text-[#f87941]">Facility Occupancy Peak</p>
-                      <p className="text-lg font-black mt-1">17:00 - 19:00 Load</p>
-                      <Progress value={78} className="h-1.5 mt-2 bg-slate-100 dark:bg-slate-800" />
-                      <p className="text-[10px] text-muted-foreground mt-2">Alert: Telemetry indicators predict load surge risk</p>
+                      <p className="text-xs font-bold text-[#f87941]">Daily Attendance Rate</p>
+                      <p className="text-lg font-black mt-1">{adminStats?.insights?.attendanceRate ?? 100}% Present</p>
+                      <Progress value={adminStats?.insights?.attendanceRate ?? 100} className="h-1.5 mt-2 bg-slate-100 dark:bg-slate-800" />
+                      <p className="text-[10px] text-muted-foreground mt-2">{adminStats?.workforce?.presentToday ?? 0} of {adminStats?.totalEmployees ?? 0} active employees present</p>
                     </div>
 
                     <div className="p-4 border rounded-xl bg-slate-50/50 dark:bg-zinc-900/50 hover:bg-slate-50 dark:hover:bg-zinc-900 transition-colors">
                       <p className="text-xs font-bold text-emerald-600">Reimbursement Compliance</p>
-                      <p className="text-lg font-black mt-1">0 Audits Flagged</p>
-                      <Progress value={100} className="h-1.5 mt-2 bg-slate-100 dark:bg-slate-800" />
-                      <p className="text-[10px] text-muted-foreground mt-2">100% compliance rate on batch audits</p>
+                      <p className="text-lg font-black mt-1">{adminStats?.insights?.complianceRate ?? 100}% Approved</p>
+                      <Progress value={adminStats?.insights?.complianceRate ?? 100} className="h-1.5 mt-2 bg-slate-100 dark:bg-slate-800" />
+                      <p className="text-[10px] text-muted-foreground mt-2">100% compliance rate on audit validations</p>
                     </div>
                   </div>
 
@@ -646,9 +653,11 @@ export default function DashboardPage() {
                   <div className="p-4 border border-[#e6e4e6]/30 bg-[#e6e4e6]/10 rounded-xl dark:border-[#2f3035]/30 dark:bg-[#2f3035]/25 flex gap-3">
                     <AlertCircle className="h-5 w-5 text-[#f87941] dark:text-[#f87941] mt-0.5 flex-shrink-0" />
                     <div>
-                      <h4 className="text-xs font-bold text-[#2f3035] dark:text-[#fdfcfc]">Recommended Executive Operations Adjustment</h4>
+                      <h4 className="text-xs font-bold text-[#2f3035] dark:text-[#fdfcfc]">
+                        {adminStats?.insights?.recommendationTitle ?? 'Recommended Executive Operations Adjustment'}
+                      </h4>
                       <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                        Shift technician coverage schedules towards Downtown Hub Sector A to mitigate peak SLAs delays as indicated by the Field Service Command logs. This adjustment is projected to raise Q3 First-Time Fix rates to a perfect 96.5%.
+                        {adminStats?.insights?.recommendationMessage ?? 'All operational metrics are within normal bounds. Keep up the great work!'}
                       </p>
                     </div>
                   </div>
@@ -663,7 +672,7 @@ export default function DashboardPage() {
                     <CardDescription className="text-xs font-medium text-muted-foreground mt-0.5">Latest transactions and activities across all departments</CardDescription>
                   </div>
                   <Link href="/dashboard/invoices">
-                    <Button variant="link" className="text-[#f87941] dark:text-[#f87941] font-semibold p-0 h-auto">View Invoices</Button>
+                    <Button variant="link" className="text-[#f87941] hover:text-[#f4662b] transition-colors font-semibold p-0 h-auto">View Invoices</Button>
                   </Link>
                 </CardHeader>
                 <CardContent className="overflow-x-auto">
@@ -815,7 +824,7 @@ export default function DashboardPage() {
                 <CardHeader className="flex flex-row items-center justify-between pb-4">
                   <CardTitle className="text-lg font-bold">Top Customers</CardTitle>
                   <Link href="/dashboard/clients">
-                    <Button variant="ghost" size="sm" className="font-semibold text-xs text-[#f87941] hover:text-[#f87941]/90">
+                    <Button variant="ghost" size="sm" className="font-semibold text-xs text-[#f87941] hover:text-[#f4662b] hover:bg-[#f87941]/10">
                       View All
                     </Button>
                   </Link>
@@ -915,7 +924,7 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <Link href="/dashboard/projects">
-                <Button variant="outline" className="w-full justify-start py-6 h-auto hover:bg-[#e6e4e6]/10 hover:border-[#f87941] hover:text-[#f87941] transition-all">
+                <Button variant="outline" className="w-full justify-start py-6 h-auto hover:bg-[#f87941]/5 hover:border-[#f87941] hover:text-[#f87941] active:scale-[0.98] transition-all cursor-pointer">
                   <FolderKanban className="mr-4 h-5 w-5 opacity-60 text-[#f87941]" />
                   <div className="text-left">
                     <p className="font-semibold">Projects</p>
@@ -924,7 +933,7 @@ export default function DashboardPage() {
                 </Button>
               </Link>
               <Link href="/dashboard/clients">
-                <Button variant="outline" className="w-full justify-start py-6 h-auto hover:bg-[#e6e4e6]/10 hover:border-[#f87941] hover:text-[#f87941] transition-all">
+                <Button variant="outline" className="w-full justify-start py-6 h-auto hover:bg-[#f87941]/5 hover:border-[#f87941] hover:text-[#f87941] active:scale-[0.98] transition-all cursor-pointer">
                   <Users className="mr-4 h-5 w-5 opacity-60 text-[#f87941]" />
                   <div className="text-left">
                     <p className="font-semibold">Clients</p>
@@ -932,17 +941,17 @@ export default function DashboardPage() {
                   </div>
                 </Button>
               </Link>
-              <Link href="/dashboard/team">
-                <Button variant="outline" className="w-full justify-start py-6 h-auto hover:bg-[#e6e4e6]/10 hover:border-[#f87941] hover:text-[#f87941] transition-all">
+              <Link href="/dashboard/employees">
+                <Button variant="outline" className="w-full justify-start py-6 h-auto hover:bg-[#f87941]/5 hover:border-[#f87941] hover:text-[#f87941] active:scale-[0.98] transition-all cursor-pointer">
                   <UserCog className="mr-4 h-5 w-5 opacity-60 text-[#f87941]" />
                   <div className="text-left">
-                    <p className="font-semibold">Team</p>
-                    <p className="text-[10px] text-muted-foreground">Roster</p>
+                    <p className="font-semibold">Employees</p>
+                    <p className="text-[10px] text-muted-foreground">Registry</p>
                   </div>
                 </Button>
               </Link>
               <Link href="/dashboard/reimbursements">
-                <Button variant="outline" className="w-full justify-start py-6 h-auto hover:bg-[#e6e4e6]/10 hover:border-[#f87941] hover:text-[#f87941] transition-all">
+                <Button variant="outline" className="w-full justify-start py-6 h-auto hover:bg-[#f87941]/5 hover:border-[#f87941] hover:text-[#f87941] active:scale-[0.98] transition-all cursor-pointer">
                   <BadgeCent className="mr-4 h-5 w-5 opacity-60 text-[#f87941]" />
                   <div className="text-left">
                     <p className="font-semibold">Claims</p>

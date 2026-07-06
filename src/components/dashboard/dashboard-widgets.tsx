@@ -270,14 +270,14 @@ export function DashboardBroadcaster() {
                 placeholder="Announcement Title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="flex h-10 w-full rounded-xl border border-input bg-transparent px-3.5 py-1 text-sm shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:border-primary disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-10 w-full rounded-xl border border-input bg-transparent px-3.5 py-1 text-sm shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F87941]/40 focus-visible:border-[#F87941] disabled:cursor-not-allowed disabled:opacity-50"
                 required
               />
             </div>
             <select 
               value={type}
               onChange={(e) => setType(e.target.value)}
-              className="flex h-10 w-full rounded-xl border border-input bg-transparent px-3.5 py-1 text-sm shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:border-primary"
+              className="flex h-10 w-full rounded-xl border border-input bg-transparent px-3.5 py-1 text-sm shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F87941]/40 focus-visible:border-[#F87941]"
             >
               <option value="info">Info</option>
               <option value="success">Success</option>
@@ -289,13 +289,13 @@ export function DashboardBroadcaster() {
             placeholder="Type your message here..."
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            className="flex min-h-[90px] w-full rounded-xl border border-input bg-transparent px-3.5 py-2 text-sm shadow-sm placeholder:text-muted-foreground transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:border-primary disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex min-h-[90px] w-full rounded-xl border border-input bg-transparent px-3.5 py-2 text-sm shadow-sm placeholder:text-muted-foreground transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F87941]/40 focus-visible:border-[#F87941] disabled:cursor-not-allowed disabled:opacity-50"
             required
           />
           <button 
             type="submit" 
             disabled={sending || !title.trim() || !message.trim()}
-            className="inline-flex items-center justify-center rounded-xl text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:pointer-events-none disabled:opacity-50 bg-primary text-white shadow-sm hover:bg-[#f87941]/90 h-10 px-4 py-2 w-full"
+            className="inline-flex items-center justify-center rounded-xl text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F87941]/40 disabled:pointer-events-none disabled:opacity-50 bg-gradient-to-r from-[#F87941] to-[#F4662B] hover:from-[#F4662B] hover:to-[#E95B1F] text-white shadow-md active:scale-[0.98] h-10 px-4 py-2 w-full cursor-pointer"
           >
             {sending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Megaphone className="h-4 w-4 mr-2" />}
             {sending ? 'Broadcasting...' : 'Broadcast to Organization'}
