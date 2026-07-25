@@ -54,11 +54,40 @@ export default function LoginPage() {
       }
 
       try {
-        const response = await fetch('/api/auth/me', {
+        let currentToken = token;
+        let response = await fetch('/api/auth/me', {
           headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization: `Bearer ${currentToken}`,
           },
         });
+
+        if (response.status === 401) {
+          // Access token is expired, try to refresh
+          const refreshRes = await fetch('/api/auth/refresh', {
+            method: 'POST',
+            credentials: 'include',
+          });
+
+          if (refreshRes.ok) {
+            const refreshData = await refreshRes.json();
+            const newToken = refreshData.accessToken || refreshData.token;
+            const newUser = refreshData.user;
+            if (newToken && newUser) {
+              currentToken = newToken;
+              persistClientSession({
+                accessToken: newToken,
+                user: newUser,
+                rememberMe: true,
+              });
+              // Retry fetching the profile
+              response = await fetch('/api/auth/me', {
+                headers: {
+                  Authorization: `Bearer ${currentToken}`,
+                },
+              });
+            }
+          }
+        }
 
         if (!response.ok) {
           clearClientSession();
@@ -76,7 +105,7 @@ export default function LoginPage() {
         }
 
         persistClientSession({
-          accessToken: token,
+          accessToken: currentToken,
           user,
           rememberMe: shouldRememberSession(),
         });

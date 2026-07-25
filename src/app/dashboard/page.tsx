@@ -131,7 +131,7 @@ export default function DashboardPage() {
       const type = getDashboardType(currentUser.role as UserRole);
       setLoading(true);
       if (type === 'admin') {
-        Promise.all([fetchAdminDashboardData(), fetchEmployeeDashboardData()]).finally(() => setLoading(false));
+        fetchAdminDashboardData().finally(() => setLoading(false));
       } else {
         fetchEmployeeDashboardData().finally(() => setLoading(false));
       }

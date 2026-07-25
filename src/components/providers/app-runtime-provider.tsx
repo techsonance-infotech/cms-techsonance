@@ -86,6 +86,8 @@ export function AppRuntimeProvider({ children }: Props) {
     let refreshPromise: Promise<string | null> | null = null;
     let authMePromise: Promise<{ status: number; payload: unknown } | null> | null = null;
     let authMeCache: { status: number; payload: unknown; cachedAt: number } | null = null;
+    let companySettingsPromise: Promise<{ status: number; payload: unknown } | null> | null = null;
+    let companySettingsCache: { status: number; payload: unknown; cachedAt: number } | null = null;
 
     function createJsonResponse(status: number, payload: unknown) {
       return new Response(JSON.stringify(payload), {
@@ -141,6 +143,7 @@ export function AppRuntimeProvider({ children }: Props) {
       const isAuthLogin = url.pathname === '/api/auth/login';
       const isForgotPasswordFlow = url.pathname.startsWith('/api/auth/forgot-password/');
       const isAuthMe = url.pathname === '/api/auth/me' && request.method.toUpperCase() === 'GET';
+      const isCompanySettings = url.pathname === '/api/company-settings' && request.method.toUpperCase() === 'GET';
       const token = getStoredSessionToken();
 
       if (isSameApiRoute && token && !nextHeaders.has('Authorization') && !isAuthRefresh && !isAuthLogin) {
@@ -174,6 +177,19 @@ export function AppRuntimeProvider({ children }: Props) {
         }
       }
 
+      if (isSameApiRoute && isCompanySettings) {
+        if (companySettingsCache && Date.now() - companySettingsCache.cachedAt < 2000) {
+          return createJsonResponse(companySettingsCache.status, companySettingsCache.payload);
+        }
+
+        if (companySettingsPromise) {
+          const cached = await companySettingsPromise;
+          if (cached) {
+            return createJsonResponse(cached.status, cached.payload);
+          }
+        }
+      }
+
       let response = await doFetch();
 
       if (isSameApiRoute && isAuthMe && response.headers.get('content-type')?.includes('application/json')) {
@@ -195,6 +211,28 @@ export function AppRuntimeProvider({ children }: Props) {
           .catch(() => null)
           .finally(() => {
             authMePromise = null;
+          });
+      }
+
+      if (isSameApiRoute && isCompanySettings && response.headers.get('content-type')?.includes('application/json')) {
+        companySettingsPromise = response
+          .clone()
+          .json()
+          .then((payload) => {
+            companySettingsCache = {
+              status: response.status,
+              payload,
+              cachedAt: Date.now(),
+            };
+
+            return {
+              status: response.status,
+              payload,
+            };
+          })
+          .catch(() => null)
+          .finally(() => {
+            companySettingsPromise = null;
           });
       }
 

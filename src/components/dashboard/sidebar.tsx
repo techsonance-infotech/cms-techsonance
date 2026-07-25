@@ -262,23 +262,7 @@ export function DashboardSidebar({ user, isMobile = false, onClose, companyName:
   useEffect(() => {
     if (propsCompanyName) {
       setCompanyName(propsCompanyName);
-      return;
     }
-
-    async function fetchCompanyName() {
-      try {
-        const response = await fetch('/api/company-settings');
-        if (response.ok) {
-          const resData = await response.json();
-          if (resData.success && resData.data?.companyName) {
-            setCompanyName(resData.data.companyName);
-          }
-        }
-      } catch (err) {
-        console.error('Failed to load company name in sidebar:', err);
-      }
-    }
-    fetchCompanyName();
   }, [propsCompanyName]);
 
   useEffect(() => {
