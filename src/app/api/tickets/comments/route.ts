@@ -39,7 +39,7 @@ export const GET = withApiHandler(async (request, context) => {
 
     const profileMap: any = {};
     if (profiles) {
-      profiles.forEach(p => { profileMap[p.id] = p; });
+      profiles.forEach((p: any) => { profileMap[p.id] = p; });
     }
 
     comments = comments.map((c: any) => ({

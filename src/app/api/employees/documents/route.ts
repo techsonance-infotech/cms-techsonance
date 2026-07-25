@@ -63,7 +63,7 @@ export const POST = withApiHandler(async (request, context) => {
     document_type: payload.documentType,
     name: payload.name,
     file_url: payload.fileUrl,
-    uploaded_by: actor.id,
+    uploaded_by: (actor as any).id || actor.authUserId,
   }).select('*').single();
 
   if (error || !data) throw error ? new Error(error.message) : new Error('Failed to create document record');

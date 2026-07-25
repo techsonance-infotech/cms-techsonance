@@ -3,6 +3,7 @@ import { BadRequestError, ConflictError, NotFoundError } from '@/server/http/err
 import { apiSuccess } from '@/server/http/response';
 import { companyHolidaySchema, updateCompanyHolidaySchema } from '@/server/validation/settings';
 import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
+import { getSupabaseAdminClient } from '@/server/supabase/admin';
 
 function normalizeSupabaseCompanyHoliday(row: Record<string, unknown>) {
   return {

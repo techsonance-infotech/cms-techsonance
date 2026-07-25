@@ -136,8 +136,8 @@ export default function LeavesPage() {
   }, [user, employeeData, statusFilter, holidayYear]);
 
   const isFullAccessUser = user && ['admin', 'cms_administrator', 'hr_manager', 'project_manager', 'management'].includes(user.role);
-  const canApproveLeaves = user && hasPermission(user.role, 'myAccount', 'canApprove');
-  const canDeleteRecords = user && hasPermission(user.role, 'myAccount', 'canDelete');
+  const canApproveLeaves = user && hasPermission(user.role as any, 'myAccount', 'canApprove');
+  const canDeleteRecords = user && hasPermission(user.role as any, 'myAccount', 'canDelete');
 
   const fetchCurrentUser = async () => {
     const token = localStorage.getItem('session_token');

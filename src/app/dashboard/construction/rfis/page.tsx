@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { 
   Building2, Send, Filter, CheckCircle2, ShieldAlert, 
-  Clock, CheckSquare, Layers, Award, ClipboardCheck, Sparkles 
+  Clock, CheckSquare, Layers, Award, ClipboardCheck, Sparkles, Plus 
 } from 'lucide-react';
 
 interface RFIItem {

@@ -40,9 +40,10 @@ import { StatusBadge } from '@/components/ui/status-badge';
 
 interface DashboardHeaderProps {
   user: User;
+  onMenuClick?: () => void;
 }
 
-export function DashboardHeader({ user }: DashboardHeaderProps) {
+export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
   const router = useRouter();
   const { theme, setTheme } = useTheme();
   const [loggingOut, setLoggingOut] = useState(false);
@@ -310,7 +311,7 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
     <header className="h-20 border-b bg-card/75 backdrop-blur-md sticky top-0 z-40 flex items-center justify-between px-6 transition-all duration-200">
       {/* Left: Greeting + Date Details */}
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" className="lg:hidden shrink-0">
+        <Button variant="ghost" size="icon" className="lg:hidden shrink-0" onClick={onMenuClick}>
           <Menu className="h-5 w-5" />
         </Button>
         <div className="hidden md:flex flex-col gap-0.5">

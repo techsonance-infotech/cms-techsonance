@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Plus, Upload, Download, Check, X, FileText, Search, Calendar, DollarSign, Receipt, Trash2, BadgeCent, Clock, CheckCircle2 } from 'lucide-react';
+import { Loader2, Plus, Upload, Download, Check, X, FileText, Search, Calendar, DollarSign, Receipt, Trash2, BadgeCent, Clock, CheckCircle2, Shield } from 'lucide-react';
 import { ContentSkeleton, StatsSkeleton, TableSkeleton, PageHeaderSkeleton, MetricCardGridSkeleton, TabsSkeleton } from '@/components/ui/dashboard-skeleton';
 import { toast } from 'sonner';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -86,6 +86,13 @@ interface Reimbursement {
     adminComments: string | null;
     createdAt: string;
     updatedAt: string;
+    project?: string;
+    costCategory?: string;
+    billingStatus?: string;
+    qty?: number;
+    unitCost?: number;
+    division?: string;
+    reasonForClaim?: string;
 }
 
 export default function ReimbursementsPage() {

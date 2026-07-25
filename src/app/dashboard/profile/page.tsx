@@ -22,7 +22,12 @@ import {
   Camera,
   Loader2,
   UploadCloud,
-  FileImage
+  FileImage,
+  Shield,
+  Heart,
+  Landmark,
+  ShieldAlert,
+  Users
 } from 'lucide-react';
 import { ProfileSkeleton } from '@/components/ui/dashboard-skeleton';
 import { Label } from '@/components/ui/label';
@@ -47,6 +52,26 @@ interface EmployeeProfile {
   skills: any;
   nfcCardId: string | null;
   avatarUrl: string | null;
+  employmentType: string | null;
+  hourlyRate: number | null;
+  ctc: number | null;
+  pfNumber: string | null;
+  uanNumber: string | null;
+  bankName: string | null;
+  bankAccountNumber: string | null;
+  ifscCode: string | null;
+  managerId: string | null;
+  maritalStatus: string | null;
+  bloodGroup: string | null;
+  nationality: string | null;
+  panNumber: string | null;
+  aadhaarNumber: string | null;
+  emergencyContactName: string | null;
+  emergencyContactRelationship: string | null;
+  emergencyContactPhone: string | null;
+  emergencyContactAddress: string | null;
+  gender: string | null;
+  role: string;
 }
 
 export default function ProfilePage() {
@@ -55,6 +80,15 @@ export default function ProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const getAvatarUrl = (url: string | null) => {
+    if (!url) return '';
+    if (url.startsWith('/api/')) {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('session_token') : null;
+      return token ? `${url}&token=${encodeURIComponent(token)}` : url;
+    }
+    return url;
+  };
 
   useEffect(() => {
     fetchEmployeeProfile();
@@ -107,6 +141,26 @@ export default function ProfilePage() {
         skills: user.skills || [],
         nfcCardId: user.nfcCardId || null,
         avatarUrl: user.avatarUrl || null,
+        employmentType: user.employmentType || null,
+        hourlyRate: user.hourlyRate || null,
+        ctc: user.ctc || null,
+        pfNumber: user.pfNumber || null,
+        uanNumber: user.uanNumber || null,
+        bankName: user.bankName || null,
+        bankAccountNumber: user.bankAccountNumber || null,
+        ifscCode: user.ifscCode || null,
+        managerId: user.managerId || null,
+        maritalStatus: user.maritalStatus || null,
+        bloodGroup: user.bloodGroup || null,
+        nationality: user.nationality || null,
+        panNumber: user.panNumber || null,
+        aadhaarNumber: user.aadhaarNumber || null,
+        emergencyContactName: user.emergencyContactName || null,
+        emergencyContactRelationship: user.emergencyContactRelationship || null,
+        emergencyContactPhone: user.emergencyContactPhone || null,
+        emergencyContactAddress: user.emergencyContactAddress || null,
+        gender: user.gender || null,
+        role: user.role,
       });
     } catch (error) {
       console.error('Error fetching dynamic profile:', error);
@@ -148,12 +202,15 @@ export default function ProfilePage() {
       formData.append('file', file);
       formData.append('kind', 'avatar');
 
+      const headers: Record<string, string> = {};
+      if (token && token !== 'null' && token !== 'undefined') {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       // POST to our unified file uploader
       const uploadRes = await fetch('/api/upload', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        headers,
         body: formData,
       });
 
@@ -163,7 +220,7 @@ export default function ProfilePage() {
       }
 
       const uploadResult = await uploadRes.json();
-      const storageUrl = uploadResult.data?.url;
+      const storageUrl = uploadResult.url || uploadResult.data?.url;
 
       if (!storageUrl) {
         throw new Error('Upload response did not return a valid file storage path');
@@ -230,6 +287,8 @@ export default function ProfilePage() {
     ? rawSkills.filter((skill: string) => typeof skill === 'string' && !skill.startsWith('__'))
     : [];
 
+  const isEmployeeOrAbove = ['SuperAdmin', 'Admin', 'Manager', 'Employee'].includes(employee.role);
+
   const getInitials = () => {
     const first = employee.firstName?.[0]?.toUpperCase() || '?';
     const last = employee.lastName?.[0]?.toUpperCase() || '?';
@@ -269,7 +328,7 @@ export default function ProfilePage() {
                 >
                   {employee.avatarUrl ? (
                     <img 
-                      src={employee.avatarUrl} 
+                      src={getAvatarUrl(employee.avatarUrl)} 
                       alt={`${employee.firstName}'s Avatar`}
                       className="h-full w-full object-cover" 
                       onError={(e) => {
@@ -393,7 +452,7 @@ export default function ProfilePage() {
             <CardHeader>
               <CardTitle className="text-base font-bold flex items-center gap-2">
                 <UserIcon className="h-4 w-4 text-primary" />
-                Contact Directory Information
+                Contact & Personal Information
               </CardTitle>
               <CardDescription>Personal details and active communication channels</CardDescription>
             </CardHeader>
@@ -424,10 +483,107 @@ export default function ProfilePage() {
                   }) : 'Not provided'}
                 </p>
               </div>
+
+              <div className="space-y-1">
+                <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1.5">
+                  <Users className="h-3 w-3 text-muted-foreground/80" /> Gender & Marital Status
+                </Label>
+                <p className="text-sm font-medium text-foreground capitalize">
+                  {employee.gender || 'Not specified'} {employee.maritalStatus ? `(${employee.maritalStatus})` : ''}
+                </p>
+              </div>
             </CardContent>
           </Card>
 
-          {/* Card 2: Workspace & Compensation Details */}
+          {/* Card 2: Statutory & Identification Records */}
+          {isEmployeeOrAbove && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base font-bold flex items-center gap-2">
+                  <Shield className="h-4 w-4 text-primary" />
+                  Statutory & Identification Records
+                </CardTitle>
+                <CardDescription>Government-issued registry identifiers and demographics</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-6 md:grid-cols-2">
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1.5">
+                    <IdCard className="h-3 w-3 text-muted-foreground/80" /> Aadhaar Card Number
+                  </Label>
+                  <p className="text-sm font-mono font-medium text-foreground">
+                    {employee.aadhaarNumber ? `XXXX-XXXX-${employee.aadhaarNumber.replace(/\s+/g, '').slice(-4)}` : 'Not provided'}
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1.5">
+                    <IdCard className="h-3 w-3 text-muted-foreground/80" /> PAN Card Number
+                  </Label>
+                  <p className="text-sm font-mono font-medium text-foreground">
+                    {employee.panNumber ? `XXXXX${employee.panNumber.toUpperCase().trim().slice(-5, -1)}X` : 'Not provided'}
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1.5">
+                    <Sparkles className="h-3 w-3 text-muted-foreground/80" /> Blood Group
+                  </Label>
+                  <p className="text-sm font-medium text-foreground uppercase">{employee.bloodGroup || 'Not specified'}</p>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1.5">
+                    <Users className="h-3 w-3 text-muted-foreground/80" /> Nationality
+                  </Label>
+                  <p className="text-sm font-medium text-foreground capitalize">{employee.nationality || 'Not specified'}</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Card 3: Emergency Contact Details */}
+          {isEmployeeOrAbove && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base font-bold flex items-center gap-2">
+                  <Heart className="h-4 w-4 text-primary" />
+                  Emergency Contact Details
+                </CardTitle>
+                <CardDescription>Primary contacts to reach out to in case of urgency</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-6 md:grid-cols-2">
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1.5">
+                    <UserIcon className="h-3 w-3 text-muted-foreground/80" /> Contact Name
+                  </Label>
+                  <p className="text-sm font-medium text-foreground">{employee.emergencyContactName || 'Not registered'}</p>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1.5">
+                    <ShieldAlert className="h-3 w-3 text-muted-foreground/80" /> Relationship
+                  </Label>
+                  <p className="text-sm font-medium text-foreground capitalize">{employee.emergencyContactRelationship || 'Not registered'}</p>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1.5">
+                    <Phone className="h-3 w-3 text-muted-foreground/80" /> Contact Phone
+                  </Label>
+                  <p className="text-sm font-medium text-foreground">{employee.emergencyContactPhone || 'Not registered'}</p>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1.5">
+                    <Briefcase className="h-3 w-3 text-muted-foreground/80" /> Home Address
+                  </Label>
+                  <p className="text-sm font-medium text-foreground">{employee.emergencyContactAddress || 'Not registered'}</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Card 4: Workspace & Compensation Details */}
           <Card>
             <CardHeader>
               <CardTitle className="text-base font-bold flex items-center gap-2">
@@ -453,12 +609,32 @@ export default function ProfilePage() {
 
               <div className="space-y-1">
                 <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1.5">
-                  <IndianRupee className="h-3 w-3 text-muted-foreground/80" /> Base Monthly Salary
+                  <Briefcase className="h-3 w-3 text-muted-foreground/80" /> Employment Type
                 </Label>
-                <p className="text-sm font-mono font-bold text-foreground">
-                  {employee.salary ? `₹${employee.salary.toLocaleString('en-IN')}` : 'Confidential / Under review'}
-                </p>
+                <p className="text-sm font-semibold text-foreground capitalize">{employee.employmentType || 'Full Time'}</p>
               </div>
+
+              {isEmployeeOrAbove && (
+                <>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1.5">
+                      <IndianRupee className="h-3 w-3 text-muted-foreground/80" /> Monthly Base Salary
+                    </Label>
+                    <p className="text-sm font-mono font-bold text-foreground">
+                      {employee.salary ? `₹${employee.salary.toLocaleString('en-IN')}` : 'Confidential / Under review'}
+                    </p>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1.5">
+                      <IndianRupee className="h-3 w-3 text-muted-foreground/80" /> Cost To Company (Annual CTC)
+                    </Label>
+                    <p className="text-sm font-mono font-semibold text-foreground">
+                      {employee.ctc ? `₹${employee.ctc.toLocaleString('en-IN')}` : 'Confidential / Under review'}
+                    </p>
+                  </div>
+                </>
+              )}
 
               <div className="space-y-1">
                 <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1.5">
@@ -472,6 +648,57 @@ export default function ProfilePage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Card 5: Direct Deposit Banking Details */}
+          {isEmployeeOrAbove && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base font-bold flex items-center gap-2">
+                  <Landmark className="h-4 w-4 text-primary" />
+                  Direct Deposit Banking Details
+                </CardTitle>
+                <CardDescription>Salary disbursement registry accounts and statutory numbers</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-6 md:grid-cols-2">
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1.5">
+                    <Landmark className="h-3 w-3 text-muted-foreground/80" /> Bank Name
+                  </Label>
+                  <p className="text-sm font-medium text-foreground">{employee.bankName || 'Not registered'}</p>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1.5">
+                    <IdCard className="h-3 w-3 text-muted-foreground/80" /> Account Number
+                  </Label>
+                  <p className="text-sm font-mono font-medium text-foreground">
+                    {employee.bankAccountNumber ? `XXXXXX${employee.bankAccountNumber.trim().slice(-4)}` : 'Not registered'}
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1.5">
+                    <IdCard className="h-3 w-3 text-muted-foreground/80" /> IFSC Code
+                  </Label>
+                  <p className="text-sm font-mono font-medium text-foreground uppercase">{employee.ifscCode || 'Not registered'}</p>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1.5">
+                    <IdCard className="h-3 w-3 text-muted-foreground/80" /> Provident Fund (PF) Number
+                  </Label>
+                  <p className="text-sm font-mono font-medium text-foreground uppercase">{employee.pfNumber || 'Not registered'}</p>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1.5">
+                    <IdCard className="h-3 w-3 text-muted-foreground/80" /> Universal Account Number (UAN)
+                  </Label>
+                  <p className="text-sm font-mono font-medium text-foreground uppercase">{employee.uanNumber || 'Not registered'}</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>

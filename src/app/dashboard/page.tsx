@@ -32,7 +32,10 @@ import {
   Receipt,
   UserPlus,
   Hourglass,
-  Sparkles
+  Sparkles,
+  HelpCircle,
+  Inbox,
+  Shield
 } from 'lucide-react';
 import { getDashboardType, hasFullAccess, type UserRole } from '@/lib/permissions';
 import { 
@@ -206,94 +209,164 @@ export default function DashboardPage() {
     );
   }
 
+  const isClientRole = String(currentUser.role).toLowerCase() === 'viewer' || String(currentUser.role).toLowerCase() === 'client';
+
   if (dashboardType === 'employee') {
     return (
       <div className="space-y-6">
         <PageHeader 
-          title={`Welcome back, ${currentUser.firstName}!`}
-          description="Here is an overview of your work and productivity metrics."
+          title={isClientRole ? `Welcome, ${currentUser.firstName}!` : `Welcome back, ${currentUser.firstName}!`}
+          description={isClientRole ? "Here is an overview of your active projects and support dossier." : "Here is an overview of your work and productivity metrics."}
           breadcrumbs={[{ label: 'Dashboard' }]}
         />
 
         {employeeStats && (
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
-            <Card className="overflow-hidden border-none shadow-md bg-brand-gradient text-white">
-              <CardHeader className="pb-1">
-                <CardTitle className="text-xs font-semibold opacity-90 uppercase tracking-wider">Hours Month</CardTitle>
-              </CardHeader>
-              <CardContent className="relative">
-                <div className="text-3xl font-black">{employeeStats.stats.totalHoursMonth ?? 0}h</div>
-                <p className="text-[10px] opacity-75 mt-0.5 font-medium">Productive logged</p>
-                <div className="absolute right-4 bottom-4 p-2 bg-white/10 backdrop-blur-md rounded-lg">
-                  <Clock className="h-4 w-4" />
-                </div>
-              </CardContent>
-            </Card>
+          <>
+            {isClientRole ? (
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                <Card className="overflow-hidden border border-border bg-card shadow-xs">
+                  <CardHeader className="pb-1">
+                    <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Active Projects</CardTitle>
+                  </CardHeader>
+                  <CardContent className="relative">
+                    <div className="text-3xl font-black text-foreground">{employeeStats.recentProjects?.length ?? 0}</div>
+                    <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">Currently engaged</p>
+                    <div className="absolute right-4 bottom-4 p-2 bg-[#f87941]/10 rounded-lg text-[#f87941]">
+                      <FolderKanban className="h-4 w-4" />
+                    </div>
+                  </CardContent>
+                </Card>
 
-            <Card className="overflow-hidden border border-border bg-card text-card-foreground shadow-xs">
-              <CardHeader className="pb-1">
-                <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Hours Year</CardTitle>
-              </CardHeader>
-              <CardContent className="relative">
-                <div className="text-3xl font-black text-foreground">{employeeStats.stats.totalHoursYear ?? 0}h</div>
-                <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">Annual total logged</p>
-                <div className="absolute right-4 bottom-4 p-2 bg-secondary rounded-lg text-primary">
-                  <Calendar className="h-4 w-4" />
-                </div>
-              </CardContent>
-            </Card>
+                <Card className="overflow-hidden border border-border bg-card shadow-xs">
+                  <CardHeader className="pb-1">
+                    <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Active Tickets</CardTitle>
+                  </CardHeader>
+                  <CardContent className="relative">
+                    <div className="text-3xl font-black text-foreground">
+                      {employeeStats.pendingApprovals?.length ?? 0}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-0.5 font-medium font-medium">Support cases pending</p>
+                    <div className="absolute right-4 bottom-4 p-2 bg-[#f87941]/10 rounded-lg text-[#f87941]">
+                      <HelpCircle className="h-4 w-4" />
+                    </div>
+                  </CardContent>
+                </Card>
 
-            <Card className="overflow-hidden border border-border bg-card text-card-foreground shadow-xs">
-              <CardHeader className="pb-1">
-                <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Active Projects</CardTitle>
-              </CardHeader>
-              <CardContent className="relative">
-                <div className="text-3xl font-black text-foreground">{employeeStats.stats.activeProjects ?? 0}</div>
-                <p className="text-[10px] text-muted-foreground mt-0.5 font-medium font-medium">Currently active</p>
-                <div className="absolute right-4 bottom-4 p-2 bg-accent-cyan/10 rounded-lg text-primary-dark dark:text-accent-cyan">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                </div>
-              </CardContent>
-            </Card>
+                <Card className="overflow-hidden border border-border bg-card shadow-xs">
+                  <CardHeader className="pb-1">
+                    <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">CRM Messages</CardTitle>
+                  </CardHeader>
+                  <CardContent className="relative">
+                    <div className="text-3xl font-black text-foreground">
+                      {employeeStats.announcements?.length ?? 0}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">Active communications</p>
+                    <div className="absolute right-4 bottom-4 p-2 bg-[#f87941]/10 rounded-lg text-[#f87941]">
+                      <Inbox className="h-4 w-4" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            ) : (
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+                <Card className="overflow-hidden border-none shadow-md bg-brand-gradient text-white">
+                  <CardHeader className="pb-1">
+                    <CardTitle className="text-xs font-semibold opacity-90 uppercase tracking-wider">Hours Month</CardTitle>
+                  </CardHeader>
+                  <CardContent className="relative">
+                    <div className="text-3xl font-black">{employeeStats.stats.totalHoursMonth ?? 0}h</div>
+                    <p className="text-[10px] opacity-75 mt-0.5 font-medium">Productive logged</p>
+                    <div className="absolute right-4 bottom-4 p-2 bg-white/10 backdrop-blur-md rounded-lg">
+                      <Clock className="h-4 w-4" />
+                    </div>
+                  </CardContent>
+                </Card>
 
-            <Card className="overflow-hidden border border-border bg-card text-card-foreground shadow-xs">
-              <CardHeader className="pb-1">
-                <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Assigned</CardTitle>
-              </CardHeader>
-              <CardContent className="relative">
-                <div className="text-3xl font-black text-foreground">{employeeStats.stats.totalAssignedProjects ?? 0}</div>
-                <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">Lifetime projects</p>
-                <div className="absolute right-4 bottom-4 p-2 bg-secondary rounded-lg text-primary">
-                  <Briefcase className="h-4 w-4" />
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card className="overflow-hidden border border-border bg-card text-card-foreground shadow-xs">
-              <CardHeader className="pb-1">
-                <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Assigned To Me</CardTitle>
-              </CardHeader>
-              <CardContent className="relative">
-                <div className="flex items-baseline gap-1">
-                  <div className="text-3xl font-black text-foreground">{employeeStats.stats.assignedTasksTotal ?? 0}</div>
-                  <div className="text-[10px] text-muted-foreground font-semibold">total</div>
-                </div>
-                <p className="text-[10px] font-bold mt-1 text-destructive bg-destructive/10 px-2 py-0.5 rounded-full inline-block">
-                  {employeeStats.stats.assignedTasksDueToday ?? 0} due today
-                </p>
-                <div className="absolute right-4 bottom-4 p-2 bg-destructive/10 rounded-lg text-destructive">
-                  <ClipboardList className="h-4 w-4" />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+                <Card className="overflow-hidden border border-border bg-card text-card-foreground shadow-xs">
+                  <CardHeader className="pb-1">
+                    <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Hours Year</CardTitle>
+                  </CardHeader>
+                  <CardContent className="relative">
+                    <div className="text-3xl font-black text-foreground">{employeeStats.stats.totalHoursYear ?? 0}h</div>
+                    <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">Annual total logged</p>
+                    <div className="absolute right-4 bottom-4 p-2 bg-secondary rounded-lg text-primary">
+                      <Calendar className="h-4 w-4" />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="overflow-hidden border border-border bg-card text-card-foreground shadow-xs">
+                  <CardHeader className="pb-1">
+                    <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Active Projects</CardTitle>
+                  </CardHeader>
+                  <CardContent className="relative">
+                    <div className="text-3xl font-black text-foreground">{employeeStats.stats.activeProjects ?? 0}</div>
+                    <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">Currently active</p>
+                    <div className="absolute right-4 bottom-4 p-2 bg-accent-cyan/10 rounded-lg text-primary-dark dark:text-accent-cyan">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="overflow-hidden border border-border bg-card text-card-foreground shadow-xs">
+                  <CardHeader className="pb-1">
+                    <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Assigned</CardTitle>
+                  </CardHeader>
+                  <CardContent className="relative">
+                    <div className="text-3xl font-black text-foreground">{employeeStats.stats.totalAssignedProjects ?? 0}</div>
+                    <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">Lifetime projects</p>
+                    <div className="absolute right-4 bottom-4 p-2 bg-secondary rounded-lg text-primary">
+                      <Briefcase className="h-4 w-4" />
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="overflow-hidden border border-border bg-card text-card-foreground shadow-xs">
+                  <CardHeader className="pb-1">
+                    <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Assigned To Me</CardTitle>
+                  </CardHeader>
+                  <CardContent className="relative">
+                    <div className="flex items-baseline gap-1">
+                      <div className="text-3xl font-black text-foreground">{employeeStats.stats.assignedTasksTotal ?? 0}</div>
+                      <div className="text-[10px] text-muted-foreground font-semibold">total</div>
+                    </div>
+                    <p className="text-[10px] font-bold mt-1 text-destructive bg-destructive/10 px-2 py-0.5 rounded-full inline-block">
+                      {employeeStats.stats.assignedTasksDueToday ?? 0} due today
+                    </p>
+                    <div className="absolute right-4 bottom-4 p-2 bg-destructive/10 rounded-lg text-destructive">
+                      <ClipboardList className="h-4 w-4" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+          </>
         )}
 
         {employeeStats && (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            <div className="lg:col-span-2">
-              <PerformanceCharts data={employeeStats.performance} />
-            </div>
+            {!isClientRole ? (
+              <div className="lg:col-span-2">
+                <PerformanceCharts data={employeeStats.performance} />
+              </div>
+            ) : (
+              <div className="lg:col-span-2">
+                <Card className="bg-card border border-border shadow-sm p-6 h-full flex flex-col justify-center">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="p-3 rounded-2xl bg-[#f87941]/10 text-[#f87941]">
+                      <Sparkles className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-foreground">Client Console</h3>
+                      <p className="text-xs text-muted-foreground">Authorized Tenant Operations Portal</p>
+                    </div>
+                  </div>
+                  <p className="text-sm text-muted-foreground leading-relaxed font-sans">
+                    Welcome to the TechSonance Client Console. This page serves as your operations command center. You can securely track software product deployment velocity, view telemetry tickets, compose notifications directly to project administrators, and review open support cases.
+                  </p>
+                </Card>
+              </div>
+            )}
             <div className="space-y-6">
               <DashboardAnnouncements 
                 announcements={employeeStats.announcements} 
@@ -310,8 +383,8 @@ export default function DashboardPage() {
           <Card className="lg:col-span-4 bg-card border border-[#e6e4e6]/30 dark:border-[#2f3035]/30 shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
-                <CardTitle>Recent Projects</CardTitle>
-                <CardDescription>Your latest project assignments</CardDescription>
+                <CardTitle>{isClientRole ? 'My Active Projects' : 'Recent Projects'}</CardTitle>
+                <CardDescription>{isClientRole ? 'Current software project delivery milestones' : 'Your latest project assignments'}</CardDescription>
               </div>
               <Link href="/dashboard/projects">
                 <Button variant="ghost" size="sm" className="text-[#f87941] hover:text-[#f4662b] hover:bg-[#f87941]/10">
@@ -340,7 +413,7 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-xs text-muted-foreground">Assigned on</p>
+                        <p className="text-xs text-muted-foreground">{isClientRole ? 'Target delivery' : 'Assigned on'}</p>
                         <p className="text-sm font-medium">{new Date(project.assignedAt || project.created_at).toLocaleDateString()}</p>
                       </div>
                     </div>
@@ -348,7 +421,7 @@ export default function DashboardPage() {
                 ) : (
                   <div className="py-8 text-center text-muted-foreground">
                     <FolderKanban className="h-12 w-12 mx-auto mb-2 opacity-20" />
-                    <p>No projects assigned yet</p>
+                    <p>No active projects found</p>
                   </div>
                 )}
               </div>
@@ -361,46 +434,50 @@ export default function DashboardPage() {
               <CardDescription>Shortcuts to internal modules</CardDescription>
             </CardHeader>
             <CardContent className="grid grid-cols-1 gap-3">
-              <Link href="/dashboard/daily-update" className="group">
-                <div className="flex items-center gap-4 p-4 rounded-xl border border-dashed hover:border-solid hover:border-[#f87941] hover:bg-[#e6e4e6]/10 transition-all">
-                  <div className="p-2 rounded-lg bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 group-hover:bg-[#f87941]/10 group-hover:text-[#f87941] transition-all">
-                    <ClipboardList className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-sm">Daily Updates</p>
-                    <p className="text-xs text-muted-foreground">Report your progress</p>
-                  </div>
-                </div>
-              </Link>
-              <Link href="/dashboard/attendance" className="group">
-                <div className="flex items-center gap-4 p-4 rounded-xl border border-dashed hover:border-solid hover:border-[#f87941] hover:bg-[#e6e4e6]/10 transition-all">
-                  <div className="p-2 rounded-lg bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 group-hover:bg-[#f87941]/10 group-hover:text-[#f87941] transition-all">
-                    <Calendar className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-sm">Attendance</p>
-                    <p className="text-xs text-muted-foreground">Log your shift hours</p>
-                  </div>
-                </div>
-              </Link>
-              <Link href="/dashboard/reimbursements" className="group">
-                <div className="flex items-center gap-4 p-4 rounded-xl border border-dashed hover:border-solid hover:border-[#f87941] hover:bg-[#e6e4e6]/10 transition-all">
-                  <div className="p-2 rounded-lg bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 group-hover:bg-[#f87941]/10 group-hover:text-[#f87941] transition-all">
-                    <BadgeCent className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-sm">Reimbursement</p>
-                    <p className="text-xs text-muted-foreground">Claim your expenses</p>
-                  </div>
-                </div>
-              </Link>
+              {!isClientRole && (
+                <>
+                  <Link href="/dashboard/daily-update" className="group">
+                    <div className="flex items-center gap-4 p-4 rounded-xl border border-dashed hover:border-solid hover:border-[#f87941] hover:bg-[#e6e4e6]/10 transition-all">
+                      <div className="p-2 rounded-lg bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 group-hover:bg-[#f87941]/10 group-hover:text-[#f87941] transition-all">
+                        <ClipboardList className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm">Daily Updates</p>
+                        <p className="text-xs text-muted-foreground">Report your progress</p>
+                      </div>
+                    </div>
+                  </Link>
+                  <Link href="/dashboard/attendance" className="group">
+                    <div className="flex items-center gap-4 p-4 rounded-xl border border-dashed hover:border-solid hover:border-[#f87941] hover:bg-[#e6e4e6]/10 transition-all">
+                      <div className="p-2 rounded-lg bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 group-hover:bg-[#f87941]/10 group-hover:text-[#f87941] transition-all">
+                        <Calendar className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm">Attendance</p>
+                        <p className="text-xs text-muted-foreground">Log your shift hours</p>
+                      </div>
+                    </div>
+                  </Link>
+                  <Link href="/dashboard/reimbursements" className="group">
+                    <div className="flex items-center gap-4 p-4 rounded-xl border border-dashed hover:border-solid hover:border-[#f87941] hover:bg-[#e6e4e6]/10 transition-all">
+                      <div className="p-2 rounded-lg bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 group-hover:bg-[#f87941]/10 group-hover:text-[#f87941] transition-all">
+                        <BadgeCent className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm">Reimbursement</p>
+                        <p className="text-xs text-muted-foreground">Claim your expenses</p>
+                      </div>
+                    </div>
+                  </Link>
+                </>
+              )}
               <Link href="/dashboard/help-desk" className="group">
                 <div className="flex items-center gap-4 p-4 rounded-xl border border-dashed hover:border-solid hover:border-[#f87941] hover:bg-[#e6e4e6]/10 transition-all">
                   <div className="p-2 rounded-lg bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 group-hover:bg-[#f87941]/10 group-hover:text-[#f87941] transition-all">
                     <AlertCircle className="h-5 w-5" />
                   </div>
                   <div>
-                    <p className="font-semibold text-sm">Support</p>
+                    <p className="font-semibold text-sm">Support Desk</p>
                     <p className="text-xs text-muted-foreground">Open a help ticket</p>
                   </div>
                 </div>
@@ -411,6 +488,8 @@ export default function DashboardPage() {
       </div>
     );
   }
+
+  const isFinancialAdmin = ['super_admin', 'admin', 'ceo', 'cto', 'accountant'].includes(String(currentUser.role).toLowerCase());
 
   const runRate = adminStats?.financialRunRate || [];
   const lastMonthData = runRate[runRate.length - 2] || { revenue: 0, expenses: 0 };
@@ -435,14 +514,14 @@ export default function DashboardPage() {
   const statCards = [
     {
       title: 'Monthly Revenue',
-      value: `₹${(adminStats?.monthlyRevenue ?? 0).toLocaleString()}`,
+      value: isFinancialAdmin ? `₹${(adminStats?.monthlyRevenue ?? 0).toLocaleString()}` : 'Confidential (RBAC)',
       icon: TrendingUp,
       iconColor: 'text-indigo-600 dark:text-indigo-400',
       iconBg: 'bg-indigo-50 dark:bg-indigo-900/30',
       trend: {
-        value: `${Math.abs(revenueTrend).toFixed(1)}%`,
+        value: isFinancialAdmin ? `${Math.abs(revenueTrend).toFixed(1)}%` : 'Restricted',
         isPositive: revenueTrend >= 0,
-        show: lastMonthData.revenue > 0,
+        show: isFinancialAdmin && lastMonthData.revenue > 0,
         className: revenueTrend >= 0 
           ? 'text-emerald-600 dark:text-emerald-500 bg-emerald-50/50 dark:bg-emerald-900/10' 
           : 'text-rose-600 dark:text-rose-500 bg-rose-50/50 dark:bg-rose-900/10'
@@ -450,19 +529,19 @@ export default function DashboardPage() {
       description: 'Accrued billings in current cycle',
       gradient: 'from-indigo-500 to-purple-600',
       stripeColor: 'from-indigo-500 to-purple-600',
-      extraDetail: 'Target: ₹5,00,000',
-      detailLink: '/dashboard/finance/invoices'
+      extraDetail: isFinancialAdmin ? 'Target: ₹5,00,000' : 'Access Restricted',
+      detailLink: isFinancialAdmin ? '/dashboard/finance/invoices' : undefined
     },
     {
       title: 'Net Cash Flow',
-      value: `₹${(adminStats?.netCashFlow ?? 0).toLocaleString()}`,
+      value: isFinancialAdmin ? `₹${(adminStats?.netCashFlow ?? 0).toLocaleString()}` : 'Confidential (RBAC)',
       icon: Wallet,
       iconColor: (adminStats?.netCashFlow ?? 0) >= 0 ? 'text-emerald-600 dark:text-emerald-500' : 'text-rose-600 dark:text-rose-500',
       iconBg: (adminStats?.netCashFlow ?? 0) >= 0 ? 'bg-emerald-50 dark:bg-emerald-900/30' : 'bg-rose-50 dark:bg-rose-900/30',
       trend: {
-        value: `${Math.abs(cashFlowTrend).toFixed(1)}%`,
+        value: isFinancialAdmin ? `${Math.abs(cashFlowTrend).toFixed(1)}%` : 'Restricted',
         isPositive: cashFlowTrend >= 0,
-        show: lastMonthCashFlow !== 0,
+        show: isFinancialAdmin && lastMonthCashFlow !== 0,
         className: cashFlowTrend >= 0 
           ? 'text-emerald-600 dark:text-emerald-500 bg-emerald-50/50 dark:bg-emerald-900/10' 
           : 'text-rose-600 dark:text-rose-500 bg-rose-50/50 dark:bg-rose-900/10'
@@ -470,17 +549,17 @@ export default function DashboardPage() {
       description: 'Inflow minus outflow margin',
       gradient: (adminStats?.netCashFlow ?? 0) >= 0 ? 'from-emerald-500 to-teal-600' : 'from-rose-500 to-red-600',
       stripeColor: (adminStats?.netCashFlow ?? 0) >= 0 ? 'from-emerald-500 to-teal-600' : 'from-rose-500 to-red-600',
-      extraDetail: 'Updated in real-time',
-      detailLink: '/dashboard/reimbursements'
+      extraDetail: isFinancialAdmin ? 'Updated in real-time' : 'Access Restricted',
+      detailLink: isFinancialAdmin ? '/dashboard/reimbursements' : undefined
     },
     {
       title: 'Pending Invoices',
-      value: `₹${(adminStats?.pendingInvoicesValue ?? 0).toLocaleString()}`,
+      value: isFinancialAdmin ? `₹${(adminStats?.pendingInvoicesValue ?? 0).toLocaleString()}` : 'Confidential (RBAC)',
       icon: Hourglass,
       iconColor: 'text-amber-600 dark:text-amber-500',
       iconBg: 'bg-amber-50 dark:bg-amber-900/30',
       trend: {
-        value: `${adminStats?.pendingInvoicesCount ?? 0} Items`,
+        value: isFinancialAdmin ? `${adminStats?.pendingInvoicesCount ?? 0} Items` : 'Restricted',
         isPositive: true,
         show: true,
         className: 'text-amber-600 dark:text-amber-500 bg-amber-50/50 dark:bg-amber-900/10'
@@ -488,8 +567,8 @@ export default function DashboardPage() {
       description: 'Awaiting client settlement',
       gradient: 'from-amber-500 to-orange-600',
       stripeColor: 'from-amber-500 to-orange-600',
-      extraDetail: `${adminStats?.pendingInvoicesCount ?? 0} invoices unpaid`,
-      detailLink: '/dashboard/finance/invoices'
+      extraDetail: isFinancialAdmin ? `${adminStats?.pendingInvoicesCount ?? 0} invoices unpaid` : 'Access Restricted',
+      detailLink: isFinancialAdmin ? '/dashboard/finance/invoices' : undefined
     },
     {
       title: 'Active Customers',
@@ -551,8 +630,8 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
             {statCards.map((stat) => {
               const Icon = stat.icon;
-              return (
-                <Link href={stat.detailLink} key={stat.title} className="group block relative overflow-hidden bg-card border border-[#e6e4e6]/30 dark:border-[#2f3035]/30 shadow-sm hover:shadow-md transition-all duration-200 rounded-2xl">
+              const cardContent = (
+                <>
                   {/* Accent stripe */}
                   <div className="absolute left-0 top-0 bottom-0 w-[4px] bg-[#f87941]" />
                   
@@ -589,12 +668,28 @@ export default function DashboardPage() {
                     {/* Progress representation or bottom footer line */}
                     <div className="mt-4 pt-3 border-t border-slate-100/50 dark:border-zinc-800/50 flex justify-between items-center text-[10px] text-muted-foreground font-semibold">
                       <span>{stat.extraDetail}</span>
-                      <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 text-[#f87941] dark:text-[#f87941] flex items-center gap-0.5">
-                        Details <ChevronRight className="h-3 w-3" />
-                      </span>
+                      {stat.detailLink && (
+                        <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 text-[#f87941] dark:text-[#f87941] flex items-center gap-0.5">
+                          Details <ChevronRight className="h-3 w-3" />
+                        </span>
+                      )}
                     </div>
                   </CardContent>
-                </Link>
+                </>
+              );
+
+              if (stat.detailLink) {
+                return (
+                  <Link href={stat.detailLink} key={stat.title} className="group block relative overflow-hidden bg-card border border-[#e6e4e6]/30 dark:border-[#2f3035]/30 shadow-sm hover:shadow-md transition-all duration-200 rounded-2xl">
+                    {cardContent}
+                  </Link>
+                );
+              }
+
+              return (
+                <div key={stat.title} className="relative overflow-hidden bg-card border border-[#e6e4e6]/30 dark:border-[#2f3035]/30 shadow-sm rounded-2xl">
+                  {cardContent}
+                </div>
               );
             })}
           </div>
@@ -605,7 +700,17 @@ export default function DashboardPage() {
               {adminStats.financialRunRate && (
                 <Card className="bg-card border border-[#e6e4e6]/30 dark:border-[#2f3035]/30 shadow-sm overflow-hidden">
                   <div className="h-1 w-full bg-[#f87941]" />
-                  <FinancialRunRateChart data={adminStats.financialRunRate} />
+                  {isFinancialAdmin ? (
+                    <FinancialRunRateChart data={adminStats.financialRunRate} />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+                      <Shield className="h-12 w-12 text-muted-foreground/40 mb-3" />
+                      <h3 className="font-bold text-sm text-foreground">Financial Run Rate Restricted</h3>
+                      <p className="text-xs text-muted-foreground max-w-sm mt-1 leading-relaxed">
+                        You do not have the financial credentials required to view corporate cash flow metrics.
+                      </p>
+                    </div>
+                  )}
                 </Card>
               )}
 
@@ -728,7 +833,7 @@ export default function DashboardPage() {
                                 {new Date(item.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                               </td>
                               <td className="py-4 text-right font-bold text-sm text-slate-900 dark:text-white">
-                                {item.amount !== undefined ? `₹${item.amount.toLocaleString()}` : '—'}
+                                {isFinancialAdmin ? (item.amount !== undefined ? `₹${item.amount.toLocaleString()}` : '—') : 'Confidential'}
                               </td>
                             </tr>
                           );
@@ -855,7 +960,7 @@ export default function DashboardPage() {
                             </div>
                           </div>
                           <span className="font-bold text-sm text-slate-900 dark:text-white">
-                            ₹{customer.revenue.toLocaleString()}
+                            {isFinancialAdmin ? `₹${customer.revenue.toLocaleString()}` : 'Confidential'}
                           </span>
                         </div>
                       );

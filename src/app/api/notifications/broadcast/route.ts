@@ -37,7 +37,7 @@ export const POST = withApiHandler(async (request, context) => {
   }
 
   // Map to notification rows
-  const notificationsToInsert = employees.map(emp => ({
+  const notificationsToInsert = employees.map((emp: { user_id: string }) => ({
     user_id: emp.user_id,
     title: title.trim(),
     message: message.trim(),
@@ -59,4 +59,4 @@ export const POST = withApiHandler(async (request, context) => {
     message: `Broadcast sent to ${notificationsToInsert.length} employees`,
     broadcastCount: notificationsToInsert.length 
   }, { status: 201 });
-}, { requireAuth: true, roles: ['Manager', 'Admin', 'SuperAdmin', 'ceo', 'cto', 'management', 'hr_manager'] });
+}, { requireAuth: true, roles: ['Manager', 'Admin', 'SuperAdmin'] as any });

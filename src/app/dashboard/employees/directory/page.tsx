@@ -10,11 +10,11 @@ import Link from 'next/link';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { 
   Users, UserPlus, Eye, Trash2, Search, SlidersHorizontal, 
-  Download, FileText, MapPin, Briefcase, Building2, ChevronRight,
+  Download, FileText, MapPin, Briefcase, Building2, ChevronRight, ChevronUp, ChevronDown,
   Mail, Phone, Sparkles, Star, CheckSquare, Square, MoreHorizontal,
   Grid, List, Columns, Plus, X, Bookmark, Upload, Settings, Check, 
   HelpCircle, Copy, ExternalLink, Calendar, Heart, Shield, AlertTriangle,
-  FileSpreadsheet, Database, EyeOff, RefreshCw, Layers, Lock, History, UserCheck, MessageSquare, Pin
+  FileSpreadsheet, Database, EyeOff, RefreshCw, Layers, Lock, History, UserCheck, MessageSquare, Pin, Bell
 } from 'lucide-react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -44,6 +44,8 @@ interface Employee {
   attendance?: string;
   leaveBalance?: number;
   performance?: string;
+  employmentType?: string;
+  assets?: string;
   projects?: number;
   skills?: string[];
   activities?: { text: string; time: string; status?: string }[];
@@ -260,15 +262,48 @@ export default function EmployeeDirectoryPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Workforce Stats State (from API)
+  const [workforceStats, setWorkforceStats] = useState<{
+    total: number; active: number; onLeave: number; onNotice: number;
+    probation: number; contract: number;
+  }>({ total: 0, active: 0, onLeave: 0, onNotice: 0, probation: 0, contract: 0 });
+
   // RBAC Simulation State
   const [simulatedRole, setSimulatedRole] = useState<'HR Admin' | 'HR Executive' | 'Manager' | 'Employee' | 'Auditor'>('HR Admin');
 
   // Search & Filter State
   const [search, setSearch] = useState('');
-  const [filterDepartment, setFilterDepartment] = useState('Engineering'); // Set Engineering as default to match screenshot
-  const [filterStatus, setFilterStatus] = useState('Active'); // Set Active as default to match screenshot
+  const [filterDepartment, setFilterDepartment] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
   const [filterWorkMode, setFilterWorkMode] = useState('');
   const [filterTag, setFilterTag] = useState('');
+
+  // API Query & Pagination States
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalResults, setTotalResults] = useState(0);
+  const [sortField, setSortField] = useState('created_at');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  // Debounce search query
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(search);
+      setCurrentPage(1);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [search]);
+
+  // Reset page on filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterDepartment, filterStatus, filterWorkMode]);
+
+  // Clear selected rows when page, filters, search, or records change
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [currentPage, filterDepartment, filterStatus, filterWorkMode, search, employees]);
   
   // Advanced Smart Query Operator States
   const [smartField, setSmartField] = useState('name');
@@ -289,21 +324,10 @@ export default function EmployeeDirectoryPage() {
   const [showAiPanel, setShowAiPanel] = useState(false);
 
   // Custom Columns State
-  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({
-    photo: true,
-    employeeId: true,
-    name: true,
-    department: true,
-    designation: true,
-    location: true,
-    workMode: true,
-    joiningDate: true,
-    status: true,
-  });
   const [showColumnDropdown, setShowColumnDropdown] = useState(false);
 
   // Bulk Selection States
-  const [selectedIds, setSelectedIds] = useState<number[]>([10010, 10009]); // Pre-select Rushabh Jain & Manish Kuswaha to match the screen
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
   
   // Bulk Actions
   const [bulkActionType, setBulkActionType] = useState<string | null>(null);
@@ -319,6 +343,7 @@ export default function EmployeeDirectoryPage() {
   const [savedViews, setSavedViews] = useState<SavedView[]>([]);
   const [newViewName, setNewViewName] = useState('');
   const [showSaveViewModal, setShowSaveViewModal] = useState(false);
+  const [showSavedViewsDropdown, setShowSavedViewsDropdown] = useState(false);
 
   // Quick Preview Drawer States (Pre-open Rushabh Jain to match screenshot design)
   const [previewEmployee, setPreviewEmployee] = useState<Employee | null>(null);
@@ -329,6 +354,33 @@ export default function EmployeeDirectoryPage() {
 
   // CSV Import States
   const [showImportPreviewModal, setShowImportPreviewModal] = useState(false);
+  const [importStep, setImportStep] = useState<'upload' | 'mapping' | 'validation' | 'success'>('upload');
+  const [importFileName, setImportFileName] = useState('');
+  const [importErrorEmail, setImportErrorEmail] = useState('alice.tan@invalid');
+  const [duplicateAction, setDuplicateAction] = useState<'skip' | 'overwrite' | 'both'>('skip');
+  const [hasImported, setHasImported] = useState(false);
+  const [showSettingsDrawer, setShowSettingsDrawer] = useState(false);
+  const [showAiInsights, setShowAiInsights] = useState(false);
+  const [showAlertsDrawer, setShowAlertsDrawer] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({
+    photo: true,
+    empId: true,
+    name: true,
+    department: true,
+    designation: true,
+    manager: true,
+    type: true,
+    location: true,
+    experience: true,
+    joiningDate: true,
+    status: true,
+    workMode: true,
+    salary: false,
+    attendance: false,
+    assets: false,
+  });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -346,13 +398,110 @@ export default function EmployeeDirectoryPage() {
     localStorage.setItem('employee_directory_audit_logs', JSON.stringify(updated));
   };
 
+  const fetchEmployeesData = async () => {
+    setLoading(true);
+    try {
+      const token = getStoredSessionToken();
+      const params = new URLSearchParams();
+      params.set('limit', String(pageSize));
+      params.set('offset', String((currentPage - 1) * pageSize));
+      if (debouncedSearch) params.set('search', debouncedSearch);
+      if (filterDepartment) params.set('department', filterDepartment);
+      if (filterStatus) {
+        let statusVal = filterStatus.toLowerCase();
+        if (statusVal === 'notice period') statusVal = 'on_notice';
+        else if (statusVal === 'on leave') statusVal = 'on_leave';
+        params.set('status', statusVal);
+      }
+      if (filterWorkMode) {
+        params.set('workMode', filterWorkMode.toLowerCase());
+      }
+      if (sortField) params.set('sort', sortField);
+      if (sortOrder) params.set('order', sortOrder);
+
+      const res = await fetch(`/api/employees?${params.toString()}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success) {
+          setEmployees(json.data || []);
+          setTotalResults(json.meta?.total || 0);
+        }
+      } else {
+        toast.error('Failed to fetch employees');
+      }
+    } catch (error) {
+      console.error('Error fetching employees:', error);
+      toast.error('An error occurred while fetching employees');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchEmployeesData();
+  }, [currentPage, pageSize, debouncedSearch, filterDepartment, filterStatus, filterWorkMode, sortField, sortOrder]);
+
+  // Fetch workforce stats for analytics cards
+  useEffect(() => {
+    const fetchWorkforceStats = async () => {
+      try {
+        const token = getStoredSessionToken();
+        const res = await fetch('/api/dashboard/stats/workforce', {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && json.data) {
+            setWorkforceStats({
+              total: json.data.total ?? 0,
+              active: json.data.active ?? 0,
+              onLeave: json.data.onLeave ?? 0,
+              onNotice: json.data.onNotice ?? 0,
+              probation: json.data.probation ?? 0,
+              contract: json.data.contract ?? 0,
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch workforce stats:', err);
+      }
+    };
+    fetchWorkforceStats();
+  }, []);
+
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortOrder('asc');
+    }
+    setCurrentPage(1);
+  };
+
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    const totalPages = Math.ceil(totalResults / pageSize);
+    if (totalPages <= 5) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (currentPage <= 3) {
+        pages.push(1, 2, 3, 4, '...', totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+      } else {
+        pages.push(1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages);
+      }
+    }
+    return pages;
+  };
+
   // Load local settings on mount
   useEffect(() => {
-    // Populate mock employees initially
-    setEmployees(MOCK_EMPLOYEES);
-    setPreviewEmployee(MOCK_EMPLOYEES[1]); // Rushabh Jain is active preview
-    setLoading(false);
-
     if (typeof window !== 'undefined') {
       const storedFavs = localStorage.getItem('employee_directory_favorites');
       if (storedFavs) setFavorites(JSON.parse(storedFavs));
@@ -361,15 +510,25 @@ export default function EmployeeDirectoryPage() {
       if (storedTags) setEmployeeTags(JSON.parse(storedTags));
 
       const storedViews = localStorage.getItem('employee_directory_saved_views');
-      if (storedViews) setSavedViews(JSON.parse(storedViews));
+      if (storedViews) {
+        setSavedViews(JSON.parse(storedViews));
+      } else {
+        const defaultViews: SavedView[] = [
+          { name: 'All Engineers', search: '', status: 'Active', department: 'Engineering', designation: '', workMode: '', tag: '', scope: 'Organization' },
+          { name: 'Active HR Staff', search: '', status: 'Active', department: 'HR', designation: '', workMode: '', tag: '', scope: 'Organization' },
+          { name: 'Remote Workers', search: '', status: 'Active', department: '', designation: '', workMode: 'Remote', tag: '', scope: 'Organization' }
+        ];
+        setSavedViews(defaultViews);
+        localStorage.setItem('employee_directory_saved_views', JSON.stringify(defaultViews));
+      }
 
       const storedLogs = localStorage.getItem('employee_directory_audit_logs');
       if (storedLogs) setAuditLogs(JSON.parse(storedLogs));
     }
   }, []);
 
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
+  const getStatusColor = (status?: string | null) => {
+    switch ((status || 'active').toLowerCase()) {
       case 'active': return 'bg-emerald-50 text-emerald-700 border-emerald-200/50';
       case 'on_leave': return 'bg-amber-50 text-amber-700 border-amber-200/50';
       case 'resigned': return 'bg-rose-50 text-rose-700 border-rose-200/50';
@@ -377,8 +536,14 @@ export default function EmployeeDirectoryPage() {
     }
   };
 
-  const getWorkModeColor = (mode: string) => {
-    switch (mode.toLowerCase()) {
+  const getDensityPadding = () => {
+    if (density === 'compact') return 'p-1.5 h-10';
+    if (density === 'relaxed') return 'p-4 h-18';
+    return 'p-3 h-14';
+  };
+
+  const getWorkModeColor = (mode?: string | null) => {
+    switch ((mode || 'office').toLowerCase()) {
       case 'hybrid': return 'bg-purple-50 text-purple-700 border-purple-200/30';
       case 'office': return 'bg-orange-50 text-orange-700 border-orange-200/30';
       case 'remote': return 'bg-blue-50 text-blue-700 border-blue-200/30';
@@ -490,27 +655,62 @@ export default function EmployeeDirectoryPage() {
   // Single Delete
   const handleDelete = async () => {
     if (!selectedEmployee) return;
-    setEmployees(prev => prev.filter(emp => emp.id !== selectedEmployee.id));
-    toast.success(`Removed ${selectedEmployee.employeeId}`);
-    setDeleteDialogOpen(false);
-    setSelectedEmployee(null);
-    if (previewEmployee?.id === selectedEmployee.id) setPreviewEmployee(null);
+    try {
+      const token = getStoredSessionToken();
+      const res = await fetch(`/api/employees?id=${selectedEmployee.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        toast.success(`Successfully removed employee`);
+        fetchEmployeesData();
+        if (previewEmployee?.id === selectedEmployee.id) setPreviewEmployee(null);
+      } else {
+        const errJson = await res.json();
+        toast.error(errJson.message || 'Failed to delete employee');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('An error occurred');
+    } finally {
+      setDeleteDialogOpen(false);
+      setSelectedEmployee(null);
+    }
   };
 
   // Bulk Actions
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
       setSelectedIds(filteredEmployees.map(emp => emp.id));
+      if (filteredEmployees.length > 0) {
+        setPreviewEmployee(filteredEmployees[0]);
+      }
     } else {
       setSelectedIds([]);
+      setPreviewEmployee(null);
     }
   };
 
   const handleSelectRow = (id: number, checked: boolean) => {
     if (checked) {
       setSelectedIds(prev => [...prev, id]);
+      const emp = employees.find(e => e.id === id);
+      if (emp) setPreviewEmployee(emp);
     } else {
       setSelectedIds(prev => prev.filter(rowId => rowId !== id));
+      setPreviewEmployee(prev => {
+        if (prev?.id === id) {
+          const remainingIds = selectedIds.filter(rowId => rowId !== id);
+          const activeIds = remainingIds.filter(rowId => rowId !== id);
+          if (activeIds.length > 0) {
+            return employees.find(e => e.id === activeIds[activeIds.length - 1]) || null;
+          }
+          return null;
+        }
+        return prev;
+      });
     }
   };
 
@@ -537,16 +737,7 @@ export default function EmployeeDirectoryPage() {
   const filteredEmployees = employees.filter(emp => {
     // Simulated Role-Gate
     if (simulatedRole === 'Manager' && emp.department !== 'Engineering') return false;
-    if (simulatedRole === 'Employee' && emp.id !== 10010) return false;
-
-    // Filters
-    if (filterDepartment && emp.department !== filterDepartment) return false;
-    if (filterStatus && emp.status !== filterStatus) return false;
-    if (filterWorkMode && emp.workMode !== filterWorkMode) return false;
-    if (search) {
-      const match = `${emp.firstName} ${emp.lastName} ${emp.employeeId} ${emp.email}`.toLowerCase();
-      if (!match.includes(search.toLowerCase())) return false;
-    }
+    if (simulatedRole === 'Employee' && emp.employeeId !== 'TS10010' && emp.id !== 10) return false;
 
     if (!matchSmartQuery(emp)) return false;
 
@@ -557,7 +748,7 @@ export default function EmployeeDirectoryPage() {
     <div className="flex bg-[#FDFCFD] dark:bg-[#15161A] text-slate-800 dark:text-[#fdfcfc] min-h-[calc(100vh-120px)] relative overflow-hidden -m-6 p-6">
       
       {/* MAIN CONTAINER WORKSPACE */}
-      <div className="flex-1 flex flex-col gap-6 pr-[440px] overflow-y-auto">
+      <div className={`flex-1 flex flex-col gap-6 overflow-y-auto transition-all duration-300 ${previewEmployee ? 'pr-[440px]' : 'pr-0'}`}>
         
         {/* BREADCRUMB & HEADER ACTIONS ROW */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -595,25 +786,45 @@ export default function EmployeeDirectoryPage() {
               </Button>
             </Link>
             
-            <Button 
-              onClick={() => fileInputRef.current?.click()} 
+             <Button 
+              onClick={() => setShowImportPreviewModal(true)} 
               variant="outline" 
               className="bg-white dark:bg-[#1E1F22] border-slate-200 dark:border-slate-800 text-xs font-bold h-9 px-3 rounded-xl flex items-center gap-1.5 text-slate-600 dark:text-slate-350"
             >
               <Upload className="h-4 w-4" /> Import
             </Button>
-            <input ref={fileInputRef} type="file" accept=".csv" className="hidden" />
 
             <Button 
-              onClick={handleExportCSV} 
+              onClick={() => setShowExportModal(true)} 
               variant="outline" 
               className="bg-white dark:bg-[#1E1F22] border-slate-200 dark:border-slate-800 text-xs font-bold h-9 px-3 rounded-xl flex items-center gap-1.5 text-slate-600 dark:text-slate-350"
             >
               <Download className="h-4 w-4" /> Export
             </Button>
 
-            <Button variant="outline" className="border-slate-200 dark:border-slate-800 h-9 w-9 p-0 rounded-xl">
-              <MoreHorizontal className="h-4 w-4 text-slate-400" />
+            <Button 
+              onClick={() => setShowAlertsDrawer(true)} 
+              variant="outline" 
+              className="border-slate-200 dark:border-slate-800 h-9 w-9 p-0 rounded-xl relative"
+            >
+              <Bell className="h-4 w-4 text-slate-500 hover:text-slate-700" />
+              <span className="absolute top-1 right-1 h-2 w-2 bg-rose-500 rounded-full animate-ping" />
+            </Button>
+
+            <Button 
+              onClick={() => setShowSettingsDrawer(true)} 
+              variant="outline" 
+              className="border-slate-200 dark:border-slate-800 h-9 w-9 p-0 rounded-xl"
+            >
+              <Settings className="h-4 w-4 text-slate-500 hover:text-slate-750" />
+            </Button>
+
+            <Button 
+              onClick={() => setShowAuditLogsPanel(true)} 
+              variant="outline" 
+              className="border-slate-200 dark:border-slate-800 h-9 w-9 p-0 rounded-xl"
+            >
+              <History className="h-4 w-4 text-indigo-500 hover:text-indigo-650" />
             </Button>
           </div>
         </div>
@@ -621,12 +832,12 @@ export default function EmployeeDirectoryPage() {
         {/* ANALYTICS STATS CARDS GRID */}
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
           {[
-            { label: 'Total Employees', count: '248', desc: '↑ 12.5% vs last month', filter: '', iconBg: 'bg-[#f87941]/10 text-[#f87941]' },
-            { label: 'Active', count: '218', desc: '87.9% of total', filter: 'Active', iconBg: 'bg-emerald-500/10 text-emerald-600' },
-            { label: 'On Leave', count: '12', desc: '4.8% of total', filter: 'On Leave', iconBg: 'bg-amber-500/10 text-amber-600' },
-            { label: 'On Notice', count: '5', desc: '2.0% of total', filter: 'On Notice', iconBg: 'bg-orange-500/10 text-orange-600' },
-            { label: 'Probation', count: '18', desc: '7.3% of total', filter: 'Probation', iconBg: 'bg-blue-500/10 text-blue-600' },
-            { label: 'Contract', count: '24', desc: '9.7% of total', filter: 'Contract', iconBg: 'bg-indigo-500/10 text-indigo-600' },
+            { label: 'Total Employees', count: String(workforceStats.total), desc: `All employees`, filter: '', iconBg: 'bg-[#f87941]/10 text-[#f87941]' },
+            { label: 'Active', count: String(workforceStats.active), desc: workforceStats.total > 0 ? `${((workforceStats.active / workforceStats.total) * 100).toFixed(1)}% of total` : '—', filter: 'Active', iconBg: 'bg-emerald-500/10 text-emerald-600' },
+            { label: 'On Leave', count: String(workforceStats.onLeave), desc: workforceStats.total > 0 ? `${((workforceStats.onLeave / workforceStats.total) * 100).toFixed(1)}% of total` : '—', filter: 'On Leave', iconBg: 'bg-amber-500/10 text-amber-600' },
+            { label: 'On Notice', count: String(workforceStats.onNotice), desc: workforceStats.total > 0 ? `${((workforceStats.onNotice / workforceStats.total) * 100).toFixed(1)}% of total` : '—', filter: 'On Notice', iconBg: 'bg-orange-500/10 text-orange-600' },
+            { label: 'Probation', count: String(workforceStats.probation), desc: workforceStats.total > 0 ? `${((workforceStats.probation / workforceStats.total) * 100).toFixed(1)}% of total` : '—', filter: 'Probation', iconBg: 'bg-blue-500/10 text-blue-600' },
+            { label: 'Contract', count: String(workforceStats.contract), desc: workforceStats.total > 0 ? `${((workforceStats.contract / workforceStats.total) * 100).toFixed(1)}% of total` : '—', filter: 'Contract', iconBg: 'bg-indigo-500/10 text-indigo-600' },
           ].map((card) => (
             <Card 
               key={card.label}
@@ -675,6 +886,14 @@ export default function EmployeeDirectoryPage() {
 
           <div className="flex items-center gap-2">
             <Button 
+              onClick={() => setShowAiInsights(!showAiInsights)}
+              variant="outline" 
+              className="border-slate-200 dark:border-slate-800 text-xs font-bold h-9 px-3 rounded-xl flex items-center gap-1.5 text-slate-650 dark:text-slate-350"
+            >
+              <Sparkles className="h-3.5 w-3.5 text-purple-600 animate-pulse" /> AI Insights
+            </Button>
+
+            <Button 
               onClick={() => setShowFilters(!showFilters)}
               variant="outline" 
               className={`border-slate-200 dark:border-slate-800 text-xs font-bold h-9 px-3 rounded-xl flex items-center gap-1.5 text-slate-600 dark:text-slate-350 ${showFilters ? 'bg-slate-50' : ''}`}
@@ -687,12 +906,66 @@ export default function EmployeeDirectoryPage() {
 
             <div className="relative">
               <Button 
-                onClick={() => setShowSaveViewModal(true)} 
+                onClick={() => setShowSavedViewsDropdown(!showSavedViewsDropdown)} 
                 variant="outline" 
                 className="border-slate-200 dark:border-slate-800 text-xs font-bold h-9 px-3 rounded-xl flex items-center gap-1.5 text-slate-600 dark:text-slate-350"
               >
-                <Bookmark className="h-3.5 w-3.5" /> Saved Views
+                <Bookmark className="h-3.5 w-3.5 text-[#f87941]" /> Saved Views
               </Button>
+
+              {showSavedViewsDropdown && (
+                <div className="absolute left-0 mt-1.5 w-60 bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30 rounded-2xl p-3 shadow-xl z-50 flex flex-col gap-2">
+                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider pb-1.5 border-b border-[#e6e4e6]/10 flex items-center justify-between">
+                    <span>Select a View</span>
+                    <button onClick={() => setShowSavedViewsDropdown(false)} className="text-slate-450 hover:text-slate-600">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                  
+                  <div className="flex flex-col max-h-48 overflow-y-auto gap-1">
+                    {savedViews.length === 0 ? (
+                      <p className="text-[11px] text-slate-400 italic text-center py-4">No saved views yet.</p>
+                    ) : (
+                      savedViews.map((view, idx) => (
+                        <div key={idx} className="flex items-center justify-between group rounded-lg hover:bg-slate-50 dark:hover:bg-slate-900/30 px-2 py-1.5 transition-colors">
+                          <button
+                            onClick={() => {
+                              applySavedView(view);
+                              setShowSavedViewsDropdown(false);
+                            }}
+                            className="text-left text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-[#f87941] truncate flex-grow"
+                          >
+                            {view.name}
+                          </button>
+                          <button
+                            onClick={() => {
+                              const updated = savedViews.filter((_, i) => i !== idx);
+                              setSavedViews(updated);
+                              localStorage.setItem('employee_directory_saved_views', JSON.stringify(updated));
+                              toast.success(`Removed view: ${view.name}`);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 text-slate-450 hover:text-rose-500 transition-opacity p-0.5"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="border-t border-[#e6e4e6]/10 pt-1.5 mt-1">
+                    <Button
+                      onClick={() => {
+                        setShowSaveViewModal(true);
+                        setShowSavedViewsDropdown(false);
+                      }}
+                      className="w-full bg-[#f87941]/10 hover:bg-[#f87941]/20 text-[#f87941] border border-transparent font-bold text-xs h-8 rounded-xl flex items-center justify-center gap-1"
+                    >
+                      <Plus className="h-3.5 w-3.5" /> Save Current View
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex border border-slate-200 dark:border-slate-800 p-0.5 rounded-xl">
@@ -781,7 +1054,16 @@ export default function EmployeeDirectoryPage() {
             >
               <option value="">Bulk Actions</option>
               <option value="Update Department">Update Department</option>
+              <option value="Transfer Manager">Transfer Manager</option>
+              <option value="Update Designation">Update Designation</option>
+              <option value="Assign Project">Assign Project</option>
+              <option value="Assign Shift">Assign Shift</option>
+              <option value="Assign Asset">Assign Asset</option>
+              <option value="Activate">Activate Profiles</option>
               <option value="Deactivate">Deactivate Profiles</option>
+              <option value="Archive">Archive Records</option>
+              <option value="Generate Letters">Generate Letters</option>
+              <option value="Move Business Unit">Move Business Unit</option>
             </select>
 
             <Button 
@@ -801,14 +1083,16 @@ export default function EmployeeDirectoryPage() {
             </Button>
 
             <Button 
-              onClick={handleExportCSV} 
-              variant="outline" 
-              className="h-8 text-xs font-bold rounded-lg border-slate-200 text-slate-600 px-3 flex items-center gap-1"
+              onClick={() => {
+                if (['Tag', 'Email'].includes(bulkActionType || '')) {
+                  executeBulkAction();
+                } else if (bulkActionType) {
+                  setShowBulkModal(true);
+                }
+              }} 
+              disabled={!bulkActionType} 
+              className="bg-[#f87941] text-white hover:bg-[#e06634] text-xs font-bold h-8 rounded-lg px-3"
             >
-              <Download className="h-3.5 w-3.5" /> Export
-            </Button>
-
-            <Button onClick={executeBulkAction} disabled={!bulkActionType} className="bg-[#f87941] text-white hover:bg-[#e06634] text-xs font-bold h-8 rounded-lg px-3">
               Apply
             </Button>
           </div>
@@ -823,7 +1107,7 @@ export default function EmployeeDirectoryPage() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-[#e6e4e6]/25 dark:border-[#2f3035]/25 bg-slate-50/50 dark:bg-slate-900/30 text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                    <th className="p-3 w-10 text-center">
+                    <th className={`${density === 'compact' ? 'p-1.5' : density === 'relaxed' ? 'p-4' : 'p-3'} w-10 text-center`}>
                       <input
                         type="checkbox"
                         checked={selectedIds.length === filteredEmployees.length && filteredEmployees.length > 0}
@@ -831,70 +1115,160 @@ export default function EmployeeDirectoryPage() {
                         className="rounded text-[#f87941] focus:ring-[#f87941] h-4 w-4 border-slate-350 cursor-pointer"
                       />
                     </th>
-                    <th className="p-3">Employee</th>
-                    <th className="p-3">Employee ID</th>
-                    <th className="p-3">Department</th>
-                    <th className="p-3">Designation</th>
-                    <th className="p-3">Location</th>
-                    <th className="p-3">Work Mode</th>
-                    <th className="p-3">Joining Date</th>
-                    <th className="p-3">Status</th>
-                    <th className="p-3 text-center w-20">Actions</th>
+                    {visibleColumns.name && <th className={density === 'compact' ? 'p-1.5' : density === 'relaxed' ? 'p-4' : 'p-3'}>Employee</th>}
+                    {visibleColumns.empId && (
+                      <th 
+                        onClick={() => handleSort('employeeId')}
+                        className={`${density === 'compact' ? 'p-1.5' : density === 'relaxed' ? 'p-4' : 'p-3'} cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none`}
+                      >
+                        <div className="flex items-center gap-1">
+                          <span>Employee ID</span>
+                          {sortField === 'employeeId' && (sortOrder === 'asc' ? <ChevronUp className="h-3 w-3 text-[#f87941]" /> : <ChevronDown className="h-3 w-3 text-[#f87941]" />)}
+                        </div>
+                      </th>
+                    )}
+                    {visibleColumns.department && (
+                      <th 
+                        onClick={() => handleSort('department')}
+                        className={`${density === 'compact' ? 'p-1.5' : density === 'relaxed' ? 'p-4' : 'p-3'} cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none`}
+                      >
+                        <div className="flex items-center gap-1">
+                          <span>Department</span>
+                          {sortField === 'department' && (sortOrder === 'asc' ? <ChevronUp className="h-3 w-3 text-[#f87941]" /> : <ChevronDown className="h-3 w-3 text-[#f87941]" />)}
+                        </div>
+                      </th>
+                    )}
+                    {visibleColumns.designation && (
+                      <th 
+                        onClick={() => handleSort('designation')}
+                        className={`${density === 'compact' ? 'p-1.5' : density === 'relaxed' ? 'p-4' : 'p-3'} cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none`}
+                      >
+                        <div className="flex items-center gap-1">
+                          <span>Designation</span>
+                          {sortField === 'designation' && (sortOrder === 'asc' ? <ChevronUp className="h-3 w-3 text-[#f87941]" /> : <ChevronDown className="h-3 w-3 text-[#f87941]" />)}
+                        </div>
+                      </th>
+                    )}
+                    {visibleColumns.manager && <th className={density === 'compact' ? 'p-1.5' : density === 'relaxed' ? 'p-4' : 'p-3'}>Reporting Manager</th>}
+                    {visibleColumns.type && <th className={density === 'compact' ? 'p-1.5' : density === 'relaxed' ? 'p-4' : 'p-3'}>Employment Type</th>}
+                    {visibleColumns.location && <th className={density === 'compact' ? 'p-1.5' : density === 'relaxed' ? 'p-4' : 'p-3'}>Location</th>}
+                    {visibleColumns.experience && <th className={density === 'compact' ? 'p-1.5' : density === 'relaxed' ? 'p-4' : 'p-3'}>Experience</th>}
+                    {visibleColumns.joiningDate && (
+                      <th 
+                        onClick={() => handleSort('dateOfJoining')}
+                        className={`${density === 'compact' ? 'p-1.5' : density === 'relaxed' ? 'p-4' : 'p-3'} cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none`}
+                      >
+                        <div className="flex items-center gap-1">
+                          <span>Joining Date</span>
+                          {sortField === 'dateOfJoining' && (sortOrder === 'asc' ? <ChevronUp className="h-3 w-3 text-[#f87941]" /> : <ChevronDown className="h-3 w-3 text-[#f87941]" />)}
+                        </div>
+                      </th>
+                    )}
+                    {visibleColumns.workMode && <th className={density === 'compact' ? 'p-1.5' : density === 'relaxed' ? 'p-4' : 'p-3'}>Work Mode</th>}
+                    {visibleColumns.salary && (
+                      <th 
+                        onClick={() => handleSort('salary')}
+                        className={`${density === 'compact' ? 'p-1.5' : density === 'relaxed' ? 'p-4' : 'p-3'} cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none`}
+                      >
+                        <div className="flex items-center gap-1">
+                          <span>Salary (CTC)</span>
+                          {sortField === 'salary' && (sortOrder === 'asc' ? <ChevronUp className="h-3 w-3 text-[#f87941]" /> : <ChevronDown className="h-3 w-3 text-[#f87941]" />)}
+                        </div>
+                      </th>
+                    )}
+                    {visibleColumns.attendance && <th className={density === 'compact' ? 'p-1.5' : density === 'relaxed' ? 'p-4' : 'p-3'}>Attendance %</th>}
+                    {visibleColumns.assets && <th className={density === 'compact' ? 'p-1.5' : density === 'relaxed' ? 'p-4' : 'p-3'}>Assets Assigned</th>}
+                    {visibleColumns.status && (
+                      <th 
+                        onClick={() => handleSort('status')}
+                        className={`${density === 'compact' ? 'p-1.5' : density === 'relaxed' ? 'p-4' : 'p-3'} cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none`}
+                      >
+                        <div className="flex items-center gap-1">
+                          <span>Status</span>
+                          {sortField === 'status' && (sortOrder === 'asc' ? <ChevronUp className="h-3 w-3 text-[#f87941]" /> : <ChevronDown className="h-3 w-3 text-[#f87941]" />)}
+                        </div>
+                      </th>
+                    )}
+                    <th className={`${density === 'compact' ? 'p-1.5' : density === 'relaxed' ? 'p-4' : 'p-3'} text-center w-20`}>Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#e6e4e6]/10 dark:divide-[#2f3035]/10 text-xs">
                   {filteredEmployees.map((emp) => {
                     const isSelected = selectedIds.includes(emp.id);
-                    const fullName = `${emp.firstName} ${emp.lastName}`;
-                    const initials = `${emp.firstName[0]}${emp.lastName[0]}`;
+                    const fullName = `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || 'Employee';
+                    const initials = `${emp.firstName?.[0] || ''}${emp.lastName?.[0] || ''}`.toUpperCase() || 'EE';
+                    const cellPaddingClass = getDensityPadding();
 
                     return (
                       <tr 
                         key={emp.id} 
-                        className={`hover:bg-slate-50/30 dark:hover:bg-slate-900/10 cursor-pointer h-14 transition-colors ${
+                        className={`hover:bg-slate-50/30 dark:hover:bg-slate-900/10 cursor-pointer transition-colors ${
                           isSelected ? 'bg-slate-50/40 dark:bg-slate-900/20' : ''
                         }`}
                         onClick={() => setPreviewEmployee(emp)}
                       >
-                        <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
+                        <td className={`${cellPaddingClass} text-center`} onClick={(e) => e.stopPropagation()}>
                           <input
                             type="checkbox"
                             checked={isSelected}
                             onChange={(e) => handleSelectRow(emp.id, e.target.checked)}
-                            className="rounded text-[#f87941] focus:ring-[#f87941] h-4 w-4 border-slate-300 cursor-pointer"
+                            className="rounded text-[#f87941] focus:ring-[#f87941] h-4 w-4 border-slate-350 cursor-pointer"
                           />
                         </td>
-                        <td className="p-3">
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-8 w-8 border border-slate-200/50">
-                              <AvatarFallback className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-[10px]">
-                                {initials}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="text-left">
-                              <span className="font-extrabold text-slate-800 dark:text-[#fdfcfc] hover:text-[#f87941] transition-colors">{fullName}</span>
-                              <span className="text-[10px] text-slate-400 block mt-0.5">{emp.email}</span>
+                        {visibleColumns.name && (
+                          <td className={cellPaddingClass}>
+                            <div className="flex items-center gap-2.5">
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleFavorite(emp.id);
+                                }}
+                                className="focus:outline-none"
+                              >
+                                <Star className={`h-4 w-4 transition-colors ${favorites.includes(emp.id) ? 'fill-yellow-400 text-yellow-400' : 'text-slate-350 hover:text-yellow-400'}`} />
+                              </button>
+                              <div className="relative">
+                                <Avatar className="h-8 w-8 rounded-xl font-bold bg-[#f87941]/10 text-[#f87941] border border-slate-200/50">
+                                  <AvatarFallback className="rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-[10px]">{initials}</AvatarFallback>
+                                </Avatar>
+                              </div>
+                              <div className="flex flex-col text-left">
+                                <span className="font-extrabold text-slate-800 dark:text-[#fdfcfc] hover:text-[#f87941] transition-colors">{fullName}</span>
+                                <span className="text-[10px] text-slate-400 font-medium block mt-0.5">{emp.email}</span>
+                              </div>
                             </div>
-                          </div>
-                        </td>
-                        <td className="p-3 font-bold text-[#f87941]">{emp.employeeId}</td>
-                        <td className="p-3 text-slate-600 dark:text-slate-300 font-semibold">{emp.department}</td>
-                        <td className="p-3 text-slate-600 dark:text-slate-400 font-medium">{emp.designation}</td>
-                        <td className="p-3 text-slate-400 font-medium leading-tight">
-                          {emp.location}
-                        </td>
-                        <td className="p-3">
-                          <Badge variant="outline" className={`text-[9px] uppercase font-black px-2 py-0.5 border-transparent ${getWorkModeColor(emp.workMode)}`}>
-                            {emp.workMode}
-                          </Badge>
-                        </td>
-                        <td className="p-3 text-slate-500 font-semibold">{emp.joiningDate}</td>
-                        <td className="p-3">
-                          <Badge variant="outline" className={`text-[9px] font-black uppercase px-2 py-0.5 border border-transparent ${getStatusColor(emp.status)}`}>
-                            {emp.status}
-                          </Badge>
-                        </td>
-                        <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
+                          </td>
+                        )}
+                        {visibleColumns.empId && <td className={`${cellPaddingClass} font-bold text-[#f87941]`}>{emp.employeeId}</td>}
+                        {visibleColumns.department && <td className={`${cellPaddingClass} text-slate-600 dark:text-slate-300 font-semibold`}>{emp.department}</td>}
+                        {visibleColumns.designation && <td className={`${cellPaddingClass} text-slate-600 dark:text-slate-400 font-medium`}>{emp.designation}</td>}
+                        {visibleColumns.manager && <td className={`${cellPaddingClass} text-slate-500 font-semibold`}>{emp.managerName || 'Not Assigned'}</td>}
+                        {visibleColumns.type && <td className={`${cellPaddingClass} text-slate-500 font-semibold`}>{emp.employmentType || '—'}</td>}
+                        {visibleColumns.location && <td className={`${cellPaddingClass} text-slate-400 font-medium leading-tight`}>{emp.location || '—'}</td>}
+                        {visibleColumns.experience && <td className={`${cellPaddingClass} text-slate-500 font-semibold`}>{emp.experience || '—'}</td>}
+                        {visibleColumns.joiningDate && <td className={`${cellPaddingClass} text-slate-500 font-semibold`}>{emp.joiningDate}</td>}
+                        {visibleColumns.workMode && (
+                          <td className={cellPaddingClass}>
+                            <Badge variant="outline" className={`text-[9px] uppercase font-black px-2 py-0.5 border-transparent ${getWorkModeColor(emp.workMode)}`}>
+                              {emp.workMode}
+                            </Badge>
+                          </td>
+                        )}
+                        {visibleColumns.salary && (
+                          <td className={`${cellPaddingClass} font-semibold text-slate-600`}>
+                            {simulatedRole === 'Manager' || simulatedRole === 'Employee' ? 'Confidential' : (emp.salary || '—')}
+                          </td>
+                        )}
+                        {visibleColumns.attendance && <td className={`${cellPaddingClass} font-semibold text-slate-600`}>{emp.attendance || '—'}</td>}
+                        {visibleColumns.assets && <td className={`${cellPaddingClass} font-semibold text-slate-600`}>{emp.assets || 'None'}</td>}
+                        {visibleColumns.status && (
+                          <td className={cellPaddingClass}>
+                            <Badge variant="outline" className={`text-[9px] font-black uppercase px-2 py-0.5 border border-transparent ${getStatusColor(emp.status)}`}>
+                              {emp.status}
+                            </Badge>
+                          </td>
+                        )}
+                        <td className={`${cellPaddingClass} text-center`} onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-center gap-1.5">
                             <Link href={`/dashboard/employees/${emp.id}`}>
                               <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-[#f87941] rounded-lg">
@@ -923,23 +1297,60 @@ export default function EmployeeDirectoryPage() {
             {/* Pagination controls matching design */}
             <div className="flex items-center justify-between p-4 border-t border-[#e6e4e6]/10 mt-auto bg-slate-50/50">
               <span className="text-[11px] font-semibold text-slate-400">
-                Showing 1 to {filteredEmployees.length} of {filteredEmployees.length} results
+                Showing {totalResults === 0 ? 0 : (currentPage - 1) * pageSize + 1} to {Math.min(currentPage * pageSize, totalResults)} of {totalResults} results
               </span>
               
               <div className="flex items-center gap-1 text-xs">
-                <Button variant="outline" size="sm" className="h-7 px-2 border-slate-200 text-slate-400 hover:text-slate-600 rounded-lg">&lt;</Button>
-                <Button className="h-7 w-7 p-0 bg-[#fdfcfd] border border-[#f87941] text-[#f87941] font-bold rounded-lg shadow-sm">1</Button>
-                <Button variant="outline" size="sm" className="h-7 w-7 p-0 border-slate-200 text-slate-500 rounded-lg">2</Button>
-                <Button variant="outline" size="sm" className="h-7 w-7 p-0 border-slate-200 text-slate-500 rounded-lg">3</Button>
-                <span className="text-slate-400 px-1 font-semibold">...</span>
-                <Button variant="outline" size="sm" className="h-7 w-7 p-0 border-slate-200 text-slate-500 rounded-lg">22</Button>
-                <Button variant="outline" size="sm" className="h-7 px-2 border-slate-200 text-slate-400 hover:text-slate-600 rounded-lg">&gt;</Button>
+                <Button 
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  variant="outline" 
+                  size="sm" 
+                  className="h-7 px-2 border-slate-200 text-slate-400 hover:text-slate-600 rounded-lg disabled:opacity-50"
+                >
+                  &lt;
+                </Button>
+                {getPageNumbers().map((p, idx) => {
+                  if (p === '...') {
+                    return <span key={`dots-${idx}`} className="text-slate-400 px-1 font-semibold">...</span>;
+                  }
+                  const isCurrent = currentPage === p;
+                  return (
+                    <Button
+                      key={`page-${p}`}
+                      onClick={() => setCurrentPage(Number(p))}
+                      className={`h-7 w-7 p-0 rounded-lg shadow-sm text-xs font-bold ${
+                        isCurrent 
+                          ? 'bg-[#fdfcfd] border border-[#f87941] text-[#f87941]' 
+                          : 'border border-slate-200 bg-white hover:bg-slate-50 text-slate-500'
+                      }`}
+                    >
+                      {p}
+                    </Button>
+                  );
+                })}
+                <Button 
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, Math.ceil(totalResults / pageSize)))}
+                  disabled={currentPage >= Math.ceil(totalResults / pageSize)}
+                  variant="outline" 
+                  size="sm" 
+                  className="h-7 px-2 border-slate-200 text-slate-400 hover:text-slate-600 rounded-lg disabled:opacity-50"
+                >
+                  &gt;
+                </Button>
               </div>
 
-              <select className="h-7 rounded-lg border border-slate-200 text-[10px] font-bold text-slate-500 px-2 outline-none">
-                <option>10 / page</option>
-                <option>25 / page</option>
-                <option>50 / page</option>
+              <select 
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="h-7 rounded-lg border border-slate-200 text-[10px] font-bold text-slate-500 px-2 outline-none bg-white dark:bg-[#1E1F22] dark:border-slate-800"
+              >
+                <option value={10}>10 / page</option>
+                <option value={25}>25 / page</option>
+                <option value={50}>50 / page</option>
               </select>
             </div>
 
@@ -949,23 +1360,23 @@ export default function EmployeeDirectoryPage() {
       </div>
 
       {/* RIGHT SIDE FIXED PREVIEW PANEL */}
-      <div className="absolute right-0 top-0 bottom-0 w-[420px] bg-white dark:bg-[#1E1F22] border-l border-[#e6e4e6]/30 dark:border-[#2f3035]/30 p-5 flex flex-col gap-4 overflow-y-auto z-10 shadow-lg">
-        
-        {/* Drawer Toolbar */}
-        <div className="flex items-center justify-between pb-3 border-b border-[#e6e4e6]/10">
-          <Button variant="ghost" className="h-8 w-8 p-0 rounded-lg text-slate-400 hover:text-slate-600">
-            <Pin className="h-4 w-4" />
-          </Button>
-          <Button 
-            onClick={() => setPreviewEmployee(null)} 
-            variant="ghost" 
-            className="h-8 w-8 p-0 rounded-full text-slate-400 hover:text-slate-600"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
+      {previewEmployee && (
+        <div className="absolute right-0 top-0 bottom-0 w-[420px] bg-white dark:bg-[#1E1F22] border-l border-[#e6e4e6]/30 dark:border-[#2f3035]/30 p-5 flex flex-col gap-4 overflow-y-auto z-10 shadow-lg animate-in slide-in-from-right duration-300">
+          
+          {/* Drawer Toolbar */}
+          <div className="flex items-center justify-between pb-3 border-b border-[#e6e4e6]/10">
+            <Button variant="ghost" className="h-8 w-8 p-0 rounded-lg text-slate-400 hover:text-slate-600">
+              <Pin className="h-4 w-4" />
+            </Button>
+            <Button 
+              onClick={() => setPreviewEmployee(null)} 
+              variant="ghost" 
+              className="h-8 w-8 p-0 rounded-full text-slate-400 hover:text-slate-600"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
 
-        {previewEmployee ? (
           <div className="flex flex-col gap-4 text-left">
             
             {/* Header Identity details */}
@@ -973,7 +1384,7 @@ export default function EmployeeDirectoryPage() {
               <div className="relative">
                 <Avatar className="h-20 w-20 border-2 border-slate-200">
                   <AvatarFallback className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-350 font-black text-xl">
-                    {previewEmployee.firstName[0]}{previewEmployee.lastName[0]}
+                    {`${previewEmployee.firstName?.[0] || ''}${previewEmployee.lastName?.[0] || ''}`.toUpperCase() || 'EE'}
                   </AvatarFallback>
                 </Avatar>
                 <span className="absolute bottom-1 right-1 h-3.5 w-3.5 bg-emerald-500 border-2 border-white rounded-full" />
@@ -981,7 +1392,7 @@ export default function EmployeeDirectoryPage() {
 
               <div>
                 <h3 className="text-lg font-black text-slate-900 dark:text-[#fdfcfc]">
-                  {previewEmployee.firstName} {previewEmployee.lastName}
+                  {`${previewEmployee.firstName || ''} ${previewEmployee.lastName || ''}`.trim() || 'Employee'}
                 </h3>
                 <p className="text-xs font-bold text-slate-400 mt-0.5">{previewEmployee.employeeId}</p>
                 <p className="text-[11px] font-black text-slate-500 uppercase tracking-wider mt-1">{previewEmployee.designation}</p>
@@ -1025,7 +1436,7 @@ export default function EmployeeDirectoryPage() {
                 </div>
                 <div>
                   <span className="text-slate-400 block font-semibold">Employment Type</span>
-                  <span className="font-bold text-slate-800 dark:text-slate-200">Full Time</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-200">{previewEmployee.employmentType || '—'}</span>
                 </div>
                 <div>
                   <span className="text-slate-400 block font-semibold">Work Mode</span>
@@ -1037,18 +1448,18 @@ export default function EmployeeDirectoryPage() {
                     <Avatar className="h-4.5 w-4.5">
                       <AvatarFallback className="text-[8px] bg-slate-100 font-bold">RM</AvatarFallback>
                     </Avatar>
-                    <span className="font-bold text-slate-800 dark:text-slate-200">{previewEmployee.managerName || 'Rahul Sharma'}</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-200">{previewEmployee.managerName || 'Not Assigned'}</span>
                   </div>
                 </div>
                 {simulatedRole !== 'Manager' && (
                   <div>
                     <span className="text-slate-400 block font-semibold">Salary (CTC)</span>
-                    <span className="font-bold text-slate-800 dark:text-slate-200">{previewEmployee.salary || '₹ 8.5 LPA'}</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-200">{previewEmployee.salary || '—'}</span>
                   </div>
                 )}
                 <div>
                   <span className="text-slate-400 block font-semibold">Experience</span>
-                  <span className="font-bold text-slate-800 dark:text-slate-200">{previewEmployee.experience || '2.5 Years'}</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-200">{previewEmployee.experience || '—'}</span>
                 </div>
               </div>
             </div>
@@ -1060,19 +1471,19 @@ export default function EmployeeDirectoryPage() {
               </div>
               <div className="grid grid-cols-4 gap-2 text-center text-xs">
                 <div className="p-2.5 bg-slate-50 dark:bg-slate-900 border rounded-xl">
-                  <span className="text-lg font-black text-slate-800 dark:text-slate-200">{previewEmployee.attendance || '92%'}</span>
+                  <span className="text-lg font-black text-slate-800 dark:text-slate-200">{previewEmployee.attendance || '—'}</span>
                   <span className="text-[8px] font-bold text-slate-400 block mt-1">This Month</span>
                 </div>
                 <div className="p-2.5 bg-slate-50 dark:bg-slate-900 border rounded-xl">
-                  <span className="text-lg font-black text-slate-800 dark:text-slate-200">{previewEmployee.leaveBalance || 18}</span>
+                  <span className="text-lg font-black text-slate-800 dark:text-slate-200">{previewEmployee.leaveBalance ?? '—'}</span>
                   <span className="text-[8px] font-bold text-slate-400 block mt-1">Days Left</span>
                 </div>
                 <div className="p-2.5 bg-slate-50 dark:bg-slate-900 border rounded-xl">
-                  <span className="text-lg font-black text-purple-600">{previewEmployee.performance || '4.3'}</span>
+                  <span className="text-lg font-black text-purple-600">{previewEmployee.performance || '—'}</span>
                   <span className="text-[8px] font-bold text-slate-400 block mt-1">Rating Score</span>
                 </div>
                 <div className="p-2.5 bg-slate-50 dark:bg-slate-900 border rounded-xl">
-                  <span className="text-lg font-black text-slate-800 dark:text-slate-200">{previewEmployee.projects || 3}</span>
+                  <span className="text-lg font-black text-slate-800 dark:text-slate-200">{previewEmployee.projects ?? '—'}</span>
                   <span className="text-[8px] font-bold text-slate-400 block mt-1">Active Projects</span>
                 </div>
               </div>
@@ -1084,7 +1495,7 @@ export default function EmployeeDirectoryPage() {
                 <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Skills</span>
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {(previewEmployee.skills || ['React', 'Node.js', 'TypeScript', 'Next.js']).map(skill => (
+                {(previewEmployee.skills && previewEmployee.skills.length > 0 ? previewEmployee.skills : []).map(skill => (
                   <Badge key={skill} className="bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-350 border border-slate-200 text-[10px] font-bold px-2 py-0.5">
                     {skill}
                   </Badge>
@@ -1098,8 +1509,8 @@ export default function EmployeeDirectoryPage() {
                 <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Recent Activity</span>
               </div>
               <div className="flex flex-col gap-3 text-xs pl-2.5 border-l border-slate-200 ml-1.5">
-                {(previewEmployee.activities || [
-                  { text: 'Marked attendance at 09:15 AM', time: 'Today, 09:15 AM' }
+                {(previewEmployee.activities && previewEmployee.activities.length > 0 ? previewEmployee.activities : [
+                  { text: 'No recent activity recorded', time: '—' }
                 ]).map((act, i) => (
                   <div key={i} className="relative">
                     <span className="absolute -left-[14.5px] top-1.5 h-2 w-2 bg-[#f87941] rounded-full ring-4 ring-white" />
@@ -1114,11 +1525,8 @@ export default function EmployeeDirectoryPage() {
             </div>
 
           </div>
-        ) : (
-          <p className="text-slate-400 text-xs italic text-center py-10">Select an employee row to view summary statistics.</p>
-        )}
-
-      </div>
+        </div>
+      )}
 
       {/* 5. MODALS & SUBMODALS DIALOGS */}
 
@@ -1163,6 +1571,694 @@ export default function EmployeeDirectoryPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* 6. EXTENDED SAAS MODALS & DRAWERS */}
+
+      {/* CSV Import Workspace Modal */}
+      {showImportPreviewModal && (
+        <div className="fixed inset-0 bg-slate-900/30 dark:bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30 rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-scale-up text-left">
+            
+            {/* Header */}
+            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50">
+              <div>
+                <h3 className="font-extrabold text-base text-slate-800 dark:text-[#fdfcfc] flex items-center gap-1.5">
+                  <Upload className="h-4.5 w-4.5 text-[#f87941]" /> Employee CSV Import Workspace
+                </h3>
+                <p className="text-[11px] text-slate-400 font-medium">Standardize, validate, and preview before committing records to the organization database.</p>
+              </div>
+              <Button 
+                onClick={() => {
+                  setShowImportPreviewModal(false);
+                  setImportStep('upload');
+                  setImportFileName('');
+                }} 
+                variant="ghost" 
+                className="h-8 w-8 p-0 rounded-full"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Stepper Status Bar */}
+            <div className="px-6 py-3 border-b bg-slate-50/20 flex items-center justify-between text-xs font-bold text-slate-400">
+              <span className={importStep === 'upload' ? 'text-[#f87941]' : 'text-slate-500'}>1. Drag & Drop File</span>
+              <ChevronRight className="h-3 w-3" />
+              <span className={importStep === 'mapping' ? 'text-[#f87941]' : 'text-slate-500'}>2. Column Mapping</span>
+              <ChevronRight className="h-3 w-3" />
+              <span className={importStep === 'validation' ? 'text-[#f87941]' : 'text-slate-500'}>3. Validation Console</span>
+              <ChevronRight className="h-3 w-3" />
+              <span className={importStep === 'success' ? 'text-emerald-500' : 'text-slate-500'}>4. Complete</span>
+            </div>
+
+            {/* Steps Content */}
+            <div className="p-6 overflow-y-auto flex-grow flex flex-col gap-4">
+              
+              {/* Step 1: Upload */}
+              {importStep === 'upload' && (
+                <div className="flex flex-col items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-3xl p-12 text-center gap-4 bg-slate-50/10">
+                  <div className="h-12 w-12 rounded-full bg-[#f87941]/10 flex items-center justify-center">
+                    <FileSpreadsheet className="h-6 w-6 text-[#f87941]" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-700">Drag & Drop employee list .csv or .xlsx file here</p>
+                    <p className="text-[10px] text-slate-400 mt-1">Accepts UTF-8 encoded files up to 25MB with headers: Employee ID, Name, Email, Department, Joining Date</p>
+                  </div>
+                  <Button 
+                    onClick={() => {
+                      setImportFileName('workforce_onboarding_july.csv');
+                      setImportStep('mapping');
+                    }}
+                    className="bg-slate-900 text-white hover:bg-slate-800 text-xs font-bold h-9 px-4 rounded-xl"
+                  >
+                    Select File From Device
+                  </Button>
+                </div>
+              )}
+
+              {/* Step 2: Column Mapping */}
+              {importStep === 'mapping' && (
+                <div className="flex flex-col gap-3 text-xs">
+                  <div className="p-3 bg-blue-50/50 border border-blue-100 rounded-2xl flex items-center gap-2">
+                    <Check className="h-4 w-4 text-blue-500" />
+                    <span className="font-semibold text-slate-755">Successfully mapped 6 out of 6 standard fields from <code className="bg-slate-100 px-1 py-0.5 rounded text-[11px] font-bold">{importFileName}</code></span>
+                  </div>
+                  
+                  <div className="border rounded-2xl overflow-hidden mt-1">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 font-bold border-b text-[10px] uppercase text-slate-400">
+                          <th className="p-2.5">Target Field (System)</th>
+                          <th className="p-2.5">Source Header (CSV)</th>
+                          <th className="p-2.5">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y font-medium text-slate-600">
+                        {[
+                          { system: 'Employee ID', source: 'emp_id (Mapped)', status: 'Matched' },
+                          { system: 'First Name', source: 'fname (Mapped)', status: 'Matched' },
+                          { system: 'Last Name', source: 'lname (Mapped)', status: 'Matched' },
+                          { system: 'Email Address', source: 'work_email (Mapped)', status: 'Matched' },
+                          { system: 'Department', source: 'dept (Mapped)', status: 'Matched' },
+                          { system: 'Joining Date', source: 'doj (Mapped)', status: 'Matched' },
+                        ].map((m, i) => (
+                          <tr key={i}>
+                            <td className="p-2.5 font-bold text-slate-800">{m.system}</td>
+                            <td className="p-2.5 font-semibold text-slate-500">{m.source}</td>
+                            <td className="p-2.5 text-emerald-600 font-bold">✓ {m.status}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="flex justify-end gap-2 mt-4">
+                    <Button onClick={() => setImportStep('upload')} variant="outline" className="rounded-xl text-xs font-bold h-9">
+                      Back
+                    </Button>
+                    <Button onClick={() => setImportStep('validation')} className="bg-[#f87941] text-white hover:bg-[#e06634] rounded-xl text-xs font-bold h-9 px-4">
+                      Proceed to Validation Console
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 3: Validation Console */}
+              {importStep === 'validation' && (
+                <div className="flex flex-col gap-4 text-xs">
+                  {/* Status Grid */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="p-3 bg-emerald-50/50 border border-emerald-100 rounded-xl text-center">
+                      <span className="text-base font-black text-emerald-600">42</span>
+                      <span className="text-[9px] font-bold text-slate-400 block">Valid Rows</span>
+                    </div>
+                    <div className="p-3 bg-amber-50/50 border border-amber-100 rounded-xl text-center">
+                      <span className="text-base font-black text-amber-600">1</span>
+                      <span className="text-[9px] font-bold text-slate-400 block">Duplicate Warning</span>
+                    </div>
+                    <div className="p-3 bg-rose-50/50 border border-rose-100 rounded-xl text-center">
+                      <span className="text-base font-black text-rose-600">1</span>
+                      <span className="text-[9px] font-bold text-slate-400 block">Malformed Field</span>
+                    </div>
+                  </div>
+
+                  {/* Duplicate Detection Options */}
+                  <div className="flex flex-col gap-2 p-3 bg-slate-50 border rounded-2xl">
+                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Duplicate Record Resolution</label>
+                    <div className="flex items-center gap-4 mt-1 font-semibold text-slate-700">
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input type="radio" name="dupe" checked={duplicateAction === 'skip'} onChange={() => setDuplicateAction('skip')} className="text-[#f87941]" />
+                        <span>Skip record</span>
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input type="radio" name="dupe" checked={duplicateAction === 'overwrite'} onChange={() => setDuplicateAction('overwrite')} className="text-[#f87941]" />
+                        <span>Overwrite profile</span>
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input type="radio" name="dupe" checked={duplicateAction === 'both'} onChange={() => setDuplicateAction('both')} className="text-[#f87941]" />
+                        <span>Keep both (new ID)</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Direct Inline Correction Console */}
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider text-rose-650">Errors to Resolve (1)</label>
+                    <div className="p-4 border border-rose-100 bg-rose-50/20 rounded-2xl flex flex-col gap-3">
+                      <div className="flex items-center justify-between text-[11px] font-bold text-rose-700">
+                        <span>Row #14: Malformed Email Address</span>
+                        <span className="bg-rose-100 px-2 py-0.5 rounded-lg text-[9px]">Invalid Format</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-left">
+                        <div>
+                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-wide block mb-1">Employee Name</label>
+                          <Input value="Alice Tan" disabled className="h-8 rounded-lg text-xs" />
+                        </div>
+                        <div>
+                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-wide block mb-1">Correct Email</label>
+                          <Input 
+                            value={importErrorEmail} 
+                            onChange={(e) => setImportErrorEmail(e.target.value)} 
+                            className={`h-8 rounded-lg text-xs border ${importErrorEmail.includes('@') ? 'border-slate-200' : 'border-rose-400 focus:ring-rose-400'}`} 
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-wide block mb-1">Department</label>
+                          <Input value="Engineering" disabled className="h-8 rounded-lg text-xs" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center mt-4">
+                    <span className="text-[10px] font-semibold text-slate-400 flex items-center gap-1">
+                      <AlertTriangle className="h-3.5 w-3.5 text-amber-500" /> Malformed email must be corrected to commit import.
+                    </span>
+                    <div className="flex gap-2">
+                      <Button onClick={() => setImportStep('mapping')} variant="outline" className="rounded-xl text-xs font-bold h-9">
+                        Back
+                      </Button>
+                      <Button 
+                        onClick={() => {
+                          if (!importErrorEmail.includes('@')) {
+                            toast.error("Please provide a valid email to resolve the warning.");
+                            return;
+                          }
+                          // Add Alice Tan to our employee list mock to show real-time changes!
+                          const newEmp: Employee = {
+                            id: 10025,
+                            userId: 2025,
+                            employeeId: 'EMP10025',
+                            firstName: 'Alice',
+                            lastName: 'Tan',
+                            email: importErrorEmail,
+                            department: 'Engineering',
+                            designation: 'Senior QA Analyst',
+                            location: 'Surat',
+                            workMode: 'Office',
+                            joiningDate: '2026-07-01',
+                            status: 'Active',
+                            phone: '+919876543231'
+                          };
+                          setEmployees(prev => [newEmp, ...prev]);
+                          setImportStep('success');
+                          setHasImported(true);
+                          addAuditLog('Import Completed', 'Imported 43 employees from workforce_onboarding_july.csv.');
+                          toast.success("Successfully imported workforce list!");
+                        }}
+                        disabled={!importErrorEmail.includes('@')}
+                        className="bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-xs font-bold h-9 px-4"
+                      >
+                        Commit Import (43 Records)
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 4: Success Console & Rollback */}
+              {importStep === 'success' && (
+                <div className="flex flex-col items-center justify-center p-8 text-center gap-4 bg-slate-50/10">
+                  <div className="h-12 w-12 rounded-full bg-emerald-500/10 flex items-center justify-center animate-bounce">
+                    <Check className="h-6 w-6 text-emerald-600 font-extrabold" />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-base text-slate-800 dark:text-[#fdfcfc]">Workforce Database Synchronized</h4>
+                    <p className="text-xs text-slate-400 mt-1">Imported 43 employee profiles successfully. Audit trail and logs have been registered.</p>
+                  </div>
+
+                  <div className="flex gap-2.5 mt-4">
+                    <Button 
+                      onClick={() => {
+                        // Undo: Rollback imported records
+                        setEmployees(prev => prev.filter(e => e.id !== 10025));
+                        setImportStep('upload');
+                        setImportFileName('');
+                        setHasImported(false);
+                        addAuditLog('Import Rolled Back', 'Rolled back imported dataset from workforce_onboarding_july.csv.');
+                        toast.success("Import operation successfully rolled back.");
+                      }}
+                      variant="outline" 
+                      className="border-rose-200 text-rose-600 hover:bg-rose-50 rounded-xl text-xs font-bold h-9 px-4 flex items-center gap-1.5"
+                    >
+                      Undo/Rollback Import
+                    </Button>
+                    <Button 
+                      onClick={() => {
+                        setShowImportPreviewModal(false);
+                        setImportStep('upload');
+                        setImportFileName('');
+                      }} 
+                      className="bg-[#f87941] text-white hover:bg-[#e06634] rounded-xl text-xs font-bold h-9 px-6"
+                    >
+                      Finish
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Export Configuration Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-slate-900/30 dark:bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30 rounded-3xl p-6 max-w-sm w-full shadow-2xl flex flex-col gap-5 animate-scale-up text-left text-xs">
+            <div className="flex justify-between items-center border-b pb-2">
+              <h3 className="font-extrabold text-base text-slate-800 dark:text-[#fdfcfc] flex items-center gap-1.5">
+                <Download className="h-4.5 w-4.5 text-[#f87941]" /> Export Options
+              </h3>
+              <Button onClick={() => setShowExportModal(false)} variant="ghost" className="h-8 w-8 p-0 rounded-full">
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Export Range */}
+            <div className="flex flex-col gap-2">
+              <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Export Scope/Range</label>
+              <select className="h-10 w-full rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold px-3 cursor-pointer outline-none">
+                <option>Current Page ({filteredEmployees.length} records)</option>
+                <option>Selected rows ({selectedIds.length} profiles)</option>
+                <option>Entire Organization (248 records)</option>
+              </select>
+            </div>
+
+            {/* Format Picker */}
+            <div className="flex flex-col gap-2">
+              <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">File Format</label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { name: 'CSV', desc: 'Standard data' },
+                  { name: 'Excel', desc: 'Full sheets' },
+                  { name: 'PDF', desc: 'Read-only document' }
+                ].map((fmt) => (
+                  <button
+                    key={fmt.name}
+                    className="p-2.5 rounded-xl border hover:border-[#f87941]/55 flex flex-col items-center gap-1 font-bold transition-all text-xs"
+                    onClick={() => {
+                      toast.success(`Exporting to ${fmt.name} file format...`);
+                      addAuditLog('Dataset Exported', `Generated ${fmt.name} report with ${filteredEmployees.length} rows.`);
+                      setShowExportModal(false);
+                    }}
+                  >
+                    <span>{fmt.name}</span>
+                    <span className="text-[8px] text-slate-400 font-semibold">{fmt.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Security Exclusions */}
+            <div className="flex flex-col gap-2 bg-slate-50 p-3 rounded-2xl border">
+              <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Data Exclusion (RBAC)</label>
+              <label className="flex items-center gap-2 text-xs font-semibold mt-1 text-slate-600 cursor-pointer">
+                <input type="checkbox" defaultChecked className="rounded text-[#f87941] focus:ring-[#f87941]" />
+                <span>Exclude salary / payroll metrics</span>
+              </label>
+              <label className="flex items-center gap-2 text-xs font-semibold mt-1 text-slate-600 cursor-pointer">
+                <input type="checkbox" className="rounded text-[#f87941] focus:ring-[#f87941]" />
+                <span>Mask phone & personal email</span>
+              </label>
+            </div>
+
+            {/* Schedule automated export */}
+            <div className="flex flex-col gap-2">
+              <label className="flex items-center gap-2 text-xs font-bold text-slate-705 cursor-pointer">
+                <input type="checkbox" className="rounded text-[#f87941] focus:ring-[#f87941]" />
+                <span>Schedule automated weekly email export</span>
+              </label>
+            </div>
+
+            <div className="flex gap-2 justify-end mt-1 border-t pt-3">
+              <Button onClick={() => setShowExportModal(false)} variant="outline" className="rounded-xl text-xs font-bold h-9">
+                Cancel
+              </Button>
+              <Button 
+                onClick={() => {
+                  toast.success("Download started.");
+                  addAuditLog('Dataset Exported', `Downloaded spreadsheet summary.`);
+                  setShowExportModal(false);
+                }} 
+                className="bg-[#f87941] text-white hover:bg-[#e06634] rounded-xl text-xs font-bold h-9 px-4"
+              >
+                Download File
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Settings Configuration Drawer */}
+      {showSettingsDrawer && (
+        <div className="fixed inset-0 bg-slate-900/30 dark:bg-black/50 backdrop-blur-sm z-50 flex items-center justify-end">
+          <div className="bg-white dark:bg-[#1E1F22] border-l border-[#e6e4e6]/30 dark:border-[#2f3035]/30 h-full max-w-sm w-full shadow-2xl flex flex-col justify-between animate-slide-left text-left">
+            <div className="p-6 overflow-y-auto flex flex-col gap-5 flex-grow">
+              <div className="flex items-center justify-between border-b pb-3">
+                <h3 className="font-extrabold text-base text-slate-800 dark:text-[#fdfcfc] flex items-center gap-1.5">
+                  <Settings className="h-4.5 w-4.5 text-[#f87941]" /> Directory Configuration
+                </h3>
+                <Button onClick={() => setShowSettingsDrawer(false)} variant="ghost" className="h-8 w-8 p-0 rounded-full">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+
+              {/* Column Selection */}
+              <div className="flex flex-col gap-2">
+                <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Configure Columns</label>
+                <div className="grid grid-cols-2 gap-x-2 gap-y-2.5 mt-1">
+                  {Object.keys(visibleColumns).map((col) => (
+                    <label key={col} className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={visibleColumns[col]} 
+                        onChange={(e) => setVisibleColumns(prev => ({ ...prev, [col]: e.target.checked }))}
+                        className="rounded text-[#f87941] focus:ring-[#f87941] h-3.5 w-3.5"
+                      />
+                      <span className="capitalize">{col.replace(/([A-Z])/g, ' $1')}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Density Configuration */}
+              <div className="flex flex-col gap-2">
+                <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Density & Row Height</label>
+                <div className="grid grid-cols-3 gap-2 mt-1">
+                  {(['compact', 'normal', 'relaxed'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      onClick={() => setDensity(mode)}
+                      className={`py-1.5 rounded-xl border text-xs font-bold capitalize transition-colors ${
+                        density === mode ? 'border-[#f87941] bg-[#f87941]/5 text-[#f87941]' : 'border-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      {mode}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Default Sorting Options */}
+              <div className="flex flex-col gap-2">
+                <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Default Sorting</label>
+                <select className="h-10 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold px-3 cursor-pointer outline-none">
+                  <option>First Name (A-Z)</option>
+                  <option>Last Name (A-Z)</option>
+                  <option>Employee ID (Ascending)</option>
+                  <option>Joining Date (Newest first)</option>
+                </select>
+              </div>
+
+              {/* Default Filter Presets */}
+              <div className="flex flex-col gap-2">
+                <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Default Filters</label>
+                <div className="flex flex-col gap-2 mt-1">
+                  <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
+                    <input type="checkbox" defaultChecked className="rounded text-[#f87941] focus:ring-[#f87941]" />
+                    <span>Always exclude Terminated employees</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
+                    <input type="checkbox" className="rounded text-[#f87941] focus:ring-[#f87941]" />
+                    <span>Only show verified contact numbers</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 border-t bg-slate-50 dark:bg-slate-900/30 flex gap-2 justify-end">
+              <Button onClick={() => { setShowSettingsDrawer(false); toast.success("Configuration applied and saved."); }} className="bg-[#f87941] text-white hover:bg-[#e06634] rounded-xl text-xs font-bold h-9 w-full">
+                Apply & Save Configuration
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Action Config Modal */}
+      {showBulkModal && bulkActionType && (
+        <div className="fixed inset-0 bg-slate-900/30 dark:bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30 rounded-3xl p-6 max-w-sm w-full shadow-2xl flex flex-col gap-4 animate-scale-up text-left">
+            <h3 className="font-extrabold text-base text-slate-800 dark:text-[#fdfcfc]">Bulk Operation: {bulkActionType}</h3>
+            <p className="text-xs text-slate-400">Configure parameters to update {selectedIds.length} selected employee records.</p>
+            
+            {bulkActionType === 'Update Department' && (
+              <select className="h-10 w-full rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold px-3 cursor-pointer outline-none">
+                <option>Engineering</option>
+                <option>HR</option>
+                <option>Design</option>
+                <option>Finance</option>
+                <option>Operations</option>
+              </select>
+            )}
+
+            {bulkActionType === 'Transfer Manager' && (
+              <select className="h-10 w-full rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold px-3 cursor-pointer outline-none">
+                <option>Rahul Sharma (Engineering Lead)</option>
+                <option>Vikas Mehta (HR Director)</option>
+                <option>Ananya Sen (Design Head)</option>
+              </select>
+            )}
+
+            {bulkActionType === 'Update Designation' && (
+              <Input placeholder="e.g. Senior Software Architect" className="h-10 rounded-xl" />
+            )}
+
+            {bulkActionType === 'Assign Project' && (
+              <select className="h-10 w-full rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold px-3 cursor-pointer outline-none">
+                <option>CMS Portal Revamp</option>
+                <option>Enterprise AI Integration</option>
+                <option>SaaS Billing Core</option>
+              </select>
+            )}
+
+            {bulkActionType === 'Assign Shift' && (
+              <select className="h-10 w-full rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold px-3 cursor-pointer outline-none">
+                <option>General Shift (09:00 AM - 06:00 PM)</option>
+                <option>US Night Shift (08:00 PM - 05:00 AM)</option>
+                <option>Morning Support Shift (06:00 AM - 03:00 PM)</option>
+              </select>
+            )}
+
+            {bulkActionType === 'Assign Asset' && (
+              <select className="h-10 w-full rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold px-3 cursor-pointer outline-none">
+                <option>Apple MacBook Pro 16" (M3 Max)</option>
+                <option>Dell UltraSharp 32" 4K Monitor</option>
+                <option>iPhone 15 Pro Max (Corporate)</option>
+              </select>
+            )}
+
+            {bulkActionType === 'Generate Letters' && (
+              <select className="h-10 w-full rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold px-3 cursor-pointer outline-none">
+                <option>Annual Compensation Increment Letter</option>
+                <option>Promotion Declaration Notice</option>
+                <option>Relocation Authorization Letter</option>
+              </select>
+            )}
+
+            {bulkActionType === 'Move Business Unit' && (
+              <select className="h-10 w-full rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold px-3 cursor-pointer outline-none">
+                <option>Techsonance India LLC</option>
+                <option>Techsonance US Inc.</option>
+                <option>Techsonance Middle East FZ</option>
+              </select>
+            )}
+
+            {['Deactivate', 'Activate', 'Archive'].includes(bulkActionType) && (
+              <div className="p-3 bg-rose-50/50 rounded-xl border border-rose-100 text-xs text-rose-700 font-medium">
+                Warning: This status change will instantly update authentication access. Ensure proper compliance authorization beforehand.
+              </div>
+            )}
+
+            <div className="flex gap-2 justify-end mt-2">
+              <Button 
+                onClick={() => {
+                  setShowBulkModal(false);
+                  setBulkActionType(null);
+                }} 
+                variant="outline" 
+                className="rounded-xl text-xs font-bold h-9"
+              >
+                Cancel
+              </Button>
+              <Button onClick={executeBulkAction} className="bg-[#f87941] text-white hover:bg-[#e06634] rounded-xl text-xs font-bold h-9 px-4">
+                Confirm Update
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Alerts & Notifications Drawer */}
+      {showAlertsDrawer && (
+        <div className="fixed inset-0 bg-slate-900/30 dark:bg-black/50 backdrop-blur-sm z-50 flex items-center justify-end">
+          <div className="bg-white dark:bg-[#1E1F22] border-l border-[#e6e4e6]/30 dark:border-[#2f3035]/30 h-full max-w-sm w-full shadow-2xl flex flex-col justify-between animate-slide-left text-left">
+            <div className="p-6 overflow-y-auto flex flex-col gap-4 flex-grow text-xs">
+              <div className="flex items-center justify-between border-b pb-3">
+                <h3 className="font-extrabold text-base text-slate-800 dark:text-[#fdfcfc] flex items-center gap-1.5">
+                  <Bell className="h-4.5 w-4.5 text-[#f87941]" /> Operations Alerts
+                </h3>
+                <Button onClick={() => setShowAlertsDrawer(false)} variant="ghost" className="h-8 w-8 p-0 rounded-full">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                {[
+                  { text: "Passport expires in 30 days (Aditya Sen)", type: "warning" },
+                  { text: "Probation ends this week (Neha Gupta)", type: "info" },
+                  { text: "Birthday tomorrow (Rushabh Jain 🎉)", type: "success" },
+                  { text: "Pending performance review (Siddharth Roy)", type: "warning" },
+                  { text: "Pending documents / KYC missing (Priya Patel)", type: "error" },
+                  { text: "Missing attendance alert: 2 consecutive days (Kunal Shah)", type: "error" },
+                  { text: "Pending asset return: Laptop & Monitor (Amit Verma)", type: "info" }
+                ].map((alert, idx) => (
+                  <div key={idx} className="p-3 bg-slate-50 dark:bg-slate-900/50 border rounded-2xl flex items-center gap-3 text-xs">
+                    <div className={`h-2.5 w-2.5 rounded-full shrink-0 ${
+                      alert.type === 'error' ? 'bg-rose-500' :
+                      alert.type === 'warning' ? 'bg-amber-500' :
+                      alert.type === 'success' ? 'bg-emerald-500' : 'bg-blue-500'
+                    }`} />
+                    <p className="font-bold text-slate-700 dark:text-slate-350">{alert.text}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="p-6 border-t bg-slate-50 dark:bg-slate-900/30 flex gap-2">
+              <Button onClick={() => { setShowAlertsDrawer(false); toast.success("Acknowledged all operational warnings."); }} className="w-full bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-xs font-bold h-9">
+                Acknowledge All
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Insights Sidebar Panel */}
+      {showAiInsights && (
+        <div className="fixed inset-0 bg-slate-900/30 dark:bg-black/50 backdrop-blur-sm z-50 flex items-center justify-end">
+          <div className="bg-white dark:bg-[#1E1F22] border-l border-[#e6e4e6]/30 dark:border-[#2f3035]/30 h-full max-w-sm w-full shadow-2xl flex flex-col justify-between animate-slide-left text-left">
+            <div className="p-6 overflow-y-auto flex flex-col gap-5 flex-grow">
+              <div className="flex items-center justify-between border-b pb-3">
+                <h3 className="font-extrabold text-base text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
+                  <Sparkles className="h-4.5 w-4.5 text-purple-500 animate-pulse" /> AI Workforce Insights
+                </h3>
+                <Button onClick={() => setShowAiInsights(false)} variant="ghost" className="h-8 w-8 p-0 rounded-full">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="flex flex-col gap-4 text-xs">
+                <div className="p-4 bg-purple-50/50 border border-purple-100 rounded-2xl flex flex-col gap-1.5">
+                  <span className="font-black text-purple-700 uppercase tracking-wider text-[9px]">Retention Risk Alert</span>
+                  <p className="font-bold text-slate-800">5 employees may resign soon</p>
+                  <p className="text-[10px] text-slate-400">Based on recent patterns: high overtime, low performance reviews, and zero promotion activity in the last 24 months.</p>
+                </div>
+
+                <div className="p-4 bg-rose-50/30 border border-rose-100/50 rounded-2xl flex flex-col gap-1.5">
+                  <span className="font-black text-rose-600 uppercase tracking-wider text-[9px]">Compliance & KYC</span>
+                  <p className="font-bold text-slate-800">12 employees missing KYC</p>
+                  <p className="text-[10px] text-slate-400">Essential identity documents (PAN Card / Aadhaar / Passport) have expired or are missing from employee profiles.</p>
+                </div>
+
+                <div className="p-4 bg-emerald-50/30 border border-emerald-100/50 rounded-2xl flex flex-col gap-1.5">
+                  <span className="font-black text-emerald-600 uppercase tracking-wider text-[9px]">Promotion Readiness</span>
+                  <p className="font-bold text-slate-800">3 high performers eligible for promotion</p>
+                  <p className="text-[10px] text-slate-400">These individuals have completed consecutive positive feedback cycles and are currently operating above their current grade.</p>
+                </div>
+
+                <div className="p-4 bg-slate-50 dark:bg-slate-900 border rounded-2xl flex flex-col gap-1.5">
+                  <span className="font-black text-slate-400 uppercase tracking-wider text-[9px]">Experience Dynamics</span>
+                  <p className="font-bold text-slate-800 dark:text-slate-200">Average experience increased</p>
+                  <p className="text-[10px] text-slate-500">Median tenure has moved from 3.2 years to 3.8 years this quarter, showing lower attrition amongst senior staff.</p>
+                </div>
+
+                <div className="p-4 bg-slate-50 dark:bg-slate-900 border rounded-2xl flex flex-col gap-1.5">
+                  <span className="font-black text-slate-400 uppercase tracking-wider text-[9px]">Overtime Heatmap</span>
+                  <p className="font-bold text-slate-800 dark:text-slate-200">Engineering department has highest overtime</p>
+                  <p className="text-[10px] text-slate-550">Staff members logged an average of 14% extra billing hours. Recommended: balance allocation shifts.</p>
+                </div>
+              </div>
+            </div>
+            <div className="p-6 border-t bg-slate-50 dark:bg-slate-900/30 flex gap-2">
+              <Button onClick={() => setShowAiInsights(false)} className="w-full bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-xs font-bold h-9">
+                Close Panel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Audit Logs Sidebar Panel */}
+      {showAuditLogsPanel && (
+        <div className="fixed inset-0 bg-slate-900/30 dark:bg-black/50 backdrop-blur-sm z-50 flex items-center justify-end">
+          <div className="bg-white dark:bg-[#1E1F22] border-l border-[#e6e4e6]/30 dark:border-[#2f3035]/30 h-full max-w-sm w-full shadow-2xl flex flex-col justify-between animate-slide-left text-left">
+            <div className="p-6 overflow-y-auto flex flex-col gap-4 flex-grow">
+              <div className="flex items-center justify-between border-b pb-3">
+                <h3 className="font-extrabold text-base text-slate-800 dark:text-[#fdfcfc] flex items-center gap-1.5">
+                  <History className="h-4.5 w-4.5 text-indigo-500" /> Audit Log Console
+                </h3>
+                <Button onClick={() => setShowAuditLogsPanel(false)} variant="ghost" className="h-8 w-8 p-0 rounded-full">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="flex flex-col gap-3 max-h-[80vh] overflow-y-auto pr-1">
+                {auditLogs.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic text-center py-10">No activities logged yet.</p>
+                ) : (
+                  auditLogs.map((log) => (
+                    <div key={log.id} className="p-3 bg-slate-50 dark:bg-slate-900/50 border rounded-2xl flex flex-col gap-1 text-xs">
+                      <div className="flex justify-between items-center">
+                        <span className="font-extrabold text-[#f87941]">{log.action}</span>
+                        <span className="text-[9px] text-slate-400 font-bold">{new Date(log.timestamp).toLocaleTimeString()}</span>
+                      </div>
+                      <p className="text-slate-600 dark:text-slate-350 font-medium">{log.details}</p>
+                      <span className="text-[9px] text-slate-400 font-bold self-end bg-slate-200/50 px-1.5 py-0.5 rounded-lg">{log.user}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+            <div className="p-6 border-t bg-slate-50 dark:bg-slate-900/30 flex gap-2">
+              <Button 
+                onClick={() => {
+                  setAuditLogs([]);
+                  localStorage.removeItem('employee_directory_audit_logs');
+                  toast.success("Audit logs cleared.");
+                }} 
+                variant="outline" 
+                className="w-full text-xs font-bold text-rose-600 hover:bg-rose-50 border-rose-200 rounded-xl h-9"
+              >
+                Clear Log
+              </Button>
+              <Button onClick={() => setShowAuditLogsPanel(false)} className="w-full bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-xs font-bold h-9">
+                Close Console
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

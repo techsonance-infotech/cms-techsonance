@@ -40,7 +40,7 @@ export const GET = withApiHandler(async (request, context) => {
   let overdueBalance = 0;
 
   if (invoices && invoices.length > 0) {
-    invoices.forEach(inv => {
+    invoices.forEach((inv: any) => {
       const amt = Number(inv.amount);
       if (inv.status === 'paid') {
         lifetimeValue += amt;

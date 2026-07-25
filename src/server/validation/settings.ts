@@ -20,6 +20,21 @@ export const companySettingsSchema = z.object({
   registrationCertificateUrl: z.string().trim().max(2000).optional().nullable(),
   panCardUrl: z.string().trim().max(2000).optional().nullable(),
   gstCertificateUrl: z.string().trim().max(2000).optional().nullable(),
+  onboardingCompleted: z.boolean().optional(),
+  faviconUrl: z.string().trim().max(2000).optional().nullable(),
+  legalName: z.string().trim().max(255).optional().nullable(),
+  workspaceName: z.string().trim().max(255).optional().nullable(),
+  orgCode: z.string().trim().max(255).optional().nullable(),
+  industry: z.string().trim().max(255).optional().nullable(),
+  businessType: z.string().trim().max(255).optional().nullable(),
+  timezone: z.string().trim().max(255).optional().nullable(),
+  currency: z.string().trim().max(255).optional().nullable(),
+  fiscalYear: z.string().trim().max(255).optional().nullable(),
+  cinNumber: z.string().trim().max(255).optional().nullable(),
+  msmeNumber: z.string().trim().max(255).optional().nullable(),
+  emergencyContact: z.string().trim().max(255).optional().nullable(),
+  supportEmail: z.string().trim().max(255).optional().nullable(),
+  supportPhone: z.string().trim().max(255).optional().nullable(),
 });
 
 export const updateCompanySettingsSchema = companySettingsSchema.partial();

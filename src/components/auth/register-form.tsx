@@ -80,11 +80,11 @@ export function RegisterForm() {
   };
 
   const getInputClass = (isValid: boolean, field: string, value: string) => {
-    const base = 'pl-11 h-12 border-slate-200 dark:border-slate-800 bg-white dark:bg-zinc-900 focus-visible:ring-[#F87941] focus-visible:border-[#F87941] rounded-xl hover:border-slate-300 dark:hover:border-slate-700 transition-colors duration-200';
+    const base = 'pl-11 h-12 border-border bg-card focus-visible:ring-primary focus-visible:border-primary rounded-xl hover:border-muted-foreground/30 transition-colors duration-200';
     if (!touched[field] || value === '') return base;
     return isValid
-      ? 'pl-11 h-12 border-emerald-500 bg-white dark:bg-zinc-900 focus-visible:ring-emerald-500 focus-visible:border-emerald-500 rounded-xl transition-colors duration-200'
-      : 'pl-11 h-12 border-rose-500 bg-white dark:bg-zinc-900 focus-visible:ring-rose-500 focus-visible:border-rose-500 rounded-xl transition-colors duration-200';
+      ? 'pl-11 h-12 border-emerald-500 bg-card focus-visible:ring-emerald-500 focus-visible:border-emerald-500 rounded-xl transition-colors duration-200'
+      : 'pl-11 h-12 border-destructive bg-card focus-visible:ring-destructive focus-visible:border-destructive rounded-xl transition-colors duration-200';
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -138,12 +138,12 @@ export function RegisterForm() {
         </p>
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-center gap-2 text-slate-400">
-            <Loader2 className="h-4 w-4 animate-spin text-[#F87941]" />
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
             <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Waiting for verification…</span>
           </div>
           <Link
             href="/login"
-            className="text-sm font-semibold text-[#F87941] hover:text-[#F4662B] transition-colors mt-2"
+            className="text-sm font-semibold text-primary hover:text-[var(--primary-hover)] transition-colors mt-2"
           >
             Return to Login
           </Link>
@@ -169,7 +169,7 @@ export function RegisterForm() {
             First Name <span className="text-rose-500">*</span>
           </Label>
           <div className="relative group">
-            <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-[#F87941] transition-colors z-10" />
+            <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-primary transition-colors z-10" />
             <Input
               id="reg-firstName"
               type="text"
@@ -194,7 +194,7 @@ export function RegisterForm() {
             Last Name <span className="text-rose-500">*</span>
           </Label>
           <div className="relative group">
-            <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-[#F87941] transition-colors z-10" />
+            <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-primary transition-colors z-10" />
             <Input
               id="reg-lastName"
               type="text"
@@ -220,7 +220,7 @@ export function RegisterForm() {
           Username <span className="text-rose-500">*</span>
         </Label>
         <div className="relative group">
-          <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-[#F87941] transition-colors z-10" />
+          <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-primary transition-colors z-10" />
           <Input
             id="reg-username"
             type="text"
@@ -245,7 +245,7 @@ export function RegisterForm() {
           Company / Organization <span className="text-rose-500">*</span>
         </Label>
         <div className="relative group">
-          <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-[#F87941] transition-colors z-10" />
+          <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-primary transition-colors z-10" />
           <Input
             id="reg-companyName"
             type="text"
@@ -267,7 +267,7 @@ export function RegisterForm() {
             Email Address <span className="text-rose-500">*</span>
           </Label>
           <div className="relative group">
-            <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-[#F87941] transition-colors z-10" />
+            <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-primary transition-colors z-10" />
             <Input
               id="reg-email"
               type="email"
@@ -287,7 +287,7 @@ export function RegisterForm() {
             Phone Number <span className="text-rose-500">*</span>
           </Label>
           <div className="relative group">
-            <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-[#F87941] transition-colors z-10" />
+            <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-primary transition-colors z-10" />
             <Input
               id="reg-phone"
               type="tel"
@@ -315,7 +315,7 @@ export function RegisterForm() {
             Password <span className="text-rose-500">*</span>
           </Label>
           <div className="relative group">
-            <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-[#F87941] transition-colors z-10" />
+            <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-primary transition-colors z-10" />
             <Input
               id="reg-password"
               type={showPassword ? 'text' : 'password'}
@@ -342,7 +342,7 @@ export function RegisterForm() {
             Confirm Password <span className="text-rose-500">*</span>
           </Label>
           <div className="relative group">
-            <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-[#F87941] transition-colors z-10" />
+            <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-primary transition-colors z-10" />
             <Input
               id="reg-confirmPassword"
               type={showConfirmPassword ? 'text' : 'password'}
@@ -397,7 +397,7 @@ export function RegisterForm() {
           id="terms"
           checked={agreed}
           onCheckedChange={(checked) => setAgreed(Boolean(checked))}
-          className="data-[state=checked]:bg-[#F87941] data-[state=checked]:border-[#F87941] border-slate-300 flex h-[18px] w-[18px] items-center justify-center rounded-md shrink-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#F87941] disabled:cursor-not-allowed disabled:opacity-50"
+          className="data-[state=checked]:bg-primary data-[state=checked]:border-primary border-slate-300 flex h-[18px] w-[18px] items-center justify-center rounded-md shrink-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
         />
         <label
           htmlFor="terms"
@@ -410,7 +410,7 @@ export function RegisterForm() {
               e.preventDefault();
               openLegalModal('terms');
             }}
-            className="text-[#F87941] hover:underline font-bold focus:outline-none cursor-pointer"
+            className="text-primary hover:underline font-bold focus:outline-none cursor-pointer"
           >
             Terms of Service
           </button>{' '}
@@ -421,7 +421,7 @@ export function RegisterForm() {
               e.preventDefault();
               openLegalModal('privacy');
             }}
-            className="text-[#F87941] hover:underline font-bold focus:outline-none cursor-pointer"
+            className="text-primary hover:underline font-bold focus:outline-none cursor-pointer"
           >
             Privacy Policy
           </button>
@@ -432,7 +432,7 @@ export function RegisterForm() {
       <Button
         type="submit"
         disabled={loading || !isFormValid}
-        className="w-full h-12 text-base font-bold text-white bg-[#F87941] hover:bg-[#F4662B] transition-all rounded-xl shadow-lg shadow-primary/20 flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
+        className="w-full h-12 text-base font-bold text-white bg-primary hover:bg-[var(--primary-hover)] transition-all rounded-xl shadow-lg shadow-primary/20 flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
       >
         {loading ? (
           <>
@@ -455,48 +455,25 @@ export function RegisterForm() {
         <span className="relative px-3 bg-white dark:bg-[#0A1A2F] text-xs font-semibold text-slate-400 uppercase tracking-wider">
           or sign up with
         </span>
-      </div>
-
-      {/* Social Buttons */}
-      <div className="flex gap-3">
+      </div>      {/* Social Buttons */}
+      <div className="flex">
         <button
           type="button"
-          className="flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900 rounded-xl h-11 px-4 text-sm font-semibold text-slate-700 dark:text-slate-300 transition-colors flex-1 cursor-pointer"
+          className="flex items-center justify-center gap-3 w-full border border-border bg-card hover:bg-accent hover:text-accent-foreground rounded-xl h-12 text-sm font-bold text-foreground transition-all shadow-sm hover:shadow duration-200 active:scale-[0.99] cursor-pointer"
         >
-          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+          <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
             <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
             <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
             <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05" />
             <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335" />
           </svg>
-          Google
-        </button>
-        
-        <button
-          type="button"
-          className="flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900 rounded-xl h-11 px-4 text-sm font-semibold text-slate-700 dark:text-slate-300 transition-colors flex-1 cursor-pointer"
-        >
-          <svg className="h-4 w-4" viewBox="0 0 23 23" fill="currentColor">
-            <rect x="0" y="0" width="11" height="11" fill="#f25022" />
-            <rect x="12" y="0" width="11" height="11" fill="#7fba00" />
-            <rect x="0" y="12" width="11" height="11" fill="#00a4ef" />
-            <rect x="12" y="12" width="11" height="11" fill="#ffb900" />
-          </svg>
-          Microsoft
-        </button>
-
-        <button
-          type="button"
-          className="flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900 rounded-xl h-11 px-4 text-sm font-semibold text-slate-700 dark:text-slate-300 transition-colors flex-1 cursor-pointer"
-        >
-          <ShieldCheck className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-          SSO Login
+          Continue with Google
         </button>
       </div>
 
       <div className="mt-6 text-center text-sm text-slate-500">
         Already have an account?{' '}
-        <Link href="/login" className="font-bold text-[#F87941] hover:underline underline-offset-4 cursor-pointer">
+        <Link href="/login" className="font-bold text-primary hover:underline underline-offset-4 cursor-pointer">
           Login here
         </Link>
       </div>

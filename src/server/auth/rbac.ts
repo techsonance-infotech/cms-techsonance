@@ -7,6 +7,9 @@ export function normalizeAppRole(role: string | null | undefined): AppRole {
     case 'super_admin':
       return 'SuperAdmin';
     case 'admin':
+    case 'owner':
+    case 'business_owner':
+    case 'tenant_owner':
     case 'hr_manager':
     case 'cms_administrator':
     case 'management':

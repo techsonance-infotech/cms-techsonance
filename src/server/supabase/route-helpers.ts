@@ -44,7 +44,8 @@ export async function buildLegacyUserIdMap(accessToken: string, authUserIds: str
 
 export function normalizeSupabaseEmployeeRecord(
   row: Record<string, unknown>,
-  legacyUserIdMap: Map<string, number | null>
+  legacyUserIdMap: Map<string, number | null>,
+  profilesMap?: Map<string, any>
 ) {
   const authUserId = typeof row.user_id === 'string' ? row.user_id : null;
   const managerAuthId = typeof row.manager_id === 'string' ? row.manager_id : null;
@@ -75,23 +76,68 @@ export function normalizeSupabaseEmployeeRecord(
     return defaultValue;
   };
 
+  const profile = authUserId && profilesMap ? profilesMap.get(authUserId) : null;
+  const managerProfile = managerAuthId && profilesMap ? profilesMap.get(managerAuthId) : null;
+
+  // Compute experience from date_of_joining
+  let experience: string | null = null;
+  if (row.date_of_joining) {
+    const joinDate = new Date(row.date_of_joining as string);
+    const now = new Date();
+    const diffMs = now.getTime() - joinDate.getTime();
+    const totalMonths = Math.floor(diffMs / (1000 * 60 * 60 * 24 * 30.44));
+    const years = Math.floor(totalMonths / 12);
+    const months = totalMonths % 12;
+    if (years > 0 && months > 0) {
+      experience = `${years}y ${months}m`;
+    } else if (years > 0) {
+      experience = `${years} Year${years > 1 ? 's' : ''}`;
+    } else if (months > 0) {
+      experience = `${months} Month${months > 1 ? 's' : ''}`;
+    } else {
+      experience = 'New Joiner';
+    }
+  }
+
+  // Format employment type to human-readable label
+  const rawEmpType = (row.employment_type as string) ?? 'full_time';
+  const employmentTypeMap: Record<string, string> = {
+    full_time: 'Full Time',
+    part_time: 'Part Time',
+    contract: 'Contract',
+    intern: 'Intern',
+    freelance: 'Freelance',
+    temporary: 'Temporary',
+  };
+  const formattedEmploymentType = employmentTypeMap[rawEmpType] ?? rawEmpType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
   return {
     id: Number(row.id),
     userId: authUserId ? (legacyUserIdMap.get(authUserId) ?? null) : null,
+    firstName: profile?.first_name ?? getField('first_name', 'firstName', ''),
+    lastName: profile?.last_name ?? getField('last_name', 'lastName', ''),
+    email: profile?.email ?? getField('email', 'email', ''),
+    avatarUrl: profile?.avatar_url ?? getField('avatar_url', 'avatarUrl', null),
+    phone: profile?.phone ?? getField('phone', 'phone', null),
+    managerName: managerProfile ? `${managerProfile.first_name} ${managerProfile.last_name}` : getField('manager_name', 'managerName', null),
+    workMode: getField('work_mode', 'workMode', 'Office'),
     employeeId: row.employee_id,
     nfcCardId: row.nfc_card_id ?? null,
     department: row.department,
     designation: row.designation,
     dateOfJoining: row.date_of_joining,
+    joiningDate: row.date_of_joining,
     dateOfBirth: row.date_of_birth ?? null,
     salary: row.salary ?? null,
     status: row.status,
+    location: getField('work_location', 'workLocation', 'Office'),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at ?? null,
 
     // Onboarding fields
-    employmentType: row.employment_type ?? 'full_time',
+    employmentType: formattedEmploymentType,
+    experience,
     hourlyRate: row.hourly_rate ?? null,
     ctc: row.ctc ?? null,
     pfNumber: row.pf_number ?? null,

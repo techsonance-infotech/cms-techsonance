@@ -14,11 +14,17 @@ export const PUT = withApiHandler(async (request, context) => {
   const payload = await request.json();
   const avatarUrl = payload.avatarUrl;
 
-  if (avatarUrl !== null && typeof avatarUrl !== 'string') {
-    throw new BadRequestError('avatarUrl must be a string or null');
+  if (avatarUrl !== null) {
+    if (typeof avatarUrl !== 'string') {
+      throw new BadRequestError('avatarUrl must be a string or null');
+    }
+    const isSafePath = avatarUrl.startsWith('/api/upload') || avatarUrl.startsWith('https://');
+    if (!isSafePath) {
+      throw new BadRequestError('Invalid avatarUrl format. Path must be a local API upload route or secure HTTPS address.');
+    }
   }
 
-  const authUserId = context.auth?.user.id;
+  const authUserId = context.auth?.user.providerUserId;
   const tenantId = context.auth?.user.tenantId;
 
   if (!authUserId || !tenantId) {

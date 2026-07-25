@@ -19,7 +19,7 @@ export async function registerTenantAdmin(input: {
     },
     app_metadata: {
       tenant_id: input.tenantId,
-      role: 'SuperAdmin',
+      role: 'Owner',
     },
   });
 

@@ -33,7 +33,7 @@ export const GET = withApiHandler(async (request, context) => {
 
 export const POST = withApiHandler(async (request, context) => {
   const tenantId = context.auth?.user.tenantId;
-  const userId = context.auth?.user.legacyUserId; // Matches user table foreign keys in public schemas
+  const userId = (context.auth?.user as any)?.legacyUserId || context.auth?.user.id; // Matches user table foreign keys in public schemas
   if (!tenantId) throw new BadRequestError('Tenant info required');
 
   const supabase = getAdminRouteSupabase();

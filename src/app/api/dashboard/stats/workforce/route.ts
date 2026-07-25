@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export const GET = withApiHandler(async (request, context) => {
   const fs = require('fs');
   const path = require('path');
-  const logPath = '/Users/techsonanceinfotechllp/Documents/CodeBase/cms-techsonance/api_error_log.json';
+  const logPath = path.join(process.cwd(), 'api_error_log.json');
 
   try {
     fs.writeFileSync(logPath, JSON.stringify({

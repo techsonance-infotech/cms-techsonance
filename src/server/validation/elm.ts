@@ -103,7 +103,7 @@ export const createTimelineEventSchema = z.object({
   eventType: timelineEventTypeSchema,
   eventTitle: z.string().trim().min(1).max(300),
   eventDescription: z.string().trim().max(2000).optional().nullable(),
-  eventData: z.record(z.unknown()).optional().default({}),
+  eventData: z.record(z.string(), z.unknown()).optional().default({}),
 });
 
 // ========================
@@ -188,10 +188,10 @@ export const createEmployeeReviewSchema = z.object({
   employeeId: z.coerce.number().int().positive(),
   reviewerId: z.coerce.number().int().positive().optional().nullable(),
   reviewType: z.string().trim().min(1),
-  goals: z.array(z.record(z.unknown())).optional().default([]),
-  kpis: z.array(z.record(z.unknown())).optional().default([]),
-  kras: z.array(z.record(z.unknown())).optional().default([]),
-  okrs: z.array(z.record(z.unknown())).optional().default([]),
+  goals: z.array(z.record(z.string(), z.unknown())).optional().default([]),
+  kpis: z.array(z.record(z.string(), z.unknown())).optional().default([]),
+  kras: z.array(z.record(z.string(), z.unknown())).optional().default([]),
+  okrs: z.array(z.record(z.string(), z.unknown())).optional().default([]),
   selfRating: z.coerce.number().min(0).max(10).optional().nullable(),
   managerRating: z.coerce.number().min(0).max(10).optional().nullable(),
   finalRating: z.coerce.number().min(0).max(10).optional().nullable(),

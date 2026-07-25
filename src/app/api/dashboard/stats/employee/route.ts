@@ -45,8 +45,8 @@ export const GET = withApiHandler(async (request, context) => {
         .gte('date', firstDayOfYear),
     ]);
 
-    totalHoursMonth = (monthHoursRes.data || []).reduce((acc, curr) => acc + (curr.duration || 0), 0) / 60;
-    totalHoursYear = (yearHoursRes.data || []).reduce((acc, curr) => acc + (curr.duration || 0), 0) / 60;
+    totalHoursMonth = (monthHoursRes.data || []).reduce((acc: number, curr: any) => acc + (curr.duration || 0), 0) / 60;
+    totalHoursYear = (yearHoursRes.data || []).reduce((acc: number, curr: any) => acc + (curr.duration || 0), 0) / 60;
   }
 
   // 3. Project Metrics
@@ -58,7 +58,7 @@ export const GET = withApiHandler(async (request, context) => {
     .eq('tenant_id', tenantId)
     .order('assigned_at', { ascending: false });
 
-  const projectIds = (memberRows || []).map((m) => m.project_id);
+  const projectIds = (memberRows || []).map((m: any) => m.project_id);
   
   let activeProjects = 0;
   let totalAssignedProjects = projectIds.length;
@@ -72,15 +72,15 @@ export const GET = withApiHandler(async (request, context) => {
       .eq('tenant_id', tenantId);
 
     if (projectsData) {
-      activeProjects = projectsData.filter((p) => p.status === 'in_progress').length;
+      activeProjects = projectsData.filter((p: any) => p.status === 'in_progress').length;
       
       // Merge with assignment date and sort
       recentProjects = (projectsData || [])
-        .map(p => ({
+        .map((p: any) => ({
           ...p,
-          assignedAt: memberRows?.find(m => m.project_id === p.id)?.assigned_at || p.created_at
+          assignedAt: memberRows?.find((m: any) => m.project_id === p.id)?.assigned_at || p.created_at
         }))
-        .sort((a, b) => new Date(b.assignedAt).getTime() - new Date(a.assignedAt).getTime())
+        .sort((a: any, b: any) => new Date(b.assignedAt).getTime() - new Date(a.assignedAt).getTime())
         .slice(0, 5);
     }
   }
@@ -88,40 +88,36 @@ export const GET = withApiHandler(async (request, context) => {
   // 4. Performance History (Last 14 days)
   const fourteenDaysAgo = new Date();
   fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 13);
-  const startDateStr = fourteenDaysAgo.toISOString().split('T')[0];
-  const todayStr = new Date().toISOString().split('T')[0];
+  const dateList: string[] = [];
+  for (let d = new Date(fourteenDaysAgo); d <= new Date(); d.setDate(d.getDate() + 1)) {
+    dateList.push(d.toISOString().split('T')[0]);
+  }
 
-  const dateList = Array.from({ length: 14 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - (13 - i));
-    return d.toISOString().split('T')[0];
-  });
-
-  const [historyAttendanceRes, historyReportsRes, taskStatsRes, dueTodayRes, notificationsRes, pendingLeavesRes, pendingReimbursementsRes] = await Promise.all([
-    employeeId 
-      ? supabase
-          .from('attendance_records')
-          .select('date, duration')
-          .eq('employee_id', employeeId)
-          .eq('tenant_id', tenantId)
-          .gte('date', startDateStr)
-      : Promise.resolve({ data: [] }),
+  // Parallel requests for activity history & pending items
+  const [
+    historyAttendanceRes,
+    historyReportsRes,
+    taskStatsRes,
+    notificationsRes,
+    pendingLeavesRes,
+    pendingReimbursementsRes
+  ] = await Promise.all([
     supabase
-      .from('daily_reports')
-      .select('date')
-      .eq('user_id', authUserId)
-      .eq('tenant_id', tenantId)
-      .gte('date', startDateStr),
-    supabase
-      .from('tasks')
-      .select('status')
-      .eq('assigned_to', authUserId)
+      .from('attendance_records')
+      .select('date, duration')
+      .eq('employee_id', employeeId)
+      .gte('date', dateList[0])
       .eq('tenant_id', tenantId),
     supabase
-      .from('tasks')
-      .select('id', { count: 'exact', head: true })
+      .from('daily_work_reports')
+      .select('date')
+      .eq('employee_id', employeeId)
+      .gte('date', dateList[0])
+      .eq('tenant_id', tenantId),
+    supabase
+      .from('project_tasks')
+      .select('status, due_date')
       .eq('assigned_to', authUserId)
-      .eq('due_date', todayStr)
       .eq('tenant_id', tenantId),
     supabase
       .from('notifications')
@@ -131,7 +127,7 @@ export const GET = withApiHandler(async (request, context) => {
       .order('created_at', { ascending: false })
       .limit(20),
     // Pending Approvals (Leaves & Reimbursements)
-    user.role === 'Admin' || user.role === 'SuperAdmin' || user.role === 'hr_manager' || user.role === 'project_manager' || user.role === 'management'
+    ['Admin', 'SuperAdmin', 'hr_manager', 'project_manager', 'management'].includes(user.role as string)
       ? supabase
           .from('leave_requests')
           .select('*, employees!inner(id, user_id, employees:users!inner(first_name, last_name))')
@@ -139,7 +135,7 @@ export const GET = withApiHandler(async (request, context) => {
           .eq('tenant_id', tenantId)
           .limit(10)
       : Promise.resolve({ data: [] }),
-    user.role === 'Admin' || user.role === 'SuperAdmin' || user.role === 'hr_manager' || user.role === 'accountant' || user.role === 'management'
+    ['Admin', 'SuperAdmin', 'hr_manager', 'accountant', 'management'].includes(user.role as string)
       ? supabase
           .from('reimbursements')
           .select('*, employees!inner(id, user_id, employees:users!inner(first_name, last_name))')
@@ -149,13 +145,13 @@ export const GET = withApiHandler(async (request, context) => {
       : Promise.resolve({ data: [] })
   ]);
 
-  const attendanceMap = new Map((historyAttendanceRes.data || []).map(r => [r.date, (r.duration || 0) / 60]));
-  const reportsSet = new Set((historyReportsRes.data || []).map(r => r.date));
+  const attendanceMap = new Map((historyAttendanceRes.data || []).map((r: any) => [r.date, (r.duration || 0) / 60]));
+  const reportsSet = new Set((historyReportsRes.data || []).map((r: any) => r.date));
 
   const performance = {
     attendanceHistory: dateList.map(date => ({
       date: new Date(date).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' }),
-      hours: Math.round((attendanceMap.get(date) || 0) * 10) / 10
+      hours: Math.round(((attendanceMap.get(date) as number) || 0) * 10) / 10
     })),
     reportHistory: dateList.map(date => ({
       date: new Date(date).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' }),
@@ -172,7 +168,7 @@ export const GET = withApiHandler(async (request, context) => {
   const alerts = notifications.filter(n => n.type === 'error' || n.type === 'success');
 
   const pendingApprovals = [
-    ...(pendingLeavesRes.data || []).map(l => ({ 
+    ...(pendingLeavesRes.data || []).map((l: any) => ({ 
       id: l.id, 
       type: 'leave', 
       title: 'Leave Request', 
@@ -180,7 +176,7 @@ export const GET = withApiHandler(async (request, context) => {
       details: `${l.leave_type.replace('_', ' ')}: ${l.start_date} to ${l.end_date}`,
       date: l.created_at 
     })),
-    ...(pendingReimbursementsRes.data || []).map(r => ({ 
+    ...(pendingReimbursementsRes.data || []).map((r: any) => ({  
       id: r.id, 
       type: 'reimbursement', 
       title: 'Reimbursement', 
@@ -190,6 +186,11 @@ export const GET = withApiHandler(async (request, context) => {
     }))
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
+  const todayStr = new Date().toISOString().split('T')[0];
+  const assignedTasksDueToday = (taskStatsRes.data || []).filter(
+    (t: any) => t.due_date === todayStr
+  ).length;
+
   return NextResponse.json({
     stats: {
       totalHoursMonth: Math.round(totalHoursMonth * 10) / 10,
@@ -197,7 +198,7 @@ export const GET = withApiHandler(async (request, context) => {
       totalAssignedProjects,
       activeProjects,
       assignedTasksTotal: taskStatsRes.data?.length || 0,
-      assignedTasksDueToday: dueTodayRes.count || 0
+      assignedTasksDueToday
     },
     performance,
     announcements,

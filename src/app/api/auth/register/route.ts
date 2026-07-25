@@ -220,7 +220,7 @@ export async function POST(request: Request) {
       email: email.toLowerCase().trim(),
       first_name: firstName,
       last_name: lastName,
-      role: 'SuperAdmin',
+      role: 'Admin',
       phone: phone.trim(),
       is_active: true,
       is_email_verified: false,
@@ -240,7 +240,7 @@ export async function POST(request: Request) {
         email: email.toLowerCase().trim(),
         first_name: firstName,
         last_name: lastName,
-        role: 'SuperAdmin',
+        role: 'Admin',
         phone: phone.trim(),
         is_active: true,
       });
@@ -263,7 +263,7 @@ export async function POST(request: Request) {
       tenant_id: tenant.id,
       user_id: authUser.id,
       email: email.toLowerCase().trim(),
-      role: 'SuperAdmin',
+      role: 'Admin',
       first_name: firstName,
       last_name: lastName,
       status: 'active',
@@ -273,12 +273,12 @@ export async function POST(request: Request) {
       console.error('Registration membership error:', membershipError);
     }
 
-    // 8. Initialize Company Settings for Tenant
+    // 8. Initialize Company Settings for Tenant (minimal — onboarding collects the rest)
     const { error: settingsError } = await supabase.from('company_settings').insert({
       tenant_id: tenant.id,
       company_name: companyName,
       email: email.toLowerCase().trim(),
-      phone: phone.trim(),
+      onboarding_completed: false,
     });
 
     if (settingsError) {

@@ -8,6 +8,7 @@ import {
   normalizeSupabaseEmployeeRecord,
   resolveAuthUserIdFromLegacyUserId,
 } from '@/server/supabase/route-helpers';
+import { listSupabaseProfilesByAuthIds } from '@/server/supabase/users';
 
 let employeesColumnsCache: string[] | null = null;
 async function getEmployeesColumns(supabase: any) {
@@ -44,8 +45,12 @@ export const GET = withApiHandler(async (request, context) => {
       .eq('tenant_id', tenantId)
       .single();
     if (error || !data) throw new NotFoundError('Employee not found');
-    const userMap = await buildLegacyUserIdMap(accessToken, [String(data.user_id), data.manager_id ? String(data.manager_id) : ''].filter(Boolean), tenantId);
-    return NextResponse.json(normalizeSupabaseEmployeeRecord(data, userMap));
+    const sanitizedAuthUserIds = [String(data.user_id), data.manager_id ? String(data.manager_id) : ''].filter(Boolean);
+    const profilesMap = await listSupabaseProfilesByAuthIds(sanitizedAuthUserIds, { useAdmin: true, tenantId });
+    const userMap = new Map<string, number | null>(
+      Array.from(profilesMap.entries()).map(([authUserId, profile]) => [authUserId, profile.legacy_user_id])
+    );
+    return NextResponse.json(normalizeSupabaseEmployeeRecord(data, userMap, profilesMap));
   }
 
   const limit = Math.min(Number(searchParams.get('limit') ?? '10'), 100);
@@ -54,16 +59,31 @@ export const GET = withApiHandler(async (request, context) => {
   const userId = searchParams.get('userId');
   const department = searchParams.get('department');
   const status = searchParams.get('status');
+  const workMode = searchParams.get('workMode');
   const sortField = searchParams.get('sort') ?? 'created_at';
   const ascending = searchParams.get('order') === 'asc';
   
   let query = supabase
     .from('employees')
     .select('*', { count: 'exact' })
-    .eq('tenant_id', tenantId);
+    .eq('tenant_id', tenantId)
+    .is('deleted_at', null);
 
   if (search) {
-    query = query.or(`employee_id.ilike.%${search}%,department.ilike.%${search}%,designation.ilike.%${search}%`);
+    // Search users table for name/email matches (since first_name/last_name are in users table)
+    const { data: matchingUsers } = await supabase
+      .from('users')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,email.ilike.%${search}%`);
+
+    const matchingUserIds = (matchingUsers || []).map((u: { id: string }) => u.id);
+
+    let orParts = `employee_id.ilike.%${search}%,department.ilike.%${search}%,designation.ilike.%${search}%`;
+    if (matchingUserIds.length > 0) {
+      orParts += `,user_id.in.(${matchingUserIds.map((id: string) => `"${id}"`).join(',')})`;
+    }
+    query = query.or(orParts);
   }
   if (userId) {
     const parsedUserId = Number(userId);
@@ -76,8 +96,22 @@ export const GET = withApiHandler(async (request, context) => {
   if (department) {
     query = query.ilike('department', `%${department}%`);
   }
+  if (workMode) {
+    const wm = workMode.toLowerCase();
+    if (wm === 'office') {
+      query = query.or('skills->>workMode.ilike.office,skills->>workMode.is.null');
+    } else {
+      query = query.or(`skills->>workMode.ilike.${wm}`);
+    }
+  }
   if (status) {
-    query = query.eq('status', employeeStatusSchema.parse(status));
+    const norm = status.toLowerCase();
+    const statusVal = norm === 'notice period' ? 'on_notice' : norm === 'on leave' ? 'on_leave' : norm;
+    if (statusVal === 'probation') {
+      query = query.eq('status', 'active').gt('confirmation_date', new Date().toISOString());
+    } else {
+      query = query.eq('status', employeeStatusSchema.parse(statusVal));
+    }
   }
 
   const { data, count, error } = await query
@@ -97,17 +131,17 @@ export const GET = withApiHandler(async (request, context) => {
 
   if (error) throw new Error(error.message);
 
-  const userMap = await buildLegacyUserIdMap(
-    accessToken,
-    ((data as Record<string, unknown>[] | null) ?? [])
-      .flatMap((row) => [String(row.user_id), row.manager_id ? String(row.manager_id) : ''])
-      .filter(Boolean),
-    tenantId
+  const sanitizedAuthUserIds = ((data as Record<string, unknown>[] | null) ?? [])
+    .flatMap((row) => [String(row.user_id), row.manager_id ? String(row.manager_id) : ''])
+    .filter(Boolean);
+  const profilesMap = await listSupabaseProfilesByAuthIds(sanitizedAuthUserIds, { useAdmin: true, tenantId });
+  const userMap = new Map<string, number | null>(
+    Array.from(profilesMap.entries()).map(([authUserId, profile]) => [authUserId, profile.legacy_user_id])
   );
 
   return NextResponse.json({
     success: true,
-    data: ((data as Record<string, unknown>[] | null) ?? []).map((row) => normalizeSupabaseEmployeeRecord(row, userMap)),
+    data: ((data as Record<string, unknown>[] | null) ?? []).map((row) => normalizeSupabaseEmployeeRecord(row, userMap, profilesMap)),
     message: 'Employees fetched successfully',
     errors: null,
     meta: {
@@ -246,8 +280,12 @@ export const POST = withApiHandler(async (request, context) => {
   const { data, error } = await supabase.from('employees').insert(insertPayload).select('*').single();
 
   if (error || !data) throw error ? new Error(error.message) : new Error('Failed to create employee');
-  const userMap = await buildLegacyUserIdMap(accessToken, [authUserId, managerAuthId].filter(Boolean) as string[], tenantId);
-  return NextResponse.json(normalizeSupabaseEmployeeRecord(data, userMap), { status: 201 });
+  const sanitizedAuthUserIds = [authUserId, managerAuthId].filter(Boolean) as string[];
+  const profilesMap = await listSupabaseProfilesByAuthIds(sanitizedAuthUserIds, { useAdmin: true, tenantId });
+  const userMap = new Map<string, number | null>(
+    Array.from(profilesMap.entries()).map(([authUserId, profile]) => [authUserId, profile.legacy_user_id])
+  );
+  return NextResponse.json(normalizeSupabaseEmployeeRecord(data, userMap, profilesMap), { status: 201 });
 }, { requireAuth: true, roles: ['Manager'] });
 
 export const PUT = withApiHandler(async (request, context) => {
@@ -412,8 +450,12 @@ export const PUT = withApiHandler(async (request, context) => {
     .single();
 
   if (error || !data) throw error ? new Error(error.message) : new Error('Failed to update employee');
-  const userMap = await buildLegacyUserIdMap(accessToken, [String(data.user_id), data.manager_id ? String(data.manager_id) : ''].filter(Boolean), tenantId);
-  return NextResponse.json(normalizeSupabaseEmployeeRecord(data, userMap));
+  const sanitizedAuthUserIds = [String(data.user_id), data.manager_id ? String(data.manager_id) : ''].filter(Boolean);
+  const profilesMap = await listSupabaseProfilesByAuthIds(sanitizedAuthUserIds, { useAdmin: true, tenantId });
+  const userMap = new Map<string, number | null>(
+    Array.from(profilesMap.entries()).map(([authUserId, profile]) => [authUserId, profile.legacy_user_id])
+  );
+  return NextResponse.json(normalizeSupabaseEmployeeRecord(data, userMap, profilesMap));
 }, { requireAuth: true, roles: ['Manager'] });
 
 export const DELETE = withApiHandler(async (request, context) => {
@@ -442,9 +484,13 @@ export const DELETE = withApiHandler(async (request, context) => {
     updated_at: new Date().toISOString(),
   }).eq('id', data.user_id).eq('tenant_id', tenantId);
 
-  const userMap = await buildLegacyUserIdMap(accessToken, [String(data.user_id)], tenantId);
+  const sanitizedAuthUserIds = [String(data.user_id)].filter(Boolean);
+  const profilesMap = await listSupabaseProfilesByAuthIds(sanitizedAuthUserIds, { useAdmin: true, tenantId });
+  const userMap = new Map<string, number | null>(
+    Array.from(profilesMap.entries()).map(([authUserId, profile]) => [authUserId, profile.legacy_user_id])
+  );
   return NextResponse.json({
     message: 'Employee resigned and account deactivated successfully',
-    employee: normalizeSupabaseEmployeeRecord(data, userMap),
+    employee: normalizeSupabaseEmployeeRecord(data, userMap, profilesMap),
   });
 }, { requireAuth: true, roles: ['Manager'] });

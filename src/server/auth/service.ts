@@ -162,7 +162,7 @@ export async function loginUser(input: {
 
   try {
     const authData = await signInWithSupabasePassword({
-      email: normalizedEmail,
+      email: user.email,
       password: input.password,
     });
 

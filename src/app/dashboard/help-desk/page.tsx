@@ -52,6 +52,7 @@ interface Ticket {
   ticketNumber: string;
   subject: string;
   description: string;
+  status: string;
   priority: string;
   createdAt: string;
   updatedAt: string;
@@ -532,7 +533,7 @@ export default function HelpDeskPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          ticketNumber: ticketNumber,
+          ticketNumber: `TICK-${Date.now().toString().slice(-6)}`,
           clientId: clientId,
           subject: `[${values.supportType.toUpperCase().replace('_', ' ')}] ${values.subject.trim()}`,
           description: values.description.trim(),
@@ -596,7 +597,7 @@ export default function HelpDeskPage() {
 
   const isAdmin = currentUser && hasFullAccess(currentUser.role as UserRole);
 
-  if (loading || !user) {
+  if (loading || !currentUser) {
     return (
       <div className="space-y-6">
         <PageHeaderSkeleton />

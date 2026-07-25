@@ -313,7 +313,7 @@ export const POST = withApiHandler(async (request, context) => {
       if (violationFlags?.ip_violation) message += `(IP Mismatch: ${violationFlags.ip_violation}) `;
       if (violationFlags?.location_violation) message += `(Geofence Exceeded: ${violationFlags.location_violation}m) `;
 
-      const notifications = adminUsers.map((admin) => ({
+      const notifications = adminUsers.map((admin: any) => ({
         user_id: admin.id,
         title: title,
         message: message.trim(),

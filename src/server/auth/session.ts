@@ -67,15 +67,22 @@ export async function authenticateRequest(request: Request, options?: { required
 
       return authContext;
     }
-  } catch (error) {
-    console.error('Better-Auth session retrieval failed, attempting fallback:', error);
+  } catch {
+    // Better-Auth session retrieval failed silently, attempting Supabase fallback
   }
 
   // 2. Fallback: Retrieve legacy Supabase session from Authorization header
   const authHeader = request.headers.get('authorization');
-  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice('Bearer '.length) : null;
+  let bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice('Bearer '.length) : null;
 
   if (!bearerToken) {
+    try {
+      const url = new URL(request.url);
+      bearerToken = url.searchParams.get('token') || url.searchParams.get('auth_token');
+    } catch {}
+  }
+
+  if (!bearerToken || bearerToken === 'null' || bearerToken === 'undefined') {
     if (options?.required) throw new UnauthorizedError();
     return null;
   }
@@ -110,7 +117,7 @@ export async function authenticateRequest(request: Request, options?: { required
     }
 
     return authContext;
-  } catch (error) {
+  } catch {
     if (options?.required) throw new UnauthorizedError();
     return null;
   }

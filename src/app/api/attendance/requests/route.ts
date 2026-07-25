@@ -119,4 +119,5 @@ export const PATCH = withApiHandler(async (request, context) => {
     return NextResponse.json({ success: true, message: 'Approved successfully' });
   }
 
+  return NextResponse.json({ success: false, message: 'No action taken' });
 }, { requireAuth: true, roles: ['Admin', 'SuperAdmin', 'Manager'] });

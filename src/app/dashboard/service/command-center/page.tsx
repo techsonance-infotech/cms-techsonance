@@ -31,7 +31,7 @@ import { toast } from 'sonner';
 interface Technician {
   id: string;
   name: string;
-  avatar: string;
+  avatar?: string;
   specialty: string;
   status: 'active' | 'busy' | 'offline';
   location: string;

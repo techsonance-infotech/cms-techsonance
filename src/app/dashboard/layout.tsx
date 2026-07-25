@@ -8,6 +8,7 @@ import { User } from '@/lib/auth';
 import { Loader2 } from 'lucide-react';
 import { AppErrorBoundary } from '@/components/ui/app-error-boundary';
 import { clearClientSession, getStoredSessionToken } from '@/lib/client-session';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 
 export default function DashboardLayout({
   children,
@@ -20,6 +21,8 @@ export default function DashboardLayout({
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [isLicenseExpired, setIsLicenseExpired] = useState(false);
   const [licenseExpiryDate, setLicenseExpiryDate] = useState<string | null>(null);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [companyName, setCompanyName] = useState<string | null>(null);
 
   useEffect(() => {
     async function checkAuth() {
@@ -59,18 +62,19 @@ export default function DashboardLayout({
             const settingsData = JSON.parse(settingsRawText);
             const settings = settingsData?.data;
 
-            // Enforce onboarding check
-            if (!settings || !settings.companyName || !settings.phone) {
+            // Enforce onboarding check — redirect if not completed
+            if (!settings || settings.onboardingCompleted !== true) {
               setIsRedirecting(true);
               router.push('/onboarding');
               return;
             }
+            setCompanyName(settings.companyName || null);
 
             // Enforce trial key verification
             const licenseExpiresAt = settings.tenant?.licenseExpiresAt;
             if (licenseExpiresAt && new Date(licenseExpiresAt) < new Date()) {
-              setIsLicenseExpired(true);
-              setLicenseExpiryDate(licenseExpiresAt);
+               setIsLicenseExpired(true);
+               setLicenseExpiryDate(licenseExpiresAt);
             }
           }
         }
@@ -153,9 +157,25 @@ export default function DashboardLayout({
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
-      <DashboardSidebar user={user} />
+      <DashboardSidebar user={user} companyName={companyName} />
+      
+      {/* Mobile Sidebar Sheet Drawer */}
+      <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
+        <SheetContent side="left" className="p-0 w-64 bg-sidebar border-r-0">
+          <div className="sr-only">
+            <SheetTitle>Navigation Menu</SheetTitle>
+          </div>
+          <DashboardSidebar 
+            user={user} 
+            isMobile 
+            onClose={() => setMobileSidebarOpen(false)} 
+            companyName={companyName}
+          />
+        </SheetContent>
+      </Sheet>
+
       <div className="flex-1 flex flex-col min-w-0 h-full">
-        <DashboardHeader user={user} />
+        <DashboardHeader user={user} onMenuClick={() => setMobileSidebarOpen(true)} />
         <main className="flex-1 p-6 overflow-y-auto">
           <AppErrorBoundary title="Dashboard module unavailable" description="We couldn't render this dashboard section.">
             {children}

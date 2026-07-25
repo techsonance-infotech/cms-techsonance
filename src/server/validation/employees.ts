@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const employeeStatusSchema = z.enum(['active', 'on_leave', 'resigned']);
+export const employeeStatusSchema = z.enum(['active', 'on_leave', 'resigned', 'on_notice', 'terminated', 'inactive']);
 
 export const employmentTypeSchema = z.enum(['full_time', 'part_time', 'contract', 'intern']);
 

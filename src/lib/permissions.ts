@@ -6,6 +6,7 @@
 export type UserRole =
   | 'super_admin'
   | 'admin'
+  | 'owner'
   | 'ceo'
   | 'cto'
   | 'director'
@@ -99,6 +100,23 @@ const viewEditCreate: Permission = {
 export const rolePermissions: Record<UserRole, RolePermissions> = {
   // Super Admin - Ultimate access
   super_admin: {
+    dashboard: fullAccess,
+    clients: fullAccess,
+    projects: fullAccess,
+    team: fullAccess,
+    finance: fullAccess,
+    content: fullAccess,
+    settings: fullAccess,
+    dailyUpdate: fullAccess,
+    myAccount: fullAccess,
+    helpDesk: fullAccess,
+    inquiry: fullAccess,
+    tasks: fullAccess,
+    reimbursements: fullAccess,
+  },
+
+  // Owner - Business/Tenant Owner, full access (assigned at registration)
+  owner: {
     dashboard: fullAccess,
     clients: fullAccess,
     projects: fullAccess,
@@ -541,10 +559,14 @@ export function getRolePermissions(role: UserRole): RolePermissions | null {
  * Check if user has full access (admin-like roles)
  */
 export function hasFullAccess(role: UserRole): boolean {
-  const normalizedRole = String(role).toLowerCase() as UserRole;
+  const raw = String(role).toLowerCase().replace(/[\s-]+/g, '_');
   return [
     'super_admin',
+    'superadmin',
     'admin',
+    'owner',
+    'business_owner',
+    'tenant_owner',
     'ceo',
     'cto',
     'director',
@@ -552,7 +574,7 @@ export function hasFullAccess(role: UserRole): boolean {
     'accountant',
     'cms_administrator',
     'management'
-  ].includes(normalizedRole);
+  ].includes(raw);
 }
 
 /**
@@ -579,6 +601,7 @@ export function getRoleName(role: UserRole): string {
   const roleNames: Record<UserRole, string> = {
     super_admin: 'Super Administrator',
     admin: 'Administrator',
+    owner: 'Business Owner',
     ceo: 'CEO',
     cto: 'CTO',
     director: 'Director',
