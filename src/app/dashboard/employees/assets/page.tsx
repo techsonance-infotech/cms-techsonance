@@ -85,47 +85,69 @@ export default function AssetTrackerPage() {
   }, []);
 
   const fetchData = async () => {
-    try {
-      setLoading(true);
-      const token = getStoredSessionToken();
+    setLoading(true);
+    const token = getStoredSessionToken();
 
+    // 1. Fetch categories
+    try {
       const categoriesRes = await fetch('/api/assets/categories', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const categoriesData = await categoriesRes.json();
-      setCategories(categoriesData);
-
-      if (categoriesData.length > 0) {
-        setNewAssetCategoryId(categoriesData[0].id);
+      if (categoriesRes.ok) {
+        const categoriesData = await categoriesRes.json();
+        setCategories(categoriesData);
+        if (categoriesData.length > 0) {
+          setNewAssetCategoryId(categoriesData[0].id);
+        }
       }
+    } catch (err) {
+      console.error('Failed to load asset categories:', err);
+    }
 
+    // 2. Fetch assets
+    try {
       const assetsRes = await fetch('/api/assets', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const assetsData = await assetsRes.json();
-      setAssets(assetsData.data || assetsData || []);
+      if (assetsRes.ok) {
+        const assetsData = await assetsRes.json();
+        const aList = assetsData.data || assetsData || [];
+        setAssets(aList);
+        if (aList.length > 0) {
+          setSelectedAsset(aList[0]);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load assets:', err);
+    }
 
+    // 3. Fetch requests
+    try {
       const requestsRes = await fetch('/api/assets/requests', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const requestsData = await requestsRes.json();
-      setRequests(requestsData.data || requestsData || []);
+      if (requestsRes.ok) {
+        const requestsData = await requestsRes.json();
+        setRequests(requestsData.data || requestsData || []);
+      }
+    } catch (err) {
+      console.error('Failed to load asset requests:', err);
+    }
 
-      // Load employees list for checkouts
-      const empRes = await fetch('/api/employees', {
+    // 4. Fetch employees
+    try {
+      const empRes = await fetch('/api/employees?limit=1000', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const empData = await empRes.json();
-      setEmployees(Array.isArray(empData) ? empData : (empData.data || []));
-
-      if (assetsData.length > 0) {
-        setSelectedAsset(assetsData[0]);
+      if (empRes.ok) {
+        const empData = await empRes.json();
+        setEmployees(Array.isArray(empData) ? empData : (empData.data || []));
       }
-    } catch {
-      toast.error('Failed to load asset details');
-    } finally {
-      setLoading(false);
+    } catch (err) {
+      console.error('Failed to load employees for assets workspace:', err);
     }
+
+    setLoading(false);
   };
 
   const createCategory = async (e: React.FormEvent) => {
@@ -292,6 +314,33 @@ export default function AssetTrackerPage() {
     const q = searchQuery.toLowerCase();
     return a.name?.toLowerCase().includes(q) || a.serial_number?.toLowerCase().includes(q);
   });
+
+  if (loading) {
+    return (
+      <div className="p-6 space-y-6 max-w-[1600px] mx-auto animate-pulse">
+        {/* Header Skeleton */}
+        <div className="h-28 bg-slate-100 dark:bg-zinc-800/50 rounded-2xl w-full"></div>
+        {/* Stats Skeleton */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="h-20 bg-slate-100 dark:bg-zinc-800/50 rounded-xl"></div>
+          <div className="h-20 bg-slate-100 dark:bg-zinc-800/50 rounded-xl"></div>
+          <div className="h-20 bg-slate-100 dark:bg-zinc-800/50 rounded-xl"></div>
+          <div className="h-20 bg-slate-100 dark:bg-zinc-800/50 rounded-xl"></div>
+        </div>
+        {/* Tabs Skeleton */}
+        <div className="flex gap-2 border-b pb-2">
+          <div className="h-8 bg-slate-100 dark:bg-zinc-800/50 rounded w-28"></div>
+          <div className="h-8 bg-slate-100 dark:bg-zinc-800/50 rounded w-28"></div>
+          <div className="h-8 bg-slate-100 dark:bg-zinc-800/50 rounded w-28"></div>
+        </div>
+        {/* Content Skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-1 h-64 bg-slate-100 dark:bg-zinc-800/50 rounded-2xl"></div>
+          <div className="lg:col-span-2 h-96 bg-slate-100 dark:bg-zinc-800/50 rounded-2xl"></div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6 max-w-[1600px] mx-auto animate-fadeIn">

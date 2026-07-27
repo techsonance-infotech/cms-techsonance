@@ -11,11 +11,18 @@ export type UserRole =
   | 'cto'
   | 'director'
   | 'hr_manager'
+  | 'hr_executive'
+  | 'finance'
   | 'accountant'
   | 'cms_administrator'
+  | 'manager'
   | 'project_manager'
   | 'business_development'
   | 'developer'
+  | 'employee'
+  | 'freelancer'
+  | 'contractor'
+  | 'auditor'
   | 'frontend_developer'
   | 'backend_developer'
   | 'fullstack_developer'
@@ -506,6 +513,125 @@ export const rolePermissions: Record<UserRole, RolePermissions> = {
     reimbursements: viewEditCreate,
   },
 
+  // HR Executive - View/edit team, leaves, and daily updates
+  hr_executive: {
+    dashboard: viewEditCreate,
+    clients: viewOnly,
+    projects: viewOnly,
+    team: viewEditCreate,
+    finance: viewOnly,
+    content: viewOnly,
+    settings: viewOnly,
+    dailyUpdate: viewEditCreate,
+    myAccount: fullAccess,
+    helpDesk: viewEditCreate,
+    inquiry: viewOnly,
+    tasks: viewEditCreate,
+    reimbursements: viewEditCreate,
+  },
+
+  // Finance - Full finance & reimbursements access, view-only team & projects
+  finance: {
+    dashboard: fullAccess,
+    clients: viewOnly,
+    projects: viewOnly,
+    team: viewOnly,
+    finance: fullAccess,
+    content: defaultPermission,
+    settings: viewOnly,
+    dailyUpdate: viewOnly,
+    myAccount: fullAccess,
+    helpDesk: viewOnly,
+    inquiry: defaultPermission,
+    tasks: viewOnly,
+    reimbursements: fullAccess,
+  },
+
+  // Manager - Projects, team, tasks, and reimbursement approvals
+  manager: {
+    dashboard: fullAccess,
+    clients: viewOnly,
+    projects: fullAccess,
+    team: viewEditCreate,
+    finance: defaultPermission,
+    content: defaultPermission,
+    settings: defaultPermission,
+    dailyUpdate: fullAccess,
+    myAccount: fullAccess,
+    helpDesk: fullAccess,
+    inquiry: viewOnly,
+    tasks: fullAccess,
+    reimbursements: fullAccess,
+  },
+
+  // Employee - Standard employee/developer-like access
+  employee: {
+    dashboard: viewOnly,
+    clients: viewOnly,
+    projects: viewOnly,
+    team: viewOnly,
+    finance: defaultPermission,
+    content: defaultPermission,
+    settings: defaultPermission,
+    dailyUpdate: viewEditCreate,
+    myAccount: { ...viewEditCreate, canApprove: false },
+    helpDesk: viewEditCreate,
+    inquiry: viewOnly,
+    tasks: fullAccess,
+    reimbursements: viewEditCreate,
+  },
+
+  // Freelancer - View only, edit tasks
+  freelancer: {
+    dashboard: viewOnly,
+    clients: defaultPermission,
+    projects: viewOnly,
+    team: defaultPermission,
+    finance: defaultPermission,
+    content: defaultPermission,
+    settings: defaultPermission,
+    dailyUpdate: viewEditCreate,
+    myAccount: { ...viewEditCreate, canApprove: false },
+    helpDesk: viewEditCreate,
+    inquiry: defaultPermission,
+    tasks: viewEditCreate,
+    reimbursements: defaultPermission,
+  },
+
+  // Contractor - View only, edit tasks
+  contractor: {
+    dashboard: viewOnly,
+    clients: defaultPermission,
+    projects: viewOnly,
+    team: defaultPermission,
+    finance: defaultPermission,
+    content: defaultPermission,
+    settings: defaultPermission,
+    dailyUpdate: viewEditCreate,
+    myAccount: { ...viewEditCreate, canApprove: false },
+    helpDesk: viewEditCreate,
+    inquiry: defaultPermission,
+    tasks: viewEditCreate,
+    reimbursements: defaultPermission,
+  },
+
+  // Auditor - View-only access
+  auditor: {
+    dashboard: viewOnly,
+    clients: viewOnly,
+    projects: viewOnly,
+    team: viewOnly,
+    finance: viewOnly,
+    content: defaultPermission,
+    settings: viewOnly,
+    dailyUpdate: viewOnly,
+    myAccount: viewOnly,
+    helpDesk: viewOnly,
+    inquiry: viewOnly,
+    tasks: viewOnly,
+    reimbursements: viewOnly,
+  },
+
   // Client - Limited access
   client: {
     dashboard: viewOnly,
@@ -606,11 +732,18 @@ export function getRoleName(role: UserRole): string {
     cto: 'CTO',
     director: 'Director',
     hr_manager: 'HR Manager',
+    hr_executive: 'HR Executive',
+    finance: 'Finance Specialist',
     accountant: 'Accountant',
     cms_administrator: 'CMS Administrator',
+    manager: 'Manager',
     project_manager: 'Project Manager',
     business_development: 'Business Development',
     developer: 'Developer',
+    employee: 'Employee',
+    freelancer: 'Freelancer',
+    contractor: 'Contractor',
+    auditor: 'Compliance Auditor',
     frontend_developer: 'Frontend Developer',
     backend_developer: 'Backend Developer',
     fullstack_developer: 'Fullstack Developer',

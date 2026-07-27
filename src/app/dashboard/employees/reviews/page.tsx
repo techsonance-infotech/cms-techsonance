@@ -449,19 +449,25 @@ export default function ReviewsPage() {
     <div className="p-6 space-y-6 max-w-[1600px] mx-auto animate-fadeIn text-slate-900 dark:text-slate-100">
       
       {/* Page Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gradient-to-br from-slate-900 via-slate-800 to-zinc-950 p-6 rounded-2xl border border-slate-800 shadow-xl">
-        <div>
-          <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-[#f87941] via-orange-400 to-amber-500 bg-clip-text text-transparent flex items-center gap-2">
-            <Star className="h-8 w-8 text-[#f87941]" />
-            Continuous Performance Hub (PMS)
-          </h1>
-          <p className="text-slate-400 text-sm mt-1">Configure reviews cycles, cascaded goals metrics, 360 peer reviews, role calibration, and successor bench strengths.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge className="bg-[#f87941]/10 text-[#f87941] border border-[#f87941]/30 px-3 py-1 text-xs">
-            <ShieldCheck className="h-3.5 w-3.5 mr-1.5 animate-pulse" />
-            SOC2 & GDPR Appraisal Secure
-          </Badge>
+      {/* Premium Banner */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-950 via-[#0f172a] to-slate-950 p-6 border border-zinc-800 shadow-xl">
+        <div className="absolute right-0 top-0 -mr-6 -mt-6 h-32 w-32 rounded-full bg-[#f87941]/10 blur-2xl animate-pulse"></div>
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-[#f87941] via-orange-400 to-amber-500 bg-clip-text text-transparent flex items-center gap-2">
+              <Star className="h-8 w-8 text-[#f87941]" />
+              Employee Movement, Reviews & Appraisals (PMS)
+            </h1>
+            <p className="text-slate-400 text-sm mt-1">
+              Manage promotions, transfers, salary revisions, reporting manager changes, and succession bench strength.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Badge className="bg-[#f87941]/10 text-[#f87941] border border-[#f87941]/30 px-3 py-1 text-xs">
+              <ShieldCheck className="h-3.5 w-3.5 mr-1.5 animate-pulse" />
+              SOC2 & GDPR Appraisal Secure
+            </Badge>
+          </div>
         </div>
       </div>
 

@@ -57,6 +57,17 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
   const [allClients, setAllClients] = useState<any[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [shortcutLabel, setShortcutLabel] = useState('⌘K');
+  const [notifications, setNotifications] = useState([
+    { id: '1', title: 'Leave Application Approved', message: 'Your leave request for Aug 12-14 has been approved by HR.', type: 'leave', time: '10m ago', read: false },
+    { id: '2', title: 'September Payslip Generated', message: 'Your payslip is ready for review and secure download.', type: 'payroll', time: '1h ago', read: false },
+    { id: '3', title: 'Asset issued: Macbook Pro', message: 'Serial number C02G45812A has been successfully registered.', type: 'asset', time: '3h ago', read: true },
+    { id: '4', title: 'MFA Policy Update Alert', message: 'Mandatory 2FA setup is required under SOC2 guidelines.', type: 'security', time: '1d ago', read: true }
+  ]);
+
+  const markAllRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    toast.success('All notifications marked as read');
+  };
 
   // Logout routine
   const handleLogout = async () => {
@@ -366,10 +377,47 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
         </Button>
 
         {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative rounded-xl hover:bg-accent/80 transition-colors shrink-0">
-          <Bell className="h-5 w-5" />
-          <span className="absolute top-2 right-2 h-2.5 w-2.5 bg-red-500 rounded-full border border-background animate-pulse" />
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="relative rounded-xl hover:bg-accent/80 transition-colors shrink-0">
+              <Bell className="h-5 w-5" />
+              {notifications.some(n => !n.read) && (
+                <span className="absolute top-2 right-2 h-2.5 w-2.5 bg-red-500 rounded-full border border-background animate-pulse" />
+              )}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-80 p-2 rounded-xl shadow-2xl border border-muted z-50 bg-card/95 backdrop-blur-md max-h-[450px] overflow-y-auto">
+            <div className="flex items-center justify-between p-2 pb-3 border-b border-muted">
+              <span className="text-xs font-black text-foreground">In-App Notification Center</span>
+              {notifications.some(n => !n.read) && (
+                <button onClick={markAllRead} className="text-[10px] font-bold text-[#f87941] hover:underline">
+                  Mark all as read
+                </button>
+              )}
+            </div>
+            <div className="py-1 divide-y divide-muted/40">
+              {notifications.map((n) => (
+                <DropdownMenuItem
+                  key={n.id}
+                  onClick={() => {
+                    setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, read: true } : item));
+                    toast.success(`Marked "${n.title}" as read`);
+                  }}
+                  className="flex flex-col items-start gap-1 p-3 rounded-lg hover:bg-accent/50 focus:bg-accent/50 cursor-pointer text-xs"
+                >
+                  <div className="flex items-center justify-between w-full font-bold">
+                    <span className="text-foreground flex items-center gap-1.5">
+                      {!n.read && <span className="h-2 w-2 rounded-full bg-[#f87941]" />}
+                      {n.title}
+                    </span>
+                    <span className="text-[9px] text-muted-foreground font-mono">{n.time}</span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground leading-relaxed">{n.message}</p>
+                </DropdownMenuItem>
+              ))}
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <span className="h-6 w-px bg-muted" />
 

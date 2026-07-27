@@ -85,34 +85,45 @@ export default function OnboardingCenterPage() {
   }, [selectedChecklistId]);
 
   const fetchData = async () => {
+    setLoading(true);
+    const token = getStoredSessionToken();
+    let empList: any[] = [];
+
+    // 1. Fetch checklists
     try {
-      setLoading(true);
-      const token = getStoredSessionToken();
-      
-      // Get checklists
       const checklistsRes = await fetch('/api/onboarding/checklists', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const checklistsData = await checklistsRes.json();
-      setChecklists(checklistsData);
-
-      if (checklistsData.length > 0) {
-        setSelectedChecklistId(checklistsData[0].id);
+      if (checklistsRes.ok) {
+        const checklistsData = await checklistsRes.json();
+        setChecklists(checklistsData);
+        if (checklistsData.length > 0) {
+          setSelectedChecklistId(checklistsData[0].id);
+        }
       }
+    } catch (err) {
+      console.error('Failed to load checklists:', err);
+    }
 
-      // Get all employees
-      const employeesRes = await fetch('/api/employees', {
+    // 2. Fetch employees (crucial for dropdown mapping)
+    try {
+      const employeesRes = await fetch('/api/employees?limit=1000', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const employeesData = await employeesRes.json();
-      const empList = Array.isArray(employeesData) ? employeesData : (employeesData.data || []);
-      setEmployees(empList);
-      
-      if (empList.length > 0) {
-        handleEmployeeSelect(empList[0]);
+      if (employeesRes.ok) {
+        const employeesData = await employeesRes.json();
+        empList = Array.isArray(employeesData) ? employeesData : (employeesData.data || []);
+        setEmployees(empList);
+        if (empList.length > 0) {
+          handleEmployeeSelect(empList[0]);
+        }
       }
+    } catch (err) {
+      console.error('Failed to load employees for onboarding:', err);
+    }
 
-      // Fetch projects
+    // 3. Fetch projects
+    try {
       const projRes = await fetch('/api/projects', {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -120,8 +131,12 @@ export default function OnboardingCenterPage() {
         const projData = await projRes.json();
         setProjects(projData.data || projData || []);
       }
+    } catch (err) {
+      console.error('Failed to load projects:', err);
+    }
 
-      // Fetch assets
+    // 4. Fetch assets
+    try {
       const assetRes = await fetch('/api/assets', {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -129,8 +144,12 @@ export default function OnboardingCenterPage() {
         const assetData = await assetRes.json();
         setAssets(assetData.data || assetData || []);
       }
+    } catch (err) {
+      console.error('Failed to load assets:', err);
+    }
 
-      // Fetch training programs
+    // 5. Fetch training programs
+    try {
       const trainRes = await fetch('/api/training/programs', {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -138,14 +157,18 @@ export default function OnboardingCenterPage() {
         const trainData = await trainRes.json();
         setTrainingPrograms(trainData.data || trainData || []);
       }
-
-      // Fetch events queue
-      fetchEventsQueue();
-    } catch (e) {
-      toast.error('Failed to load onboarding configurations');
-    } finally {
-      setLoading(false);
+    } catch (err) {
+      console.error('Failed to load training programs:', err);
     }
+
+    // 6. Fetch events queue
+    try {
+      await fetchEventsQueue();
+    } catch (err) {
+      console.error('Failed to load events queue:', err);
+    }
+
+    setLoading(false);
   };
 
   const fetchBlueprintTasks = async (checklistId: number) => {

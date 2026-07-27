@@ -99,34 +99,45 @@ export default function OffboardingCenterPage() {
   }, []);
 
   const fetchData = async () => {
+    setLoading(true);
+    const token = getStoredSessionToken();
+    let empList: any[] = [];
+
+    // 1. Fetch checklists
     try {
-      setLoading(true);
-      const token = getStoredSessionToken();
-      
-      // Get checklists
       const checklistsRes = await fetch('/api/offboarding/checklists', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const checklistsData = await checklistsRes.json();
-      setChecklists(checklistsData);
-
-      if (checklistsData.length > 0) {
-        setSelectedChecklistId(checklistsData[0].id);
+      if (checklistsRes.ok) {
+        const checklistsData = await checklistsRes.json();
+        setChecklists(checklistsData);
+        if (checklistsData.length > 0) {
+          setSelectedChecklistId(checklistsData[0].id);
+        }
       }
+    } catch (err) {
+      console.error('Failed to load checklists:', err);
+    }
 
-      // Get all employees
-      const employeesRes = await fetch('/api/employees', {
+    // 2. Fetch employees (crucial for dropdown mapping)
+    try {
+      const employeesRes = await fetch('/api/employees?limit=1000', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const employeesData = await employeesRes.json();
-      const empList = Array.isArray(employeesData) ? employeesData : (employeesData.data || []);
-      setEmployees(empList);
-      
-      if (empList.length > 0) {
-        handleEmployeeSelect(empList[0]);
+      if (employeesRes.ok) {
+        const employeesData = await employeesRes.json();
+        empList = Array.isArray(employeesData) ? employeesData : (employeesData.data || []);
+        setEmployees(empList);
+        if (empList.length > 0) {
+          handleEmployeeSelect(empList[0]);
+        }
       }
+    } catch (err) {
+      console.error('Failed to load employees for offboarding:', err);
+    }
 
-      // Fetch assets
+    // 3. Fetch assets
+    try {
       const assetRes = await fetch('/api/assets', {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -134,8 +145,12 @@ export default function OffboardingCenterPage() {
         const assetData = await assetRes.json();
         setAssets(assetData.data || assetData || []);
       }
+    } catch (err) {
+      console.error('Failed to load assets:', err);
+    }
 
-      // Fetch projects
+    // 4. Fetch projects
+    try {
       const projRes = await fetch('/api/projects', {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -143,14 +158,18 @@ export default function OffboardingCenterPage() {
         const projData = await projRes.json();
         setProjects(projData.data || projData || []);
       }
-
-      // Fetch Events
-      fetchEventsQueue();
-    } catch (e) {
-      toast.error('Failed to load offboarding configurations');
-    } finally {
-      setLoading(false);
+    } catch (err) {
+      console.error('Failed to load projects:', err);
     }
+
+    // 5. Fetch Events
+    try {
+      await fetchEventsQueue();
+    } catch (err) {
+      console.error('Failed to load events queue:', err);
+    }
+
+    setLoading(false);
   };
 
   const fetchEventsQueue = async () => {

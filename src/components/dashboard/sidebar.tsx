@@ -43,6 +43,8 @@ import {
   Star,
   Upload,
   ScrollText,
+  ArrowRightLeft,
+  Home,
   Contact,
   BadgeCheck,
   BarChart3,
@@ -135,6 +137,14 @@ const categories: NavCategory[] = [
     items: []
   },
   {
+    name: 'Reports & BI Hub',
+    icon: TrendingUp,
+    isSingleton: true,
+    href: '/dashboard/reports',
+    roles: ['admin', 'project_manager', 'hr_manager'],
+    items: []
+  },
+  {
     name: 'Employees',
     icon: Users,
     items: [
@@ -147,7 +157,9 @@ const categories: NavCategory[] = [
       { name: 'Document Vault', href: '/dashboard/employees/documents', icon: FileText, roles: ['admin', 'hr_manager'] },
       { name: 'Training & Skills', href: '/dashboard/employees/training', icon: GraduationCap, roles: ['admin', 'hr_manager'] },
       { name: 'Org Chart', href: '/dashboard/employees/org-chart', icon: Network, roles: ['admin', 'project_manager', 'developer', 'hr_manager', 'accountant', 'business_development'] },
+      { name: 'Employee Movement', href: '/dashboard/employees/movement', icon: ArrowRightLeft, roles: ['admin', 'project_manager', 'hr_manager'] },
       { name: 'Reviews & Appraisals', href: '/dashboard/employees/reviews', icon: Star, roles: ['admin', 'project_manager', 'hr_manager'] },
+      { name: 'Resource & PSA Planner', href: '/dashboard/employees/resource-allocation', icon: ClipboardList, roles: ['admin', 'project_manager', 'hr_manager'] },
       { name: 'Bulk Import', href: '/dashboard/employees/import', icon: Upload, roles: ['admin', 'hr_manager'] },
       { name: 'Audit Logs', href: '/dashboard/employees/audit-logs', icon: ScrollText, roles: ['admin'] },
     ]
@@ -156,12 +168,15 @@ const categories: NavCategory[] = [
     name: 'HR Operations',
     icon: BadgeCheck,
     items: [
+      { name: 'Operations Dashboard', href: '/dashboard/hr-operations', icon: BarChart3, roles: ['admin', 'hr_manager'] },
       { name: 'Attendance Register', href: '/dashboard/attendance', icon: Clock, roles: ['admin', 'project_manager', 'developer', 'hr_manager', 'client'] },
       { name: 'Leaves & Time Off', href: '/dashboard/leaves', icon: Calendar, roles: ['admin', 'project_manager', 'developer', 'hr_manager', 'client'] },
-      { name: 'Daily Updates', href: '/dashboard/daily-update', icon: ClipboardList, roles: ['admin', 'project_manager', 'developer'] },
+      { name: 'Timesheet Operations', href: '/dashboard/employees/timesheets', icon: Clock, roles: ['admin', 'project_manager', 'developer', 'hr_manager'] },
       { name: 'Reimbursements', href: '/dashboard/reimbursements', icon: Receipt, roles: ['admin', 'project_manager', 'developer', 'hr_manager', 'accountant'] },
       { name: 'Shift Management', href: '/dashboard/employees/shifts', icon: Clock, roles: ['admin', 'hr_manager'] },
       { name: 'Holiday Calendar', href: '/dashboard/employees/holidays', icon: Calendar, roles: ['admin', 'hr_manager', 'project_manager', 'developer', 'client'] },
+      { name: 'Work From Home', href: '/dashboard/employees/wfh', icon: Home, roles: ['admin', 'hr_manager', 'project_manager', 'developer'] },
+      { name: 'Broadcast Hub', href: '/dashboard/employees/broadcast', icon: Inbox, roles: ['admin', 'hr_manager'] },
     ]
   },
   {
@@ -195,6 +210,14 @@ const categories: NavCategory[] = [
       { name: 'Payroll & Salary', href: '/dashboard/payroll', icon: Wallet, roles: ['admin', 'accountant', 'hr_manager'] },
       { name: 'Project Financials', href: '/dashboard/projects/financials', icon: DollarSign, roles: ['admin', 'project_manager', 'accountant'] },
     ]
+  },
+  {
+    name: 'AI Copilot Hub',
+    icon: Star,
+    isSingleton: true,
+    href: '/dashboard/ai-copilot',
+    roles: ['admin', 'project_manager', 'hr_manager', 'developer'],
+    items: []
   },
   {
     name: 'Business Settings',

@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   Plus, Loader2, Calendar as CalendarIcon, Calendar, Clock, Eye, Edit, Trash2, Check, X, Users,
   Upload, Pencil, Fingerprint, RefreshCw, UserCheck, UserX, Search, Filter,
-  ChevronLeft, ChevronRight, MoreHorizontal, Download, Info
+  ChevronLeft, ChevronRight, MoreHorizontal, Download, Info, Settings
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
@@ -220,6 +220,64 @@ export default function AttendancePage() {
     notes: '',
   });
 
+  // Attendance settings states
+  const [officeLatitude, setOfficeLatitude] = useState('');
+  const [officeLongitude, setOfficeLongitude] = useState('');
+  const [geofenceRadius, setGeofenceRadius] = useState(500);
+  const [allowedIps, setAllowedIps] = useState('');
+  const [standardHours, setStandardHours] = useState(9.0);
+  const [savingSettings, setSavingSettings] = useState(false);
+
+  const fetchAttendanceSettings = async () => {
+    try {
+      const token = localStorage.getItem('session_token');
+      const response = await fetch('/api/attendance/settings', {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setOfficeLatitude(data.office_latitude ? String(data.office_latitude) : '');
+        setOfficeLongitude(data.office_longitude ? String(data.office_longitude) : '');
+        setGeofenceRadius(data.geofence_radius_meters ?? 500);
+        setAllowedIps(data.allowed_ips ?? '');
+        setStandardHours(data.standard_work_hours ?? 9.0);
+      }
+    } catch (err) {
+      console.error('Failed to load settings:', err);
+    }
+  };
+
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingSettings(true);
+    const token = localStorage.getItem('session_token');
+    try {
+      const response = await fetch('/api/attendance/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          office_latitude: officeLatitude ? Number(officeLatitude) : null,
+          office_longitude: officeLongitude ? Number(officeLongitude) : null,
+          geofence_radius_meters: Number(geofenceRadius),
+          allowed_ips: allowedIps,
+          standard_work_hours: Number(standardHours)
+        })
+      });
+      if (response.ok) {
+        toast.success('Attendance policies updated successfully');
+      } else {
+        toast.error('Failed to update attendance policies');
+      }
+    } catch {
+      toast.error('Connection error occurred while saving policies');
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
   // Holiday management
   const [showHolidayDialog, setShowHolidayDialog] = useState(false);
   const [holidayForm, setHolidayForm] = useState({
@@ -246,6 +304,7 @@ export default function AttendancePage() {
         fetchEmployees();
         fetchAllLeaveRequests();
         fetchAllAttendance();
+        fetchAttendanceSettings();
       }
 
       if (employeeId) {
@@ -1201,10 +1260,10 @@ export default function AttendancePage() {
     };
   };
 
-  const isFullAccessUser = currentUser && ['admin', 'cms_administrator', 'hr_manager', 'project_manager', 'management'].includes(currentUser.role);
-  const canApproveLeaves = currentUser && hasPermission(currentUser.role, 'myAccount', 'canApprove');
-  const canEditAttendance = currentUser && hasPermission(currentUser.role, 'myAccount', 'canEdit');
-  const canDeleteRecords = currentUser && hasPermission(currentUser.role, 'myAccount', 'canDelete');
+  const isFullAccessUser = currentUser && hasFullAccess(currentUser.role as UserRole);
+  const canApproveLeaves = currentUser && hasPermission(currentUser.role as UserRole, 'myAccount', 'canApprove');
+  const canEditAttendance = currentUser && hasPermission(currentUser.role as UserRole, 'myAccount', 'canEdit');
+  const canDeleteRecords = currentUser && hasPermission(currentUser.role as UserRole, 'myAccount', 'canDelete');
 
   const stats = getAttendanceStats();
 
@@ -1255,23 +1314,31 @@ export default function AttendancePage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight">
-          {isFullAccessUser ? 'Employee Attendance Management' : 'My Account'}
-        </h2>
-        <p className="text-muted-foreground">
-          {isFullAccessUser
-            ? 'Manage all employee leaves, attendance, and company holidays'
-            : 'Manage your leaves, attendance, and view company holidays'}
-        </p>
+      {/* Premium Banner */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-950 via-[#0f172a] to-slate-950 p-6 border border-zinc-800 shadow-xl">
+        <div className="absolute right-0 top-0 -mr-6 -mt-6 h-32 w-32 rounded-full bg-[#f87941]/10 blur-2xl animate-pulse"></div>
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-[#f87941] via-orange-400 to-amber-500 bg-clip-text text-transparent flex items-center gap-2">
+              <Clock className="h-8 w-8 text-[#f87941]" />
+              {isFullAccessUser ? 'Employee Attendance Management' : 'My Attendance & Logs'}
+            </h1>
+            <p className="text-slate-400 text-sm mt-1">
+              {isFullAccessUser
+                ? 'Manage all employee leaves, attendance, and company holidays'
+                : 'Track check-ins, request manual regularization, and view monthly logs.'}
+            </p>
+          </div>
+        </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         {/* Only show tabs for admin roles — employees get direct view without tab header */}
         {isFullAccessUser && (
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="all-attendance">All Attendance</TabsTrigger>
             <TabsTrigger value="attendance"><Clock className="mr-2 h-4 w-4" />My Attendance</TabsTrigger>
+            <TabsTrigger value="attendance-settings"><Settings className="mr-2 h-4 w-4" />Settings & Policies</TabsTrigger>
           </TabsList>
         )}
 
@@ -2180,6 +2247,89 @@ export default function AttendancePage() {
                     </Button>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+
+        {isFullAccessUser && (
+          <TabsContent value="attendance-settings">
+            <Card className="border border-border bg-card shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-sm font-bold flex items-center gap-2">
+                  <Settings className="h-5 w-5 text-[#f87941]" />
+                  Global Attendance Policies & Geofencing Configurator
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Define corporate geofence radius coordinates, IP restrictions, and standard working hours.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSaveSettings} className="space-y-4 max-w-lg text-xs font-semibold">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label className="text-slate-500">Office Latitude</Label>
+                      <Input
+                        type="text"
+                        placeholder="e.g. 19.0760"
+                        value={officeLatitude}
+                        onChange={e => setOfficeLatitude(e.target.value)}
+                        className="bg-white dark:bg-[#1E1F22] text-xs h-9"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-slate-500">Office Longitude</Label>
+                      <Input
+                        type="text"
+                        placeholder="e.g. 72.8777"
+                        value={officeLongitude}
+                        onChange={e => setOfficeLongitude(e.target.value)}
+                        className="bg-white dark:bg-[#1E1F22] text-xs h-9"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label className="text-slate-500">Geofence Radius (meters)</Label>
+                      <Input
+                        type="number"
+                        placeholder="500"
+                        value={geofenceRadius}
+                        onChange={e => setGeofenceRadius(Number(e.target.value))}
+                        className="bg-white dark:bg-[#1E1F22] text-xs h-9"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-slate-500">Standard Work Hours</Label>
+                      <Input
+                        type="number"
+                        step="0.5"
+                        placeholder="9.0"
+                        value={standardHours}
+                        onChange={e => setStandardHours(Number(e.target.value))}
+                        className="bg-white dark:bg-[#1E1F22] text-xs h-9"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-slate-500">Allowed IP addresses (comma separated)</Label>
+                    <Input
+                      type="text"
+                      placeholder="e.g. 192.168.1.1, 10.0.0.1 (Leave empty for unrestricted)"
+                      value={allowedIps}
+                      onChange={e => setAllowedIps(e.target.value)}
+                      className="bg-white dark:bg-[#1E1F22] text-xs h-9"
+                    />
+                  </div>
+
+                  <div className="pt-2 text-right">
+                    <Button type="submit" disabled={savingSettings} className="bg-[#f87941] hover:bg-[#e06634] text-white font-bold h-9 text-xs">
+                      {savingSettings ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Policies'}
+                    </Button>
+                  </div>
+                </form>
               </CardContent>
             </Card>
           </TabsContent>

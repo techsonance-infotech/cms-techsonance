@@ -20,7 +20,7 @@ import {
 import { Loader2, Calendar, CalendarDays, Flag, Plus, Eye, ChevronLeft, ChevronRight, Check, X, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { LeaveRequestDialog } from '@/components/dashboard/LeaveRequestDialog';
-import { hasPermission } from '@/lib/permissions';
+import { hasPermission, hasFullAccess, UserRole } from '@/lib/permissions';
 
 interface LeaveRequest {
   id: number;
@@ -135,9 +135,9 @@ export default function LeavesPage() {
     }
   }, [user, employeeData, statusFilter, holidayYear]);
 
-  const isFullAccessUser = user && ['admin', 'cms_administrator', 'hr_manager', 'project_manager', 'management'].includes(user.role);
-  const canApproveLeaves = user && hasPermission(user.role as any, 'myAccount', 'canApprove');
-  const canDeleteRecords = user && hasPermission(user.role as any, 'myAccount', 'canDelete');
+  const isFullAccessUser = user && hasFullAccess(user.role as UserRole);
+  const canApproveLeaves = user && hasPermission(user.role as UserRole, 'myAccount', 'canApprove');
+  const canDeleteRecords = user && hasPermission(user.role as UserRole, 'myAccount', 'canDelete');
 
   const fetchCurrentUser = async () => {
     const token = localStorage.getItem('session_token');
@@ -189,7 +189,7 @@ export default function LeavesPage() {
     }
 
     // Fetch all employees and users for admin mapping
-    if (['admin', 'cms_administrator', 'hr_manager', 'project_manager'].includes(user.role)) {
+    if (hasFullAccess(user.role as UserRole)) {
       const empRes = await fetch('/api/employees?limit=1000', { headers: { Authorization: `Bearer ${token}` } });
       const usrRes = await fetch('/api/users?limit=1000', { headers: { Authorization: `Bearer ${token}` } });
       if (empRes.ok) {
@@ -343,16 +343,26 @@ export default function LeavesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <p className="text-sm text-muted-foreground">Employee Portal</p>
-          <h1 className="text-3xl font-semibold">{isFullAccessUser ? 'Leave Management' : 'Leave Management'}</h1>
-        </div>
-        <div className="flex flex-col gap-3 sm:flex-row">
-
-          <Button onClick={() => setShowDialog(true)}>
-            <Plus className="mr-2 h-4 w-4" /> Apply Leave
-          </Button>
+      {/* Premium Banner */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-950 via-[#0f172a] to-slate-950 p-6 border border-zinc-800 shadow-xl">
+        <div className="absolute right-0 top-0 -mr-6 -mt-6 h-32 w-32 rounded-full bg-[#f87941]/10 blur-2xl animate-pulse"></div>
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-[#f87941] via-orange-400 to-amber-500 bg-clip-text text-transparent flex items-center gap-2">
+              <Calendar className="h-8 w-8 text-[#f87941]" />
+              {isFullAccessUser ? 'Employee Leave Management' : 'My Leaves & Time Off'}
+            </h1>
+            <p className="text-slate-400 text-sm mt-1">
+              {isFullAccessUser
+                ? 'Manage employee leave requests, policy settings, and holidays'
+                : 'Apply for leaves, track approval status, and view holiday calendars.'}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={() => setShowDialog(true)} className="bg-[#f87941] hover:bg-[#e06634] text-white font-bold">
+              <Plus className="mr-2 h-4 w-4" /> Apply Leave
+            </Button>
+          </div>
         </div>
       </div>
 

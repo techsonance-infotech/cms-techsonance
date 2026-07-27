@@ -146,47 +146,61 @@ export default function DocumentVaultPage() {
   }, []);
 
   const fetchData = async () => {
-    try {
-      setLoading(true);
-      const token = getStoredSessionToken();
+    setLoading(true);
+    const token = getStoredSessionToken();
+    let docsList: any[] = [];
 
+    // 1. Fetch categories
+    try {
       const categoriesRes = await fetch('/api/documents/categories', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const categoriesData = await categoriesRes.json();
-      setCategories(categoriesData);
-
-      if (categoriesData.length > 0) {
-        setSelectedCategoryId(categoriesData[0].id);
+      if (categoriesRes.ok) {
+        const categoriesData = await categoriesRes.json();
+        setCategories(categoriesData);
+        if (categoriesData.length > 0) {
+          setSelectedCategoryId(categoriesData[0].id);
+        }
       }
+    } catch (err) {
+      console.error('Failed to load categories:', err);
+    }
 
+    // 2. Fetch documents
+    try {
       const docsRes = await fetch('/api/documents', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const docsData = await docsRes.json();
-      const docsList = Array.isArray(docsData) ? docsData : (docsData.data || []);
-      setDocuments(docsList);
+      if (docsRes.ok) {
+        const docsData = await docsRes.json();
+        docsList = Array.isArray(docsData) ? docsData : (docsData.data || []);
+        setDocuments(docsList);
+        if (docsList.length > 0) {
+          setSelectedDoc(docsList[0]);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load documents list:', err);
+    }
 
-      const employeesRes = await fetch('/api/employees', {
+    // 3. Fetch employees (crucial for dropdown mapping)
+    try {
+      const employeesRes = await fetch('/api/employees?limit=1000', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const employeesData = await employeesRes.json();
-      const empList = Array.isArray(employeesData) ? employeesData : (employeesData.data || []);
-      setEmployees(empList);
-
-      if (empList.length > 0) {
-        setSelectedEmployeeId(empList[0].id);
+      if (employeesRes.ok) {
+        const employeesData = await employeesRes.json();
+        const empList = Array.isArray(employeesData) ? employeesData : (employeesData.data || []);
+        setEmployees(empList);
+        if (empList.length > 0) {
+          setSelectedEmployeeId(empList[0].id);
+        }
       }
-
-      if (docsList.length > 0) {
-        setSelectedDoc(docsList[0]);
-      }
-
-    } catch {
-      toast.error('Failed to load document vault details');
-    } finally {
-      setLoading(false);
+    } catch (err) {
+      console.error('Failed to load employees list:', err);
     }
+
+    setLoading(false);
   };
 
   const createCategory = async (e: React.FormEvent) => {
@@ -359,6 +373,20 @@ export default function DocumentVaultPage() {
     }
     return matchesSearch;
   });
+
+  if (loading) {
+    return (
+      <div className="p-6 space-y-6 max-w-[1600px] mx-auto animate-pulse">
+        {/* Header Skeleton */}
+        <div className="h-28 bg-slate-100 dark:bg-zinc-800/50 rounded-2xl w-full"></div>
+        {/* Content Skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-1 h-64 bg-slate-100 dark:bg-zinc-800/50 rounded-2xl"></div>
+          <div className="lg:col-span-2 h-96 bg-slate-100 dark:bg-zinc-800/50 rounded-2xl"></div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6 max-w-[1600px] mx-auto animate-fadeIn">

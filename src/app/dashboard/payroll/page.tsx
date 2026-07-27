@@ -101,15 +101,20 @@ export default function PayrollPage() {
     const [adjustmentDeductions, setAdjustmentDeductions] = useState('');
     const [adjustmentNotes, setAdjustmentNotes] = useState('');
     const [isSavingAdjustment, setIsSavingAdjustment] = useState(false);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetchEmployees();
-        fetchBusinessSettings();
-    }, []);
-
-    useEffect(() => {
-        fetchPayrolls();
-    }, [selectedMonth, selectedYear]);
+        async function loadInitial() {
+            setLoading(true);
+            await Promise.all([
+                fetchEmployees(),
+                fetchBusinessSettings(),
+                fetchPayrolls()
+            ]);
+            setLoading(false);
+        }
+        loadInitial();
+    }, [selectedMonth, selectedYear, selectedEmployeeFilter]);
 
     useEffect(() => {
         if (!activePayrollJobId) return;
@@ -607,6 +612,26 @@ export default function PayrollPage() {
         : 0;
 
     const totalDisbursement = attendanceSummary.reduce((sum, s) => sum + s.calculatedSalary, 0);
+
+    if (loading) {
+        return (
+            <div className="p-6 space-y-6 max-w-[1600px] mx-auto animate-pulse">
+                {/* Header Skeleton */}
+                <div className="h-28 bg-slate-100 dark:bg-zinc-800/50 rounded-2xl w-full"></div>
+                {/* Stats cards skeleton */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="h-20 bg-slate-100 dark:bg-zinc-800/50 rounded-xl"></div>
+                    <div className="h-20 bg-slate-100 dark:bg-zinc-800/50 rounded-xl"></div>
+                    <div className="h-20 bg-slate-100 dark:bg-zinc-800/50 rounded-xl"></div>
+                    <div className="h-20 bg-slate-100 dark:bg-zinc-800/50 rounded-xl"></div>
+                </div>
+                {/* Tables skeleton */}
+                <div className="grid grid-cols-1 gap-6">
+                    <div className="h-96 bg-slate-100 dark:bg-zinc-800/50 rounded-2xl"></div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6 p-1 max-w-[1600px] mx-auto">

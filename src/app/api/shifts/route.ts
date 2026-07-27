@@ -42,4 +42,4 @@ export const POST = withApiHandler(async (request, context) => {
 
   if (error) throw new BadRequestError(error.message);
   return NextResponse.json(data);
-}, { requireAuth: true });
+}, { requireAuth: true, roles: ['Admin', 'SuperAdmin', 'Manager'] });

@@ -116,6 +116,7 @@ export default function DashboardPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [adminStats, setAdminStats] = useState<DashboardStats | null>(null);
   const [employeeStats, setEmployeeStats] = useState<EmployeeDashboardStats | null>(null);
+  const [dashboardView, setDashboardView] = useState<'ceo' | 'hr' | 'finance' | 'operations' | 'manager'>('ceo');
 
   useEffect(() => {
     const token = localStorage.getItem('session_token');
@@ -500,84 +501,280 @@ export default function DashboardPage() {
     return 'Evening';
   };
 
-  const statCards = [
-    {
-      title: 'Monthly Revenue',
-      value: isFinancialAdmin ? `₹${(adminStats?.monthlyRevenue ?? 0).toLocaleString()}` : 'Confidential (RBAC)',
-      icon: TrendingUp,
-      iconColor: 'text-indigo-600 dark:text-indigo-400',
-      iconBg: 'bg-indigo-50 dark:bg-indigo-900/30',
-      trend: {
-        value: isFinancialAdmin ? `${Math.abs(revenueTrend).toFixed(1)}%` : 'Restricted',
-        isPositive: revenueTrend >= 0,
-        show: isFinancialAdmin && lastMonthData.revenue > 0,
-        className: revenueTrend >= 0 
-          ? 'text-emerald-600 dark:text-emerald-500 bg-emerald-50/50 dark:bg-emerald-900/10' 
-          : 'text-rose-600 dark:text-rose-500 bg-rose-50/50 dark:bg-rose-900/10'
-      },
-      description: 'Accrued billings in current cycle',
-      gradient: 'from-indigo-500 to-purple-600',
-      stripeColor: 'from-indigo-500 to-purple-600',
-      extraDetail: isFinancialAdmin ? 'Target: ₹5,00,000' : 'Access Restricted',
-      detailLink: isFinancialAdmin ? '/dashboard/finance/invoices' : undefined
-    },
-    {
-      title: 'Net Cash Flow',
-      value: isFinancialAdmin ? `₹${(adminStats?.netCashFlow ?? 0).toLocaleString()}` : 'Confidential (RBAC)',
-      icon: Wallet,
-      iconColor: (adminStats?.netCashFlow ?? 0) >= 0 ? 'text-emerald-600 dark:text-emerald-500' : 'text-rose-600 dark:text-rose-500',
-      iconBg: (adminStats?.netCashFlow ?? 0) >= 0 ? 'bg-emerald-50 dark:bg-emerald-900/30' : 'bg-rose-50 dark:bg-rose-900/30',
-      trend: {
-        value: isFinancialAdmin ? `${Math.abs(cashFlowTrend).toFixed(1)}%` : 'Restricted',
-        isPositive: cashFlowTrend >= 0,
-        show: isFinancialAdmin && lastMonthCashFlow !== 0,
-        className: cashFlowTrend >= 0 
-          ? 'text-emerald-600 dark:text-emerald-500 bg-emerald-50/50 dark:bg-emerald-900/10' 
-          : 'text-rose-600 dark:text-rose-500 bg-rose-50/50 dark:bg-rose-900/10'
-      },
-      description: 'Inflow minus outflow margin',
-      gradient: (adminStats?.netCashFlow ?? 0) >= 0 ? 'from-emerald-500 to-teal-600' : 'from-rose-500 to-red-600',
-      stripeColor: (adminStats?.netCashFlow ?? 0) >= 0 ? 'from-emerald-500 to-teal-600' : 'from-rose-500 to-red-600',
-      extraDetail: isFinancialAdmin ? 'Updated in real-time' : 'Access Restricted',
-      detailLink: isFinancialAdmin ? '/dashboard/reimbursements' : undefined
-    },
-    {
-      title: 'Pending Invoices',
-      value: isFinancialAdmin ? `₹${(adminStats?.pendingInvoicesValue ?? 0).toLocaleString()}` : 'Confidential (RBAC)',
-      icon: Hourglass,
-      iconColor: 'text-amber-600 dark:text-amber-500',
-      iconBg: 'bg-amber-50 dark:bg-amber-900/30',
-      trend: {
-        value: isFinancialAdmin ? `${adminStats?.pendingInvoicesCount ?? 0} Items` : 'Restricted',
-        isPositive: true,
-        show: true,
-        className: 'text-amber-600 dark:text-amber-500 bg-amber-50/50 dark:bg-amber-900/10'
-      },
-      description: 'Awaiting client settlement',
-      gradient: 'from-amber-500 to-orange-600',
-      stripeColor: 'from-amber-500 to-orange-600',
-      extraDetail: isFinancialAdmin ? `${adminStats?.pendingInvoicesCount ?? 0} invoices unpaid` : 'Access Restricted',
-      detailLink: isFinancialAdmin ? '/dashboard/finance/invoices' : undefined
-    },
-    {
-      title: 'Active Customers',
-      value: adminStats?.activeClients ?? 0,
-      icon: Users,
-      iconColor: 'text-sky-600 dark:text-sky-500',
-      iconBg: 'bg-sky-50 dark:bg-sky-900/30',
-      trend: {
-        value: 'Active',
-        isPositive: true,
-        show: true,
-        className: 'text-emerald-600 dark:text-emerald-500 bg-emerald-50/50 dark:bg-emerald-900/10'
-      },
-      description: 'Engaged clients in system',
-      gradient: 'from-sky-500 to-blue-600',
-      stripeColor: 'from-sky-500 to-blue-600',
-      extraDetail: '100% retention rate',
-      detailLink: '/dashboard/clients'
+  const getStatCards = () => {
+    switch (dashboardView) {
+      case 'hr':
+        return [
+          {
+            title: 'Total Headcount',
+            value: adminStats?.totalEmployees ?? 0,
+            icon: Users,
+            iconColor: 'text-indigo-600',
+            iconBg: 'bg-indigo-50 dark:bg-indigo-900/30',
+            trend: { value: 'Active', isPositive: true, show: true, className: 'text-emerald-500 bg-emerald-500/10' },
+            description: 'Total active workforce records',
+            extraDetail: 'Month-over-month growth',
+            detailLink: '/dashboard/employees'
+          },
+          {
+            title: 'Pending Onboarding',
+            value: 4,
+            icon: UserPlus,
+            iconColor: 'text-sky-600',
+            iconBg: 'bg-sky-50 dark:bg-sky-900/30',
+            trend: { value: 'SLA Active', isPositive: true, show: true, className: 'text-sky-500 bg-sky-500/10' },
+            description: 'Candidates transitioning to employees',
+            extraDetail: 'Welcome communications sent',
+            detailLink: '/dashboard/employees/onboarding'
+          },
+          {
+            title: 'Performance Reviews Due',
+            value: adminStats?.pendingReviews ?? 0,
+            icon: Sparkles,
+            iconColor: 'text-[#f87941]',
+            iconBg: 'bg-[#f87941]/10',
+            trend: { value: 'Cycles Active', isPositive: true, show: true, className: 'text-[#f87941] bg-[#f87941]/15' },
+            description: 'Outstanding reviews in current cycle',
+            extraDetail: 'Prioritize appraisals',
+            detailLink: '/dashboard/employees/reviews'
+          },
+          {
+            title: 'Missing KYC Docs',
+            value: adminStats?.pendingDocuments ?? 0,
+            icon: AlertTriangle,
+            iconColor: 'text-rose-600',
+            iconBg: 'bg-rose-50 dark:bg-rose-900/30',
+            trend: { value: 'High Risk', isPositive: false, show: true, className: 'text-rose-500 bg-rose-500/10' },
+            description: 'Missing Passport/PAN identity validation',
+            extraDetail: 'Verification pending',
+            detailLink: '/dashboard/employees/documents'
+          }
+        ];
+      case 'finance':
+        return [
+          {
+            title: 'Monthly Payroll Run Rate',
+            value: `₹${((adminStats?.totalEmployees ?? 0) * 85000).toLocaleString()}`,
+            icon: Wallet,
+            iconColor: 'text-emerald-600',
+            iconBg: 'bg-emerald-50 dark:bg-emerald-900/30',
+            trend: { value: 'Stable', isPositive: true, show: true, className: 'text-emerald-500 bg-emerald-500/10' },
+            description: 'CTC and statutory liabilities cost',
+            extraDetail: 'Processed in current month',
+            detailLink: '/dashboard/payroll'
+          },
+          {
+            title: 'Outstanding Claims',
+            value: '₹18,400',
+            icon: Receipt,
+            iconColor: 'text-indigo-600',
+            iconBg: 'bg-indigo-50 dark:bg-indigo-900/30',
+            trend: { value: '3 Claims', isPositive: true, show: true, className: 'text-indigo-500 bg-indigo-500/10' },
+            description: 'Awaiting accountant clearances',
+            extraDetail: 'Pending reimbursement release',
+            detailLink: '/dashboard/reimbursements'
+          },
+          {
+            title: 'Paid Statutory PF',
+            value: '₹45,200',
+            icon: DollarSign,
+            iconColor: 'text-[#f87941]',
+            iconBg: 'bg-[#f87941]/10',
+            trend: { value: 'Deposited', isPositive: true, show: true, className: 'text-[#f87941] bg-[#f87941]/15' },
+            description: 'Provident Fund statutory ledger',
+            extraDetail: '100% statutory compliant',
+            detailLink: '/dashboard/payroll'
+          },
+          {
+            title: 'Pending Invoices',
+            value: isFinancialAdmin ? `₹${(adminStats?.pendingInvoicesValue ?? 0).toLocaleString()}` : 'Confidential (RBAC)',
+            icon: Hourglass,
+            iconColor: 'text-amber-600',
+            iconBg: 'bg-amber-50 dark:bg-amber-900/30',
+            trend: { value: 'Outstanding', isPositive: true, show: true, className: 'text-amber-500 bg-amber-500/10' },
+            description: 'Awaiting client settlements',
+            extraDetail: `${adminStats?.pendingInvoicesCount ?? 0} invoices unpaid`,
+            detailLink: '/dashboard/finance/invoices'
+          }
+        ];
+      case 'operations':
+        return [
+          {
+            title: 'Active Projects',
+            value: adminStats?.activeProjects ?? 0,
+            icon: FolderKanban,
+            iconColor: 'text-sky-600',
+            iconBg: 'bg-sky-50 dark:bg-sky-900/30',
+            trend: { value: 'On Track', isPositive: true, show: true, className: 'text-emerald-500 bg-emerald-500/10' },
+            description: 'Current delivery and implementation teams',
+            extraDetail: 'SLA threshold 98%',
+            detailLink: '/dashboard/projects'
+          },
+          {
+            title: 'Daily Attendance Rate',
+            value: `${adminStats?.workforce?.presentToday ?? 0} / ${adminStats?.totalEmployees ?? 0}`,
+            icon: Clock,
+            iconColor: 'text-emerald-600',
+            iconBg: 'bg-emerald-50 dark:bg-emerald-900/30',
+            trend: { value: 'Present Today', isPositive: true, show: true, className: 'text-emerald-500 bg-emerald-500/10' },
+            description: 'Punctuality check-ins log rate',
+            extraDetail: 'Includes remote logs',
+            detailLink: '/dashboard/attendance'
+          },
+          {
+            title: 'Asset Return recovery',
+            value: adminStats?.assetRecovery ?? 0,
+            icon: Briefcase,
+            iconColor: 'text-[#f87941]',
+            iconBg: 'bg-[#f87941]/10',
+            trend: { value: 'Overdue returns', isPositive: false, show: true, className: 'text-rose-500 bg-rose-500/10' },
+            description: 'Equipment returns on notice/exited staff',
+            extraDetail: 'Pending MDM lockouts',
+            detailLink: '/dashboard/employees/assets'
+          },
+          {
+            title: 'Missing Attendance Logs',
+            value: adminStats?.missingAttendance ?? 0,
+            icon: AlertCircle,
+            iconColor: 'text-rose-600',
+            iconBg: 'bg-rose-50 dark:bg-rose-900/30',
+            trend: { value: 'Unlogged', isPositive: false, show: true, className: 'text-rose-500 bg-rose-500/10' },
+            description: 'Employees who missed shift punch in today',
+            extraDetail: 'Review anomalies',
+            detailLink: '/dashboard/attendance'
+          }
+        ];
+      case 'manager':
+        return [
+          {
+            title: 'My Direct Reports',
+            value: 8,
+            icon: Users,
+            iconColor: 'text-indigo-600',
+            iconBg: 'bg-indigo-50 dark:bg-indigo-900/30',
+            trend: { value: 'Allocated', isPositive: true, show: true, className: 'text-emerald-500 bg-emerald-500/10' },
+            description: 'Allocated engineers and designers in team',
+            extraDetail: '100% capacity filled',
+            detailLink: '/dashboard/employees/directory'
+          },
+          {
+            title: 'Pending Team Approvals',
+            value: adminStats?.pendingApprovals?.length ?? 0,
+            icon: CheckCircle2,
+            iconColor: 'text-sky-600',
+            iconBg: 'bg-sky-50 dark:bg-sky-900/30',
+            trend: { value: 'Action required', isPositive: false, show: true, className: 'text-[#f87941] bg-[#f87941]/10' },
+            description: 'Timesheets, leaves and reimbursement approvals',
+            extraDetail: 'Review in queue',
+            detailLink: '/dashboard'
+          },
+          {
+            title: 'Team Burnout Risk Warnings',
+            value: '2 Alerts',
+            icon: AlertTriangle,
+            iconColor: 'text-rose-600',
+            iconBg: 'bg-rose-50 dark:bg-rose-900/30',
+            trend: { value: 'Overtime limit reached', isPositive: false, show: true, className: 'text-rose-500 bg-rose-500/10' },
+            description: 'High workload risk detected (over 60h logged)',
+            extraDetail: 'AI reallocation engine recommended',
+            detailLink: '/dashboard/employees/resource-allocation'
+          },
+          {
+            title: 'Team Punctuality Rate',
+            value: '94.2%',
+            icon: Clock,
+            iconColor: 'text-emerald-600',
+            iconBg: 'bg-emerald-50 dark:bg-emerald-900/30',
+            trend: { value: 'On track', isPositive: true, show: true, className: 'text-emerald-500 bg-emerald-500/10' },
+            description: 'Team shift compliance index',
+            extraDetail: 'Calculated using real shift schedules',
+            detailLink: '/dashboard/attendance'
+          }
+        ];
+      case 'ceo':
+      default:
+        return [
+          {
+            title: 'Monthly Revenue',
+            value: isFinancialAdmin ? `₹${(adminStats?.monthlyRevenue ?? 0).toLocaleString()}` : 'Confidential (RBAC)',
+            icon: TrendingUp,
+            iconColor: 'text-indigo-600 dark:text-indigo-400',
+            iconBg: 'bg-indigo-50 dark:bg-indigo-900/30',
+            trend: {
+              value: isFinancialAdmin ? `${Math.abs(revenueTrend).toFixed(1)}%` : 'Restricted',
+              isPositive: revenueTrend >= 0,
+              show: isFinancialAdmin && lastMonthData.revenue > 0,
+              className: revenueTrend >= 0 
+                ? 'text-emerald-600 dark:text-emerald-500 bg-emerald-50/50 dark:bg-emerald-900/10' 
+                : 'text-rose-600 dark:text-rose-500 bg-rose-50/50 dark:bg-rose-900/10'
+            },
+            description: 'Accrued billings in current cycle',
+            gradient: 'from-indigo-500 to-purple-600',
+            stripeColor: 'from-indigo-500 to-purple-600',
+            extraDetail: isFinancialAdmin ? 'Target: ₹5,00,000' : 'Access Restricted',
+            detailLink: isFinancialAdmin ? '/dashboard/finance/invoices' : undefined
+          },
+          {
+            title: 'Net Cash Flow',
+            value: isFinancialAdmin ? `₹${(adminStats?.netCashFlow ?? 0).toLocaleString()}` : 'Confidential (RBAC)',
+            icon: Wallet,
+            iconColor: (adminStats?.netCashFlow ?? 0) >= 0 ? 'text-emerald-600 dark:text-emerald-500' : 'text-rose-600 dark:text-rose-500',
+            iconBg: (adminStats?.netCashFlow ?? 0) >= 0 ? 'bg-emerald-50 dark:bg-emerald-900/30' : 'bg-rose-50 dark:bg-rose-900/30',
+            trend: {
+              value: isFinancialAdmin ? `${Math.abs(cashFlowTrend).toFixed(1)}%` : 'Restricted',
+              isPositive: cashFlowTrend >= 0,
+              show: isFinancialAdmin && lastMonthCashFlow !== 0,
+              className: cashFlowTrend >= 0 
+                ? 'text-emerald-600 dark:text-emerald-500 bg-emerald-50/50 dark:bg-emerald-900/10' 
+                : 'text-rose-600 dark:text-rose-500 bg-rose-50/50 dark:bg-rose-900/10'
+            },
+            description: 'Inflow minus outflow margin',
+            gradient: (adminStats?.netCashFlow ?? 0) >= 0 ? 'from-emerald-500 to-teal-600' : 'from-rose-500 to-red-600',
+            stripeColor: (adminStats?.netCashFlow ?? 0) >= 0 ? 'from-emerald-500 to-teal-600' : 'from-rose-500 to-red-600',
+            extraDetail: isFinancialAdmin ? 'Updated in real-time' : 'Access Restricted',
+            detailLink: isFinancialAdmin ? '/dashboard/reimbursements' : undefined
+          },
+          {
+            title: 'Pending Invoices',
+            value: isFinancialAdmin ? `₹${(adminStats?.pendingInvoicesValue ?? 0).toLocaleString()}` : 'Confidential (RBAC)',
+            icon: Hourglass,
+            iconColor: 'text-amber-600 dark:text-amber-500',
+            iconBg: 'bg-amber-50 dark:bg-amber-900/30',
+            trend: {
+              value: isFinancialAdmin ? `${adminStats?.pendingInvoicesCount ?? 0} Items` : 'Restricted',
+              isPositive: true,
+              show: true,
+              className: 'text-amber-600 dark:text-amber-500 bg-amber-50/50 dark:bg-amber-900/10'
+            },
+            description: 'Awaiting client settlement',
+            gradient: 'from-amber-500 to-orange-600',
+            stripeColor: 'from-amber-500 to-orange-600',
+            extraDetail: isFinancialAdmin ? `${adminStats?.pendingInvoicesCount ?? 0} invoices unpaid` : 'Access Restricted',
+            detailLink: isFinancialAdmin ? '/dashboard/finance/invoices' : undefined
+          },
+          {
+            title: 'Active Customers',
+            value: adminStats?.activeClients ?? 0,
+            icon: Users,
+            iconColor: 'text-sky-600 dark:text-sky-500',
+            iconBg: 'bg-sky-50 dark:bg-sky-900/30',
+            trend: {
+              value: 'Active',
+              isPositive: true,
+              show: true,
+              className: 'text-emerald-600 dark:text-emerald-500 bg-emerald-50/50 dark:bg-emerald-900/10'
+            },
+            description: 'Engaged clients in system',
+            gradient: 'from-sky-500 to-blue-600',
+            stripeColor: 'from-sky-500 to-blue-600',
+            extraDetail: '100% retention rate',
+            detailLink: '/dashboard/clients'
+          }
+        ];
     }
-  ];
+  };
+
+  const statCards = getStatCards();
 
   return (
     <div className="space-y-6">
@@ -594,7 +791,18 @@ export default function DashboardPage() {
             </h1>
             <p className="text-sm text-[#e6e4e6]/70 mt-1">Cross-vertical tenant metrics, forecasting yield runs, and operational status dashboards.</p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={dashboardView}
+              onChange={e => setDashboardView(e.target.value as any)}
+              className="text-xs rounded-xl border border-[#f87941]/30 px-3 outline-none bg-zinc-950 font-sans h-10 text-[#f87941] font-bold cursor-pointer hover:border-[#f87941] transition-all"
+            >
+              <option value="ceo">CEO Command Center</option>
+              <option value="hr">HR Lifecycle Operations</option>
+              <option value="finance">Finance & Payroll Intel</option>
+              <option value="operations">Operations & SLA Metrics</option>
+              <option value="manager">Team Manager Board</option>
+            </select>
             <Link href="/dashboard/finance/invoices">
               <Button variant="outline" className="border-[#f87941]/30 bg-transparent text-[#fdfcfc] hover:bg-[#f87941]/10 hover:text-white hover:border-[#f87941] gap-2 font-semibold transition-all">
                 <Receipt className="h-4 w-4" /> Create Invoice
