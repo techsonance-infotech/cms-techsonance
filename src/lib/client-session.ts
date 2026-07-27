@@ -8,7 +8,14 @@ export function getStoredSessionToken() {
     return null;
   }
 
-  return sessionStorage.getItem('session_token') ?? localStorage.getItem('session_token');
+  const token = sessionStorage.getItem('session_token') ?? localStorage.getItem('session_token');
+  if (token && token !== 'null' && token !== 'undefined') {
+    return token;
+  }
+
+  // Fallback: parse from document.cookie
+  const match = document.cookie.match(/(^|;\s*)session_token\s*=\s*([^;]+)/);
+  return match ? decodeURIComponent(match[2]) : null;
 }
 
 export function getStoredUser() {
@@ -18,15 +25,32 @@ export function getStoredUser() {
 
   const rawUser = sessionStorage.getItem('user') ?? localStorage.getItem('user');
 
-  if (!rawUser) {
-    return null;
+  if (rawUser && rawUser !== 'null' && rawUser !== 'undefined') {
+    try {
+      return JSON.parse(rawUser);
+    } catch {}
   }
 
-  try {
-    return JSON.parse(rawUser);
-  } catch {
-    return null;
+  // Fallback: parse from token payload
+  const token = getStoredSessionToken();
+  if (token) {
+    try {
+      const parts = token.split('.');
+      if (parts.length === 3) {
+        const payload = JSON.parse(atob(parts[1]));
+        return {
+          id: payload.sub || 0,
+          email: payload.email || '',
+          firstName: payload.user_metadata?.firstName || '',
+          lastName: payload.user_metadata?.lastName || '',
+          role: payload.app_metadata?.role || 'Employee',
+          tenantId: payload.app_metadata?.tenant_id || null
+        };
+      }
+    } catch {}
   }
+
+  return null;
 }
 
 export function persistClientSession(input: {

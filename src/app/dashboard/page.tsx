@@ -471,17 +471,6 @@ export default function DashboardPage() {
                   </Link>
                 </>
               )}
-              <Link href="/dashboard/help-desk" className="group">
-                <div className="flex items-center gap-4 p-4 rounded-xl border border-dashed hover:border-solid hover:border-[#f87941] hover:bg-[#e6e4e6]/10 transition-all">
-                  <div className="p-2 rounded-lg bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 group-hover:bg-[#f87941]/10 group-hover:text-[#f87941] transition-all">
-                    <AlertCircle className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-sm">Support Desk</p>
-                    <p className="text-xs text-muted-foreground">Open a help ticket</p>
-                  </div>
-                </div>
-              </Link>
             </CardContent>
           </Card>
         </div>

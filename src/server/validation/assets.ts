@@ -90,3 +90,39 @@ export const updateMediaFileSchema = z.object({
   fileType: mediaFileTypeSchema.optional(),
   fileSize: z.coerce.number().int().positive().max(500 * 1024 * 1024).optional(),
 });
+
+// Hardware Assets (ELM Phase 1)
+export const assetCategorySchema = z.object({
+  name: z.string().trim().min(1).max(255),
+  description: z.string().trim().optional().nullable(),
+});
+
+export const assetSchema = z.object({
+  categoryId: z.number().int().positive(),
+  name: z.string().trim().min(1).max(255),
+  serialNumber: z.string().trim().min(1).max(255),
+  modelNumber: z.string().trim().optional().nullable(),
+  purchaseDate: z.string().date().optional().nullable().or(z.literal('')),
+  warrantyExpiry: z.string().date().optional().nullable().or(z.literal('')),
+  amcDetails: z.string().trim().optional().nullable(),
+  status: z.enum(['available', 'assigned', 'maintenance', 'retired']).optional().default('available'),
+  notes: z.string().trim().optional().nullable(),
+});
+
+export const assetAssignmentSchema = z.object({
+  assetId: z.number().int().positive(),
+  employeeId: z.number().int().positive(),
+  assignedDate: z.string().date(),
+  returnedDate: z.string().date().optional().nullable().or(z.literal('')),
+  conditionOnAssign: z.string().trim().optional().nullable(),
+  conditionOnReturn: z.string().trim().optional().nullable(),
+  status: z.enum(['active', 'returned']).optional().default('active'),
+});
+
+export const assetRequestSchema = z.object({
+  employeeId: z.number().int().positive(),
+  categoryId: z.number().int().positive(),
+  reason: z.string().trim().min(1),
+  status: z.enum(['pending', 'approved', 'rejected', 'fulfilled']).optional().default('pending'),
+  managerComments: z.string().trim().optional().nullable(),
+});

@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { getStoredSessionToken } from '@/lib/client-session';
 import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -68,7 +69,7 @@ export default function OnboardingPage() {
 
     async function loadSettings() {
       try {
-        const response = await fetch(`/api/company-settings?t=${Date.now()}`, {
+        const response = await fetch('/api/company-settings', {
           headers: {
             'Authorization': `Bearer ${sessionToken}`,
           },
@@ -111,37 +112,79 @@ export default function OnboardingPage() {
   }, [router]);
 
   // Handle Mock File Upload Simulator
-  const simulateFileUpload = (field: 'registrationCert' | 'panCard' | 'gstCert', file: File) => {
+  // Handle Actual File Upload
+  const handleActualFileUpload = async (field: 'registrationCert' | 'panCard' | 'gstCert', file: File) => {
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('File exceeds 10MB limit.');
+      return;
+    }
+    if (!['image/png', 'image/jpeg', 'image/jpg', 'application/pdf'].includes(file.type)) {
+      toast.error('Invalid file format. Only PNG, JPEG, and PDF are supported.');
+      return;
+    }
+
     setFiles((prev) => ({
       ...prev,
-      [field]: { name: file.name, progress: 0, url: null },
+      [field]: { name: file.name, progress: 10, url: null },
     }));
 
-    let progress = 0;
-    const interval = setInterval(() => {
-      progress += 20;
-      setFiles((prev) => {
-        const current = prev[field];
-        if (!current) return prev;
-        return {
-          ...prev,
-          [field]: { ...current, progress: Math.min(progress, 100) },
-        };
-      });
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('kind', 'employee_document');
 
-      if (progress >= 100) {
-        clearInterval(interval);
-        // Set mock URL path
+      const activeToken = getStoredSessionToken() || token;
+      const headers: Record<string, string> = {};
+      if (activeToken) {
+        headers['Authorization'] = `Bearer ${activeToken}`;
+      }
+
+      // Smooth progress indicator update
+      const progressInterval = setInterval(() => {
         setFiles((prev) => {
           const current = prev[field];
-          if (!current) return prev;
+          if (!current || current.progress >= 90) {
+            clearInterval(progressInterval);
+            return prev;
+          }
           return {
             ...prev,
-            [field]: { ...current, url: `/uploads/mock_${field}_${Date.now()}.pdf` },
+            [field]: { ...current, progress: current.progress + 15 },
           };
         });
+      }, 100);
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+
+      clearInterval(progressInterval);
+
+      if (response.ok) {
+        const resJson = await response.json();
+        const fileUrl = resJson.data?.url || resJson.url || '';
+        
+        setFiles((prev) => ({
+          ...prev,
+          [field]: { name: file.name, progress: 100, url: fileUrl },
+        }));
+        toast.success(`${file.name} uploaded successfully!`);
+      } else {
+        const errorJson = await response.json().catch(() => ({}));
+        throw new Error(errorJson.error || errorJson.message || 'Server error');
       }
-    }, 150);
+    } catch (err: any) {
+      console.error('File upload failed:', err);
+      toast.error(`Upload failed: ${err.message || err}`);
+      setFiles((prev) => ({
+        ...prev,
+        [field]: null,
+      }));
+    }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -152,14 +195,14 @@ export default function OnboardingPage() {
     e.preventDefault();
     const droppedFile = e.dataTransfer.files?.[0];
     if (droppedFile) {
-      simulateFileUpload(field, droppedFile);
+      handleActualFileUpload(field, droppedFile);
     }
   };
 
   const handleFileChange = (field: 'registrationCert' | 'panCard' | 'gstCert', e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
-      simulateFileUpload(field, selectedFile);
+      handleActualFileUpload(field, selectedFile);
     }
   };
 

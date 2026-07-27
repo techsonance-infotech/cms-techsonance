@@ -51,10 +51,14 @@ export const GET = withApiHandler(async (request, context) => {
   });
 
   if (request.headers.get('accept')?.includes('application/json')) {
-    return apiSuccess({ url: signedUrl }, 'Signed URL generated');
+    const jsonRes = apiSuccess({ url: signedUrl }, 'Signed URL generated');
+    jsonRes.headers.set('Cache-Control', 'private, max-age=300');
+    return jsonRes;
   }
 
-  return NextResponse.redirect(signedUrl, { status: 302 });
+  const redirectRes = NextResponse.redirect(signedUrl, { status: 302 });
+  redirectRes.headers.set('Cache-Control', 'private, max-age=300');
+  return redirectRes;
 }, { requireAuth: true, roles: ['Employee'] });
 
 export const POST = withApiHandler(async (request, context) => {

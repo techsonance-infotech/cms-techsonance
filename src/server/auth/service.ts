@@ -7,6 +7,7 @@ import {
   readRefreshTokenCookie,
   readRefreshTokenPersistenceCookie,
   writeRefreshTokenCookie,
+  writeAccessTokenCookie,
 } from '@/server/auth/session';
 import {
   refreshSupabaseSession,
@@ -188,6 +189,9 @@ export async function loginUser(input: {
     await writeRefreshTokenCookie(authData.session.refresh_token, {
       persistent: input.rememberMe ?? false,
     });
+    await writeAccessTokenCookie(authData.session.access_token, {
+      persistent: input.rememberMe ?? false,
+    });
 
     await writeAuditLog({
       actorUserId: userId,
@@ -284,6 +288,7 @@ export async function refreshUserSession(request: Request, requestId?: string) {
   }
 
   await writeRefreshTokenCookie(session.refresh_token, { persistent });
+  await writeAccessTokenCookie(session.access_token, { persistent });
 
   await writeAuditLog({
     actorUserId: supabaseProfile.legacyUserId,

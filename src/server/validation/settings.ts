@@ -35,6 +35,31 @@ export const companySettingsSchema = z.object({
   emergencyContact: z.string().trim().max(255).optional().nullable(),
   supportEmail: z.string().trim().max(255).optional().nullable(),
   supportPhone: z.string().trim().max(255).optional().nullable(),
+  invoicePrefix: z.string().trim().max(50).optional().nullable(),
+  invoiceNumberStart: z.coerce.number().int().min(1).optional().nullable(),
+  quotationPrefix: z.string().trim().max(50).optional().nullable(),
+  purchasePrefix: z.string().trim().max(50).optional().nullable(),
+  creditNotePrefix: z.string().trim().max(50).optional().nullable(),
+  gstEnabled: z.boolean().optional().nullable(),
+  gstRateDefault: z.coerce.number().min(0).max(100).optional().nullable(),
+  taxConfiguration: z.array(z.object({
+    name: z.string(),
+    rate: z.number(),
+    type: z.string()
+  })).optional().nullable(),
+  invoiceDecimal: z.coerce.number().int().min(0).max(4).optional().nullable(),
+  invoiceFooter: z.string().trim().max(2000).optional().nullable(),
+  invoiceTerms: z.string().trim().max(5000).optional().nullable(),
+  defaultPaymentTerms: z.string().trim().max(255).optional().nullable(),
+  paymentGateway: z.string().trim().max(50).optional().nullable(),
+  paymentGatewayConfig: z.record(z.string(), z.any()).optional().nullable(),
+  qrCodeEnabled: z.boolean().optional().nullable(),
+  qrCodeUrl: z.string().trim().max(2000).optional().nullable(),
+  digitalSignatureEnabled: z.boolean().optional().nullable(),
+  digitalSignatureUrl: z.string().trim().max(2000).optional().nullable(),
+  invoiceTemplate: z.string().trim().max(50).optional().nullable(),
+  multiCurrencyEnabled: z.boolean().optional().nullable(),
+  supportedCurrencies: z.array(z.string()).optional().nullable(),
 });
 
 export const updateCompanySettingsSchema = companySettingsSchema.partial();

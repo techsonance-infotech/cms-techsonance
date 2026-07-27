@@ -66,6 +66,8 @@ tags:
   - 
     name: "notifications"
   - 
+    name: "org-chart"
+  - 
     name: "pages"
   - 
     name: "payments"
@@ -5827,6 +5829,88 @@ paths:
       responses:
         200:
           $ref: "#/components/responses/SuccessResponse"
+        400:
+          $ref: "#/components/responses/ValidationErrorResponse"
+        401:
+          $ref: "#/components/responses/UnauthorizedResponse"
+        403:
+          $ref: "#/components/responses/ForbiddenResponse"
+        404:
+          $ref: "#/components/responses/NotFoundResponse"
+        422:
+          $ref: "#/components/responses/UnprocessableResponse"
+        500:
+          $ref: "#/components/responses/InternalErrorResponse"
+  /api/org-chart:
+    get:
+      tags:
+        - org-chart
+      summary: "Retrieve resource for /api/org-chart"
+      description: "Auto-generated documentation for GET /api/org-chart."
+      security:
+        - 
+          bearerAuth: []
+      parameters:
+        - 
+          name: "limit"
+          in: "query"
+          required: false
+          schema:
+            type: "integer"
+            minimum: 1
+            maximum: 100
+          example: 10
+        - 
+          name: "offset"
+          in: "query"
+          required: false
+          schema:
+            type: "integer"
+            minimum: 0
+          example: 0
+      responses:
+        200:
+          $ref: "#/components/responses/SuccessResponse"
+        201:
+          $ref: "#/components/responses/CreatedResponse"
+        400:
+          $ref: "#/components/responses/ValidationErrorResponse"
+        401:
+          $ref: "#/components/responses/UnauthorizedResponse"
+        403:
+          $ref: "#/components/responses/ForbiddenResponse"
+        404:
+          $ref: "#/components/responses/NotFoundResponse"
+        422:
+          $ref: "#/components/responses/UnprocessableResponse"
+        500:
+          $ref: "#/components/responses/InternalErrorResponse"
+    put:
+      tags:
+        - org-chart
+      summary: "Update resource for /api/org-chart"
+      description: "Auto-generated documentation for PUT /api/org-chart."
+      security:
+        - 
+          bearerAuth: []
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenericPayload"
+            examples:
+              sample:
+                summary: "PUT request payload"
+                value:
+                  name: "Example"
+                  status: "active"
+      responses:
+        200:
+          $ref: "#/components/responses/SuccessResponse"
+        201:
+          $ref: "#/components/responses/CreatedResponse"
         400:
           $ref: "#/components/responses/ValidationErrorResponse"
         401:

@@ -4,9 +4,24 @@ import { withApiHandler } from '@/server/http/handler';
 import { getCurrentUser } from '@/lib/auth';
 import { getSupabaseAdminClient } from '@/server/supabase/admin';
 import { BadRequestError } from '@/server/http/errors';
+import { cookies } from 'next/headers';
+import { writeAccessTokenCookie } from '@/server/auth/session';
 
 export const GET = withApiHandler(async (request, context) => {
   const user = await getCurrentUser(request as NextRequest);
+  
+  // Self-heal: If authenticated via Authorization header and session_token cookie is missing, write it
+  const authHeader = request.headers.get('authorization');
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice('Bearer '.length) : null;
+  if (token && user) {
+    try {
+      const cookieStore = await cookies();
+      if (!cookieStore.get('session_token')?.value) {
+        await writeAccessTokenCookie(token, { persistent: true });
+      }
+    } catch {}
+  }
+
   return NextResponse.json({ user: user ?? context.auth?.user ?? null });
 }, { requireAuth: true });
 

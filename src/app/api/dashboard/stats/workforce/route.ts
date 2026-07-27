@@ -37,11 +37,54 @@ export const GET = withApiHandler(async (request, context) => {
     if (error) throw new Error(error.message);
 
 
-  const allEmployees = (employees as Record<string, unknown>[] | null) ?? [];
-  const now = new Date();
-  const thisMonth = now.getMonth();
-  const thisYear = now.getFullYear();
-  const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const searchParams = new URL(request.url).searchParams;
+    const dateRangeParam = searchParams.get('dateRange') || 'Last 30 Days';
+    const filtersParam = searchParams.get('filters') || '';
+
+    const allEmployeesRaw = (employees as Record<string, unknown>[] | null) ?? [];
+
+    let allEmployees = [...allEmployeesRaw];
+    if (filtersParam) {
+      const filters = filtersParam.split(',');
+      if (filters.includes('hq')) {
+        allEmployees = allEmployees.filter(e => e.work_location === 'HQ' || (e.office as string)?.toLowerCase() === 'hq');
+      }
+      if (filters.includes('remote')) {
+        allEmployees = allEmployees.filter(e => e.work_mode === 'remote');
+      }
+      if (filters.includes('on-leave')) {
+        allEmployees = allEmployees.filter(e => e.status === 'on_leave');
+      }
+    }
+
+    const now = new Date();
+    const thisMonth = now.getMonth();
+    const thisYear = now.getFullYear();
+    const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    // Apply dateRange filtering boundaries to metrics
+    let rangeStartDate = new Date(0);
+    if (dateRangeParam === 'Last 7 Days') {
+      rangeStartDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    } else if (dateRangeParam === 'Last 30 Days') {
+      rangeStartDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    } else if (dateRangeParam === 'This Month') {
+      rangeStartDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    } else if (dateRangeParam === 'This Quarter') {
+      const q = Math.floor(now.getMonth() / 3);
+      rangeStartDate = new Date(now.getFullYear(), q * 3, 1);
+    } else if (dateRangeParam === 'This Year') {
+      rangeStartDate = new Date(now.getFullYear(), 0, 1);
+    }
+
+    // Filter employees to only those joined on or before target date range or active within period
+    if (dateRangeParam !== 'All Time') {
+      allEmployees = allEmployees.filter(e => {
+        if (!e.date_of_joining) return true;
+        const doj = new Date(e.date_of_joining as string);
+        return doj <= now;
+      });
+    }
 
   // Status counts
   const total = allEmployees.length;

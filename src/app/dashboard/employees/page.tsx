@@ -78,13 +78,17 @@ export default function WorkforceDashboardPage() {
   useEffect(() => {
     setIsMounted(true);
     fetchStats();
-  }, []);
+  }, [dateRange, activeFilters]);
 
   const fetchStats = async () => {
     setLoading(true);
     try {
       const token = getStoredSessionToken();
-      const res = await fetch(`/api/dashboard/stats/workforce?t=${Date.now()}`, {
+      const queryParams = new URLSearchParams({
+        dateRange,
+        filters: activeFilters.join(','),
+      });
+      const res = await fetch(`/api/dashboard/stats/workforce?${queryParams.toString()}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -124,41 +128,100 @@ export default function WorkforceDashboardPage() {
     }
   };
 
-  const exportCSV = () => {
+  const exportPDF = () => {
     if (!stats) return;
-    const rows = [
-      ['Metric', 'Value'],
-      ['Total Employees', stats.total],
-      ['Active Employees', stats.active],
-      ['On Leave', stats.onLeave],
-      ['On Notice', stats.onNotice],
-      ['Probation', stats.probation],
-      ['Contractors', stats.contract],
-      ['Interns', stats.intern],
-      ['Remote Mode', stats.remote],
-      ['Hybrid Mode', stats.hybrid],
-      ['WFO Mode', stats.wfo],
-      ['Departments Count', stats.departments],
-      ['Locations Count', stats.locations],
-      ['Male Count', stats.male],
-      ['Female Count', stats.female],
-      ['Other Gender Count', stats.otherGender],
-      ['Average Age', stats.avgAge || 'N/A'],
-      ['Average Experience', stats.avgExperience || 'N/A'],
-      ['Average Salary (INR)', stats.avgSalary || 'N/A'],
-      ['New Joiners This Month', stats.newJoiners],
-      ['Resignations This Month', stats.resignedThisMonth],
-    ];
-    const csvContent = "data:text/csv;charset=utf-8,"
-      + rows.map(e => e.join(",")).join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `workforce_report_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success('Workforce report exported successfully');
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast.error('Please allow popups to export PDF');
+      return;
+    }
+
+    const formattedSalary = stats.avgSalary
+      ? new Intl.NumberFormat('en-IN', {
+          style: 'currency',
+          currency: 'INR',
+          maximumFractionDigits: 0
+        }).format(stats.avgSalary)
+      : 'N/A';
+
+    const html = `
+      <html>
+        <head>
+          <title>Workforce Intelligence Report</title>
+          <style>
+            body { font-family: 'Inter', system-ui, -apple-system, sans-serif; color: #1e293b; padding: 40px; }
+            .header { border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 30px; }
+            .header h1 { margin: 0; font-size: 24px; color: #0f172a; }
+            .header p { margin: 5px 0 0 0; font-size: 14px; color: #64748b; }
+            .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 40px; }
+            .card { background: #f8fafc; border: 1px solid #e2e8f0; padding: 20px; border-radius: 12px; }
+            .card h3 { margin: 0 0 10px 0; font-size: 11px; text-transform: uppercase; color: #64748b; letter-spacing: 0.05em; }
+            .card p { margin: 0; font-size: 24px; font-weight: 800; color: #0f172a; }
+            .section-title { font-size: 18px; font-weight: 700; margin-bottom: 15px; color: #0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin-top: 30px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+            th, td { text-align: left; padding: 12px; border-bottom: 1px solid #e2e8f0; font-size: 14px; }
+            th { background: #f1f5f9; font-weight: 600; color: #475569; }
+            .footer { margin-top: 50px; font-size: 12px; text-align: center; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 20px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Workforce Intelligence Report</h1>
+            <p>Generated on ${new Date().toLocaleDateString()} | Date Range: ${dateRange} | Filters: ${activeFilters.length > 0 ? activeFilters.join(', ') : 'None'}</p>
+          </div>
+          
+          <div class="stats-grid">
+            <div class="card"><h3>Total Headcount</h3><p>${stats.total}</p></div>
+            <div class="card"><h3>Active Personnel</h3><p>${stats.active}</p></div>
+            <div class="card"><h3>Attrition Rate</h3><p>${stats.attritionRate}%</p></div>
+            <div class="card"><h3>On Leave</h3><p>${stats.onLeave}</p></div>
+            <div class="card"><h3>On Notice</h3><p>${stats.onNotice}</p></div>
+            <div class="card"><h3>Probation</h3><p>${stats.probation}</p></div>
+          </div>
+
+          <div class="section-title">Demographics & Work Modes</div>
+          <table>
+            <thead>
+              <tr><th>Metric</th><th>Count / Value</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Remote Personnel</td><td>${stats.remote}</td></tr>
+              <tr><td>Hybrid Personnel</td><td>${stats.hybrid}</td></tr>
+              <tr><td>Office (WFO) Personnel</td><td>${stats.wfo}</td></tr>
+              <tr><td>Male Personnel</td><td>${stats.male}</td></tr>
+              <tr><td>Female Personnel</td><td>${stats.female}</td></tr>
+              <tr><td>Other Genders</td><td>${stats.otherGender}</td></tr>
+              <tr><td>Avg. Salary (INR)</td><td>${formattedSalary}</td></tr>
+            </tbody>
+          </table>
+
+          <div class="section-title">Compliance Metrics</div>
+          <table>
+            <thead>
+              <tr><th>Alert Category</th><th>Outstanding Items</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Missing KYC Documents</td><td>${stats.pendingDocuments} profiles</td></tr>
+              <tr><td>Pending Performance Reviews</td><td>${stats.pendingReviews} cycles</td></tr>
+              <tr><td>Assets Pending Return</td><td>${stats.assetRecovery} assets</td></tr>
+              <tr><td>Missing Attendance Today</td><td>${stats.missingAttendance} profiles</td></tr>
+            </tbody>
+          </table>
+
+          <div class="footer">TechSonance CMS - Enterprise SaaS Platform</div>
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() { window.close(); }, 500);
+            }
+          </script>
+        </body>
+      </html>
+    `;
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    toast.success('PDF Report generated successfully');
   };
 
   const toggleDemoFilter = (filter: string) => {
@@ -344,7 +407,7 @@ export default function WorkforceDashboardPage() {
 
           {/* Export Report Button */}
           <Button
-            onClick={exportCSV}
+            onClick={exportPDF}
             className="bg-[#f87941]/10 text-[#f87941] border border-[#f87941]/20 hover:bg-[#f87941]/20 font-bold flex items-center gap-2 transition-colors"
           >
             <Download className="h-4 w-4" /> Export Report

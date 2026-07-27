@@ -10,8 +10,32 @@ export const GET = withApiHandler(async (request, context) => {
   const supabase = getAdminRouteSupabase();
   const searchParams = new URL(request.url).searchParams;
   const entitySlug = searchParams.get('entitySlug');
+  const history = searchParams.get('history');
+
+  if (history && entitySlug) {
+    const { data: schemas, error: schemaError } = await supabase
+      .from('custom_form_schemas')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .eq('entity_slug', entitySlug)
+      .order('version', { ascending: false });
+
+    if (schemaError) throw schemaError;
+    return NextResponse.json({ success: true, schemas });
+  }
 
   if (entitySlug) {
+    // Return active schema format if exists
+    const { data: activeSchema, error: activeError } = await supabase
+      .from('custom_form_schemas')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .eq('entity_slug', entitySlug)
+      .eq('active', true)
+      .maybeSingle();
+
+    if (activeError) throw activeError;
+
     const { data: fields, error: fieldsError } = await supabase
       .from('custom_fields')
       .select('*')
@@ -19,7 +43,7 @@ export const GET = withApiHandler(async (request, context) => {
       .eq('entity_slug', entitySlug);
 
     if (fieldsError) throw fieldsError;
-    return NextResponse.json({ success: true, fields });
+    return NextResponse.json({ success: true, fields, activeSchema });
   }
 
   const { data: entities, error: entitiesError } = await supabase
@@ -78,5 +102,68 @@ export const POST = withApiHandler(async (request, context) => {
     return NextResponse.json({ success: true, data }, { status: 201 });
   }
 
-  throw new BadRequestError('Invalid registry type. Must be entity or field');
+  if (body.type === 'publish-schema') {
+    const { entitySlug, schemaJson } = body;
+    if (!entitySlug || !schemaJson) throw new BadRequestError('EntitySlug and schemaJson are required');
+
+    // Get current max version
+    const { data: versions } = await supabase
+      .from('custom_form_schemas')
+      .select('version')
+      .eq('tenant_id', tenantId)
+      .eq('entity_slug', entitySlug)
+      .order('version', { ascending: false })
+      .limit(1);
+
+    const nextVersion = versions && versions.length > 0 ? (versions[0].version + 1) : 1;
+
+    // Set all previous active schemas to false
+    await supabase
+      .from('custom_form_schemas')
+      .update({ active: false })
+      .eq('tenant_id', tenantId)
+      .eq('entity_slug', entitySlug);
+
+    const { data, error } = await supabase
+      .from('custom_form_schemas')
+      .insert({
+        tenant_id: tenantId,
+        entity_slug: entitySlug,
+        version: nextVersion,
+        active: true,
+        schema_json: schemaJson
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return NextResponse.json({ success: true, message: `Schema published as Version ${nextVersion}!`, data });
+  }
+
+  if (body.type === 'rollback-schema') {
+    const { entitySlug, version } = body;
+    if (!entitySlug || !version) throw new BadRequestError('EntitySlug and version are required');
+
+    // Set all schemas to inactive
+    await supabase
+      .from('custom_form_schemas')
+      .update({ active: false })
+      .eq('tenant_id', tenantId)
+      .eq('entity_slug', entitySlug);
+
+    // Set specific version to active
+    const { data, error } = await supabase
+      .from('custom_form_schemas')
+      .update({ active: true })
+      .eq('tenant_id', tenantId)
+      .eq('entity_slug', entitySlug)
+      .eq('version', version)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return NextResponse.json({ success: true, message: `Rolled back schema to Version ${version}!`, data });
+  }
+
+  throw new BadRequestError('Invalid action type.');
 }, { requireAuth: true, roles: ['Admin'] });

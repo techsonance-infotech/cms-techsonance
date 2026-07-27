@@ -47,6 +47,9 @@ import {
   BadgeCheck,
   BarChart3,
   UserPlus,
+  Laptop,
+  ListTodo,
+  Trash2,
 } from 'lucide-react';
 import { User } from '@/lib/auth';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
@@ -138,6 +141,11 @@ const categories: NavCategory[] = [
       { name: 'Workforce Dashboard', href: '/dashboard/employees', icon: BarChart3, roles: ['admin', 'project_manager', 'hr_manager'] },
       { name: 'Employee Directory', href: '/dashboard/employees/directory', icon: Contact, roles: ['admin', 'project_manager', 'hr_manager', 'developer'] },
       { name: 'Add Employee', href: '/dashboard/employees/new', icon: UserPlus, roles: ['admin', 'hr_manager'] },
+      { name: 'Onboarding Center', href: '/dashboard/employees/onboarding', icon: ListTodo, roles: ['admin', 'hr_manager'] },
+      { name: 'Offboarding Center', href: '/dashboard/employees/offboarding', icon: Trash2, roles: ['admin', 'hr_manager'] },
+      { name: 'Asset Tracker', href: '/dashboard/employees/assets', icon: Laptop, roles: ['admin', 'hr_manager'] },
+      { name: 'Document Vault', href: '/dashboard/employees/documents', icon: FileText, roles: ['admin', 'hr_manager'] },
+      { name: 'Training & Skills', href: '/dashboard/employees/training', icon: GraduationCap, roles: ['admin', 'hr_manager'] },
       { name: 'Org Chart', href: '/dashboard/employees/org-chart', icon: Network, roles: ['admin', 'project_manager', 'developer', 'hr_manager', 'accountant', 'business_development'] },
       { name: 'Reviews & Appraisals', href: '/dashboard/employees/reviews', icon: Star, roles: ['admin', 'project_manager', 'hr_manager'] },
       { name: 'Bulk Import', href: '/dashboard/employees/import', icon: Upload, roles: ['admin', 'hr_manager'] },
@@ -152,6 +160,8 @@ const categories: NavCategory[] = [
       { name: 'Leaves & Time Off', href: '/dashboard/leaves', icon: Calendar, roles: ['admin', 'project_manager', 'developer', 'hr_manager', 'client'] },
       { name: 'Daily Updates', href: '/dashboard/daily-update', icon: ClipboardList, roles: ['admin', 'project_manager', 'developer'] },
       { name: 'Reimbursements', href: '/dashboard/reimbursements', icon: Receipt, roles: ['admin', 'project_manager', 'developer', 'hr_manager', 'accountant'] },
+      { name: 'Shift Management', href: '/dashboard/employees/shifts', icon: Clock, roles: ['admin', 'hr_manager'] },
+      { name: 'Holiday Calendar', href: '/dashboard/employees/holidays', icon: Calendar, roles: ['admin', 'hr_manager', 'project_manager', 'developer', 'client'] },
     ]
   },
   {
@@ -172,6 +182,7 @@ const categories: NavCategory[] = [
       { name: 'AI Email Composer', href: '/dashboard/inbox/composer', icon: PenTool, roles: ['admin', 'project_manager', 'business_development'] },
       { name: 'Opportunity Forecast', href: '/dashboard/inquiry/forecast', icon: TrendingUp, roles: ['admin', 'project_manager', 'business_development'] },
       { name: 'Inquiry Board', href: '/dashboard/inquiry', icon: Search, roles: ['admin', 'project_manager', 'business_development', 'developer', 'hr_manager', 'accountant', 'client'] },
+      { name: 'Content Manager', href: '/dashboard/content', icon: FileText, roles: ['admin'] },
     ]
   },
   {
@@ -186,50 +197,12 @@ const categories: NavCategory[] = [
     ]
   },
   {
-    name: 'Operations & Tickets',
-    icon: HelpCircle,
-    items: [
-      { name: 'Service Tickets', href: '/dashboard/service', icon: HelpCircle, roles: ['admin', 'project_manager', 'developer', 'client'] },
-      { name: 'Ticket Workspace', href: '/dashboard/service/workspace', icon: ClipboardList, roles: ['admin', 'project_manager', 'developer'] },
-      { name: 'Field Command Center', href: '/dashboard/service/command-center', icon: Map, roles: ['admin', 'project_manager', 'developer'] },
-      { name: 'Support Dossier', href: '/dashboard/support', icon: HelpCircle, roles: ['admin', 'project_manager', 'developer', 'client'] },
-      { name: 'Support Analytics', href: '/dashboard/support/analytics', icon: Activity, roles: ['admin', 'project_manager'] },
-      { name: 'Help Desk Queue', href: '/dashboard/help-desk', icon: HelpCircle, roles: ['admin', 'project_manager', 'developer'] },
-      { name: 'Agent Dashboard', href: '/dashboard/help-desk/agent', icon: HelpCircle, roles: ['admin', 'project_manager', 'developer'] },
-    ]
-  },
-  {
-    name: 'Industry Verticals',
-    icon: Building2,
-    items: [
-      { name: 'Academic Curriculum', href: '/dashboard/education/curriculum', icon: BookOpen, roles: ['admin', 'project_manager'] },
-      { name: 'Student Management', href: '/dashboard/education/students', icon: GraduationCap, roles: ['admin', 'project_manager'] },
-      { name: 'Retail Inventory', href: '/dashboard/retail/inventory', icon: ClipboardList, roles: ['admin', 'project_manager'] },
-      { name: 'Safety Reorder', href: '/dashboard/retail/inventory/reorder', icon: ClipboardList, roles: ['admin', 'project_manager'] },
-      { name: 'Store Operations', href: '/dashboard/retail/stores', icon: Building2, roles: ['admin', 'project_manager'] },
-      { name: 'Construction BOQ', href: '/dashboard/construction/boq', icon: Building2, roles: ['admin', 'project_manager'] },
-      { name: 'Construction RFIs', href: '/dashboard/construction/rfis', icon: FolderKanban, roles: ['admin', 'project_manager'] },
-      { name: 'Gym Analytics', href: '/dashboard/service/gym-analytics', icon: Dumbbell, roles: ['admin', 'project_manager'] },
-      { name: 'Gym Trainer Control', href: '/dashboard/service/gym-trainer', icon: CalendarDays, roles: ['admin', 'project_manager'] },
-    ]
-  },
-  {
-    name: 'Telemetry & Security',
-    icon: Shield,
-    items: [
-      { name: 'Network Telemetry', href: '/dashboard/service/network', icon: Wifi, roles: ['admin', 'project_manager', 'developer'] },
-      { name: 'Security Monitor', href: '/dashboard/service/security-monitor', icon: Shield, roles: ['admin'] },
-    ]
-  },
-  {
-    name: 'System Settings',
+    name: 'Business Settings',
     icon: Settings,
-    items: [
-      { name: 'Global Settings', href: '/dashboard/settings', icon: Settings, roles: ['admin'] },
-      { name: 'Security Command', href: '/dashboard/settings/security', icon: Shield, roles: ['admin'] },
-      { name: 'Automation Builder', href: '/dashboard/settings/automation-builder', icon: Settings, roles: ['admin'] },
-      { name: 'Content Manager', href: '/dashboard/content', icon: FileText, roles: ['admin'] },
-    ]
+    isSingleton: true,
+    href: '/dashboard/settings',
+    roles: ['admin'],
+    items: []
   }
 ];
 

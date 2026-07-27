@@ -84,10 +84,8 @@ export function AppRuntimeProvider({ children }: Props) {
 
     const originalFetch = window.fetch.bind(window);
     let refreshPromise: Promise<string | null> | null = null;
-    let authMePromise: Promise<{ status: number; payload: unknown } | null> | null = null;
-    let authMeCache: { status: number; payload: unknown; cachedAt: number } | null = null;
-    let companySettingsPromise: Promise<{ status: number; payload: unknown } | null> | null = null;
-    let companySettingsCache: { status: number; payload: unknown; cachedAt: number } | null = null;
+    const routePromises = new Map<string, Promise<{ status: number; payload: unknown } | null>>();
+    const routeCache = new Map<string, { status: number; payload: unknown; cachedAt: number }>();
 
     function createJsonResponse(status: number, payload: unknown) {
       return new Response(JSON.stringify(payload), {
@@ -142,8 +140,18 @@ export function AppRuntimeProvider({ children }: Props) {
       const isAuthRefresh = url.pathname === '/api/auth/refresh';
       const isAuthLogin = url.pathname === '/api/auth/login';
       const isForgotPasswordFlow = url.pathname.startsWith('/api/auth/forgot-password/');
-      const isAuthMe = url.pathname === '/api/auth/me' && request.method.toUpperCase() === 'GET';
-      const isCompanySettings = url.pathname === '/api/company-settings' && request.method.toUpperCase() === 'GET';
+      
+      const path = url.pathname;
+      const isAuthMe = path === '/api/auth/me';
+      const isGet = request.method.toUpperCase() === 'GET';
+      const cacheableRoutes = [
+        '/api/auth/me',
+        '/api/company-settings',
+        '/api/business-settings',
+        '/api/workspace-settings',
+        '/api/dashboard/stats/workforce',
+      ];
+      const isCacheable = isSameApiRoute && isGet && cacheableRoutes.includes(path);
       const token = getStoredSessionToken();
 
       if (isSameApiRoute && token && !nextHeaders.has('Authorization') && !isAuthRefresh && !isAuthLogin) {
@@ -164,45 +172,33 @@ export function AppRuntimeProvider({ children }: Props) {
         credentials: init?.credentials ?? 'include',
       });
 
-      if (isSameApiRoute && isAuthMe) {
-        if (authMeCache && Date.now() - authMeCache.cachedAt < 2000) {
-          return createJsonResponse(authMeCache.status, authMeCache.payload);
+      if (isCacheable) {
+        const cached = routeCache.get(path);
+        if (cached && Date.now() - cached.cachedAt < 2000) {
+          return createJsonResponse(cached.status, cached.payload);
         }
 
-        if (authMePromise) {
-          const cached = await authMePromise;
-          if (cached) {
-            return createJsonResponse(cached.status, cached.payload);
-          }
-        }
-      }
-
-      if (isSameApiRoute && isCompanySettings) {
-        if (companySettingsCache && Date.now() - companySettingsCache.cachedAt < 2000) {
-          return createJsonResponse(companySettingsCache.status, companySettingsCache.payload);
-        }
-
-        if (companySettingsPromise) {
-          const cached = await companySettingsPromise;
-          if (cached) {
-            return createJsonResponse(cached.status, cached.payload);
+        const activePromise = routePromises.get(path);
+        if (activePromise) {
+          const resolved = await activePromise;
+          if (resolved) {
+            return createJsonResponse(resolved.status, resolved.payload);
           }
         }
       }
 
       let response = await doFetch();
 
-      if (isSameApiRoute && isAuthMe && response.headers.get('content-type')?.includes('application/json')) {
-        authMePromise = response
-          .clone()
+      if (isCacheable && response.headers.get('content-type')?.includes('application/json')) {
+        const clonedResponse = response.clone();
+        const promise = clonedResponse
           .json()
           .then((payload) => {
-            authMeCache = {
+            routeCache.set(path, {
               status: response.status,
               payload,
               cachedAt: Date.now(),
-            };
-
+            });
             return {
               status: response.status,
               payload,
@@ -210,30 +206,10 @@ export function AppRuntimeProvider({ children }: Props) {
           })
           .catch(() => null)
           .finally(() => {
-            authMePromise = null;
+            routePromises.delete(path);
           });
-      }
 
-      if (isSameApiRoute && isCompanySettings && response.headers.get('content-type')?.includes('application/json')) {
-        companySettingsPromise = response
-          .clone()
-          .json()
-          .then((payload) => {
-            companySettingsCache = {
-              status: response.status,
-              payload,
-              cachedAt: Date.now(),
-            };
-
-            return {
-              status: response.status,
-              payload,
-            };
-          })
-          .catch(() => null)
-          .finally(() => {
-            companySettingsPromise = null;
-          });
+        routePromises.set(path, promise);
       }
 
       if (isSameApiRoute && response.status === 401 && token && !isAuthRefresh && !isAuthLogin) {

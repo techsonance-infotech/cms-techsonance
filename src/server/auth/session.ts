@@ -77,6 +77,13 @@ export async function authenticateRequest(request: Request, options?: { required
 
   if (!bearerToken) {
     try {
+      const cookieStore = await cookies();
+      bearerToken = cookieStore.get('session_token')?.value ?? null;
+    } catch {}
+  }
+
+  if (!bearerToken) {
+    try {
       const url = new URL(request.url);
       bearerToken = url.searchParams.get('token') || url.searchParams.get('auth_token');
     } catch {}
@@ -150,6 +157,18 @@ export async function writeRefreshTokenCookie(token: string, options?: { persist
   });
 }
 
+export async function writeAccessTokenCookie(token: string, options?: { persistent?: boolean }) {
+  const cookieStore = await cookies();
+  const persistent = options?.persistent ?? true;
+  cookieStore.set('session_token', token, {
+    httpOnly: true,
+    secure: env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    ...(persistent ? { expires: getRefreshExpiryDate() } : {}),
+  });
+}
+
 export async function clearRefreshTokenCookie() {
   const cookieStore = await cookies();
   cookieStore.set(REFRESH_COOKIE_NAME, '', {
@@ -160,6 +179,13 @@ export async function clearRefreshTokenCookie() {
     expires: new Date(0),
   });
   cookieStore.set(REFRESH_PERSISTENT_COOKIE_NAME, '', {
+    httpOnly: true,
+    secure: env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    expires: new Date(0),
+  });
+  cookieStore.set('session_token', '', {
     httpOnly: true,
     secure: env.NODE_ENV === 'production',
     sameSite: 'lax',

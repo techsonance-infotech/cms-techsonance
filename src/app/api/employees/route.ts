@@ -280,6 +280,71 @@ export const POST = withApiHandler(async (request, context) => {
   const { data, error } = await supabase.from('employees').insert(insertPayload).select('*').single();
 
   if (error || !data) throw error ? new Error(error.message) : new Error('Failed to create employee');
+
+  // Auto-boot onboarding workflows sequence
+  try {
+    const { data: newWf } = await supabase
+      .from('onboarding_workflows')
+      .insert({
+        tenant_id: tenantId,
+        employee_id: data.id,
+        status: 'draft',
+        current_stage: 'Offer Acceptance',
+        approval_chain: [
+          { role: 'hr_manager', name: 'HR Manager Approval', status: 'pending' },
+          { role: 'admin', name: 'Operations VP Approval', status: 'pending' }
+        ],
+        approval_history: [],
+        draft_data: {}
+      })
+      .select()
+      .single();
+
+    if (newWf) {
+      // Fetch default active template for tenant
+      const { data: defaultChk } = await supabase
+        .from('onboarding_checklists')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (defaultChk) {
+        const { data: tasks } = await supabase
+          .from('onboarding_tasks')
+          .select('id')
+          .eq('tenant_id', tenantId)
+          .eq('checklist_id', defaultChk.id);
+
+        if (tasks && tasks.length > 0) {
+          const insertRows = tasks.map((task: any) => ({
+            tenant_id: tenantId,
+            employee_id: data.id,
+            task_id: task.id,
+            status: 'pending',
+          }));
+          await supabase.from('employee_onboarding').insert(insertRows);
+        }
+      }
+
+      // Log initial audit trace log
+      await supabase.from('onboarding_audit_logs').insert({
+        tenant_id: tenantId,
+        workflow_id: newWf.id,
+        employee_id: data.id,
+        stage_name: 'Offer Acceptance',
+        action: 'BOOT_WORKFLOW',
+        performed_by: context.auth?.user.email || 'Admin Portal User',
+        ip_address: '127.0.0.1',
+        device_info: 'Employee created via Onboarding Form'
+      });
+    }
+  } catch (wfErr) {
+    console.error('Error auto-booting workflow instance:', wfErr);
+  }
+
   const sanitizedAuthUserIds = [authUserId, managerAuthId].filter(Boolean) as string[];
   const profilesMap = await listSupabaseProfilesByAuthIds(sanitizedAuthUserIds, { useAdmin: true, tenantId });
   const userMap = new Map<string, number | null>(

@@ -52,7 +52,7 @@ export default function DashboardLayout({
 
         if (loggedUser) {
           // Check onboarding and license expiry
-          const settingsRes = await fetch(`/api/company-settings?t=${Date.now()}`, {
+          const settingsRes = await fetch('/api/company-settings', {
             headers: { Authorization: `Bearer ${token}` },
             cache: 'no-store',
           });

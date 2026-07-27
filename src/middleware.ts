@@ -31,6 +31,17 @@ function getRequestKey(request: NextRequest) {
     };
   }
 
+  const isAiOrPlaygroundRoute = 
+    pathname.startsWith('/api/ai') ||
+    pathname.startsWith('/api/developer/keys'); // includes send-playground
+
+  if (isAiOrPlaygroundRoute) {
+    return {
+      bucket: `ai_playground_critical:${ip}`,
+      limit: 10,
+    };
+  }
+
   return {
     bucket: `${hasAuth ? 'auth' : 'public'}:${ip}`,
     limit: hasAuth ? env.AUTH_RATE_LIMIT_PER_MINUTE : env.PUBLIC_RATE_LIMIT_PER_MINUTE,
@@ -105,6 +116,8 @@ export async function middleware(request: NextRequest) {
     response.headers.set('x-frame-options', 'DENY');
     response.headers.set('x-content-type-options', 'nosniff');
     response.headers.set('referrer-policy', 'strict-origin-when-cross-origin');
+    response.headers.set('x-xss-protection', '1; mode=block');
+    response.headers.set('permissions-policy', 'camera=(), microphone=(), geolocation=()');
     response.headers.set('strict-transport-security', 'max-age=63072000; includeSubDomains; preload');
     response.headers.set(
       'content-security-policy',
@@ -123,6 +136,8 @@ export async function middleware(request: NextRequest) {
   response.headers.set('x-frame-options', 'DENY');
   response.headers.set('x-content-type-options', 'nosniff');
   response.headers.set('referrer-policy', 'strict-origin-when-cross-origin');
+  response.headers.set('x-xss-protection', '1; mode=block');
+  response.headers.set('permissions-policy', 'camera=(), microphone=(), geolocation=()');
   response.headers.set('strict-transport-security', 'max-age=63072000; includeSubDomains; preload');
   response.headers.set(
     'content-security-policy',

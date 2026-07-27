@@ -14,14 +14,14 @@ import {
   Mail, Phone, Sparkles, Star, CheckSquare, Square, MoreHorizontal,
   Grid, List, Columns, Plus, X, Bookmark, Upload, Settings, Check, 
   HelpCircle, Copy, ExternalLink, Calendar, Heart, Shield, AlertTriangle,
-  FileSpreadsheet, Database, EyeOff, RefreshCw, Layers, Lock, History, UserCheck, MessageSquare, Pin, Bell
+  FileSpreadsheet, Database, EyeOff, RefreshCw, Layers, Lock, History, UserCheck, MessageSquare, Pin, Bell, Edit2
 } from 'lucide-react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { getStoredSessionToken } from '@/lib/client-session';
+import { getStoredSessionToken, getStoredUser } from '@/lib/client-session';
 
 // Define SaaS directory interfaces
 interface Employee {
@@ -268,8 +268,7 @@ export default function EmployeeDirectoryPage() {
     probation: number; contract: number;
   }>({ total: 0, active: 0, onLeave: 0, onNotice: 0, probation: 0, contract: 0 });
 
-  // RBAC Simulation State
-  const [simulatedRole, setSimulatedRole] = useState<'HR Admin' | 'HR Executive' | 'Manager' | 'Employee' | 'Auditor'>('HR Admin');
+
 
   // Search & Filter State
   const [search, setSearch] = useState('');
@@ -384,18 +383,250 @@ export default function EmployeeDirectoryPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Active User session and Dynamic Exporter parameters
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [exportScope, setExportScope] = useState('Current Page');
+  const [excludeSalary, setExcludeSalary] = useState(true);
+  const [maskPersonal, setMaskPersonal] = useState(false);
+
+  // CSV parsing states
+  const [csvRows, setCsvRows] = useState<any[]>([]);
+  const [validRowsCount, setValidRowsCount] = useState(0);
+  const [errorRowsCount, setErrorRowsCount] = useState(0);
+
+  useEffect(() => {
+    setCurrentUser(getStoredUser());
+  }, []);
+
+  // Fetch dynamic audit logs on panel open
+  useEffect(() => {
+    if (showAuditLogsPanel) {
+      const fetchLogs = async () => {
+        try {
+          const token = getStoredSessionToken();
+          const res = await fetch('/api/audit-logs', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (res.ok) {
+            const json = await res.json();
+            const logsList = Array.isArray(json) ? json : (json.data || []);
+            if (logsList && Array.isArray(logsList)) {
+              const mapped = logsList.map((log: any) => ({
+                id: String(log.id),
+                action: log.action_name || 'Action',
+                timestamp: log.created_at || new Date().toISOString(),
+                user: log.action_by || 'Admin',
+                details: `${log.old_value ? `From: ${log.old_value} | ` : ''}To: ${log.new_value || 'N/A'} (IP: ${log.ip_address || '127.0.0.1'})`,
+              }));
+              setAuditLogs(mapped);
+            }
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      };
+      fetchLogs();
+    }
+  }, [showAuditLogsPanel]);
+
   // Log audit actions helper
-  const addAuditLog = (action: string, details: string) => {
+  const addAuditLog = async (action: string, details: string) => {
+    const userRole = (currentUser?.role || 'developer').toLowerCase();
     const newLog: AuditLog = {
       id: Math.random().toString(36).substring(7),
       action,
       timestamp: new Date().toISOString(),
-      user: `${simulatedRole} (Simulated User)`,
+      user: currentUser?.email || 'System',
       details,
     };
-    const updated = [newLog, ...auditLogs].slice(0, 100);
-    setAuditLogs(updated);
-    localStorage.setItem('employee_directory_audit_logs', JSON.stringify(updated));
+    setAuditLogs(prev => [newLog, ...prev].slice(0, 100));
+
+    // Persist this action using settings_audit_logs if admin
+    if (userRole === 'admin' || userRole === 'hr_manager') {
+      try {
+        const token = getStoredSessionToken();
+        await fetch('/api/audit-logs', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            action: 'create_log',
+            actionName: action,
+            newValue: details
+          })
+        });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  };
+
+  // CSV File Upload selector
+  const handleCSVFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportFileName(file.name);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      if (!text) return;
+
+      const rows = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+      if (rows.length < 2) {
+        toast.error('CSV file must contain a header and at least one data row');
+        return;
+      }
+
+      const headers = rows[0].split(',').map(h => h.trim().replace(/^["']|["']$/g, ''));
+      const dataRows = rows.slice(1).map(row => {
+        const values = row.split(',').map(v => v.trim().replace(/^["']|["']$/g, ''));
+        const obj: Record<string, string> = {};
+        headers.forEach((header, index) => {
+          obj[header] = values[index] || '';
+        });
+        return obj;
+      });
+
+      setCsvRows(dataRows);
+
+      let valid = 0;
+      let invalid = 0;
+      dataRows.forEach(row => {
+        const email = row['Email'] || row['email'] || row['Email Address'] || '';
+        if (email.includes('@')) {
+          valid++;
+        } else {
+          invalid++;
+        }
+      });
+
+      setValidRowsCount(valid);
+      setErrorRowsCount(invalid);
+      setImportStep('mapping');
+    };
+    reader.readAsText(file);
+  };
+
+  // Exporter Implementation
+  const triggerExport = async (format: string) => {
+    let dataset: Employee[] = [];
+    if (exportScope.startsWith('Current Page')) {
+      dataset = filteredEmployees;
+    } else if (exportScope.startsWith('Selected rows')) {
+      dataset = filteredEmployees.filter(e => selectedIds.includes(e.id));
+      if (dataset.length === 0) {
+        toast.error('No rows selected for export');
+        return;
+      }
+    } else {
+      try {
+        const token = getStoredSessionToken();
+        const res = await fetch('/api/employees?limit=1000', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const json = await res.json();
+          dataset = json.data || [];
+        }
+      } catch (err) {
+        console.error('Failed to fetch entire workforce for export:', err);
+      }
+    }
+
+    if (format === 'PDF') {
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        toast.error('Please allow popups to export PDF');
+        return;
+      }
+      const rowsHtml = dataset.map(emp => `
+        <tr>
+          <td>${emp.employeeId}</td>
+          <td>${emp.firstName} ${emp.lastName}</td>
+          <td>${emp.email}</td>
+          <td>${emp.department}</td>
+          <td>${emp.designation}</td>
+          <td>${emp.joiningDate || '—'}</td>
+          <td>${excludeSalary ? 'Confidential' : (emp.salary || '—')}</td>
+          <td>${emp.status}</td>
+        </tr>
+      `).join('');
+
+      const html = `
+        <html>
+          <head>
+            <title>Workforce Directory Report</title>
+            <style>
+              body { font-family: 'Inter', system-ui, sans-serif; color: #1e293b; padding: 40px; }
+              h1 { margin: 0 0 5px 0; font-size: 22px; color: #0f172a; }
+              p { margin: 0 0 20px 0; font-size: 12px; color: #64748b; }
+              table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+              th, td { text-align: left; padding: 10px; border-bottom: 1px solid #e2e8f0; font-size: 12px; }
+              th { background: #f1f5f9; font-weight: 600; color: #475569; }
+            </style>
+          </head>
+          <body>
+            <h1>Workforce Directory Report</h1>
+            <p>Generated: ${new Date().toLocaleString()} | Scope: ${exportScope} | Format: PDF</p>
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Department</th>
+                  <th>Designation</th>
+                  <th>Joined</th>
+                  <th>Salary</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rowsHtml}
+              </tbody>
+            </table>
+            <script>
+              window.onload = function() {
+                window.print();
+                setTimeout(function() { window.close(); }, 500);
+              }
+            </script>
+          </body>
+        </html>
+      `;
+      printWindow.document.open();
+      printWindow.document.write(html);
+      printWindow.document.close();
+      toast.success('PDF Report generated successfully');
+    } else {
+      const headers = ['Employee ID', 'Name', 'Email', 'Department', 'Designation', 'Joining Date', 'Salary', 'Status'];
+      const rows = dataset.map(emp => [
+        emp.employeeId,
+        `${emp.firstName} ${emp.lastName}`,
+        maskPersonal ? '***@***.***' : emp.email,
+        emp.department,
+        emp.designation,
+        emp.joiningDate || '',
+        excludeSalary ? 'Confidential' : (emp.salary || ''),
+        emp.status
+      ]);
+      const csvContent = "data:text/csv;charset=utf-8," 
+        + [headers.join(','), ...rows.map(r => r.map(val => `"${val}"`).join(','))].join('\n');
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `workforce_export_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success('Export downloaded successfully');
+    }
+
+    addAuditLog('Dataset Exported', `Generated ${format} report for ${dataset.length} profiles.`);
+    setShowExportModal(false);
   };
 
   const fetchEmployeesData = async () => {
@@ -426,10 +657,10 @@ export default function EmployeeDirectoryPage() {
       });
       if (res.ok) {
         const json = await res.json();
-        if (json.success) {
-          setEmployees(json.data || []);
-          setTotalResults(json.meta?.total || 0);
-        }
+        const empList = Array.isArray(json) ? json : (json.data || []);
+        const meta = Array.isArray(json) ? (json as any).meta : (json.meta || null);
+        setEmployees(empList);
+        setTotalResults(meta?.total || empList.length || 0);
       } else {
         toast.error('Failed to fetch employees');
       }
@@ -455,14 +686,15 @@ export default function EmployeeDirectoryPage() {
         });
         if (res.ok) {
           const json = await res.json();
-          if (json.success && json.data) {
+          const stats = (json && typeof json === 'object' && !('success' in json)) ? json : (json?.data || null);
+          if (stats) {
             setWorkforceStats({
-              total: json.data.total ?? 0,
-              active: json.data.active ?? 0,
-              onLeave: json.data.onLeave ?? 0,
-              onNotice: json.data.onNotice ?? 0,
-              probation: json.data.probation ?? 0,
-              contract: json.data.contract ?? 0,
+              total: stats.total ?? 0,
+              active: stats.active ?? 0,
+              onLeave: stats.onLeave ?? 0,
+              onNotice: stats.onNotice ?? 0,
+              probation: stats.probation ?? 0,
+              contract: stats.contract ?? 0,
             });
           }
         }
@@ -735,12 +967,7 @@ export default function EmployeeDirectoryPage() {
 
   // Full filter criteria pipeline
   const filteredEmployees = employees.filter(emp => {
-    // Simulated Role-Gate
-    if (simulatedRole === 'Manager' && emp.department !== 'Engineering') return false;
-    if (simulatedRole === 'Employee' && emp.employeeId !== 'TS10010' && emp.id !== 10) return false;
-
     if (!matchSmartQuery(emp)) return false;
-
     return true;
   });
 
@@ -766,19 +993,13 @@ export default function EmployeeDirectoryPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Simulating Role Controller */}
-            <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-1.5 rounded-xl border border-slate-200/50">
-              <select
-                value={simulatedRole}
-                onChange={(e) => setSimulatedRole(e.target.value as any)}
-                className="bg-transparent border-none text-[11px] font-bold text-[#f87941] cursor-pointer outline-none"
-              >
-                <option value="HR Admin">Admin view</option>
-                <option value="Manager">Manager view</option>
-                <option value="Employee">Employee view</option>
-                <option value="Auditor">Auditor view</option>
-              </select>
-            </div>
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              className="hidden" 
+              accept=".csv" 
+              onChange={handleCSVFileSelect} 
+            />
 
             <Link href="/dashboard/employees/new">
               <Button className="bg-[#f87941] text-white hover:bg-[#e06634] font-bold text-xs h-9 px-4 rounded-xl flex items-center gap-1.5 shadow-[0_4px_12px_rgba(248,121,65,0.15)]">
@@ -1039,7 +1260,7 @@ export default function EmployeeDirectoryPage() {
         )}
 
         {/* BULK SELECTION ACTION ROW */}
-        {selectedIds.length > 0 && simulatedRole !== 'Auditor' && (
+        {selectedIds.length > 0 && (currentUser?.role === 'admin' || currentUser?.role === 'hr_manager' || currentUser?.role === 'project_manager') && (
           <div className="flex items-center gap-3 bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30 p-2 px-4 rounded-xl shadow-sm animate-slide-up">
             <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{selectedIds.length} selected</span>
             <button onClick={() => setSelectedIds(filteredEmployees.map(e => e.id))} className="text-[#f87941] hover:text-[#e06634] text-xs font-bold">
@@ -1256,7 +1477,7 @@ export default function EmployeeDirectoryPage() {
                         )}
                         {visibleColumns.salary && (
                           <td className={`${cellPaddingClass} font-semibold text-slate-600`}>
-                            {simulatedRole === 'Manager' || simulatedRole === 'Employee' ? 'Confidential' : (emp.salary || '—')}
+                            {!(currentUser?.role === 'admin' || currentUser?.role === 'hr_manager' || currentUser?.role === 'accountant') ? 'Confidential' : (emp.salary || '—')}
                           </td>
                         )}
                         {visibleColumns.attendance && <td className={`${cellPaddingClass} font-semibold text-slate-600`}>{emp.attendance || '—'}</td>}
@@ -1275,15 +1496,22 @@ export default function EmployeeDirectoryPage() {
                                 <Eye className="h-3.5 w-3.5" />
                               </Button>
                             </Link>
-                            {simulatedRole === 'HR Admin' && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 w-7 p-0 text-slate-400 hover:text-rose-500 rounded-lg"
-                                onClick={() => { setSelectedEmployee(emp); setDeleteDialogOpen(true); }}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
+                            {(currentUser?.role === 'admin' || currentUser?.role === 'hr_manager') && (
+                              <>
+                                <Link href={`/dashboard/employees/new?id=${emp.id}`}>
+                                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-[#f87941] rounded-lg">
+                                    <Edit2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </Link>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 w-7 p-0 text-slate-400 hover:text-rose-500 rounded-lg"
+                                  onClick={() => { setSelectedEmployee(emp); setDeleteDialogOpen(true); }}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </>
                             )}
                           </div>
                         </td>
@@ -1451,7 +1679,7 @@ export default function EmployeeDirectoryPage() {
                     <span className="font-bold text-slate-800 dark:text-slate-200">{previewEmployee.managerName || 'Not Assigned'}</span>
                   </div>
                 </div>
-                {simulatedRole !== 'Manager' && (
+                {(currentUser?.role === 'admin' || currentUser?.role === 'hr_manager' || currentUser?.role === 'accountant') && (
                   <div>
                     <span className="text-slate-400 block font-semibold">Salary (CTC)</span>
                     <span className="font-bold text-slate-800 dark:text-slate-200">{previewEmployee.salary || '—'}</span>
@@ -1626,8 +1854,7 @@ export default function EmployeeDirectoryPage() {
                   </div>
                   <Button 
                     onClick={() => {
-                      setImportFileName('workforce_onboarding_july.csv');
-                      setImportStep('mapping');
+                      fileInputRef.current?.click();
                     }}
                     className="bg-slate-900 text-white hover:bg-slate-800 text-xs font-bold h-9 px-4 rounded-xl"
                   >
@@ -1689,16 +1916,16 @@ export default function EmployeeDirectoryPage() {
                   {/* Status Grid */}
                   <div className="grid grid-cols-3 gap-2">
                     <div className="p-3 bg-emerald-50/50 border border-emerald-100 rounded-xl text-center">
-                      <span className="text-base font-black text-emerald-600">42</span>
+                      <span className="text-base font-black text-emerald-600">{validRowsCount}</span>
                       <span className="text-[9px] font-bold text-slate-400 block">Valid Rows</span>
                     </div>
                     <div className="p-3 bg-amber-50/50 border border-amber-100 rounded-xl text-center">
-                      <span className="text-base font-black text-amber-600">1</span>
+                      <span className="text-base font-black text-amber-600">0</span>
                       <span className="text-[9px] font-bold text-slate-400 block">Duplicate Warning</span>
                     </div>
                     <div className="p-3 bg-rose-50/50 border border-rose-100 rounded-xl text-center">
-                      <span className="text-base font-black text-rose-600">1</span>
-                      <span className="text-[9px] font-bold text-slate-400 block">Malformed Field</span>
+                      <span className="text-base font-black text-rose-600">{errorRowsCount}</span>
+                      <span className="text-[9px] font-bold text-slate-400 block">Malformed Fields</span>
                     </div>
                   </div>
 
@@ -1759,37 +1986,111 @@ export default function EmployeeDirectoryPage() {
                         Back
                       </Button>
                       <Button 
-                        onClick={() => {
-                          if (!importErrorEmail.includes('@')) {
+                        onClick={async () => {
+                          if (csvRows.length === 0) {
+                            toast.error("No records found in CSV file to import");
+                            return;
+                          }
+                          if (errorRowsCount > 0 && !importErrorEmail.includes('@')) {
                             toast.error("Please provide a valid email to resolve the warning.");
                             return;
                           }
-                          // Add Alice Tan to our employee list mock to show real-time changes!
-                          const newEmp: Employee = {
-                            id: 10025,
-                            userId: 2025,
-                            employeeId: 'EMP10025',
-                            firstName: 'Alice',
-                            lastName: 'Tan',
-                            email: importErrorEmail,
-                            department: 'Engineering',
-                            designation: 'Senior QA Analyst',
-                            location: 'Surat',
-                            workMode: 'Office',
-                            joiningDate: '2026-07-01',
-                            status: 'Active',
-                            phone: '+919876543231'
-                          };
-                          setEmployees(prev => [newEmp, ...prev]);
-                          setImportStep('success');
-                          setHasImported(true);
-                          addAuditLog('Import Completed', 'Imported 43 employees from workforce_onboarding_july.csv.');
-                          toast.success("Successfully imported workforce list!");
+                          
+                          const token = getStoredSessionToken();
+                          let successCount = 0;
+                          
+                          // Show toast loading state
+                          const loadId = toast.loading("Committing imported records to database...");
+                          
+                          try {
+                            // Fetch existing users to try and match emails
+                            let userLookupMap = new Map<string, number>();
+                            try {
+                              const usersRes = await fetch('/api/users', {
+                                headers: { 'Authorization': `Bearer ${token}` }
+                              });
+                              if (usersRes.ok) {
+                                const usersJson = await usersRes.json();
+                                const usersList = Array.isArray(usersJson) ? usersJson : (usersJson.data || []);
+                                if (usersList && Array.isArray(usersList)) {
+                                  usersList.forEach((u: any) => {
+                                    if (u.email) {
+                                      userLookupMap.set(u.email.toLowerCase(), u.id);
+                                    }
+                                  });
+                                }
+                              }
+                            } catch (lookupErr) {
+                              console.error("User lookup match failed, using fallback:", lookupErr);
+                            }
+
+                            const defaultUserId = currentUser?.id || 1;
+
+                            for (const row of csvRows) {
+                              const rawEmail = row['Email'] || row['email'] || row['Email Address'] || row['work_email'] || '';
+                              const email = rawEmail.trim().toLowerCase();
+                              const finalEmail = email.includes('invalid') ? importErrorEmail.trim().toLowerCase() : email;
+                              
+                              // Match user ID by email or fallback to current user
+                              const matchedUserId = userLookupMap.get(finalEmail) || defaultUserId;
+                              
+                              const rawEmpId = row['Employee ID'] || row['employee_id'] || row['emp_id'] || '';
+                              const empId = rawEmpId.trim() || `EMP-${Math.floor(Math.random() * 90000 + 10000)}`;
+                              
+                              const rawName = row['Name'] || row['name'] || row['fname'] || 'Imported User';
+                              const dept = row['Department'] || row['department'] || row['dept'] || 'Engineering';
+                              const desig = row['Designation'] || row['designation'] || 'Engineer';
+                              
+                              const rawDoj = row['Joining Date'] || row['joining_date'] || row['doj'] || '';
+                              // format YYYY-MM-DD
+                              let doj = new Date().toISOString().split('T')[0];
+                              if (rawDoj) {
+                                try {
+                                  const parsedDate = new Date(rawDoj);
+                                  if (!isNaN(parsedDate.getTime())) {
+                                    doj = parsedDate.toISOString().split('T')[0];
+                                  }
+                                } catch {}
+                              }
+                              
+                              const res = await fetch('/api/employees', {
+                                method: 'POST',
+                                headers: {
+                                  'Content-Type': 'application/json',
+                                  'Authorization': `Bearer ${token}`
+                                },
+                                body: JSON.stringify({
+                                  userId: matchedUserId,
+                                  employeeId: empId,
+                                  department: dept,
+                                  designation: desig,
+                                  dateOfJoining: doj,
+                                  status: 'active',
+                                  employmentType: 'full_time'
+                                })
+                              });
+                              
+                              if (res.ok) {
+                                successCount++;
+                              }
+                            }
+                            
+                            toast.dismiss(loadId);
+                            toast.success(`Successfully imported ${successCount} profiles!`);
+                            fetchEmployeesData();
+                            setImportStep('success');
+                            setHasImported(true);
+                            addAuditLog('Import Completed', `Imported ${successCount} employees from ${importFileName}.`);
+                          } catch (err) {
+                            toast.dismiss(loadId);
+                            toast.error("An error occurred during import execution");
+                            console.error(err);
+                          }
                         }}
-                        disabled={!importErrorEmail.includes('@')}
+                        disabled={errorRowsCount > 0 && !importErrorEmail.includes('@')}
                         className="bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-xs font-bold h-9 px-4"
                       >
-                        Commit Import (43 Records)
+                        Commit Import ({csvRows.length} Records)
                       </Button>
                     </div>
                   </div>
@@ -1858,10 +2159,14 @@ export default function EmployeeDirectoryPage() {
             {/* Export Range */}
             <div className="flex flex-col gap-2">
               <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Export Scope/Range</label>
-              <select className="h-10 w-full rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold px-3 cursor-pointer outline-none">
-                <option>Current Page ({filteredEmployees.length} records)</option>
-                <option>Selected rows ({selectedIds.length} profiles)</option>
-                <option>Entire Organization (248 records)</option>
+              <select
+                value={exportScope}
+                onChange={(e) => setExportScope(e.target.value)}
+                className="h-10 w-full rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-semibold px-3 cursor-pointer outline-none"
+              >
+                <option value="Current Page">Current Page ({filteredEmployees.length} records)</option>
+                <option value="Selected rows">Selected rows ({selectedIds.length} profiles)</option>
+                <option value="Entire Organization">Entire Organization</option>
               </select>
             </div>
 
@@ -1876,12 +2181,8 @@ export default function EmployeeDirectoryPage() {
                 ].map((fmt) => (
                   <button
                     key={fmt.name}
-                    className="p-2.5 rounded-xl border hover:border-[#f87941]/55 flex flex-col items-center gap-1 font-bold transition-all text-xs"
-                    onClick={() => {
-                      toast.success(`Exporting to ${fmt.name} file format...`);
-                      addAuditLog('Dataset Exported', `Generated ${fmt.name} report with ${filteredEmployees.length} rows.`);
-                      setShowExportModal(false);
-                    }}
+                    className="p-2.5 rounded-xl border hover:border-[#f87941]/55 flex flex-col items-center gap-1 font-bold transition-all text-xs dark:bg-slate-900 dark:border-slate-800"
+                    onClick={() => triggerExport(fmt.name)}
                   >
                     <span>{fmt.name}</span>
                     <span className="text-[8px] text-slate-400 font-semibold">{fmt.desc}</span>
@@ -1891,14 +2192,24 @@ export default function EmployeeDirectoryPage() {
             </div>
 
             {/* Security Exclusions */}
-            <div className="flex flex-col gap-2 bg-slate-50 p-3 rounded-2xl border">
+            <div className="flex flex-col gap-2 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-2xl border dark:border-slate-800">
               <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Data Exclusion (RBAC)</label>
-              <label className="flex items-center gap-2 text-xs font-semibold mt-1 text-slate-600 cursor-pointer">
-                <input type="checkbox" defaultChecked className="rounded text-[#f87941] focus:ring-[#f87941]" />
+              <label className="flex items-center gap-2 text-xs font-semibold mt-1 text-slate-600 dark:text-slate-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={excludeSalary}
+                  onChange={(e) => setExcludeSalary(e.target.checked)}
+                  className="rounded text-[#f87941] focus:ring-[#f87941]"
+                />
                 <span>Exclude salary / payroll metrics</span>
               </label>
-              <label className="flex items-center gap-2 text-xs font-semibold mt-1 text-slate-600 cursor-pointer">
-                <input type="checkbox" className="rounded text-[#f87941] focus:ring-[#f87941]" />
+              <label className="flex items-center gap-2 text-xs font-semibold mt-1 text-slate-600 dark:text-slate-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={maskPersonal}
+                  onChange={(e) => setMaskPersonal(e.target.checked)}
+                  className="rounded text-[#f87941] focus:ring-[#f87941]"
+                />
                 <span>Mask phone & personal email</span>
               </label>
             </div>

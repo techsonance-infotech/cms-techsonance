@@ -44,12 +44,96 @@ const STEPS = [
   { id: 'review', name: 'Review & Submit', icon: Check, desc: 'Verify all details' },
 ];
 
+const AVAILABLE_PERMISSIONS = [
+  { key: 'read:dashboard', name: 'Read Dashboard Overview', desc: 'Allows viewing general workspace statistics, workforce charts, and insights.' },
+  { key: 'write:dashboard', name: 'Edit Dashboard Layout', desc: 'Allows rearranging dashboard metrics and visual settings.' },
+  { key: 'read:employees', name: 'View Employees Directory', desc: 'Allows browsing the employee directory list and basic profiles.' },
+  { key: 'write:employees', name: 'Manage & Onboard Employees', desc: 'Allows adding, editing, offboarding, and deleting employee records.' },
+  { key: 'read:financials', name: 'View Salaries & Payroll', desc: 'Allows viewing salary components, CTC values, and bank info.' },
+  { key: 'write:financials', name: 'Manage Salaries & Payroll', desc: 'Allows editing compensation values, payroll parameters, and bank details.' },
+  { key: 'read:documents', name: 'View Uploaded Documents', desc: 'Allows downloading KYC files, certificates, and uploaded resumes.' },
+  { key: 'write:documents', name: 'Manage Documents', desc: 'Allows deleting or re-uploading system documents and assets.' },
+  { key: 'read:settings', name: 'View Workspace Settings', desc: 'Allows viewing workspace metadata and global parameters.' },
+  { key: 'write:settings', name: 'Modify Workspace Settings', desc: 'Allows configuring organization prefix settings, IP whitelist, and SMTP.' },
+];
+
+const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
+  admin: ['read:dashboard', 'write:dashboard', 'read:employees', 'write:employees', 'read:financials', 'write:financials', 'read:documents', 'write:documents', 'read:settings', 'write:settings'],
+  cms_administrator: ['read:dashboard', 'write:dashboard', 'read:employees', 'write:employees', 'read:financials', 'write:financials', 'read:documents', 'write:documents', 'read:settings', 'write:settings'],
+  hr_manager: ['read:dashboard', 'read:employees', 'write:employees', 'read:financials', 'write:financials', 'read:documents', 'write:documents'],
+  project_manager: ['read:dashboard', 'read:employees', 'read:documents'],
+  developer: ['read:dashboard', 'read:employees'],
+  qa_engineer: ['read:dashboard', 'read:employees'],
+  devops_engineer: ['read:dashboard', 'read:employees'],
+  ui_ux_designer: ['read:dashboard', 'read:employees'],
+  intern: ['read:dashboard', 'read:employees'],
+  business_development: ['read:dashboard', 'read:employees'],
+  digital_marketing: ['read:dashboard', 'read:employees'],
+  business_analyst: ['read:dashboard', 'read:employees'],
+  management: ['read:dashboard', 'read:employees', 'read:documents', 'read:financials'],
+  architect: ['read:dashboard', 'read:employees'],
+  client: ['read:dashboard'],
+};
+
 export default function NewEmployeePage() {
   const router = useRouter();
   const [activeStep, setActiveStep] = useState('personal');
   const [managers, setManagers] = useState<Manager[]>([]);
   const [loadingManagers, setLoadingManagers] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [employeeEditId, setEmployeeEditId] = useState<string | null>(null);
+  const [govtIdType, setGovtIdType] = useState('Aadhaar Card');
+
+  // Auto-generate employee ID and load default probation/notice values on load in creation mode
+  useEffect(() => {
+    if (employeeEditId) return;
+
+    async function autoGenerateEmployeeId() {
+      try {
+        const token = getStoredSessionToken();
+        let prefix = 'EMP';
+        let defaultProbationVal = '3';
+        let defaultNoticeVal = '90';
+
+        const settingsRes = await fetch('/api/workspace-settings', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (settingsRes.ok) {
+          const settings = await settingsRes.json();
+          const settingsData = settings.data || settings;
+          if (settingsData.empIdPrefix) {
+            prefix = settingsData.empIdPrefix;
+          }
+          if (settingsData.defaultProbation !== undefined && settingsData.defaultProbation !== null) {
+            defaultProbationVal = String(settingsData.defaultProbation);
+          }
+          if (settingsData.noticePeriod !== undefined && settingsData.noticePeriod !== null) {
+            defaultNoticeVal = String(settingsData.noticePeriod);
+          }
+        }
+
+        const empRes = await fetch('/api/employees?limit=1', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        let nextSerial = 1001;
+        if (empRes.ok) {
+          const empJson = await empRes.json();
+          const total = empJson.meta?.total ?? 0;
+          nextSerial = 1000 + total + 1;
+        }
+
+        setFormData(prev => ({
+          ...prev,
+          employeeId: `${prefix}${nextSerial}`,
+          probationPeriod: defaultProbationVal,
+          noticePeriod: defaultNoticeVal
+        }));
+      } catch (err) {
+        console.error('Error auto-generating Employee ID:', err);
+      }
+    }
+    autoGenerateEmployeeId();
+  }, [employeeEditId]);
   
   // Section observer refs
   const sectionRefs = {
@@ -65,6 +149,7 @@ export default function NewEmployeePage() {
 
   // Form State
   const [formData, setFormData] = useState({
+    userId: '',
     // User Profile
     firstName: '',
     middleName: '',
@@ -74,9 +159,8 @@ export default function NewEmployeePage() {
     gender: 'Male',
     username: '',
     officeEmail: '',
-    accountExpiryDate: '',
     password: '',
-    role: 'Employee',
+    role: 'developer',
 
     // Employee Profile
     employeeId: '',
@@ -120,8 +204,7 @@ export default function NewEmployeePage() {
     experienceCertificateUrl: '',
     resumeUrl: '',
 
-    // Permissions (custom json string / array)
-    permissions: '["read:dashboard"]',
+    permissions: '["read:dashboard","read:employees"]',
 
     // Emergency Contact
     emergencyContactName: '',
@@ -141,6 +224,109 @@ export default function NewEmployeePage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [uploadingField, setUploadingField] = useState<string | null>(null);
 
+  // Auto-generate password based on Employee ID in creation mode
+  useEffect(() => {
+    if (!employeeEditId && formData.employeeId) {
+      setFormData(prev => ({
+        ...prev,
+        password: `Welcome@${prev.employeeId}`
+      }));
+    }
+  }, [formData.employeeId, employeeEditId]);
+
+  // Extract query parameters safe from window object
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const editId = params.get('id');
+      if (editId) {
+        setEmployeeEditId(editId);
+      }
+    }
+  }, []);
+
+  // Fetch employee details when in edit mode
+  useEffect(() => {
+    if (!employeeEditId) return;
+
+    async function fetchEmployeeDetails() {
+      try {
+        const token = getStoredSessionToken();
+        const res = await fetch(`/api/employees?id=${employeeEditId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const employee = await res.json();
+          if (employee) {
+            setFormData({
+              userId: employee.userId ? String(employee.userId) : '',
+              firstName: employee.firstName || '',
+              middleName: employee.middleName || '',
+              lastName: employee.lastName || '',
+              email: employee.email || '',
+              phone: employee.phone || '',
+              gender: employee.gender || 'Male',
+              username: employee.username || '',
+              officeEmail: employee.officeEmail || '',
+              password: '', // Kept empty for editing
+              role: employee.role || 'Employee',
+              employeeId: employee.employeeId || '',
+              maritalStatus: employee.maritalStatus || '',
+              bloodGroup: employee.bloodGroup || '',
+              nationality: employee.nationality || '',
+              personalIdNumber: employee.personalIdNumber || '',
+              department: employee.department || '',
+              designation: employee.designation || '',
+              employmentType: employee.employmentType === 'full_time' ? 'Full-Time' : employee.employmentType === 'part_time' ? 'Part-Time' : employee.employmentType === 'contract' ? 'Contract' : employee.employmentType === 'intern' ? 'Intern' : 'Full-Time',
+              dateOfJoining: employee.dateOfJoining || '',
+              dateOfBirth: employee.dateOfBirth || '',
+              managerId: employee.managerId ? String(employee.managerId) : '',
+              status: employee.status || 'active',
+              probationPeriod: employee.probationPeriod ? String(employee.probationPeriod) : '',
+              confirmationDate: employee.confirmationDate || '',
+              workLocation: employee.workLocation || '',
+              workShift: employee.workShift || '',
+              noticePeriod: employee.noticePeriod ? String(employee.noticePeriod) : '',
+              salary: employee.salary ? String(employee.salary) : '',
+              hourlyRate: employee.hourlyRate ? String(employee.hourlyRate) : '',
+              ctc: employee.ctc ? String(employee.ctc) : '',
+              currency: employee.currency || 'INR',
+              bankName: employee.bankName || '',
+              bankAccountNumber: employee.bankAccountNumber || '',
+              ifscCode: employee.ifscCode || '',
+              branchName: employee.branchName || '',
+              pfNumber: employee.pfNumber || '',
+              uanNumber: employee.uanNumber || '',
+              esiNumber: employee.esiNumber || '',
+              panNumber: employee.panNumber || '',
+              aadhaarNumber: employee.aadhaarNumber || '',
+              aadhaarCardUrl: employee.aadhaarCardUrl || '',
+              panCardUrl: employee.panCardUrl || '',
+              addressProofUrl: employee.addressProofUrl || '',
+              educationCertificateUrl: employee.educationCertificateUrl || '',
+              experienceCertificateUrl: employee.experienceCertificateUrl || '',
+              resumeUrl: employee.resumeUrl || '',
+              permissions: employee.permissions ? JSON.stringify(employee.permissions) : '["read:dashboard"]',
+              emergencyContactName: employee.emergencyContactName || '',
+              emergencyContactRelationship: employee.emergencyContactRelationship || '',
+              emergencyContactPhone: employee.emergencyContactPhone || '',
+              emergencyContactAddress: employee.emergencyContactAddress || '',
+              languagesKnown: employee.languagesKnown || '',
+              linkedinProfile: employee.linkedinProfile || '',
+              githubProfile: employee.githubProfile || '',
+              previousCompany: employee.previousCompany || '',
+              referralSource: employee.referralSource || '',
+              notes: employee.notes || '',
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching employee details:', err);
+      }
+    }
+    fetchEmployeeDetails();
+  }, [employeeEditId]);
+
   // Fetch potential managers
   useEffect(() => {
     async function fetchManagers() {
@@ -151,9 +337,9 @@ export default function NewEmployeePage() {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (res.ok) {
-          const data = await res.json();
+          const json = await res.json();
           // Filter admin and managers
-          const candidates = data.filter((u: any) => u.role === 'Admin' || u.role === 'Manager');
+          const candidates = (json.data || []).filter((u: any) => u.role === 'Admin' || u.role === 'Manager');
           setManagers(candidates);
         }
       } catch (err) {
@@ -183,10 +369,18 @@ export default function NewEmployeePage() {
       if (!formData.designation.trim()) newErrors.designation = 'Designation is required';
       if (!formData.dateOfJoining) newErrors.dateOfJoining = 'Joining Date is required';
     } else if (stepId === 'access') {
-      if (!formData.password) {
-        newErrors.password = 'Initial password is required';
-      } else if (formData.password.length < 6) {
-        newErrors.password = 'Password must be at least 6 characters';
+      if (!employeeEditId) {
+        if (!formData.password) {
+          newErrors.password = 'Initial password is required';
+        } else if (formData.password.length < 6) {
+          newErrors.password = 'Password must be at least 6 characters';
+        }
+      }
+      if (formData.username && !/^[a-z0-9._-]+$/.test(formData.username)) {
+        newErrors.username = 'Username must contain only lowercase letters, numbers, dots, and underscores';
+      }
+      if (formData.officeEmail && !/\S+@\S+\.\S+/.test(formData.officeEmail)) {
+        newErrors.officeEmail = 'Valid office email is required';
       }
     }
 
@@ -244,21 +438,63 @@ export default function NewEmployeePage() {
     }
   };
 
-  // Document Upload Handler (simulated with cloud secure URL string)
+  // Document Upload Handler (real Supabase Storage endpoint)
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, fieldName: string) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // 1. Validate File Type
+    const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'application/pdf'];
+    if (!validTypes.includes(file.type)) {
+      toast.error('Invalid file type. Only PNG, JPG, JPEG, and PDF files are allowed.');
+      return;
+    }
+
+    // 2. Validate File Size (max 1 MB)
+    const maxSizeBytes = 1 * 1024 * 1024;
+    if (file.size > maxSizeBytes) {
+      toast.error('File size exceeds the 1 MB limit.');
+      return;
+    }
+
     setUploadingField(fieldName);
-    // Simulate premium upload delay
-    setTimeout(() => {
+    try {
+      const token = getStoredSessionToken();
+      const payload = new FormData();
+      payload.append('file', file);
+      payload.append('kind', 'employee_document');
+
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: payload
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json();
+        throw new Error(errJson.message || 'File upload failed');
+      }
+
+      const uploadResult = await res.json();
+      const uploadedUrl = uploadResult.data?.url || uploadResult.url;
+
+      if (!uploadedUrl) {
+        throw new Error('Upload response did not return a valid file URL.');
+      }
+
       setFormData((prev) => ({
         ...prev,
-        [fieldName]: `https://supabase-storage-mock.secure/docs/${file.name}`,
+        [fieldName]: uploadedUrl,
       }));
-      setUploadingField(null);
       toast.success(`${file.name} uploaded successfully!`);
-    }, 1200);
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || 'An error occurred during file upload.');
+    } finally {
+      setUploadingField(null);
+    }
   };
 
   const validateForm = () => {
@@ -280,10 +516,18 @@ export default function NewEmployeePage() {
     if (!formData.dateOfJoining) newErrors.dateOfJoining = 'Joining Date is required';
 
     // System access
-    if (!formData.password) {
-      newErrors.password = 'Initial password is required';
-    } else if (formData.password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
+    if (!employeeEditId) {
+      if (!formData.password) {
+        newErrors.password = 'Initial password is required';
+      } else if (formData.password.length < 6) {
+        newErrors.password = 'Password must be at least 6 characters';
+      }
+    }
+    if (formData.username && !/^[a-z0-9._-]+$/.test(formData.username)) {
+      newErrors.username = 'Username must contain only lowercase letters, numbers, dots, and underscores';
+    }
+    if (formData.officeEmail && !/\S+@\S+\.\S+/.test(formData.officeEmail)) {
+      newErrors.officeEmail = 'Valid office email is required';
     }
 
     setErrors(newErrors);
@@ -310,112 +554,214 @@ export default function NewEmployeePage() {
     setSubmitting(true);
     try {
       const token = getStoredSessionToken();
+      const normEmploymentType = (formData.employmentType || '').toLowerCase().replace('-', '_');
 
-      // 1. Create User
-      const userPayload = {
-        email: formData.email,
-        password: formData.password,
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        role: formData.role,
-        phone: formData.phone || undefined,
-        username: formData.username || undefined,
-        middleName: formData.middleName || undefined,
-        gender: formData.gender,
-        officeEmail: formData.officeEmail || undefined,
-        accountExpiryDate: formData.accountExpiryDate || undefined,
-      };
+      if (employeeEditId) {
+        // --- EDIT MODE FLOW ---
+        // 1. Update User
+        const userPayload = {
+          email: formData.email,
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          role: formData.role,
+          phone: formData.phone || undefined,
+          username: formData.username || undefined,
+          middleName: formData.middleName || undefined,
+          gender: formData.gender,
+          officeEmail: formData.officeEmail || undefined,
+          ...(formData.password ? { password: formData.password } : {}),
+        };
 
-      const userRes = await fetch('/api/users', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(userPayload)
-      });
+        const userRes = await fetch(`/api/users?id=${formData.userId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(userPayload)
+        });
 
-      if (!userRes.ok) {
-        const errorData = await userRes.json();
-        throw new Error(errorData.message || 'Failed to register authentication user account');
+        if (!userRes.ok) {
+          const errorData = await userRes.json();
+          throw new Error(errorData.message || 'Failed to update user account details');
+        }
+
+        // 2. Update Employee Profile
+        const employeePayload = {
+          employeeId: formData.employeeId,
+          department: formData.department,
+          designation: formData.designation,
+          employmentType: normEmploymentType,
+          dateOfJoining: formData.dateOfJoining,
+          dateOfBirth: formData.dateOfBirth || null,
+          managerId: formData.managerId ? Number(formData.managerId) : null,
+          status: formData.status,
+          probationPeriod: formData.probationPeriod ? Number(formData.probationPeriod) : null,
+          confirmationDate: formData.confirmationDate || null,
+          workLocation: formData.workLocation || null,
+          workShift: formData.workShift || null,
+          noticePeriod: formData.noticePeriod ? Number(formData.noticePeriod) : null,
+          
+          salary: formData.salary ? Number(formData.salary) : null,
+          hourlyRate: formData.hourlyRate ? Number(formData.hourlyRate) : null,
+          ctc: formData.ctc ? Number(formData.ctc) : null,
+          currency: formData.currency,
+          bankName: formData.bankName || null,
+          bankAccountNumber: formData.bankAccountNumber || null,
+          ifscCode: formData.ifscCode || null,
+          branchName: formData.branchName || null,
+          pfNumber: formData.pfNumber || null,
+          uanNumber: formData.uanNumber || null,
+          esiNumber: formData.esiNumber || null,
+          panNumber: formData.panNumber || null,
+          aadhaarNumber: formData.aadhaarNumber || null,
+
+          aadhaarCardUrl: formData.aadhaarCardUrl || null,
+          panCardUrl: formData.panCardUrl || null,
+          addressProofUrl: formData.addressProofUrl || null,
+          educationCertificateUrl: formData.educationCertificateUrl || null,
+          experienceCertificateUrl: formData.experienceCertificateUrl || null,
+          resumeUrl: formData.resumeUrl || null,
+
+          permissions: formData.permissions ? JSON.parse(formData.permissions) : null,
+
+          emergencyContactName: formData.emergencyContactName || null,
+          emergencyContactRelationship: formData.emergencyContactRelationship || null,
+          emergencyContactPhone: formData.emergencyContactPhone || null,
+          emergencyContactAddress: formData.emergencyContactAddress || null,
+
+          languagesKnown: formData.languagesKnown || null,
+          linkedinProfile: formData.linkedinProfile || null,
+          githubProfile: formData.githubProfile || null,
+          previousCompany: formData.previousCompany || null,
+          referralSource: formData.referralSource || null,
+          notes: formData.notes || null,
+          gender: formData.gender,
+        };
+
+        const employeeRes = await fetch(`/api/employees?id=${employeeEditId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(employeePayload)
+        });
+
+        if (!employeeRes.ok) {
+          const errorData = await employeeRes.json();
+          throw new Error(errorData.message || 'Failed to update employee profile mapping');
+        }
+
+        toast.success('Employee profile successfully updated!');
+        router.push('/dashboard/employees');
+      } else {
+        // --- CREATION MODE FLOW ---
+        // 1. Create User
+        const userPayload = {
+          email: formData.email,
+          password: formData.password,
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          role: formData.role,
+          phone: formData.phone || undefined,
+          username: formData.username || undefined,
+          middleName: formData.middleName || undefined,
+          gender: formData.gender,
+          officeEmail: formData.officeEmail || undefined,
+        };
+
+        const userRes = await fetch('/api/users', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(userPayload)
+        });
+
+        if (!userRes.ok) {
+          const errorData = await userRes.json();
+          throw new Error(errorData.message || 'Failed to register authentication user account');
+        }
+
+        const createdUser = await userRes.json();
+        const newUserId = createdUser.id; // Legacy numeric user ID
+
+        // 2. Create Employee Linked Profile
+        const employeePayload = {
+          userId: newUserId,
+          employeeId: formData.employeeId,
+          department: formData.department,
+          designation: formData.designation,
+          employmentType: normEmploymentType,
+          dateOfJoining: formData.dateOfJoining,
+          dateOfBirth: formData.dateOfBirth || undefined,
+          managerId: formData.managerId ? Number(formData.managerId) : undefined,
+          status: formData.status,
+          probationPeriod: formData.probationPeriod ? Number(formData.probationPeriod) : undefined,
+          confirmationDate: formData.confirmationDate || undefined,
+          workLocation: formData.workLocation || undefined,
+          workShift: formData.workShift || undefined,
+          noticePeriod: formData.noticePeriod ? Number(formData.noticePeriod) : undefined,
+          
+          salary: formData.salary ? Number(formData.salary) : undefined,
+          hourlyRate: formData.hourlyRate ? Number(formData.hourlyRate) : undefined,
+          ctc: formData.ctc ? Number(formData.ctc) : undefined,
+          currency: formData.currency,
+          bankName: formData.bankName || undefined,
+          bankAccountNumber: formData.bankAccountNumber || undefined,
+          ifscCode: formData.ifscCode || undefined,
+          branchName: formData.branchName || undefined,
+          pfNumber: formData.pfNumber || undefined,
+          uanNumber: formData.uanNumber || undefined,
+          esiNumber: formData.esiNumber || undefined,
+          panNumber: formData.panNumber || undefined,
+          aadhaarNumber: formData.aadhaarNumber || undefined,
+
+          aadhaarCardUrl: formData.aadhaarCardUrl || undefined,
+          panCardUrl: formData.panCardUrl || undefined,
+          addressProofUrl: formData.addressProofUrl || undefined,
+          educationCertificateUrl: formData.educationCertificateUrl || undefined,
+          experienceCertificateUrl: formData.experienceCertificateUrl || undefined,
+          resumeUrl: formData.resumeUrl || undefined,
+
+          permissions: formData.permissions ? JSON.parse(formData.permissions) : undefined,
+
+          emergencyContactName: formData.emergencyContactName || undefined,
+          emergencyContactRelationship: formData.emergencyContactRelationship || undefined,
+          emergencyContactPhone: formData.emergencyContactPhone || undefined,
+          emergencyContactAddress: formData.emergencyContactAddress || undefined,
+
+          languagesKnown: formData.languagesKnown || undefined,
+          linkedinProfile: formData.linkedinProfile || undefined,
+          githubProfile: formData.githubProfile || undefined,
+          previousCompany: formData.previousCompany || undefined,
+          referralSource: formData.referralSource || undefined,
+          notes: formData.notes || undefined,
+          gender: formData.gender,
+        };
+
+        const employeeRes = await fetch('/api/employees', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(employeePayload)
+        });
+
+        if (!employeeRes.ok) {
+          const errorData = await employeeRes.json();
+          throw new Error(errorData.message || 'Failed to create employee profile mapping');
+        }
+
+        toast.success('Employee successfully onboarded!');
+        router.push('/dashboard/employees');
       }
-
-      const createdUser = await userRes.json();
-      const newUserId = createdUser.id; // Legacy numeric user ID
-
-      // 2. Create Employee Linked Profile
-      const employeePayload = {
-        userId: newUserId,
-        employeeId: formData.employeeId,
-        department: formData.department,
-        designation: formData.designation,
-        employmentType: formData.employmentType,
-        dateOfJoining: formData.dateOfJoining,
-        dateOfBirth: formData.dateOfBirth || undefined,
-        managerId: formData.managerId ? Number(formData.managerId) : undefined,
-        status: formData.status,
-        probationPeriod: formData.probationPeriod || undefined,
-        confirmationDate: formData.confirmationDate || undefined,
-        workLocation: formData.workLocation || undefined,
-        workShift: formData.workShift || undefined,
-        noticePeriod: formData.noticePeriod || undefined,
-        
-        salary: formData.salary ? Number(formData.salary) : undefined,
-        hourlyRate: formData.hourlyRate ? Number(formData.hourlyRate) : undefined,
-        ctc: formData.ctc ? Number(formData.ctc) : undefined,
-        currency: formData.currency,
-        bankName: formData.bankName || undefined,
-        bankAccountNumber: formData.bankAccountNumber || undefined,
-        ifscCode: formData.ifscCode || undefined,
-        branchName: formData.branchName || undefined,
-        pfNumber: formData.pfNumber || undefined,
-        uanNumber: formData.uanNumber || undefined,
-        esiNumber: formData.esiNumber || undefined,
-        panNumber: formData.panNumber || undefined,
-        aadhaarNumber: formData.aadhaarNumber || undefined,
-
-        aadhaarCardUrl: formData.aadhaarCardUrl || undefined,
-        panCardUrl: formData.panCardUrl || undefined,
-        addressProofUrl: formData.addressProofUrl || undefined,
-        educationCertificateUrl: formData.educationCertificateUrl || undefined,
-        experienceCertificateUrl: formData.experienceCertificateUrl || undefined,
-        resumeUrl: formData.resumeUrl || undefined,
-
-        permissions: formData.permissions ? JSON.parse(formData.permissions) : undefined,
-
-        emergencyContactName: formData.emergencyContactName || undefined,
-        emergencyContactRelationship: formData.emergencyContactRelationship || undefined,
-        emergencyContactPhone: formData.emergencyContactPhone || undefined,
-        emergencyContactAddress: formData.emergencyContactAddress || undefined,
-
-        languagesKnown: formData.languagesKnown || undefined,
-        linkedinProfile: formData.linkedinProfile || undefined,
-        githubProfile: formData.githubProfile || undefined,
-        previousCompany: formData.previousCompany || undefined,
-        referralSource: formData.referralSource || undefined,
-        notes: formData.notes || undefined,
-        gender: formData.gender,
-      };
-
-      const employeeRes = await fetch('/api/employees', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(employeePayload)
-      });
-
-      if (!employeeRes.ok) {
-        const errorData = await employeeRes.json();
-        throw new Error(errorData.message || 'Failed to create employee profile mapping');
-      }
-
-      toast.success('Employee successfully onboarded!');
-      router.push('/dashboard/employees');
     } catch (err: any) {
       console.error(err);
-      toast.error(err.message || 'An error occurred during employee creation.');
+      toast.error(err.message || 'An error occurred during submission.');
     } finally {
       setSubmitting(false);
     }
@@ -426,8 +772,12 @@ export default function NewEmployeePage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8 border-b border-[#e6e4e6]/30 dark:border-[#2f3035]/30 pb-5">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-[#fdfcfc] md:text-3xl">Add New Employee</h1>
-          <p className="text-sm text-slate-500 dark:text-[#b1b1b1] mt-1">Create a complete employee profile and onboard them into the organization.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-[#fdfcfc] md:text-3xl">
+            {employeeEditId ? 'Edit Employee Profile' : 'Add New Employee'}
+          </h1>
+          <p className="text-sm text-slate-500 dark:text-[#b1b1b1] mt-1">
+            {employeeEditId ? 'Update employee details and system credentials in the organization.' : 'Create a complete employee profile and onboard them into the organization.'}
+          </p>
         </div>
         <Link href="/dashboard/employees">
           <Button variant="outline" className="border-[#e6e4e6]/30 dark:border-[#2f3035]/30 hover:bg-[#e6e4e6]/10 dark:hover:bg-[#2f3035]/10 text-slate-700 dark:text-[#fdfcfc] font-semibold flex items-center gap-2">
@@ -597,35 +947,70 @@ export default function NewEmployeePage() {
                 </div>
                 <div>
                   <Label htmlFor="bloodGroup" className="text-slate-700 dark:text-[#fdfcfc]">Blood Group</Label>
-                  <Input 
+                  <select 
                     id="bloodGroup" 
-                    name="bloodGroup" 
+                    name="bloodGroup"
                     value={formData.bloodGroup}
                     onChange={handleInputChange}
-                    className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
-                    placeholder="e.g. O+, A-"
-                  />
+                    className="flex h-10 w-full rounded-md border border-gray-200 dark:border-zinc-800 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-[#fdfcfc] focus:border-[#f87941] mt-2 outline-none"
+                  >
+                    <option value="" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Select Blood Group</option>
+                    <option value="A+" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">A+</option>
+                    <option value="A-" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">A-</option>
+                    <option value="B+" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">B+</option>
+                    <option value="B-" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">B-</option>
+                    <option value="AB+" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">AB+</option>
+                    <option value="AB-" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">AB-</option>
+                    <option value="O+" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">O+</option>
+                    <option value="O-" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">O-</option>
+                  </select>
                 </div>
                 <div>
                   <Label htmlFor="nationality" className="text-slate-700 dark:text-[#fdfcfc]">Nationality</Label>
-                  <Input 
+                  <select 
                     id="nationality" 
-                    name="nationality" 
+                    name="nationality"
                     value={formData.nationality}
                     onChange={handleInputChange}
-                    className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
-                    placeholder="e.g. Indian"
-                  />
+                    className="flex h-10 w-full rounded-md border border-gray-200 dark:border-zinc-800 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-[#fdfcfc] focus:border-[#f87941] mt-2 outline-none"
+                  >
+                    <option value="" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Select Nationality</option>
+                    <option value="Indian" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Indian</option>
+                    <option value="American" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">American</option>
+                    <option value="British" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">British</option>
+                    <option value="Canadian" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Canadian</option>
+                    <option value="Australian" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Australian</option>
+                    <option value="Singaporean" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Singaporean</option>
+                    <option value="German" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">German</option>
+                    <option value="French" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">French</option>
+                    <option value="Other" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Other</option>
+                  </select>
                 </div>
                 <div>
-                  <Label htmlFor="personalIdNumber" className="text-slate-700 dark:text-[#fdfcfc]">Personal ID Number (SSN/Govt ID)</Label>
+                  <Label htmlFor="govtIdType" className="text-slate-700 dark:text-[#fdfcfc]">Govt ID Type</Label>
+                  <select 
+                    id="govtIdType" 
+                    value={govtIdType}
+                    onChange={(e) => setGovtIdType(e.target.value)}
+                    className="flex h-10 w-full rounded-md border border-gray-200 dark:border-zinc-800 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-[#fdfcfc] focus:border-[#f87941] mt-2 outline-none"
+                  >
+                    <option value="Aadhaar Card">Aadhaar Card</option>
+                    <option value="PAN Card">PAN Card</option>
+                    <option value="Social Security Number">Social Security Number</option>
+                    <option value="Passport">Passport</option>
+                    <option value="Driver License">Driver License</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div className="col-span-1 md:col-span-3">
+                  <Label htmlFor="personalIdNumber" className="text-slate-700 dark:text-[#fdfcfc]">Personal ID Number ({govtIdType})</Label>
                   <Input 
                     id="personalIdNumber" 
                     name="personalIdNumber" 
                     value={formData.personalIdNumber}
                     onChange={handleInputChange}
                     className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
-                    placeholder="Enter personal identification number"
+                    placeholder={`Enter ${govtIdType} identification number`}
                   />
                 </div>
                 {/* Wizard Navigation Footer */}
@@ -677,26 +1062,50 @@ export default function NewEmployeePage() {
                 </div>
                 <div>
                   <Label htmlFor="department" className="text-slate-700 dark:text-[#fdfcfc]">Department <span className="text-[#f87941]">*</span></Label>
-                  <Input 
+                  <select 
                     id="department" 
                     name="department" 
                     value={formData.department}
                     onChange={handleInputChange}
-                    className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
-                    placeholder="e.g. Engineering"
-                  />
+                    className="flex h-10 w-full rounded-md border border-gray-200 dark:border-zinc-800 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-[#fdfcfc] focus:border-[#f87941] mt-2 outline-none"
+                  >
+                    <option value="" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Select Department</option>
+                    <option value="Engineering" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Engineering</option>
+                    <option value="HR" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">HR</option>
+                    <option value="Design" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Design</option>
+                    <option value="Marketing" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Marketing</option>
+                    <option value="Sales" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Sales</option>
+                    <option value="Finance" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Finance</option>
+                    <option value="Operations" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Operations</option>
+                    <option value="Support" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Support</option>
+                    <option value="Legal" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Legal</option>
+                  </select>
                   {errors.department && <span className="text-xs text-red-500 mt-1 block">{errors.department}</span>}
                 </div>
                 <div>
                   <Label htmlFor="designation" className="text-slate-700 dark:text-[#fdfcfc]">Designation <span className="text-[#f87941]">*</span></Label>
-                  <Input 
+                  <select 
                     id="designation" 
                     name="designation" 
                     value={formData.designation}
                     onChange={handleInputChange}
-                    className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
-                    placeholder="e.g. Senior Developer"
-                  />
+                    className="flex h-10 w-full rounded-md border border-gray-200 dark:border-zinc-800 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-[#fdfcfc] focus:border-[#f87941] mt-2 outline-none"
+                  >
+                    <option value="" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Select Designation</option>
+                    <option value="Software Engineer" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Software Engineer</option>
+                    <option value="Senior Software Engineer" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Senior Software Engineer</option>
+                    <option value="Tech Lead" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Tech Lead</option>
+                    <option value="Staff Engineer" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Staff Engineer</option>
+                    <option value="Engineering Manager" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Engineering Manager</option>
+                    <option value="Product Manager" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Product Manager</option>
+                    <option value="HR Specialist" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">HR Specialist</option>
+                    <option value="HR Manager" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">HR Manager</option>
+                    <option value="UI/UX Designer" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">UI/UX Designer</option>
+                    <option value="Creative Director" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Creative Director</option>
+                    <option value="Financial Analyst" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Financial Analyst</option>
+                    <option value="Sales Executive" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Sales Executive</option>
+                    <option value="Marketing Manager" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Marketing Manager</option>
+                  </select>
                   {errors.designation && <span className="text-xs text-red-500 mt-1 block">{errors.designation}</span>}
                 </div>
                 <div>
@@ -778,14 +1187,21 @@ export default function NewEmployeePage() {
                 </div>
                 <div>
                   <Label htmlFor="workShift" className="text-slate-700 dark:text-[#fdfcfc]">Work Shift</Label>
-                  <Input 
+                  <select 
                     id="workShift" 
-                    name="workShift" 
+                    name="workShift"
                     value={formData.workShift}
                     onChange={handleInputChange}
-                    className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
-                    placeholder="e.g. General (9 AM - 6 PM)"
-                  />
+                    className="flex h-10 w-full rounded-md border border-gray-200 dark:border-zinc-800 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-[#fdfcfc] focus:border-[#f87941] mt-2 outline-none"
+                  >
+                    <option value="" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Select Shift</option>
+                    <option value="Day Shift" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Day Shift (9 AM - 6 PM)</option>
+                    <option value="Night Shift" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Night Shift (10 PM - 7 AM)</option>
+                    <option value="Morning Shift" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Morning Shift (6 AM - 3 PM)</option>
+                    <option value="Evening Shift" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Evening Shift (2 PM - 11 PM)</option>
+                    <option value="Rotating Shift" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Rotating Shift</option>
+                    <option value="Flexible Hours" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Flexible Hours</option>
+                  </select>
                 </div>
                 <div>
                   <Label htmlFor="noticePeriod" className="text-slate-700 dark:text-[#fdfcfc]">Notice Period (days)</Label>
@@ -871,14 +1287,22 @@ export default function NewEmployeePage() {
                 </div>
                 <div>
                   <Label htmlFor="currency" className="text-slate-700 dark:text-[#fdfcfc]">Salary Currency</Label>
-                  <Input 
+                  <select 
                     id="currency" 
-                    name="currency" 
+                    name="currency"
                     value={formData.currency}
                     onChange={handleInputChange}
-                    className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
-                    placeholder="INR"
-                  />
+                    className="flex h-10 w-full rounded-md border border-gray-200 dark:border-zinc-800 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-[#fdfcfc] focus:border-[#f87941] mt-2 outline-none"
+                  >
+                    <option value="INR" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">INR (₹)</option>
+                    <option value="USD" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">USD ($)</option>
+                    <option value="EUR" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">EUR (€)</option>
+                    <option value="GBP" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">GBP (£)</option>
+                    <option value="AED" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">AED (د.إ)</option>
+                    <option value="SGD" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">SGD ($)</option>
+                    <option value="CAD" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">CAD ($)</option>
+                    <option value="AUD" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">AUD ($)</option>
+                  </select>
                 </div>
                 <div>
                   <Label htmlFor="bankName" className="text-slate-700 dark:text-[#fdfcfc]">Bank Name</Label>
@@ -1116,7 +1540,12 @@ export default function NewEmployeePage() {
                     className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
                     placeholder="••••••••"
                   />
-                  {errors.password && <span className="text-xs text-red-500 mt-1 block">{errors.password}</span>}
+                   {errors.password && <span className="text-xs text-red-500 mt-1 block">{errors.password}</span>}
+                   {!employeeEditId && formData.employeeId && (
+                     <span className="text-[10px] text-[#f87941]/90 mt-1 block font-semibold">
+                       Auto-generated: Welcome@{formData.employeeId}
+                     </span>
+                   )}
                 </div>
                 <div>
                   <Label htmlFor="role" className="text-slate-700 dark:text-[#fdfcfc]">System Role</Label>
@@ -1124,35 +1553,84 @@ export default function NewEmployeePage() {
                     id="role" 
                     name="role"
                     value={formData.role}
-                    onChange={handleInputChange}
+                    onChange={(e) => {
+                      const selectedRole = e.target.value;
+                      const defaultPerms = DEFAULT_ROLE_PERMISSIONS[selectedRole] || ['read:dashboard', 'read:employees'];
+                      setFormData(prev => ({
+                        ...prev,
+                        role: selectedRole,
+                        permissions: JSON.stringify(defaultPerms)
+                      }));
+                    }}
                     className="flex h-10 w-full rounded-md border border-gray-200 dark:border-zinc-800 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-[#fdfcfc] focus:border-[#f87941] mt-2 outline-none"
                   >
-                    <option value="Employee" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Employee</option>
-                    <option value="Manager" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Manager</option>
-                    <option value="Admin" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Admin</option>
+                    <option value="admin" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Admin</option>
+                    <option value="hr_manager" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">HR Manager</option>
+                    <option value="cms_administrator" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">CMS Administrator</option>
+                    <option value="project_manager" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Project Manager</option>
+                    <option value="developer" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Developer</option>
+                    <option value="qa_engineer" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">QA Engineer</option>
+                    <option value="devops_engineer" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">DevOps Engineer</option>
+                    <option value="ui_ux_designer" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">UI/UX Designer</option>
+                    <option value="intern" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Intern</option>
+                    <option value="business_development" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Business Development</option>
+                    <option value="digital_marketing" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Digital Marketing</option>
+                    <option value="business_analyst" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Business Analyst</option>
+                    <option value="management" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Management</option>
+                    <option value="architect" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Architect</option>
+                    <option value="client" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Client</option>
                   </select>
                 </div>
-                <div>
-                  <Label htmlFor="accountExpiryDate" className="text-slate-700 dark:text-[#fdfcfc]">Account Expiry Date</Label>
-                  <Input 
-                    id="accountExpiryDate" 
-                    name="accountExpiryDate" 
-                    type="date"
-                    value={formData.accountExpiryDate}
-                    onChange={handleInputChange}
-                    className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] focus:border-[#f87941] mt-2" 
-                  />
-                </div>
-                <div className="md:col-span-3">
-                  <Label htmlFor="permissions" className="text-slate-700 dark:text-[#fdfcfc]">Custom System Permissions (JSON string)</Label>
-                  <Input 
-                    id="permissions" 
-                    name="permissions" 
-                    value={formData.permissions}
-                    onChange={handleInputChange}
-                    className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 font-mono text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
-                    placeholder='["read:dashboard"]'
-                  />
+                <div className="md:col-span-3 mt-4">
+                  <Label className="text-slate-700 dark:text-[#fdfcfc] font-bold text-sm block mb-4">
+                    Active System Access Permissions
+                  </Label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {AVAILABLE_PERMISSIONS.map((perm) => {
+                      const parsedPerms = (() => {
+                        try {
+                          return JSON.parse(formData.permissions) || [];
+                        } catch {
+                          return [];
+                        }
+                      })();
+                      const isChecked = parsedPerms.includes(perm.key);
+                      return (
+                        <div 
+                          key={perm.key}
+                          onClick={() => {
+                            let nextPerms = [...parsedPerms];
+                            if (nextPerms.includes(perm.key)) {
+                              nextPerms = nextPerms.filter(p => p !== perm.key);
+                            } else {
+                              nextPerms.push(perm.key);
+                            }
+                            setFormData(prev => ({
+                              ...prev,
+                              permissions: JSON.stringify(nextPerms)
+                            }));
+                          }}
+                          className={`flex items-start gap-3 p-3.5 rounded-xl border transition-all duration-300 cursor-pointer ${
+                            isChecked 
+                              ? 'border-[#f87941] bg-[#f87941]/5 shadow-[0_2px_8px_rgba(248,121,65,0.05)]' 
+                              : 'border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-slate-900/50 hover:bg-slate-50 dark:hover:bg-slate-900'
+                          }`}
+                        >
+                          <div className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-all duration-300 ${
+                            isChecked 
+                              ? 'border-[#f87941] bg-[#f87941] text-white' 
+                              : 'border-slate-300 dark:border-zinc-700 bg-white dark:bg-slate-950'
+                          }`}>
+                            {isChecked && <Check className="h-3 w-3 stroke-[3]" />}
+                          </div>
+                          <div>
+                            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">{perm.name}</span>
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">{perm.desc}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
                 {/* Wizard Navigation Footer */}
                 <div className="col-span-1 md:col-span-3 flex justify-between items-center mt-8 pt-6 border-t border-[#e6e4e6]/30 dark:border-[#2f3035]/30">

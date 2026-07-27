@@ -40,6 +40,27 @@ function normalizeSupabaseCompanySettings(row: Record<string, unknown>) {
     emergencyContact: row.emergency_contact ?? null,
     supportEmail: row.support_email ?? null,
     supportPhone: row.support_phone ?? null,
+    invoicePrefix: row.invoice_prefix ?? null,
+    invoiceNumberStart: row.invoice_number_start ?? null,
+    quotationPrefix: row.quotation_prefix ?? null,
+    purchasePrefix: row.purchase_prefix ?? null,
+    creditNotePrefix: row.credit_note_prefix ?? null,
+    gstEnabled: row.gst_enabled ?? false,
+    gstRateDefault: row.gst_rate_default ?? null,
+    taxConfiguration: row.tax_configuration ?? [],
+    invoiceDecimal: row.invoice_decimal ?? null,
+    invoiceFooter: row.invoice_footer ?? null,
+    invoiceTerms: row.invoice_terms ?? null,
+    defaultPaymentTerms: row.default_payment_terms ?? null,
+    paymentGateway: row.payment_gateway ?? null,
+    paymentGatewayConfig: row.payment_gateway_config ?? {},
+    qrCodeEnabled: row.qr_code_enabled ?? false,
+    qrCodeUrl: row.qr_code_url ?? null,
+    digitalSignatureEnabled: row.digital_signature_enabled ?? false,
+    digitalSignatureUrl: row.digital_signature_url ?? null,
+    invoiceTemplate: row.invoice_template ?? null,
+    multiCurrencyEnabled: row.multi_currency_enabled ?? false,
+    supportedCurrencies: row.supported_currencies ?? [],
   };
 }
 
@@ -131,6 +152,27 @@ export const POST = withApiHandler(async (request, context) => {
     emergency_contact: payload.emergencyContact?.trim() || null,
     support_email: payload.supportEmail?.trim() || null,
     support_phone: payload.supportPhone?.trim() || null,
+    invoice_prefix: payload.invoicePrefix ?? null,
+    invoice_number_start: payload.invoiceNumberStart ?? null,
+    quotation_prefix: payload.quotationPrefix ?? null,
+    purchase_prefix: payload.purchasePrefix ?? null,
+    credit_note_prefix: payload.creditNotePrefix ?? null,
+    gst_enabled: payload.gstEnabled ?? null,
+    gst_rate_default: payload.gstRateDefault ?? null,
+    tax_configuration: payload.taxConfiguration ?? null,
+    invoice_decimal: payload.invoiceDecimal ?? null,
+    invoice_footer: payload.invoiceFooter ?? null,
+    invoice_terms: payload.invoiceTerms ?? null,
+    default_payment_terms: payload.defaultPaymentTerms ?? null,
+    payment_gateway: payload.paymentGateway ?? null,
+    payment_gateway_config: payload.paymentGatewayConfig ?? null,
+    qr_code_enabled: payload.qrCodeEnabled ?? null,
+    qr_code_url: payload.qrCodeUrl ?? null,
+    digital_signature_enabled: payload.digitalSignatureEnabled ?? null,
+    digital_signature_url: payload.digitalSignatureUrl ?? null,
+    invoice_template: payload.invoiceTemplate ?? null,
+    multi_currency_enabled: payload.multiCurrencyEnabled ?? null,
+    supported_currencies: payload.supportedCurrencies ?? null,
     tenant_id: tenantId,
     updated_at: now,
   };
@@ -158,7 +200,28 @@ export const POST = withApiHandler(async (request, context) => {
                              errorMsg.includes('msme_number') ||
                              errorMsg.includes('emergency_contact') ||
                              errorMsg.includes('support_email') ||
-                             errorMsg.includes('support_phone');
+                             errorMsg.includes('support_phone') ||
+                             errorMsg.includes('invoice_prefix') ||
+                             errorMsg.includes('invoice_number_start') ||
+                             errorMsg.includes('quotation_prefix') ||
+                             errorMsg.includes('purchase_prefix') ||
+                             errorMsg.includes('credit_note_prefix') ||
+                             errorMsg.includes('gst_enabled') ||
+                             errorMsg.includes('gst_rate_default') ||
+                             errorMsg.includes('tax_configuration') ||
+                             errorMsg.includes('invoice_decimal') ||
+                             errorMsg.includes('invoice_footer') ||
+                             errorMsg.includes('invoice_terms') ||
+                             errorMsg.includes('default_payment_terms') ||
+                             errorMsg.includes('payment_gateway') ||
+                             errorMsg.includes('payment_gateway_config') ||
+                             errorMsg.includes('qr_code_enabled') ||
+                             errorMsg.includes('qr_code_url') ||
+                             errorMsg.includes('digital_signature_enabled') ||
+                             errorMsg.includes('digital_signature_url') ||
+                             errorMsg.includes('invoice_template') ||
+                             errorMsg.includes('multi_currency_enabled') ||
+                             errorMsg.includes('supported_currencies');
 
     if (isMissingColumns) {
       console.warn('Self-heal: Strip missing columns during POST insert');
@@ -172,6 +235,31 @@ export const POST = withApiHandler(async (request, context) => {
       delete insertData.currency;
       delete insertData.fiscal_year;
       delete insertData.cin_number;
+      delete insertData.msme_number;
+      delete insertData.emergency_contact;
+      delete insertData.support_email;
+      delete insertData.support_phone;
+      delete insertData.invoice_prefix;
+      delete insertData.invoice_number_start;
+      delete insertData.quotation_prefix;
+      delete insertData.purchase_prefix;
+      delete insertData.credit_note_prefix;
+      delete insertData.gst_enabled;
+      delete insertData.gst_rate_default;
+      delete insertData.tax_configuration;
+      delete insertData.invoice_decimal;
+      delete insertData.invoice_footer;
+      delete insertData.invoice_terms;
+      delete insertData.default_payment_terms;
+      delete insertData.payment_gateway;
+      delete insertData.payment_gateway_config;
+      delete insertData.qr_code_enabled;
+      delete insertData.qr_code_url;
+      delete insertData.digital_signature_enabled;
+      delete insertData.digital_signature_url;
+      delete insertData.invoice_template;
+      delete insertData.multi_currency_enabled;
+      delete insertData.supported_currencies;
       delete insertData.msme_number;
       delete insertData.emergency_contact;
       delete insertData.support_email;
@@ -252,6 +340,27 @@ export const PUT = withApiHandler(async (request, context) => {
       emergency_contact: payload.emergencyContact?.trim() || null,
       support_email: payload.supportEmail?.trim() || null,
       support_phone: payload.supportPhone?.trim() || null,
+      invoice_prefix: payload.invoicePrefix ?? null,
+      invoice_number_start: payload.invoiceNumberStart ?? null,
+      quotation_prefix: payload.quotationPrefix ?? null,
+      purchase_prefix: payload.purchasePrefix ?? null,
+      credit_note_prefix: payload.creditNotePrefix ?? null,
+      gst_enabled: payload.gstEnabled ?? null,
+      gst_rate_default: payload.gstRateDefault ?? null,
+      tax_configuration: payload.taxConfiguration ?? null,
+      invoice_decimal: payload.invoiceDecimal ?? null,
+      invoice_footer: payload.invoiceFooter ?? null,
+      invoice_terms: payload.invoiceTerms ?? null,
+      default_payment_terms: payload.defaultPaymentTerms ?? null,
+      payment_gateway: payload.paymentGateway ?? null,
+      payment_gateway_config: payload.paymentGatewayConfig ?? null,
+      qr_code_enabled: payload.qrCodeEnabled ?? null,
+      qr_code_url: payload.qrCodeUrl ?? null,
+      digital_signature_enabled: payload.digitalSignatureEnabled ?? null,
+      digital_signature_url: payload.digitalSignatureUrl ?? null,
+      invoice_template: payload.invoiceTemplate ?? null,
+      multi_currency_enabled: payload.multiCurrencyEnabled ?? null,
+      supported_currencies: payload.supportedCurrencies ?? null,
       tenant_id: tenantId,
       updated_at: new Date().toISOString(),
     };
@@ -279,7 +388,28 @@ export const PUT = withApiHandler(async (request, context) => {
                                errorMsg.includes('msme_number') ||
                                errorMsg.includes('emergency_contact') ||
                                errorMsg.includes('support_email') ||
-                               errorMsg.includes('support_phone');
+                               errorMsg.includes('support_phone') ||
+                               errorMsg.includes('invoice_prefix') ||
+                               errorMsg.includes('invoice_number_start') ||
+                               errorMsg.includes('quotation_prefix') ||
+                               errorMsg.includes('purchase_prefix') ||
+                               errorMsg.includes('credit_note_prefix') ||
+                               errorMsg.includes('gst_enabled') ||
+                               errorMsg.includes('gst_rate_default') ||
+                               errorMsg.includes('tax_configuration') ||
+                               errorMsg.includes('invoice_decimal') ||
+                               errorMsg.includes('invoice_footer') ||
+                               errorMsg.includes('invoice_terms') ||
+                               errorMsg.includes('default_payment_terms') ||
+                               errorMsg.includes('payment_gateway') ||
+                               errorMsg.includes('payment_gateway_config') ||
+                               errorMsg.includes('qr_code_enabled') ||
+                               errorMsg.includes('qr_code_url') ||
+                               errorMsg.includes('digital_signature_enabled') ||
+                               errorMsg.includes('digital_signature_url') ||
+                               errorMsg.includes('invoice_template') ||
+                               errorMsg.includes('multi_currency_enabled') ||
+                               errorMsg.includes('supported_currencies');
 
       if (isMissingColumns) {
         console.warn('Self-heal: Strip missing compliance/document columns during insert');
@@ -302,6 +432,27 @@ export const PUT = withApiHandler(async (request, context) => {
         delete insertData.emergency_contact;
         delete insertData.support_email;
         delete insertData.support_phone;
+        delete insertData.invoice_prefix;
+        delete insertData.invoice_number_start;
+        delete insertData.quotation_prefix;
+        delete insertData.purchase_prefix;
+        delete insertData.credit_note_prefix;
+        delete insertData.gst_enabled;
+        delete insertData.gst_rate_default;
+        delete insertData.tax_configuration;
+        delete insertData.invoice_decimal;
+        delete insertData.invoice_footer;
+        delete insertData.invoice_terms;
+        delete insertData.default_payment_terms;
+        delete insertData.payment_gateway;
+        delete insertData.payment_gateway_config;
+        delete insertData.qr_code_enabled;
+        delete insertData.qr_code_url;
+        delete insertData.digital_signature_enabled;
+        delete insertData.digital_signature_url;
+        delete insertData.invoice_template;
+        delete insertData.multi_currency_enabled;
+        delete insertData.supported_currencies;
 
         const retry = await supabase.from('company_settings').insert(insertData).select('*').single();
         if (retry.error || !retry.data) throw retry.error ?? new Error('Failed to create company settings');
@@ -347,6 +498,27 @@ export const PUT = withApiHandler(async (request, context) => {
     ...(payload.emergencyContact !== undefined ? { emergency_contact: payload.emergencyContact?.trim() || null } : {}),
     ...(payload.supportEmail !== undefined ? { support_email: payload.supportEmail?.trim() || null } : {}),
     ...(payload.supportPhone !== undefined ? { support_phone: payload.supportPhone?.trim() || null } : {}),
+    ...(payload.invoicePrefix !== undefined ? { invoice_prefix: payload.invoicePrefix } : {}),
+    ...(payload.invoiceNumberStart !== undefined ? { invoice_number_start: payload.invoiceNumberStart } : {}),
+    ...(payload.quotationPrefix !== undefined ? { quotation_prefix: payload.quotationPrefix } : {}),
+    ...(payload.purchasePrefix !== undefined ? { purchase_prefix: payload.purchasePrefix } : {}),
+    ...(payload.creditNotePrefix !== undefined ? { credit_note_prefix: payload.creditNotePrefix } : {}),
+    ...(payload.gstEnabled !== undefined ? { gst_enabled: payload.gstEnabled } : {}),
+    ...(payload.gstRateDefault !== undefined ? { gst_rate_default: payload.gstRateDefault } : {}),
+    ...(payload.taxConfiguration !== undefined ? { tax_configuration: payload.taxConfiguration } : {}),
+    ...(payload.invoiceDecimal !== undefined ? { invoice_decimal: payload.invoiceDecimal } : {}),
+    ...(payload.invoiceFooter !== undefined ? { invoice_footer: payload.invoiceFooter } : {}),
+    ...(payload.invoiceTerms !== undefined ? { invoice_terms: payload.invoiceTerms } : {}),
+    ...(payload.defaultPaymentTerms !== undefined ? { default_payment_terms: payload.defaultPaymentTerms } : {}),
+    ...(payload.paymentGateway !== undefined ? { payment_gateway: payload.paymentGateway } : {}),
+    ...(payload.paymentGatewayConfig !== undefined ? { payment_gateway_config: payload.paymentGatewayConfig } : {}),
+    ...(payload.qrCodeEnabled !== undefined ? { qr_code_enabled: payload.qrCodeEnabled } : {}),
+    ...(payload.qrCodeUrl !== undefined ? { qr_code_url: payload.qrCodeUrl } : {}),
+    ...(payload.digitalSignatureEnabled !== undefined ? { digital_signature_enabled: payload.digitalSignatureEnabled } : {}),
+    ...(payload.digitalSignatureUrl !== undefined ? { digital_signature_url: payload.digitalSignatureUrl } : {}),
+    ...(payload.invoiceTemplate !== undefined ? { invoice_template: payload.invoiceTemplate } : {}),
+    ...(payload.multiCurrencyEnabled !== undefined ? { multi_currency_enabled: payload.multiCurrencyEnabled } : {}),
+    ...(payload.supportedCurrencies !== undefined ? { supported_currencies: payload.supportedCurrencies } : {}),
     updated_at: new Date().toISOString(),
   };
 
@@ -379,7 +551,28 @@ export const PUT = withApiHandler(async (request, context) => {
                              errorMsg.includes('msme_number') ||
                              errorMsg.includes('emergency_contact') ||
                              errorMsg.includes('support_email') ||
-                             errorMsg.includes('support_phone');
+                             errorMsg.includes('support_phone') ||
+                             errorMsg.includes('invoice_prefix') ||
+                             errorMsg.includes('invoice_number_start') ||
+                             errorMsg.includes('quotation_prefix') ||
+                             errorMsg.includes('purchase_prefix') ||
+                             errorMsg.includes('credit_note_prefix') ||
+                             errorMsg.includes('gst_enabled') ||
+                             errorMsg.includes('gst_rate_default') ||
+                             errorMsg.includes('tax_configuration') ||
+                             errorMsg.includes('invoice_decimal') ||
+                             errorMsg.includes('invoice_footer') ||
+                             errorMsg.includes('invoice_terms') ||
+                             errorMsg.includes('default_payment_terms') ||
+                             errorMsg.includes('payment_gateway') ||
+                             errorMsg.includes('payment_gateway_config') ||
+                             errorMsg.includes('qr_code_enabled') ||
+                             errorMsg.includes('qr_code_url') ||
+                             errorMsg.includes('digital_signature_enabled') ||
+                             errorMsg.includes('digital_signature_url') ||
+                             errorMsg.includes('invoice_template') ||
+                             errorMsg.includes('multi_currency_enabled') ||
+                             errorMsg.includes('supported_currencies');
 
     if (isMissingColumns) {
       console.warn('Self-heal: Strip missing compliance/document columns during update');
@@ -402,6 +595,27 @@ export const PUT = withApiHandler(async (request, context) => {
       delete updateData.emergency_contact;
       delete updateData.support_email;
       delete updateData.support_phone;
+      delete updateData.invoice_prefix;
+      delete updateData.invoice_number_start;
+      delete updateData.quotation_prefix;
+      delete updateData.purchase_prefix;
+      delete updateData.credit_note_prefix;
+      delete updateData.gst_enabled;
+      delete updateData.gst_rate_default;
+      delete updateData.tax_configuration;
+      delete updateData.invoice_decimal;
+      delete updateData.invoice_footer;
+      delete updateData.invoice_terms;
+      delete updateData.default_payment_terms;
+      delete updateData.payment_gateway;
+      delete updateData.payment_gateway_config;
+      delete updateData.qr_code_enabled;
+      delete updateData.qr_code_url;
+      delete updateData.digital_signature_enabled;
+      delete updateData.digital_signature_url;
+      delete updateData.invoice_template;
+      delete updateData.multi_currency_enabled;
+      delete updateData.supported_currencies;
 
       const retry = await supabase
         .from('company_settings')
