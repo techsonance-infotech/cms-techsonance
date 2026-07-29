@@ -31,7 +31,7 @@ export const POST = withApiHandler(async (request, context) => {
   if (employees.length > 0) {
     const notificationsToInsert = employees.map((emp: { user_id: string }) => ({
       user_id: emp.user_id,
-      title: `🎉 Upcoming Holiday: ${holidayTitle}`,
+      title: `Upcoming Holiday: ${holidayTitle}`,
       message: `Notice: ${holidayTitle} is scheduled for ${holidayDate}. Corporate offices will observe this holiday.`,
       type: 'info',
       is_read: false,

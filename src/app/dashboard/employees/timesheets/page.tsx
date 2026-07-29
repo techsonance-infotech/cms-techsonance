@@ -13,7 +13,7 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import {
-  Clock, Calendar, CheckCircle2, AlertCircle, Lock, Unlock, DollarSign,
+  Clock, Calendar, CheckCircle2, AlertCircle, Lock, Unlock, DollarSign, IndianRupee,
   Plus, Trash2, SendHorizontal, Download, RefreshCw, Filter, Check,
   XCircle, Zap, Layers, Briefcase, FileText, Users, ChevronRight, ShieldCheck,
   Bell, Award, Sparkles, Inbox, HelpCircle, BarChart3
@@ -73,6 +73,7 @@ export default function TimesheetOperationsPage() {
   });
 
   // Entry Form State
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [entryDate, setEntryDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [projectName, setProjectName] = useState('Enterprise SaaS Portal');
@@ -83,11 +84,30 @@ export default function TimesheetOperationsPage() {
   const [billingRate, setBillingRate] = useState<number>(85);
   const [isLateSubmission, setIsLateSubmission] = useState(false);
   const [lateReason, setLateReason] = useState('');
+  const [projectsList, setProjectsList] = useState<any[]>([]);
 
   // Correction Request State
   const [showCorrectionDialog, setShowCorrectionDialog] = useState(false);
   const [correctionNotesInput, setCorrectionNotesInput] = useState('');
   const [targetEntryForCorrection, setTargetEntryForCorrection] = useState<TimesheetEntryRecord | null>(null);
+
+  const fetchCurrentUser = async () => {
+    try {
+      const token = localStorage.getItem('session_token');
+      if (!token) return;
+      const res = await fetch('/api/auth/me', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCurrentUser(data.user);
+      }
+    } catch (err) {
+      console.error('Error fetching current user:', err);
+    }
+  };
+
+  const isManagerOrAdmin = currentUser && ['super_admin', 'admin', 'hr_manager', 'finance', 'owner', 'manager', 'project_manager'].includes(currentUser.role);
 
   // Fetch 100% Dynamic Data from Backend API
   const loadTimesheetDataFromApi = async () => {
@@ -102,7 +122,8 @@ export default function TimesheetOperationsPage() {
         if (data.employeeRoster) {
           setRoster(data.employeeRoster);
           if (data.employeeRoster.length > 0 && !selectedUserId) {
-            setSelectedUserId(data.employeeRoster[0].id);
+            const selfEntry = data.employeeRoster.find((e: any) => e.id === currentUser?.id);
+            setSelectedUserId(selfEntry?.id || data.employeeRoster[0].id);
           }
         }
         if (data.summaryStats) {
@@ -118,9 +139,36 @@ export default function TimesheetOperationsPage() {
     }
   };
 
+  const loadProjects = async () => {
+    try {
+      const token = localStorage.getItem('session_token');
+      const res = await fetch('/api/projects?limit=100', {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
+      if (res.ok) {
+        const payload = await res.json();
+        const projects = Array.isArray(payload) ? payload : (payload.data || []);
+        setProjectsList(projects);
+        if (projects.length > 0) {
+          setProjectName(projects[0].name);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load projects:', err);
+    }
+  };
+
   useEffect(() => {
+    fetchCurrentUser();
     loadTimesheetDataFromApi();
+    loadProjects();
   }, []);
+
+  useEffect(() => {
+    if (currentUser && !isManagerOrAdmin) {
+      setSelectedUserId(currentUser.id);
+    }
+  }, [currentUser, isManagerOrAdmin]);
 
   const activeEmployee = roster.find(e => e.id === selectedUserId) || roster[0];
 
@@ -167,7 +215,7 @@ export default function TimesheetOperationsPage() {
 
       toast.success(resData.message || 'Timesheet entry logged successfully!');
       if (resData.overtimeCalculated > 0) {
-        toast.info(`🔥 Overtime Detected: ${resData.overtimeCalculated} hrs overtime automatically classified!`);
+        toast.info(`Overtime Detected: ${resData.overtimeCalculated} hrs overtime automatically classified!`);
       }
       await loadTimesheetDataFromApi();
       setTaskName('');
@@ -361,28 +409,34 @@ export default function TimesheetOperationsPage() {
             <TabsTrigger value="grid" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-[#f87941] data-[state=active]:text-white">
               <Clock className="h-3.5 w-3.5" /> Daily & Weekly Timesheet Entry
             </TabsTrigger>
-            <TabsTrigger value="approvals" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-[#f87941] data-[state=active]:text-white">
-              <CheckCircle2 className="h-3.5 w-3.5" /> Manager Approvals & Bulk Action Hub ({timesheetEntries.length})
-            </TabsTrigger>
+            {isManagerOrAdmin && (
+              <TabsTrigger value="approvals" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-[#f87941] data-[state=active]:text-white">
+                <CheckCircle2 className="h-3.5 w-3.5" /> Manager Approvals & Bulk Action Hub ({timesheetEntries.length})
+              </TabsTrigger>
+            )}
             <TabsTrigger value="analytics" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-[#f87941] data-[state=active]:text-white">
               <BarChart3 className="h-3.5 w-3.5" /> Project & Billable Analytics
             </TabsTrigger>
-            <TabsTrigger value="compliance" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-[#f87941] data-[state=active]:text-white">
-              <ShieldCheck className="h-3.5 w-3.5" /> Period Locking & FLSA Compliance
-            </TabsTrigger>
+            {isManagerOrAdmin && (
+              <TabsTrigger value="compliance" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-[#f87941] data-[state=active]:text-white">
+                <ShieldCheck className="h-3.5 w-3.5" /> Period Locking & FLSA Compliance
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleSendReminders}
-              disabled={reminding}
-              className="rounded-xl text-xs font-bold border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 flex items-center gap-1.5"
-            >
-              <Bell className={`h-3.5 w-3.5 ${reminding ? 'animate-spin' : ''}`} />
-              Send Ping Reminders
-            </Button>
+            {isManagerOrAdmin && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSendReminders}
+                disabled={reminding}
+                className="rounded-xl text-xs font-bold border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 flex items-center gap-1.5"
+              >
+                <Bell className={`h-3.5 w-3.5 ${reminding ? 'animate-spin' : ''}`} />
+                Send Ping Reminders
+              </Button>
+            )}
 
             <Button
               variant="outline"
@@ -420,16 +474,24 @@ export default function TimesheetOperationsPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Employee</label>
-                      <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                        <SelectTrigger className="rounded-xl text-xs font-semibold h-10 border-slate-200 dark:border-zinc-800">
-                          <SelectValue placeholder="Select Employee" />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl">
-                          {roster.map(e => (
-                            <SelectItem key={e.id} value={e.id}>{e.name} ({e.department})</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      {isManagerOrAdmin ? (
+                        <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                          <SelectTrigger className="rounded-xl text-xs font-semibold h-10 border-slate-200 dark:border-zinc-800">
+                            <SelectValue placeholder="Select Employee" />
+                          </SelectTrigger>
+                          <SelectContent className="rounded-xl">
+                            {roster.map(e => (
+                              <SelectItem key={e.id} value={e.id}>{e.name} ({e.department})</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input
+                          value={activeEmployee?.name || currentUser?.firstName || 'My Profile'}
+                          disabled
+                          className="rounded-xl text-xs font-semibold h-10 border-slate-200 dark:border-zinc-800 bg-slate-100 dark:bg-zinc-900"
+                        />
+                      )}
                     </div>
 
                     <div className="space-y-1.5">
@@ -451,11 +513,21 @@ export default function TimesheetOperationsPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="rounded-xl">
-                          <SelectItem value="Enterprise SaaS Portal">🚀 Enterprise SaaS Portal</SelectItem>
-                          <SelectItem value="AI Workflow Engine">🧠 AI Workflow Engine</SelectItem>
-                          <SelectItem value="Mobile Banking App">📱 Mobile Banking App</SelectItem>
-                          <SelectItem value="Cloud Infrastructure Upgrade">☁️ Cloud Infrastructure Upgrade</SelectItem>
-                          <SelectItem value="Internal Operations">🏢 Internal Operations & Admin</SelectItem>
+                          {projectsList.length > 0 ? (
+                            projectsList.map((p: any) => (
+                              <SelectItem key={p.id} value={p.name}>
+                                {p.name}
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <>
+                              <SelectItem value="Enterprise SaaS Portal">Enterprise SaaS Portal</SelectItem>
+                              <SelectItem value="AI Workflow Engine">AI Workflow Engine</SelectItem>
+                              <SelectItem value="Mobile Banking App">Mobile Banking App</SelectItem>
+                              <SelectItem value="Cloud Infrastructure Upgrade">Cloud Infrastructure Upgrade</SelectItem>
+                              <SelectItem value="Internal Operations">Internal Operations & Admin</SelectItem>
+                            </>
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
@@ -467,11 +539,11 @@ export default function TimesheetOperationsPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="rounded-xl">
-                          <SelectItem value="Development">💻 Software Development</SelectItem>
-                          <SelectItem value="Code Review">🔍 Code Review & QA</SelectItem>
-                          <SelectItem value="Client Meeting">🤝 Client Meeting & Sprint Review</SelectItem>
-                          <SelectItem value="Architecture">🏗️ System Architecture & Planning</SelectItem>
-                          <SelectItem value="Training">🎓 Training & Research</SelectItem>
+                          <SelectItem value="Development">Software Development</SelectItem>
+                          <SelectItem value="Code Review">Code Review & QA</SelectItem>
+                          <SelectItem value="Client Meeting">Client Meeting & Sprint Review</SelectItem>
+                          <SelectItem value="Architecture">System Architecture & Planning</SelectItem>
+                          <SelectItem value="Training">Training & Research</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -488,7 +560,7 @@ export default function TimesheetOperationsPage() {
                   </div>
 
                   {/* Hours Breakdown */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 rounded-2xl bg-slate-50 dark:bg-zinc-900/50 border">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-2xl bg-slate-50 dark:bg-zinc-900/50 border">
                     <div className="space-y-1">
                       <label className="text-[11px] font-bold text-emerald-600">Billable Hours</label>
                       <Input
@@ -508,16 +580,6 @@ export default function TimesheetOperationsPage() {
                         value={nonBillableHours}
                         onChange={e => setNonBillableHours(Number(e.target.value))}
                         className="rounded-xl text-xs font-mono font-bold h-9 border-slate-200 dark:border-zinc-800"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-cyan-600">Hourly Billing Rate ($/hr)</label>
-                      <Input
-                        type="number"
-                        value={billingRate}
-                        onChange={e => setBillingRate(Number(e.target.value))}
-                        className="rounded-xl text-xs font-mono font-bold h-9 border-cyan-500/30"
                       />
                     </div>
                   </div>
@@ -569,29 +631,60 @@ export default function TimesheetOperationsPage() {
                 </CardHeader>
                 <CardContent className="pt-4 space-y-3">
                   <div className="grid grid-cols-7 gap-1.5 text-center text-xs font-bold text-slate-400">
-                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
-                      <div key={day} className="py-1.5 bg-slate-100 dark:bg-zinc-800 rounded-lg text-[11px]">{day}</div>
-                    ))}
+                    {(() => {
+                      const today = new Date();
+                      const day = today.getDay();
+                      const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+                      const monday = new Date(today.setDate(diff));
+                      return Array.from({ length: 7 }).map((_, i) => {
+                        const d = new Date(monday);
+                        d.setDate(monday.getDate() + i);
+                        return (
+                          <div key={i} className="py-1.5 bg-slate-100 dark:bg-zinc-800 rounded-lg text-[11px]">
+                            {d.toLocaleDateString('en-US', { weekday: 'short' })} ({d.getDate()})
+                          </div>
+                        );
+                      });
+                    })()}
                   </div>
 
                   <div className="grid grid-cols-7 gap-1.5 text-center text-xs font-bold">
-                    {[8, 8, 8.5, 8, 7.5, 0, 0].map((hrs, idx) => (
-                      <div
-                        key={idx}
-                        className={`p-3 rounded-2xl border flex flex-col justify-between items-center ${
-                          hrs > 8
-                            ? 'bg-rose-500/10 border-rose-500/40 text-rose-600'
-                            : hrs > 0
-                            ? 'bg-emerald-500/5 border-emerald-500/30 text-emerald-600'
-                            : 'bg-slate-50 dark:bg-zinc-900 border-slate-200 text-slate-400'
-                        }`}
-                      >
-                        <div className="font-mono font-black text-sm">{hrs > 0 ? `${hrs}h` : '--'}</div>
-                        <div className="text-[9px] font-semibold mt-1">
-                          {hrs > 8 ? 'OT 0.5h' : (hrs > 0 ? 'Standard' : 'Off')}
-                        </div>
-                      </div>
-                    ))}
+                    {(() => {
+                      const today = new Date();
+                      const day = today.getDay();
+                      const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+                      const monday = new Date(today.setDate(diff));
+                      const weekDates = Array.from({ length: 7 }).map((_, i) => {
+                        const d = new Date(monday);
+                        d.setDate(monday.getDate() + i);
+                        return d.toISOString().split('T')[0];
+                      });
+
+                      return weekDates.map((dateStr, idx) => {
+                        const dayEntries = timesheetEntries.filter(
+                          (t) => t.entryDate === dateStr && (!currentUser || String(t.userId) === String(currentUser.id))
+                        );
+                        const hrs = dayEntries.reduce((sum, entry) => sum + (entry.totalHours || 0), 0);
+
+                        return (
+                          <div
+                            key={idx}
+                            className={`p-3 rounded-2xl border flex flex-col justify-between items-center ${
+                              hrs > 8
+                                ? 'bg-rose-500/10 border-rose-500/40 text-rose-600'
+                                : hrs > 0
+                                ? 'bg-emerald-500/5 border-emerald-500/30 text-emerald-600'
+                                : 'bg-slate-50 dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 text-slate-400'
+                            }`}
+                          >
+                            <div className="font-mono font-black text-sm">{hrs > 0 ? `${hrs}h` : '--'}</div>
+                            <div className="text-[9px] font-semibold mt-1">
+                              {hrs > 8 ? `OT ${(hrs - 8).toFixed(1)}h` : (hrs > 0 ? 'Standard' : 'Off')}
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
                   </div>
 
                   <div className="p-4 rounded-2xl bg-slate-50 dark:bg-zinc-900 border space-y-2 text-xs font-semibold">
@@ -618,8 +711,9 @@ export default function TimesheetOperationsPage() {
         {/* ========================================================================= */}
         {/* TAB 2: MANAGER APPROVALS & BULK ACTION HUB */}
         {/* ========================================================================= */}
-        <TabsContent value="approvals" className="space-y-6 m-0">
-          <Card className="rounded-3xl border-slate-200 dark:border-zinc-800 shadow-md">
+        {isManagerOrAdmin && (
+          <TabsContent value="approvals" className="space-y-6 m-0">
+            <Card className="rounded-3xl border-slate-200 dark:border-zinc-800 shadow-md">
             <CardHeader className="pb-3 border-b">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
@@ -690,7 +784,7 @@ export default function TimesheetOperationsPage() {
                             <div className="font-mono text-[10px] text-slate-400">{t.entryDate}</div>
                             {t.isLateSubmission && (
                               <Badge className="bg-amber-500/10 text-amber-600 border-none font-bold text-[8px] mt-0.5">
-                                ⚠️ Late Submission
+                                Late Submission
                               </Badge>
                             )}
                           </td>
@@ -710,7 +804,7 @@ export default function TimesheetOperationsPage() {
                           </td>
 
                           <td className="p-4 font-mono font-black text-emerald-500">
-                            ${t.billableAmount.toFixed(2)}
+                            ₹{t.billableAmount.toFixed(2)}
                           </td>
 
                           <td className="p-4">
@@ -749,6 +843,7 @@ export default function TimesheetOperationsPage() {
             </CardContent>
           </Card>
         </TabsContent>
+        )}
 
         {/* ========================================================================= */}
         {/* TAB 3: PROJECT & BILLABLE ANALYTICS */}
@@ -779,7 +874,7 @@ export default function TimesheetOperationsPage() {
                         <div key={projName} className="space-y-1">
                           <div className="flex justify-between text-xs font-bold">
                             <span>{projName}</span>
-                            <span className="font-mono text-[#f87941]">{data.totalHours} hrs • ${data.totalAmount.toFixed(2)}</span>
+                            <span className="font-mono text-[#f87941]">{data.totalHours} hrs • ₹{data.totalAmount.toFixed(2)}</span>
                           </div>
                           <Progress value={pct} className="h-2" />
                         </div>
@@ -798,14 +893,14 @@ export default function TimesheetOperationsPage() {
               <Card className="rounded-3xl border-slate-200 dark:border-zinc-800 shadow-md">
                 <CardHeader className="pb-3 border-b">
                   <CardTitle className="text-base font-black flex items-center gap-2">
-                    <DollarSign className="h-4.5 w-4.5 text-[#f87941]" /> Revenue Ledger Summary
+                    <IndianRupee className="h-4.5 w-4.5 text-[#f87941]" /> Revenue Ledger Summary
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="pt-4 space-y-3 text-xs font-semibold">
                   <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-1">
                     <div className="text-[10px] text-emerald-600 uppercase font-bold">Billable Revenue Logged</div>
                     <div className="text-xl font-mono font-black text-emerald-500">
-                      ${timesheetEntries.reduce((sum, t) => sum + t.billableAmount, 0).toFixed(2)}
+                      ₹{timesheetEntries.reduce((sum, t) => sum + t.billableAmount, 0).toFixed(2)}
                     </div>
                   </div>
                 </CardContent>
@@ -818,8 +913,9 @@ export default function TimesheetOperationsPage() {
         {/* ========================================================================= */}
         {/* TAB 4: PERIOD LOCKING & FLSA COMPLIANCE */}
         {/* ========================================================================= */}
-        <TabsContent value="compliance" className="space-y-6 m-0">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {isManagerOrAdmin && (
+          <TabsContent value="compliance" className="space-y-6 m-0">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
             <Card className="rounded-3xl border-slate-200 dark:border-zinc-800 shadow-md">
               <CardHeader className="pb-3 border-b">
@@ -873,6 +969,7 @@ export default function TimesheetOperationsPage() {
 
           </div>
         </TabsContent>
+        )}
 
       </Tabs>
 

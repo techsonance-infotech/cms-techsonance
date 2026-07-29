@@ -10,7 +10,7 @@ export const GET = withApiHandler(async (request, context) => {
 
   const supabase = getAdminRouteSupabase();
   const { data, error } = await supabase
-    .from('shifts')
+    .from('shift_definitions')
     .select('*')
     .eq('tenant_id', tenantId)
     .order('name', { ascending: true });
@@ -28,14 +28,16 @@ export const POST = withApiHandler(async (request, context) => {
 
   const supabase = getAdminRouteSupabase();
   const { data, error } = await supabase
-    .from('shifts')
+    .from('shift_definitions')
     .insert({
       tenant_id: tenantId,
+      shift_code: `SFT-${Math.floor(1000 + Math.random() * 9000)}`,
       name: validated.name,
+      shift_type: 'general',
       start_time: validated.startTime,
       end_time: validated.endTime,
-      grace_period_minutes: validated.gracePeriodMinutes,
-      half_day_hours: validated.halfDayHours,
+      break_duration_minutes: 60,
+      differential_pay_percentage: 0.00,
     })
     .select()
     .single();

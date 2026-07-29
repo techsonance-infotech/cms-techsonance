@@ -21,10 +21,19 @@ import {
   ChevronRight,
   Users,
   Wallet,
-  Command
+  Command,
+  Bot,
+  ShieldCheck,
+  Cpu,
+  Network,
+  TrendingUp,
+  HeartHandshake,
+  Headphones,
+  Inbox
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -230,6 +239,62 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
       category: 'Navigation',
       icon: Wallet,
       action: () => router.push('/dashboard/reimbursements')
+    },
+    {
+      id: 'nav-requests',
+      title: 'Go to Employee Request Center',
+      description: 'Submit & approve requests, hardware, leaves & WFH',
+      category: 'Navigation',
+      icon: Inbox,
+      action: () => router.push('/dashboard/employees/requests')
+    },
+    {
+      id: 'nav-service-desk',
+      title: 'Go to HR Service Desk',
+      description: 'Support tickets, HR cases, KB articles & SLAs',
+      category: 'Navigation',
+      icon: Headphones,
+      action: () => router.push('/dashboard/hr-service-desk')
+    },
+    {
+      id: 'nav-wellness',
+      title: 'Go to Employee Wellness Operations',
+      description: 'EAP hotline, mental health, pulse surveys & burnout radar',
+      category: 'Navigation',
+      icon: HeartHandshake,
+      action: () => router.push('/dashboard/employees/wellness')
+    },
+    {
+      id: 'nav-compliance',
+      title: 'Go to Compliance Operations',
+      description: '14 compliance domains, audit findings & CAPA plans',
+      category: 'Navigation',
+      icon: ShieldCheck,
+      action: () => router.push('/dashboard/employees/compliance')
+    },
+    {
+      id: 'nav-automation',
+      title: 'Go to HR Automation Engine',
+      description: '21 automated triggers, execution logs & AI daily digest',
+      category: 'Navigation',
+      icon: Cpu,
+      action: () => router.push('/dashboard/hr-automation')
+    },
+    {
+      id: 'nav-ai-copilot',
+      title: 'Go to AI Copilot Hub',
+      description: '19 AI engines, NL Assistant & Fraud Shields',
+      category: 'Navigation',
+      icon: Bot,
+      action: () => router.push('/dashboard/ai-copilot')
+    },
+    {
+      id: 'nav-analytics',
+      title: 'Go to Analytics & BI',
+      description: '14 operational dashboards, SLAs, WFH & expense trends',
+      category: 'Navigation',
+      icon: TrendingUp,
+      action: () => router.push('/dashboard/analytics')
     },
     {
       id: 'nav-settings',

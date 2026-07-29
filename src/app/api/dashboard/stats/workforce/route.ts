@@ -286,11 +286,11 @@ export const GET = withApiHandler(async (request, context) => {
 
   // AI Insights
   const aiInsights = [
-    `📊 **Attrition Overview**: Attrition rate is currently at **${attritionRate}%**. Suggest conducting exit interviews for key roles.`,
-    `⚠️ **Compliance Alert**: **${pendingDocuments}** active employees are missing complete KYC or contract documentation.`,
-    `⏳ **Pending Reviews**: **${pendingReviews}** performance reviews are pending. Review cycles should be prioritized.`,
-    `🎒 **Asset Return Check**: **${assetRecovery}** notice-period/resigned staff still hold company-issued assets.`,
-    `📅 **Today's Attendance**: **${missingAttendance}** employees have not logged check-in today.`
+    `Attrition Overview: Attrition rate is currently at **${attritionRate}%**. Suggest conducting exit interviews for key roles.`,
+    `Compliance Alert: **${pendingDocuments}** active employees are missing complete KYC or contract documentation.`,
+    `Pending Reviews: **${pendingReviews}** performance reviews are pending. Review cycles should be prioritized.`,
+    `Asset Return Check: **${assetRecovery}** notice-period/resigned staff still hold company-issued assets.`,
+    `Today's Attendance: **${missingAttendance}** employees have not logged check-in today.`
   ];
 
     return NextResponse.json({

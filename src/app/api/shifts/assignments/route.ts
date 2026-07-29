@@ -13,15 +13,15 @@ export const GET = withApiHandler(async (request, context) => {
 
   const supabase = getAdminRouteSupabase();
   let query = supabase
-    .from('employee_shifts')
-    .select('*, shifts(*)')
+    .from('shift_roster_assignments')
+    .select('*, shift_definitions(*)')
     .eq('tenant_id', tenantId);
 
   if (employeeId) {
-    query = query.eq('employee_id', Number(employeeId));
+    query = query.eq('employee_table_id', Number(employeeId));
   }
 
-  const { data, error } = await query.order('start_date', { ascending: false });
+  const { data, error } = await query.order('roster_date', { ascending: false });
 
   if (error) throw new BadRequestError(error.message);
   return NextResponse.json(data);
@@ -36,24 +36,42 @@ export const POST = withApiHandler(async (request, context) => {
 
   const supabase = getAdminRouteSupabase();
 
-  await supabase
-    .from('employee_shifts')
-    .update({ is_active: false })
-    .eq('employee_id', validated.employeeId)
-    .eq('tenant_id', tenantId);
+  // Retrieve user_id from employee record
+  const { data: employee, error: empError } = await supabase
+    .from('employees')
+    .select('user_id')
+    .eq('id', validated.employeeId)
+    .eq('tenant_id', tenantId)
+    .single();
+
+  if (empError || !employee) throw new BadRequestError('Employee not found');
+
+  const startDate = new Date(validated.startDate);
+  const endDate = validated.endDate ? new Date(validated.endDate) : new Date(validated.startDate);
+  const rowsToInsert: any[] = [];
+  const curr = new Date(startDate);
+
+  while (curr <= endDate) {
+    const dateStr = curr.toISOString().split('T')[0];
+    const isWeekend = curr.getDay() === 0 || curr.getDay() === 6;
+
+    rowsToInsert.push({
+      tenant_id: tenantId,
+      user_id: employee.user_id,
+      employee_table_id: validated.employeeId,
+      shift_id: validated.shiftId,
+      roster_date: dateStr,
+      is_weekly_off: isWeekend,
+      status: 'Assigned',
+    });
+
+    curr.setDate(curr.getDate() + 1);
+  }
 
   const { data, error } = await supabase
-    .from('employee_shifts')
-    .insert({
-      tenant_id: tenantId,
-      employee_id: validated.employeeId,
-      shift_id: validated.shiftId,
-      start_date: validated.startDate,
-      end_date: validated.endDate || null,
-      is_active: validated.isActive,
-    })
-    .select()
-    .single();
+    .from('shift_roster_assignments')
+    .insert(rowsToInsert)
+    .select();
 
   if (error) throw new BadRequestError(error.message);
   return NextResponse.json(data);

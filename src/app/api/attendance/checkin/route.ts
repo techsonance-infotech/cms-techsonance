@@ -4,6 +4,9 @@ import { BadRequestError, ConflictError, NotFoundError } from '@/server/http/err
 import { checkInSchema } from '@/server/validation/attendance';
 import { getCurrentSupabaseActor, getAdminRouteSupabase } from '@/server/supabase/route-helpers';
 import { listSupabaseProfilesByAuthIds } from '@/server/supabase/users';
+import { getPolicyForEmployee, getShiftForEmployee, applyRounding, parseShiftTime } from '@/server/attendance/engine';
+import { detectAttendanceAnomaly } from '@/server/ai/attendance-anomaly';
+import { logAuditAction, publishDomainEvent } from '@/server/events/dispatcher';
 
 async function resolveSupabaseEmployee(accessToken: string, tenantId: string, tagUid?: string | null, employeeId?: number | null) {
   const supabase = getAdminRouteSupabase();
@@ -72,6 +75,7 @@ export const POST = withApiHandler(async (request, context) => {
   const minuteStart = new Date(nowDate);
   minuteStart.setSeconds(0, 0);
   const minuteEnd = new Date(minuteStart.getTime() + 60_000);
+  
   const { data: sameMinuteRecord } = await supabase.from('attendance_records').select('*')
     .eq('employee_id', resolved.employeeId)
     .eq('date', today)
@@ -92,7 +96,150 @@ export const POST = withApiHandler(async (request, context) => {
     .eq('tenant_id', tenantId);
   }
 
-  const metadata = payload.metadata ?? null;
+  // --- RESOLVE POLICY & SHIFT RULES ---
+  const policy = await getPolicyForEmployee(supabase, tenantId, resolved.employeeId);
+  const shift = await getShiftForEmployee(supabase, tenantId, resolved.employeeId, today);
+
+  const roundedIn = applyRounding(nowDate, policy.rounding_minutes);
+  const shiftStart = parseShiftTime(shift.start_time, today);
+
+  // Late Arrival Check
+  let isLate = false;
+  let status = 'present';
+  if (!policy.is_flexible) {
+    const lateThreshold = new Date(shiftStart.getTime() + policy.grace_period_late_minutes * 60000);
+    if (roundedIn > lateThreshold) {
+      isLate = true;
+      status = 'late';
+    }
+  }
+
+  const clientIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip');
+  const userAgent = request.headers.get('user-agent');
+
+  // --- AI ANOMALY & FRAUD DETECTION ---
+  const aiResult = await detectAttendanceAnomaly({
+    employeeId: resolved.employeeId,
+    date: today,
+    timeIn: nowDate.toISOString(),
+    locationLatitude: payload.locationLatitude,
+    locationLongitude: payload.locationLongitude,
+    officeLatitude: policy.target_assignment?.office_latitude ?? null,
+    officeLongitude: policy.target_assignment?.office_longitude ?? null,
+    geofenceRadiusMeters: policy.target_assignment?.geofence_radius ?? 500,
+    allowedIps: policy.target_assignment?.allowed_ips ?? '',
+    clientIp,
+    userAgent,
+    shiftStart: shift.start_time,
+    shiftEnd: shift.end_time,
+  });
+
+  const violationFlags: any = {};
+  if (aiResult.isAnomaly) {
+    violationFlags[aiResult.anomalyType] = aiResult.details;
+  }
+
+  const targetDateObj = new Date(today);
+  const isWeekend = targetDateObj.getDay() === 0 || targetDateObj.getDay() === 6;
+
+  // ROUTE TO APPROVAL QUEUE IF WEEKEND OR ANOMALY DETECTED
+  if (isWeekend || aiResult.isAnomaly) {
+    const { data: requestRecord, error: requestError } = await supabase.from('attendance_requests').insert({
+      employee_id: resolved.employeeId,
+      date: today,
+      time_in: nowDate.toISOString(),
+      time_out: null,
+      duration: null,
+      status: 'pending',
+      check_in_method: resolved.checkInMethod,
+      location: payload.location ?? null,
+      reader_id: payload.readerId ?? null,
+      notes: payload.metadata?.notes ?? (isWeekend ? 'Weekend Check-in' : `AI Alert: ${aiResult.details}`),
+      violation_flags: violationFlags,
+      metadata: { 
+        ...payload.metadata, 
+        aiConfidence: aiResult.confidenceScore, 
+        aiDetails: aiResult.details,
+        clientIp,
+        userAgent
+      },
+      tenant_id: tenantId,
+      created_at: nowDate.toISOString(),
+      updated_at: nowDate.toISOString(),
+      requested_time_in: nowDate.toISOString(),
+      reason_type: isWeekend ? 'regularization' : 'dispute',
+      gps_latitude: payload.locationLatitude ?? null,
+      gps_longitude: payload.locationLongitude ?? null,
+      ai_fraud_check: {
+        isAnomaly: aiResult.isAnomaly,
+        anomalyType: aiResult.anomalyType,
+        confidenceScore: aiResult.confidenceScore,
+        details: aiResult.details,
+        recommendation: aiResult.recommendation
+      }
+    }).select('*').single();
+
+    if (requestError || !requestRecord) throw requestError ?? new Error('Failed to create attendance request');
+
+    // Create Exception Log for Audits
+    if (aiResult.isAnomaly) {
+      await supabase.from('attendance_exceptions').insert({
+        tenant_id: tenantId,
+        employee_id: resolved.employeeId,
+        date: today,
+        exception_type: aiResult.anomalyType,
+        severity: aiResult.confidenceScore > 80 ? 'high' : 'medium',
+        details: aiResult.details,
+        ai_detected: true,
+        ai_confidence: aiResult.confidenceScore,
+        resolved: false,
+        created_at: nowDate.toISOString(),
+      });
+
+      await publishDomainEvent(supabase, tenantId, 'AttendanceAnomalyDetected', {
+        employeeId: resolved.employeeId,
+        date: today,
+        anomalyType: aiResult.anomalyType,
+        confidenceScore: aiResult.confidenceScore,
+        details: aiResult.details
+      });
+    }
+
+    // Publish Event
+    await publishDomainEvent(supabase, tenantId, 'AttendanceRegularized', {
+      requestId: requestRecord.id,
+      employeeId: resolved.employeeId,
+      date: today,
+      reasonType: 'regularization'
+    });
+
+    // Write Audit Log
+    await logAuditAction(supabase, {
+      tenantId,
+      employeeId: resolved.employeeId,
+      actorId: actor.legacyUserId ? String(actor.legacyUserId) : null,
+      actionType: 'regularize_request',
+      clientIp,
+      userAgent,
+      gpsCoordinates: payload.locationLatitude ? `${payload.locationLatitude},${payload.locationLongitude}` : null,
+      metadata: { isAnomaly: aiResult.isAnomaly, checkInMethod: resolved.checkInMethod }
+    });
+
+    return NextResponse.json({ 
+      success: true, 
+      routedToQueue: true, 
+      message: isWeekend ? 'Weekend check-in routed to approval queue.' : `Check-in routed to approval queue: ${aiResult.details}` 
+    }, { status: 202 });
+  }
+
+  // NORMAL CHECK-IN
+  const metadata = {
+    ...payload.metadata,
+    clientIp,
+    userAgent,
+    roundedIn: roundedIn.toISOString()
+  };
+
   const { data: created, error } = await supabase.from('attendance_records').insert({
     employee_id: resolved.employeeId,
     date: today,
@@ -101,7 +248,7 @@ export const POST = withApiHandler(async (request, context) => {
     location_latitude: payload.locationLatitude ?? null,
     location_longitude: payload.locationLongitude ?? null,
     duration: null,
-    status: 'present',
+    status,
     check_in_method: resolved.checkInMethod,
     reader_id: payload.readerId ?? null,
     location: payload.location ?? null,
@@ -112,7 +259,51 @@ export const POST = withApiHandler(async (request, context) => {
     tenant_id: tenantId,
     created_at: nowDate.toISOString(),
   }).select('*').single();
+
   if (error || !created) throw error ?? new Error('Failed to create attendance record');
+
+  // Trigger Late Arrival Exception if applicable
+  if (isLate) {
+    await supabase.from('attendance_exceptions').insert({
+      tenant_id: tenantId,
+      employee_id: resolved.employeeId,
+      date: today,
+      exception_type: 'late_arrival',
+      severity: 'low',
+      details: `Checked in late at ${nowDate.toLocaleTimeString()} (Shift start: ${shift.start_time}).`,
+      ai_detected: false,
+      resolved: false,
+      created_at: nowDate.toISOString(),
+    });
+
+    await publishDomainEvent(supabase, tenantId, 'AttendancePolicyViolationDetected', {
+      employeeId: resolved.employeeId,
+      date: today,
+      violationType: 'late_arrival'
+    });
+  }
+
+  // Publish Event
+  await publishDomainEvent(supabase, tenantId, 'AttendanceMarked', {
+    recordId: created.id,
+    employeeId: resolved.employeeId,
+    date: today,
+    status
+  });
+
+  // Write Audit Log
+  await logAuditAction(supabase, {
+    tenantId,
+    employeeId: resolved.employeeId,
+    actorId: actor.legacyUserId ? String(actor.legacyUserId) : null,
+    actionType: 'check_in',
+    recordId: Number(created.id),
+    clientIp,
+    userAgent,
+    gpsCoordinates: payload.locationLatitude ? `${payload.locationLatitude},${payload.locationLongitude}` : null,
+    metadata: { checkInMethod: resolved.checkInMethod, status }
+  });
 
   return NextResponse.json({ ...created, employee: employeeView, message: 'Check-in successful' }, { status: 201 });
 }, { requireAuth: true, roles: ['Employee'] });
+

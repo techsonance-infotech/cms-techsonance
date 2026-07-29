@@ -384,10 +384,10 @@ export default function WfhManagementPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="rounded-xl">
-                          <SelectItem value="ad_hoc">🏠 Ad-hoc Single / Multi Day WFH</SelectItem>
-                          <SelectItem value="recurring_hybrid">📅 Recurring Hybrid Schedule</SelectItem>
-                          <SelectItem value="medical_emergency">🩺 Medical / Family Care Emergency</SelectItem>
-                          <SelectItem value="remote_relocation">✈️ Temporary Remote Relocation</SelectItem>
+                          <SelectItem value="ad_hoc">Ad-hoc Single / Multi Day WFH</SelectItem>
+                          <SelectItem value="recurring_hybrid">Recurring Hybrid Schedule</SelectItem>
+                          <SelectItem value="medical_emergency">Medical / Family Care Emergency</SelectItem>
+                          <SelectItem value="remote_relocation">Temporary Remote Relocation</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -524,7 +524,7 @@ export default function WfhManagementPage() {
                           </div>
 
                           <div className="text-slate-500 text-[11px]">
-                            📅 {r.startDate} to {r.endDate} ({r.daysCount} days)
+                            {r.startDate} to {r.endDate} ({r.daysCount} days)
                           </div>
 
                           <div className="text-slate-500 text-[11px] line-clamp-2 italic bg-slate-50 dark:bg-zinc-900 p-2 rounded-xl border">
@@ -595,7 +595,13 @@ export default function WfhManagementPage() {
 
               <div className="grid grid-cols-7 gap-2 text-xs">
                 {Array.from({ length: 31 }, (_, i) => i + 1).map(dateNum => {
-                  const isWfhDay = dateNum % 3 === 0;
+                  const dateStr = `2026-07-${dateNum.toString().padStart(2, '0')}`;
+                  const approvedWfhForDate = wfhRequests.filter(r => {
+                    return r.status === 'Approved' && dateStr >= r.startDate && dateStr <= r.endDate;
+                  });
+                  const remoteCount = approvedWfhForDate.length;
+                  const isWfhDay = remoteCount > 0;
+
                   return (
                     <div
                       key={dateNum}
@@ -608,7 +614,7 @@ export default function WfhManagementPage() {
                       <div className="font-extrabold text-slate-900 dark:text-slate-100">{dateNum}</div>
                       {isWfhDay ? (
                         <span className="text-[9px] font-bold text-cyan-600 bg-cyan-500/10 px-1.5 py-0.5 rounded-md">
-                          🏠 4 Remote
+                          🏠 {remoteCount} Remote
                         </span>
                       ) : (
                         <span className="text-[9px] font-bold text-slate-400">
@@ -805,7 +811,7 @@ export default function WfhManagementPage() {
                 <CardContent className="pt-4 space-y-3 text-xs font-semibold">
                   {aiInsights.aiRecommendations?.map((rec: string, idx: number) => (
                     <div key={idx} className="p-3 rounded-2xl bg-slate-50 dark:bg-zinc-900/40 border leading-relaxed">
-                      💡 {rec}
+                      {rec}
                     </div>
                   ))}
                 </CardContent>

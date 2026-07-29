@@ -13,14 +13,23 @@ export const GET = withApiHandler(async (request, context) => {
 
   const supabase = getAdminRouteSupabase();
 
+  // Role validation to segregate access
+  const isManagerOrAdmin = ['super_admin', 'admin', 'hr_manager', 'finance', 'owner', 'manager', 'project_manager'].includes(user.role);
+
   // 1. Relational Query: Active employee roster joined with public.users
   let employees: any[] = [];
   try {
-    const { data } = await supabase
+    let query = supabase
       .from('employees')
       .select('id, user_id, employee_id, department, branch, designation, status')
       .eq('tenant_id', tenantId)
       .eq('status', 'active');
+
+    if (!isManagerOrAdmin) {
+      query = query.eq('user_id', user.id);
+    }
+
+    const { data } = await query;
     if (data) employees = data;
   } catch (err) {
     console.warn('Employees query info:', err);
@@ -54,11 +63,16 @@ export const GET = withApiHandler(async (request, context) => {
   // 2. Query Timesheet Entries from DB `timesheet_entries` table
   let dbEntries: any[] = [];
   try {
-    const { data } = await supabase
+    let query = supabase
       .from('timesheet_entries')
       .select('*')
-      .eq('tenant_id', tenantId)
-      .order('entry_date', { ascending: false });
+      .eq('tenant_id', tenantId);
+
+    if (!isManagerOrAdmin) {
+      query = query.eq('user_id', user.id);
+    }
+
+    const { data } = await query.order('entry_date', { ascending: false });
     if (data) dbEntries = data;
   } catch (err) {
     console.warn('Timesheet entries DB query info:', err);
@@ -146,54 +160,64 @@ export const POST = withApiHandler(async (request, context) => {
     lateSubmissionReason = ''
   } = payload;
 
-  if (!userId || !entryDate || !taskName) {
-    throw new BadRequestError('User ID, Entry Date, and Task Name are required');
-  }
-
   const user = context.auth!.user;
   const tenantId = user.tenantId;
 
   if (!tenantId) throw new BadRequestError('Tenant ID missing');
 
+  // Role validation to segregate access
+  const isManagerOrAdmin = ['super_admin', 'admin', 'hr_manager', 'finance', 'owner', 'manager', 'project_manager'].includes(user.role);
+  const targetUserId = isManagerOrAdmin ? (userId || user.id) : user.id;
+
+  if (!targetUserId || !entryDate || !taskName) {
+    throw new BadRequestError('Target User ID, Entry Date, and Task Name are required');
+  }
+
   const supabase = getAdminRouteSupabase();
 
   // Automatic Overtime Calculation (> 8 hours per day is classified as Overtime)
-  const baseHours = (parseFloat(billableHours) || 0) + (parseFloat(nonBillableHours) || 0);
-  let calculatedOvertime = 0;
-  let finalBillable = parseFloat(billableHours) || 0;
-
-  if (baseHours > 8) {
-    calculatedOvertime = baseHours - 8;
-    finalBillable = Math.max(finalBillable - calculatedOvertime, 0);
+  const bHours = Number(billableHours) || 0;
+  const nbHours = Number(nonBillableHours) || 0;
+  const totalDailyLogged = bHours + nbHours;
+  
+  let finalBillable = bHours;
+  let finalOvertime = 0;
+  if (totalDailyLogged > 8) {
+    // excess is overtime
+    finalOvertime = totalDailyLogged - 8;
+    finalBillable = Math.max(0, bHours - finalOvertime);
   }
 
-  // Insert row into `timesheet_entries`
-  let insertedEntry: any = null;
-  try {
-    const { data } = await supabase.from('timesheet_entries').insert({
+  // Insert into DB `timesheet_entries`
+  const { data: newEntry, error } = await supabase
+    .from('timesheet_entries')
+    .insert({
       tenant_id: tenantId,
-      user_id: userId,
-      project_name: projectName.trim(),
-      task_name: taskName.trim(),
+      user_id: targetUserId,
+      project_name: projectName,
+      task_name: taskName,
       activity_category: activityCategory,
       entry_date: entryDate,
       billable_hours: finalBillable,
-      non_billable_hours: parseFloat(nonBillableHours) || 0,
-      overtime_hours: calculatedOvertime,
-      billing_rate: parseFloat(billingRate) || 85.00,
+      non_billable_hours: nbHours,
+      overtime_hours: finalOvertime,
+      billing_rate: billingRate,
       status: 'Submitted',
       is_late_submission: !!isLateSubmission,
-      late_submission_reason: lateSubmissionReason || null
-    }).select().single();
-    insertedEntry = data;
-  } catch (err) {
-    console.warn('Timesheet entry insert error:', err);
+      late_submission_reason: isLateSubmission ? lateSubmissionReason : null
+    })
+    .select('*')
+    .single();
+
+  if (error || !newEntry) {
+    console.error('Timesheet entry insert error:', error);
+    throw error ?? new Error('Failed to insert timesheet entry');
   }
 
   return NextResponse.json({
     success: true,
-    message: `Timesheet entry logged for ${entryDate} (${finalBillable + nonBillableHours + calculatedOvertime} hrs total)!`,
-    overtimeCalculated: calculatedOvertime,
-    timestamp: new Date().toISOString()
-  }, { status: 201 });
+    message: 'Timesheet logged successfully!',
+    overtimeCalculated: finalOvertime,
+    entry: newEntry
+  });
 }, { requireAuth: true });

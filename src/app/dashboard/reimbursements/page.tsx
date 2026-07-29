@@ -23,22 +23,22 @@ import { toast } from 'sonner';
 
 // Define the 15 Expense Categories
 export const EXPENSE_CATEGORIES = [
-  { id: 'Travel', name: '✈️ Business Travel & Flights' },
-  { id: 'Fuel', name: '⛽ Fuel & Mileage Allowance' },
-  { id: 'Food', name: '🍽️ Meals & Dining' },
-  { id: 'Internet', name: '🌐 Broadband & Home Internet' },
-  { id: 'Mobile', name: '📱 Mobile Phone & Cellular Data' },
-  { id: 'Medical', name: '🩺 Medical & Health Expenses' },
-  { id: 'Training', name: '🎓 Professional Training & Courses' },
-  { id: 'Certification', name: '📜 Skill Certification Fees' },
-  { id: 'Relocation', name: '🚚 Employee Relocation Expenses' },
-  { id: 'Office Supplies', name: '📦 Office Supplies & Stationery' },
-  { id: 'Project Expenses', name: '💻 Project Software & Cloud Tools' },
-  { id: 'Client Expenses', name: '🤝 Client Hospitality & Meetings' },
-  { id: 'Accommodation', name: '🏨 Hotel & Lodging' },
-  { id: 'Entertainment', name: '🎟️ Team Outing & Entertainment' },
-  { id: 'Remote Work Allowance', name: '🏠 Remote Work & Home Office Setup' },
-  { id: 'Custom', name: '⚙️ Custom Expense Category' }
+  { id: 'Travel', name: 'Business Travel & Flights' },
+  { id: 'Fuel', name: 'Fuel & Mileage Allowance' },
+  { id: 'Food', name: 'Meals & Dining' },
+  { id: 'Internet', name: 'Broadband & Home Internet' },
+  { id: 'Mobile', name: 'Mobile Phone & Cellular Data' },
+  { id: 'Medical', name: 'Medical & Health Expenses' },
+  { id: 'Training', name: 'Professional Training & Courses' },
+  { id: 'Certification', name: 'Skill Certification Fees' },
+  { id: 'Relocation', name: 'Employee Relocation Expenses' },
+  { id: 'Office Supplies', name: 'Office Supplies & Stationery' },
+  { id: 'Project Expenses', name: 'Project Software & Cloud Tools' },
+  { id: 'Client Expenses', name: 'Client Hospitality & Meetings' },
+  { id: 'Accommodation', name: 'Hotel & Lodging' },
+  { id: 'Entertainment', name: 'Team Outing & Entertainment' },
+  { id: 'Remote Work Allowance', name: 'Remote Work & Home Office Setup' },
+  { id: 'Custom', name: 'Custom Expense Category' }
 ];
 
 export interface RosterEmp {
@@ -153,7 +153,7 @@ export default function EnterpriseReimbursementsPage() {
       setProjectName('Enterprise SaaS Portal');
       setIsBillable(true);
       setSimulatingOcr(false);
-      toast.success('⚡ OCR Scan Complete: Receipt Merchant, Tax ID & Amount Extracted!');
+      toast.success('OCR Scan Complete: Receipt Merchant, Tax ID & Amount Extracted!');
     }, 1200);
   };
 
@@ -300,7 +300,7 @@ export default function EnterpriseReimbursementsPage() {
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
               <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Total Claimed</div>
-              <div className="text-xl font-black text-white mt-0.5">${summaryStats.totalClaimedAmount.toFixed(2)}</div>
+              <div className="text-xl font-black text-white mt-0.5">₹{summaryStats.totalClaimedAmount.toFixed(2)}</div>
               <div className="text-[10px] text-emerald-400 flex items-center justify-center gap-0.5 mt-0.5">
                 <CheckCircle2 className="h-2.5 w-2.5" /> Live Ledger
               </div>
@@ -308,13 +308,13 @@ export default function EnterpriseReimbursementsPage() {
 
             <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
               <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Billable to Clients</div>
-              <div className="text-xl font-black text-emerald-400 mt-0.5">${summaryStats.totalBillableAmount.toFixed(2)}</div>
+              <div className="text-xl font-black text-emerald-400 mt-0.5">₹{summaryStats.totalBillableAmount.toFixed(2)}</div>
               <div className="text-[10px] text-emerald-400/80 mt-0.5">Client Reimbursable</div>
             </div>
 
             <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
               <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Approved & Paid</div>
-              <div className="text-xl font-black text-cyan-400 mt-0.5">${summaryStats.totalApprovedAmount.toFixed(2)}</div>
+              <div className="text-xl font-black text-cyan-400 mt-0.5">₹{summaryStats.totalApprovedAmount.toFixed(2)}</div>
               <div className="text-[10px] text-cyan-400/80 mt-0.5">Settled Claims</div>
             </div>
 
@@ -443,11 +443,11 @@ export default function EnterpriseReimbursementsPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="rounded-xl">
-                          <SelectItem value="Enterprise SaaS Portal">🚀 Enterprise SaaS Portal</SelectItem>
-                          <SelectItem value="AI Workflow Engine">🧠 AI Workflow Engine</SelectItem>
-                          <SelectItem value="Mobile Banking App">📱 Mobile Banking App</SelectItem>
-                          <SelectItem value="Cloud Infrastructure Upgrade">☁️ Cloud Infrastructure Upgrade</SelectItem>
-                          <SelectItem value="Internal Operations">🏢 Internal Operations & Admin</SelectItem>
+                          <SelectItem value="Enterprise SaaS Portal">Enterprise SaaS Portal</SelectItem>
+                          <SelectItem value="AI Workflow Engine">AI Workflow Engine</SelectItem>
+                          <SelectItem value="Mobile Banking App">Mobile Banking App</SelectItem>
+                          <SelectItem value="Cloud Infrastructure Upgrade">Cloud Infrastructure Upgrade</SelectItem>
+                          <SelectItem value="Internal Operations">Internal Operations & Admin</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -456,7 +456,7 @@ export default function EnterpriseReimbursementsPage() {
                       <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Billable to Client?</label>
                       <div className="flex items-center justify-between p-2.5 rounded-xl bg-white dark:bg-zinc-800 border text-xs">
                         <span className="font-bold text-slate-700 dark:text-slate-300">
-                          {isBillable ? '🟢 Billable (Client Reimbursable)' : '⚪ Non-Billable (Internal)'}
+                          {isBillable ? 'Billable (Client Reimbursable)' : 'Non-Billable (Internal)'}
                         </span>
                         <Switch checked={isBillable} onCheckedChange={setIsBillable} />
                       </div>
@@ -487,7 +487,7 @@ export default function EnterpriseReimbursementsPage() {
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 rounded-2xl bg-slate-50 dark:bg-zinc-900 border">
                     <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-emerald-600">Total Claim Amount ($)</label>
+                      <label className="text-[11px] font-bold text-emerald-600">Total Claim Amount (₹)</label>
                       <Input
                         type="number"
                         step="0.01"
@@ -498,7 +498,7 @@ export default function EnterpriseReimbursementsPage() {
                     </div>
 
                     <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-cyan-600">GST / VAT Tax Amount ($)</label>
+                      <label className="text-[11px] font-bold text-cyan-600">GST / VAT Tax Amount (₹)</label>
                       <Input
                         type="number"
                         step="0.01"
@@ -654,7 +654,7 @@ export default function EnterpriseReimbursementsPage() {
                           <td className="p-4">
                             {c.isBillable ? (
                               <Badge className="bg-emerald-500/10 text-emerald-600 border-none font-bold text-[9px]">
-                                🟢 Billable
+                                Billable
                               </Badge>
                             ) : (
                               <Badge className="bg-slate-100 text-slate-500 border-none font-bold text-[9px]">
@@ -664,7 +664,7 @@ export default function EnterpriseReimbursementsPage() {
                           </td>
 
                           <td className="p-4 font-mono font-black text-emerald-500">
-                            ${c.amount.toFixed(2)}
+                            ₹{c.amount.toFixed(2)}
                           </td>
 
                           <td className="p-4">
@@ -718,7 +718,7 @@ export default function EnterpriseReimbursementsPage() {
                         <div key={catName} className="space-y-1">
                           <div className="flex justify-between text-xs font-bold">
                             <span>{catName} <span className="text-slate-400 font-normal">({data.project})</span></span>
-                            <span className="font-mono text-[#f87941]">${data.total.toFixed(2)}</span>
+                            <span className="font-mono text-[#f87941]">₹{data.total.toFixed(2)}</span>
                           </div>
                           <Progress value={pct} className="h-2" />
                         </div>
@@ -742,7 +742,7 @@ export default function EnterpriseReimbursementsPage() {
                 </CardHeader>
                 <CardContent className="pt-4 space-y-3 text-xs font-semibold">
                   <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-600">
-                    🛡️ AI Fraud Risk Score: 0 High-Risk Anomalies Detected. 100% Policy Clean.
+                    AI Fraud Risk Score: 0 High-Risk Anomalies Detected. 100% Policy Clean.
                   </div>
                 </CardContent>
               </Card>
@@ -764,7 +764,7 @@ export default function EnterpriseReimbursementsPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-4 space-y-2 text-xs font-semibold">
-                <div className="text-slate-500">Enforces daily per-diem caps: $75/day Meals, $250/night Accommodation.</div>
+                <div className="text-slate-500">Enforces daily per-diem caps: ₹75/day Meals, ₹250/night Accommodation.</div>
                 <Badge className="bg-emerald-500/10 text-emerald-600 border-none font-bold text-[10px]">Active Enforced</Badge>
               </CardContent>
             </Card>
@@ -777,7 +777,7 @@ export default function EnterpriseReimbursementsPage() {
               </CardHeader>
               <CardContent className="pt-4 space-y-2 text-xs font-semibold">
                 <div className="text-slate-500">Tracks GSTIN / VAT invoice registration numbers for 100% corporate tax credit compliance.</div>
-                <div className="font-mono font-black text-cyan-500">${summaryStats.totalTaxClaimed.toFixed(2)} ITC Credit</div>
+                <div className="font-mono font-black text-cyan-500">₹{summaryStats.totalTaxClaimed.toFixed(2)} ITC Credit</div>
               </CardContent>
             </Card>
 

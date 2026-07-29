@@ -1,394 +1,537 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Bot, Send, Sparkles, Brain, Cpu, TrendingUp, 
-  AlertTriangle, ArrowRight, UserPlus, Upload, 
-  Search, ShieldAlert, Zap, BookOpen, GraduationCap 
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Bot, Brain, Sparkles, ShieldAlert, CheckCircle2,
+  RefreshCw, SendHorizontal, Clock, User, FileText, DollarSign, Shield,
+  Zap, ChevronLeft, ChevronRight, Loader2, AlertCircle, Sparkle
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-interface Message {
-  sender: 'ai' | 'user';
-  text: string;
-  timestamp: string;
+export interface CapabilityItem {
+  category: string;
+  name: string;
+  description: string;
+  confidenceScore: number;
 }
 
-export default function AICopilotPage() {
-  const [messages, setMessages] = useState<Message[]>([
-    { sender: 'ai', text: 'Hello! I am your **HR AI Copilot**. How can I help you optimize your workforce, parse resumes, check skill gaps, or audit compliance metrics today?', timestamp: new Date().toLocaleTimeString() }
-  ]);
-  const [inputVal, setInputVal] = useState('');
-  const [sending, setSending] = useState(false);
-  const [activeTab, setActiveTab] = useState<'chat' | 'predictions' | 'parser'>('chat');
+export interface InsightRecord {
+  id: string;
+  category: string;
+  title: string;
+  description: string;
+  riskLevel: string;
+  confidenceScore: number;
+  recommendedAction: string;
+  status: string;
+  createdAt: string;
+}
 
-  // Parser State
-  const [parsing, setParsing] = useState(false);
-  const [parsedProfile, setParsedProfile] = useState<any>(null);
+export default function AiCopilotOperationsPage() {
+  const [activeTab, setActiveTab] = useState('insights');
+  const [loading, setLoading] = useState(true);
+  const [actionProcessing, setActionProcessing] = useState(false);
 
-  // Predictions State
-  const [predictionsLoading, setPredictionsLoading] = useState(false);
-  const [predictionsData, setPredictionsData] = useState<any>(null);
+  // RBAC State
+  const [canApprove, setCanApprove] = useState(false);
+  const [userRole, setUserRole] = useState('');
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  // Dynamic API State
+  const [capabilities, setCapabilities] = useState<CapabilityItem[]>([]);
+  const [insights, setInsights] = useState<InsightRecord[]>([]);
+  const [dailyExecutiveSummary, setDailyExecutiveSummary] = useState<string>('');
+  const [summaryStats, setSummaryStats] = useState({
+    totalCapabilities: 0,
+    modelConfidencePercent: '0%',
+    activeAnomaliesCount: 0,
+    fraudSavingsTotal: '₹0 Saved',
+    moraleIndexScore: '0% Sentiment'
+  });
+
+  // Pagination State
+  const [insightsPage, setInsightsPage] = useState(1);
+  const [capabilitiesPage, setCapabilitiesPage] = useState(1);
+  const INSIGHTS_PER_PAGE = 3;
+  const CAPABILITIES_PER_PAGE = 6;
+
+  // Natural Language Chat State
+  const [chatPrompt, setChatPrompt] = useState('');
+  const [chatHistory, setChatHistory] = useState<Array<{ prompt: string; response: string }>>([]);
+  const [chatThinking, setChatThinking] = useState(false);
+
+  const getSessionToken = () => {
+    if (typeof window === 'undefined') return null;
+    return sessionStorage.getItem('session_token') ?? localStorage.getItem('session_token');
+  };
+
+  // Fetch 100% Dynamic Data from Backend API
+  const loadAiOperationsDataFromApi = async () => {
+    try {
+      setLoading(true);
+      const token = getSessionToken();
+      const res = await fetch('/api/ai/operations-intelligence', {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.canApprove !== undefined) setCanApprove(data.canApprove);
+        if (data.userRole) setUserRole(data.userRole);
+        if (data.capabilities) setCapabilities(data.capabilities);
+        if (data.summaryStats) setSummaryStats(data.summaryStats);
+        if (data.insights) setInsights(data.insights);
+        if (data.dailyExecutiveSummary) setDailyExecutiveSummary(data.dailyExecutiveSummary);
+      } else {
+        toast.error('Failed to load operations intelligence data');
+      }
+    } catch (err) {
+      console.error('API Fetch error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    loadAiOperationsDataFromApi();
+  }, []);
 
-  const handleSend = async (textToSend: string) => {
-    if (!textToSend.trim()) return;
+  // Send Natural Language HR Assistant Prompt
+  const handleSendChatPrompt = async () => {
+    if (!chatPrompt.trim()) return;
+    const userMsg = chatPrompt.trim();
+    setChatPrompt('');
+    setChatThinking(true);
 
-    // Add user message
-    const userMsg: Message = { sender: 'user', text: textToSend, timestamp: new Date().toLocaleTimeString() };
-    setMessages(prev => [...prev, userMsg]);
-    setInputVal('');
-    setSending(true);
+    // Optimistically insert user request
+    setChatHistory(prev => [...prev, { prompt: userMsg, response: '' }]);
 
     try {
-      const token = localStorage.getItem('session_token');
-      const res = await fetch('/api/ai/copilot', {
+      const token = getSessionToken();
+      const res = await fetch('/api/ai/operations-intelligence', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
-        body: JSON.stringify({ action: 'chat', query: textToSend })
+        body: JSON.stringify({ prompt: userMsg })
       });
 
-      if (res.ok) {
-        const json = await res.json();
-        const aiMsg: Message = {
-          sender: 'ai',
-          text: json.answer || 'Sorry, I did not understand that query.',
-          timestamp: new Date().toLocaleTimeString()
-        };
-        setMessages(prev => [...prev, aiMsg]);
-      } else {
-        toast.error('AI assistant failed to process request');
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error('Network error contacting AI service');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'AI Chat failed');
+
+      // Update history response index
+      setChatHistory(prev => prev.map(item => item.prompt === userMsg ? { ...item, response: data.response } : item));
+    } catch (err: any) {
+      toast.error(err.message || 'Error communicating with AI Assistant');
+      setChatHistory(prev => prev.filter(item => item.prompt !== userMsg));
     } finally {
-      setSending(false);
+      setChatThinking(false);
     }
   };
 
-  const runPredictionScan = async () => {
-    setPredictionsLoading(true);
+  // Execute 1-Click AI Action
+  const handleExecuteAiAction = async (insightId: string, action: string) => {
+    setActionProcessing(true);
+
     try {
-      const token = localStorage.getItem('session_token');
-      const res = await fetch('/api/ai/copilot', {
+      const token = getSessionToken();
+      const res = await fetch('/api/ai/operations-intelligence/action', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
-        body: JSON.stringify({ action: 'attrition_prediction' })
+        body: JSON.stringify({ insightId, action })
       });
-      if (res.ok) {
-        const json = await res.json();
-        setPredictionsData(json.metrics);
-        toast.success('Workforce predictive scan completed');
-      }
-    } catch (err) {
-      console.error(err);
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Action failed');
+
+      toast.success(data.message || '1-Click AI Recommendation executed!');
+      await loadAiOperationsDataFromApi();
+    } catch (err: any) {
+      toast.error(err.message || 'Error executing AI action');
     } finally {
-      setPredictionsLoading(false);
+      setActionProcessing(false);
     }
   };
 
-  const handleUploadResume = async () => {
-    setParsing(true);
-    try {
-      const token = localStorage.getItem('session_token');
-      const res = await fetch('/api/ai/copilot', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ action: 'parse_resume' })
-      });
-      if (res.ok) {
-        const json = await res.json();
-        setParsedProfile(json.extractedData);
-        toast.success('Resume parsed and skills indexed');
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setParsing(false);
-    }
-  };
+  // Pagination Computations
+  const totalInsightsPages = Math.ceil(insights.length / INSIGHTS_PER_PAGE);
+  const paginatedInsights = insights.slice((insightsPage - 1) * INSIGHTS_PER_PAGE, insightsPage * INSIGHTS_PER_PAGE);
+
+  const totalCapabilitiesPages = Math.ceil(capabilities.length / CAPABILITIES_PER_PAGE);
+  const paginatedCapabilities = capabilities.slice((capabilitiesPage - 1) * CAPABILITIES_PER_PAGE, capabilitiesPage * CAPABILITIES_PER_PAGE);
+
+  if (loading) {
+    return (
+      <div className="space-y-6 max-w-[1700px] mx-auto p-4 md:p-6 animate-pulse">
+        {/* Header Skeleton */}
+        <div className="h-44 w-full bg-slate-100 dark:bg-zinc-800 rounded-3xl" />
+        {/* Tabs selector Skeleton */}
+        <div className="h-12 w-full max-w-lg bg-slate-100 dark:bg-zinc-850 rounded-2xl" />
+        {/* Grid content Skeleton */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="h-64 bg-slate-100 dark:bg-zinc-800 rounded-3xl" />
+          <div className="h-64 bg-slate-100 dark:bg-zinc-800 rounded-3xl" />
+          <div className="h-64 bg-slate-100 dark:bg-zinc-800 rounded-3xl" />
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6 max-w-[1600px] mx-auto p-6 text-slate-900 dark:text-slate-100">
-      
-      {/* Header Banner */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-950 via-[#0f172a] to-zinc-950 p-6 border border-zinc-800 shadow-xl">
-        <div className="absolute right-0 top-0 -mr-6 -mt-6 h-32 w-32 rounded-full bg-orange-500/10 blur-2xl animate-pulse"></div>
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-[#f87941] via-orange-400 to-amber-500 bg-clip-text text-transparent flex items-center gap-2">
-              <Bot className="h-8 w-8 text-[#f87941]" />
-              HR AI Copilot & Intel Engine
-            </h1>
-            <p className="text-slate-400 text-sm mt-1">Central command for resume parsing, NL search queries, burnout prediction, and compliance analytics.</p>
+    <div className="space-y-6 max-w-[1700px] mx-auto p-4 md:p-6 text-slate-900 dark:text-slate-100 animate-fadeIn">
+
+      {/* Hero Header Section */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-950 via-[#0f172a] to-zinc-950 p-6 md:p-8 border border-zinc-800 shadow-2xl">
+        <div className="absolute right-0 top-0 -mr-12 -mt-12 h-64 w-64 rounded-full bg-[#f87941]/10 blur-3xl animate-pulse pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-[#f87941]/15 rounded-2xl border border-[#f87941]/30">
+                <Bot className="h-7 w-7 text-[#f87941]" />
+              </div>
+              <div>
+                <h1 className="text-2xl md:text-3xl font-black tracking-tight bg-gradient-to-r from-[#f87941] via-orange-400 to-amber-400 bg-clip-text text-transparent">
+                  AI Operations Intelligence Engine
+                </h1>
+                <p className="text-slate-400 text-xs md:text-sm font-medium mt-0.5">
+                  19 Active capabilities: Attendance & Expense Fraud Shields, Attrition Radar, Shift Optimizer & NL Copilot
+                </p>
+              </div>
+            </div>
           </div>
-          <Badge className="bg-[#f87941]/10 text-[#f87941] border border-[#f87941]/30 px-3 py-1 text-xs">
-            <Cpu className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-            Gemini 1.5 Pro Integrated
-          </Badge>
+
+          {/* Quick Metrics Bar */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
+              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Model Accuracy</div>
+              <div className="text-lg font-black text-emerald-400 mt-0.5">{summaryStats.modelConfidencePercent}</div>
+              <div className="text-[9px] text-emerald-400/80 flex items-center justify-center gap-0.5 mt-0.5">
+                <CheckCircle2 className="h-2.5 w-2.5" /> High Precision
+              </div>
+            </div>
+
+            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
+              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Active Anomalies</div>
+              <div className="text-lg font-black text-amber-400 mt-0.5">{summaryStats.activeAnomaliesCount} Flags</div>
+              <div className="text-[9px] text-amber-400/80 mt-0.5">In Review</div>
+            </div>
+
+            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
+              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Fraud Shield Savings</div>
+              <div className="text-lg font-black text-emerald-400 mt-0.5">{summaryStats.fraudSavingsTotal}</div>
+              <div className="text-[9px] text-emerald-400/80 mt-0.5">0 Loss Incurred</div>
+            </div>
+
+            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
+              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Team Sentiment</div>
+              <div className="text-lg font-black text-cyan-400 mt-0.5">{summaryStats.moraleIndexScore}</div>
+              <div className="text-[9px] text-cyan-400/80 mt-0.5">Positive Morale</div>
+            </div>
+
+            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
+              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">AI Engines Active</div>
+              <div className="text-lg font-black text-purple-400 mt-0.5">{summaryStats.totalCapabilities} / 19 Live</div>
+              <div className="text-[9px] text-purple-400/80 mt-0.5">Operational</div>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Navigation Subtabs */}
-      <div className="flex gap-2 border-b pb-2.5 text-xs font-bold text-slate-500">
-        {[
-          { id: 'chat', label: 'AI Record Assistant & NL Search', icon: Search },
-          { id: 'predictions', label: 'Workforce Predictors & Sentiment', icon: Brain },
-          { id: 'parser', label: 'CV Resume Parsing Hub', icon: Upload }
-        ].map(tab => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap ${
-                isActive 
-                  ? 'bg-[#f87941]/15 text-[#f87941]' 
-                  : 'hover:bg-slate-50 dark:hover:bg-zinc-800/40 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-            >
-              <Icon className="h-4 w-4" />
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+      {/* Main Tabs Navigation */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-6">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-zinc-800 pb-2">
+          <TabsList className="bg-slate-100 dark:bg-zinc-900/80 p-1 rounded-2xl border border-slate-200 dark:border-zinc-800 flex flex-wrap h-auto">
+            <TabsTrigger value="insights" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-[#f87941] data-[state=active]:text-white">
+              <ShieldAlert className="h-3.5 w-3.5" /> AI Anomaly Risk Radar ({insights.length})
+            </TabsTrigger>
+            <TabsTrigger value="capabilities" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-[#f87941] data-[state=active]:text-white">
+              <Brain className="h-3.5 w-3.5" /> 19 AI Operations Engines ({capabilities.length})
+            </TabsTrigger>
+            <TabsTrigger value="assistant" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-[#f87941] data-[state=active]:text-white">
+              <Bot className="h-3.5 w-3.5" /> Natural Language AI Assistant
+            </TabsTrigger>
+            <TabsTrigger value="digest" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-[#f87941] data-[state=active]:text-white">
+              <Sparkles className="h-3.5 w-3.5" /> Daily Executive Summary
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
-      <div className="grid grid-cols-12 gap-6">
-        
-        {/* Left Side Main Action Panels */}
-        <div className="col-span-12 lg:col-span-8 space-y-6">
-
-          {/* TAB 1: CO-PILOT CHAT ASSISTANT */}
-          {activeTab === 'chat' && (
-            <Card className="flex flex-col h-[600px] shadow-lg border-slate-100 dark:border-zinc-800/80">
-              <CardHeader className="border-b bg-slate-50/50 dark:bg-zinc-900/20 pb-4">
-                <CardTitle className="text-md flex items-center gap-2"><Sparkles className="h-5 w-5 text-orange-400" /> Natural Language HR Query Assistant</CardTitle>
-                <CardDescription>Search records, benchmark salary arrays, and retrieve profiles using chat commands.</CardDescription>
-              </CardHeader>
-              <CardContent className="flex-1 overflow-y-auto p-6 space-y-4 min-h-[350px]">
-                {messages.map((m, idx) => (
-                  <div key={idx} className={`flex ${m.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[80%] rounded-2xl p-4 text-xs shadow-sm leading-relaxed ${
-                      m.sender === 'user' 
-                        ? 'bg-[#f87941] text-white rounded-tr-none' 
-                        : 'bg-slate-50 dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 rounded-tl-none text-slate-700 dark:text-slate-350'
-                    }`}>
-                      <p className="whitespace-pre-line font-medium">{m.text}</p>
-                      <span className="block text-[8px] text-right mt-1.5 opacity-60 font-semibold">{m.timestamp}</span>
-                    </div>
-                  </div>
-                ))}
-                {sending && (
-                  <div className="flex justify-start">
-                    <div className="bg-slate-50 dark:bg-zinc-900 border rounded-2xl rounded-tl-none p-4 text-xs flex items-center gap-2 text-slate-400 font-bold">
-                      <Cpu className="h-4 w-4 animate-spin text-[#f87941]" />
-                      Analyzing workspace database...
-                    </div>
-                  </div>
-                )}
-                <div ref={messagesEndRef} />
-              </CardContent>
-              <div className="p-4 border-t bg-slate-50/50 dark:bg-zinc-900/20 flex gap-2">
-                <Input
-                  placeholder="e.g. Show React Developers or Check Salary benchmarks..."
-                  value={inputVal}
-                  onChange={e => setInputVal(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleSend(inputVal)}
-                  className="bg-white dark:bg-[#1E1F22] border-border h-10 text-xs"
-                />
-                <Button onClick={() => handleSend(inputVal)} className="bg-[#f87941] hover:bg-[#e06634] text-white font-bold h-10 px-4 flex items-center gap-1">
-                  <Send className="h-4 w-4" /> Send
-                </Button>
-              </div>
-            </Card>
-          )}
-
-          {/* TAB 2: PREDICTIVE SUITE */}
-          {activeTab === 'predictions' && (
-            <Card className="shadow-lg border-slate-100 dark:border-zinc-800/80">
-              <CardHeader className="border-b bg-slate-50/50 dark:bg-zinc-900/20">
-                <CardTitle className="text-md">AI Workforce Predictive Predictors</CardTitle>
-                <CardDescription>Predict attrition tendencies, burnout risks, and evaluate employee sentiment indices.</CardDescription>
-              </CardHeader>
-              <CardContent className="pt-6 space-y-6 text-xs font-semibold">
-                <div className="flex justify-between items-center bg-[#f87941]/5 p-4 rounded-xl border border-[#f87941]/10">
-                  <div className="space-y-1">
-                    <h5 className="font-bold text-slate-800 dark:text-slate-200">Run Attrition & Sentiment Risk Scans</h5>
-                    <p className="text-[10px] text-slate-400">Processes weekly hours logged, attendance check-ins, and leave requests.</p>
-                  </div>
-                  <Button onClick={runPredictionScan} disabled={predictionsLoading} className="bg-[#f87941] hover:bg-[#e06634] text-white font-bold h-9 flex items-center gap-1.5">
-                    {predictionsLoading ? <Cpu className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-                    Start Analytics Scan
-                  </Button>
-                </div>
-
-                {predictionsData && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fadeIn">
-                    <div className="p-4 border border-slate-100 dark:border-zinc-850 bg-slate-50 dark:bg-zinc-900 rounded-xl space-y-1">
-                      <span className="text-[10px] text-slate-400 uppercase tracking-widest">Calculated Attrition Risk</span>
-                      <p className="text-lg font-black text-emerald-500">{predictionsData.attritionRisk}</p>
-                    </div>
-                    <div className="p-4 border border-slate-100 dark:border-zinc-850 bg-slate-50 dark:bg-zinc-900 rounded-xl space-y-1">
-                      <span className="text-[10px] text-slate-400 uppercase tracking-widest">Active Burnout Warnings</span>
-                      <p className="text-lg font-black text-rose-500">{predictionsData.burnoutAlerts}</p>
-                    </div>
-                    <div className="p-4 border border-slate-100 dark:border-zinc-850 bg-slate-50 dark:bg-zinc-900 rounded-xl space-y-1">
-                      <span className="text-[10px] text-slate-400 uppercase tracking-widest">Employee Sentiment Score</span>
-                      <p className="text-lg font-black text-indigo-400">{predictionsData.sentimentIndex}</p>
-                    </div>
-                    <div className="p-4 border border-slate-100 dark:border-zinc-850 bg-slate-50 dark:bg-zinc-900 rounded-xl space-y-1">
-                      <span className="text-[10px] text-slate-400 uppercase tracking-widest">Attendance Anomalies today</span>
-                      <p className="text-lg font-black text-[#f87941]">{predictionsData.anomaliesCount}</p>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* TAB 3: RESUME PARSING HUB */}
-          {activeTab === 'parser' && (
-            <Card className="shadow-lg border-slate-100 dark:border-zinc-800/80">
-              <CardHeader className="border-b bg-slate-50/50 dark:bg-zinc-900/20">
-                <CardTitle className="text-md">CV Resume Extraction & Indexing Engine</CardTitle>
-                <CardDescription>Drag and drop PDF/Docx files to extract names, experiences, education, and tag skillsets.</CardDescription>
-              </CardHeader>
-              <CardContent className="pt-6 space-y-6 text-xs">
-                
-                <div className="border-2 border-dashed border-slate-200 dark:border-zinc-800 rounded-2xl p-12 text-center flex flex-col items-center justify-center bg-slate-50/50 dark:bg-zinc-900/20 hover:border-[#f87941]/50 cursor-pointer transition-all duration-300">
-                  <div className="p-4 rounded-full bg-[#f87941]/10 text-[#f87941] mb-4">
-                    <Upload className="h-8 w-8" />
-                  </div>
-                  <h4 className="font-bold text-slate-800 dark:text-slate-200 mb-1">Select Candidate Resume</h4>
-                  <p className="text-[10px] text-slate-400 mb-4 max-w-sm">Supports PDF, DOCX, and text formats. OCR processing is activated automatically.</p>
-                  <Button onClick={handleUploadResume} disabled={parsing} className="bg-[#f87941] hover:bg-[#e06634] text-white font-bold h-9">
-                    {parsing ? <Cpu className="h-4 w-4 animate-spin mr-1.5" /> : null}
-                    Simulate Upload & Parser Extraction
-                  </Button>
-                </div>
-
-                {parsedProfile && (
-                  <Card className="border border-slate-100 dark:border-zinc-850 shadow-md animate-fadeIn">
-                    <CardHeader className="pb-2 border-b bg-slate-50/40 dark:bg-zinc-900/10">
-                      <h4 className="text-xs font-black text-slate-800 dark:text-slate-200 flex items-center gap-1.5"><Zap className="h-4 w-4 text-amber-500" /> Extracted Structured Profile</h4>
-                    </CardHeader>
-                    <CardContent className="pt-4 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-semibold">
-                      <div className="space-y-1">
-                        <span className="text-slate-400 text-[10px]">Name</span>
-                        <p className="text-slate-800 dark:text-slate-200">{parsedProfile.name}</p>
-                      </div>
-                      <div className="space-y-1">
-                        <span className="text-slate-400 text-[10px]">Email & Contact</span>
-                        <p className="text-slate-800 dark:text-slate-200">{parsedProfile.email} | {parsedProfile.phone}</p>
-                      </div>
-                      <div className="space-y-1">
-                        <span className="text-slate-400 text-[10px]">Education</span>
-                        <p className="text-slate-800 dark:text-slate-200">{parsedProfile.education}</p>
-                      </div>
-                      <div className="space-y-1">
-                        <span className="text-slate-400 text-[10px]">Indexed Experience</span>
-                        <p className="text-slate-800 dark:text-slate-200">{parsedProfile.experience}</p>
-                      </div>
-                      <div className="space-y-1 col-span-2">
-                        <span className="text-slate-400 text-[10px] block mb-1">Skill Extraction Tags</span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {parsedProfile.skills.map((s: string) => (
-                            <Badge key={s} className="bg-[#f87941]/10 text-[#f87941] border border-[#f87941]/20 font-bold px-2 py-0.5 text-[9px]">{s}</Badge>
-                          ))}
+        {/* ========================================================================= */}
+        {/* TAB 1: AI ANOMALY & FRAUD RISK RADAR */}
+        {/* ========================================================================= */}
+        <TabsContent value="insights" className="space-y-6 m-0">
+          {paginatedInsights.length > 0 ? (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {paginatedInsights.map(i => (
+                  <Card key={i.id} className="rounded-3xl border-slate-200 dark:border-zinc-800 shadow-md flex flex-col justify-between">
+                    <div>
+                      <CardHeader className="pb-2 border-b">
+                        <div className="flex items-center justify-between">
+                          <Badge className="bg-[#f87941]/10 text-[#f87941] font-mono text-[10px]">
+                            {i.category}
+                          </Badge>
+                          <Badge className={`border-none font-bold text-[9px] ${
+                            i.riskLevel === 'High' || i.riskLevel === 'Critical' ? 'bg-rose-500/10 text-rose-600' : 'bg-amber-500/10 text-amber-600'
+                          }`}>
+                            {i.riskLevel} Risk ({i.confidenceScore}%)
+                          </Badge>
                         </div>
+                        <CardTitle className="text-sm font-black mt-2">{i.title}</CardTitle>
+                      </CardHeader>
+
+                      <CardContent className="pt-4 space-y-3 text-xs font-semibold">
+                        <div className="p-3 rounded-2xl bg-slate-50 dark:bg-zinc-900 border space-y-1">
+                          <div className="text-[10px] text-slate-400 uppercase font-bold">AI Diagnostic Finding</div>
+                          <div className="text-slate-700 dark:text-slate-300 font-medium">{i.description}</div>
+                        </div>
+
+                        <div className="p-3 rounded-2xl bg-purple-500/10 border border-purple-500/30 text-purple-700 dark:text-purple-300 space-y-1">
+                          <div className="text-[10px] uppercase font-bold flex items-center gap-1"><Sparkles className="h-3 w-3" /> Recommended Corrective Action</div>
+                          <div className="font-medium">{i.recommendedAction}</div>
+                        </div>
+                      </CardContent>
+                    </div>
+
+                    <div className="p-4 pt-0">
+                      <div className="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-zinc-800">
+                        <Badge className={`border-none font-bold text-[9px] ${i.status === 'Resolved' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600'}`}>
+                          Status: {i.status}
+                        </Badge>
+
+                        {canApprove && i.status !== 'Resolved' && (
+                          <Button
+                            size="sm"
+                            disabled={actionProcessing}
+                            onClick={() => handleExecuteAiAction(i.id, 'resolve')}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[10px] h-7 px-3 rounded-lg flex items-center gap-1"
+                          >
+                            {actionProcessing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
+                            1-Click AI Fix
+                          </Button>
+                        )}
                       </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+
+              {/* Insights Pagination */}
+              {totalInsightsPages > 1 && (
+                <div className="flex items-center justify-between pt-2">
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">
+                    Showing {(insightsPage - 1) * INSIGHTS_PER_PAGE + 1}&ndash;{Math.min(insightsPage * INSIGHTS_PER_PAGE, insights.length)} of {insights.length} anomalies
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={insightsPage <= 1}
+                      onClick={() => setInsightsPage(p => Math.max(1, p - 1))}
+                      className="h-8 w-8 p-0 rounded-lg border-slate-200 dark:border-zinc-800"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    {[...Array(totalInsightsPages)].map((_, i) => (
+                      <Button
+                        key={i}
+                        size="sm"
+                        variant={insightsPage === i + 1 ? 'default' : 'outline'}
+                        onClick={() => setInsightsPage(i + 1)}
+                        className={`h-8 w-8 p-0 rounded-lg text-xs font-bold ${
+                          insightsPage === i + 1
+                            ? 'bg-[#f87941] hover:bg-[#e06634] text-white'
+                            : 'border-slate-200 dark:border-zinc-800'
+                        }`}
+                      >
+                        {i + 1}
+                      </Button>
+                    ))}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={insightsPage >= totalInsightsPages}
+                      onClick={() => setInsightsPage(p => Math.min(totalInsightsPages, p + 1))}
+                      className="h-8 w-8 p-0 rounded-lg border-slate-200 dark:border-zinc-800"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <Card className="rounded-3xl border-slate-200 dark:border-zinc-800 shadow-md">
+              <CardContent className="p-12 text-center text-xs text-slate-400 font-bold">
+                No active operational anomalies or risk flags reported.
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* ========================================================================= */}
+        {/* TAB 2: 19 AI OPERATIONS ENGINES */}
+        {/* ========================================================================= */}
+        <TabsContent value="capabilities" className="space-y-6 m-0">
+          {paginatedCapabilities.length > 0 ? (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {paginatedCapabilities.map(c => (
+                  <Card key={c.name} className="rounded-3xl border-slate-200 dark:border-zinc-800 shadow-md hover:shadow-lg transition-all flex flex-col justify-between">
+                    <CardHeader className="pb-2">
+                      <div className="flex items-center justify-between">
+                        <Badge className="bg-slate-100 dark:bg-zinc-800 text-slate-500 font-mono text-[9px]">
+                          {c.category}
+                        </Badge>
+                        <Badge className="bg-[#f87941]/10 text-[#f87941] border-none font-bold text-[9px]">
+                          {c.confidenceScore}% Precision
+                        </Badge>
+                      </div>
+                      <CardTitle className="text-sm font-black mt-2">{c.name}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="pb-4 text-xs text-slate-500 dark:text-slate-400 font-semibold leading-relaxed">
+                      {c.description}
                     </CardContent>
                   </Card>
-                )}
+                ))}
+              </div>
 
-              </CardContent>
-            </Card>
+              {/* Capabilities Pagination */}
+              {totalCapabilitiesPages > 1 && (
+                <div className="flex items-center justify-between pt-2">
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">
+                    Showing {(capabilitiesPage - 1) * CAPABILITIES_PER_PAGE + 1}&ndash;{Math.min(capabilitiesPage * CAPABILITIES_PER_PAGE, capabilities.length)} of {capabilities.length} capabilities
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={capabilitiesPage <= 1}
+                      onClick={() => setCapabilitiesPage(p => Math.max(1, p - 1))}
+                      className="h-8 w-8 p-0 rounded-lg border-slate-200 dark:border-zinc-800"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    {[...Array(totalCapabilitiesPages)].map((_, i) => (
+                      <Button
+                        key={i}
+                        size="sm"
+                        variant={capabilitiesPage === i + 1 ? 'default' : 'outline'}
+                        onClick={() => setCapabilitiesPage(i + 1)}
+                        className={`h-8 w-8 p-0 rounded-lg text-xs font-bold ${
+                          capabilitiesPage === i + 1
+                            ? 'bg-[#f87941] hover:bg-[#e06634] text-white'
+                            : 'border-slate-200 dark:border-zinc-800'
+                        }`}
+                      >
+                        {i + 1}
+                      </Button>
+                    ))}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={capabilitiesPage >= totalCapabilitiesPages}
+                      onClick={() => setCapabilitiesPage(p => Math.min(totalCapabilitiesPages, p + 1))}
+                      className="h-8 w-8 p-0 rounded-lg border-slate-200 dark:border-zinc-800"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="p-12 text-center text-xs text-slate-400 font-bold">
+              No active capabilities initialized.
+            </div>
           )}
+        </TabsContent>
 
-        </div>
-
-        {/* Right Side Column: Fast Suggestions Cards */}
-        <div className="col-span-12 lg:col-span-4 space-y-6">
-
-          {/* Quick Queries Prompts */}
-          <Card className="shadow-lg border-slate-100 dark:border-zinc-800/80">
-            <CardHeader className="border-b bg-slate-50/50 dark:bg-zinc-900/20">
-              <CardTitle className="text-md flex items-center gap-1.5"><Brain className="h-4.5 w-4.5 text-[#f87941]" /> Natural Language Triggers</CardTitle>
+        {/* ========================================================================= */}
+        {/* TAB 3: NATURAL LANGUAGE AI ASSISTANT */}
+        {/* ========================================================================= */}
+        <TabsContent value="assistant" className="space-y-6 m-0">
+          <Card className="rounded-3xl border-slate-200 dark:border-zinc-800 shadow-md">
+            <CardHeader className="pb-3 border-b">
+              <CardTitle className="text-base font-black flex items-center gap-2">
+                <Bot className="h-5 w-5 text-[#f87941]" /> Natural Language HR Operations Assistant
+              </CardTitle>
             </CardHeader>
-            <CardContent className="pt-4 text-xs font-semibold space-y-2">
-              <button 
-                onClick={() => {
-                  setActiveTab('chat');
-                  handleSend('Show React Developers');
-                }} 
-                className="w-full text-left p-3 rounded-xl border border-slate-100 dark:border-zinc-850 hover:border-[#f87941]/30 hover:bg-slate-50 dark:hover:bg-zinc-900/30 flex items-center justify-between"
-              >
-                <span>🔍 Search React Developers in Surat</span>
-                <ArrowRight className="h-3.5 w-3.5 text-[#f87941]" />
-              </button>
-
-              <button 
-                onClick={() => {
-                  setActiveTab('chat');
-                  handleSend('Average salary benchmarking');
-                }} 
-                className="w-full text-left p-3 rounded-xl border border-slate-100 dark:border-zinc-850 hover:border-[#f87941]/30 hover:bg-slate-50 dark:hover:bg-zinc-900/30 flex items-center justify-between"
-              >
-                <span>📊 Audit salary benchmarking</span>
-                <ArrowRight className="h-3.5 w-3.5 text-[#f87941]" />
-              </button>
-            </CardContent>
-          </Card>
-
-          {/* Skill Gap Analysis */}
-          <Card className="shadow-lg border-slate-100 dark:border-zinc-800/80">
-            <CardHeader className="border-b bg-slate-50/50 dark:bg-zinc-900/20">
-              <CardTitle className="text-md flex items-center gap-1.5"><GraduationCap className="h-5 w-5 text-[#f87941]" /> Skill Gap & Learning recommendations</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-4 text-xs font-semibold space-y-4">
-              <div className="space-y-1">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Core capabilities score</span>
-                  <span className="text-emerald-500 font-bold">68% Competence</span>
-                </div>
-                <div className="w-full h-1.5 bg-slate-200 dark:bg-zinc-800 rounded-full overflow-hidden">
-                  <div className="bg-emerald-500 h-full w-[68%]"></div>
-                </div>
+            <CardContent className="pt-6 space-y-6">
+              <div className="flex gap-2">
+                <Input
+                  value={chatPrompt}
+                  onChange={e => setChatPrompt(e.target.value)}
+                  placeholder="Ask AI anything, e.g., 'Are there any expense fraud risks or burnout alerts today?'"
+                  className="rounded-2xl text-xs h-11 border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900"
+                  onKeyDown={e => e.key === 'Enter' && handleSendChatPrompt()}
+                />
+                <Button
+                  onClick={handleSendChatPrompt}
+                  disabled={chatThinking || !chatPrompt.trim()}
+                  className="bg-[#f87941] hover:bg-[#e06634] text-white font-extrabold text-xs h-11 px-6 rounded-2xl flex items-center gap-2 shadow-lg shadow-[#f87941]/20"
+                >
+                  {chatThinking ? <Loader2 className="h-4 w-4 animate-spin" /> : <SendHorizontal className="h-4 w-4" />}
+                  Ask AI Copilot
+                </Button>
               </div>
 
-              <div className="p-3.5 border border-dashed rounded-xl bg-slate-50 dark:bg-zinc-900/30 text-[10px] space-y-2">
-                <div className="font-bold text-[#f87941] flex items-center gap-1">
-                  <BookOpen className="h-3.5 w-3.5" /> Gap Alert: Kubernetes & GraphQL missing
+              {chatHistory.length > 0 && (
+                <div className="space-y-4 pt-2">
+                  {chatHistory.map((item, idx) => (
+                    <div key={idx} className="space-y-3 p-5 rounded-3xl bg-slate-950 text-white border border-zinc-800 animate-fadeIn">
+                      <div className="text-xs font-bold text-[#f87941] flex items-center gap-2">
+                        <Sparkle className="h-4 w-4 text-[#f87941]" /> Prompt: "{item.prompt}"
+                      </div>
+                      <div className="text-xs text-slate-300 whitespace-pre-line leading-relaxed font-sans pt-1">
+                        {item.response ? item.response : (
+                          <div className="space-y-2.5 animate-pulse py-1">
+                            <div className="h-3 w-5/6 bg-zinc-800 rounded" />
+                            <div className="h-3 w-4/6 bg-zinc-800 rounded" />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <p className="text-slate-400 leading-relaxed font-semibold">Initiate training module "Modern GraphQL Microservices" next week.</p>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ========================================================================= */}
+        {/* TAB 4: DAILY EXECUTIVE SUMMARY */}
+        {/* ========================================================================= */}
+        <TabsContent value="digest" className="space-y-6 m-0">
+          <Card className="rounded-3xl border-slate-200 dark:border-zinc-800 shadow-md">
+            <CardHeader className="pb-3 border-b">
+              <CardTitle className="text-base font-black flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-[#f87941]" /> AI Morning Executive Summary & Recommendations
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="p-6 rounded-3xl bg-slate-950 text-white border border-zinc-800 space-y-3">
+                <div className="text-xs font-mono text-[#f87941] font-bold">
+                  Daily Workforce Intelligence Briefing
+                </div>
+                <div className="text-xs text-slate-300 whitespace-pre-line leading-relaxed font-sans pt-2">
+                  {dailyExecutiveSummary || 'Generating operational summary...'}
+                </div>
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
 
-        </div>
-
-      </div>
+      </Tabs>
 
     </div>
   );

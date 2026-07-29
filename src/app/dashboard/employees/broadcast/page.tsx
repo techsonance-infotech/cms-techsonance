@@ -510,10 +510,10 @@ export default function BroadcastHubPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="rounded-xl">
-                          <SelectItem value="info">ℹ️ Info</SelectItem>
-                          <SelectItem value="alert">⚠️ Alert</SelectItem>
-                          <SelectItem value="urgent">🔥 Urgent</SelectItem>
-                          <SelectItem value="emergency">🚨 Emergency</SelectItem>
+                          <SelectItem value="info">Info</SelectItem>
+                          <SelectItem value="alert">Alert</SelectItem>
+                          <SelectItem value="urgent">Urgent</SelectItem>
+                          <SelectItem value="emergency">Emergency</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

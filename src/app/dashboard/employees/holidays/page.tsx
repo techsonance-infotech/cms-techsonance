@@ -409,9 +409,9 @@ export default function HolidayManagementPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="rounded-xl">
-                          <SelectItem value="High">🔥 High (Complete Office Shutdown)</SelectItem>
-                          <SelectItem value="Medium">⚠️ Medium (Partial Capacity)</SelectItem>
-                          <SelectItem value="Low">ℹ️ Low (Optional / Floating RH)</SelectItem>
+                          <SelectItem value="High">High (Complete Office Shutdown)</SelectItem>
+                          <SelectItem value="Medium">Medium (Partial Capacity)</SelectItem>
+                          <SelectItem value="Low">Low (Optional / Floating RH)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -491,7 +491,7 @@ export default function HolidayManagementPage() {
                           <tr key={h.id} className="hover:bg-slate-50/70 dark:hover:bg-zinc-900/30">
                             <td className="p-4 px-6">
                               <div className="font-extrabold text-slate-900 dark:text-slate-100 text-xs">{h.title}</div>
-                              <div className="font-mono text-[10px] text-slate-400">📅 {h.holidayDate}</div>
+                              <div className="font-mono text-[10px] text-slate-400">{h.holidayDate}</div>
                             </td>
 
                             <td className="p-4">
@@ -563,7 +563,7 @@ export default function HolidayManagementPage() {
                     </div>
                     <div className="text-slate-500">Bridge Day Opportunity: <span className="font-bold text-slate-900 dark:text-white">{lw.bridgeDay}</span></div>
                     <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-300 font-semibold leading-relaxed">
-                      💡 {lw.recommendation}
+                      {lw.recommendation}
                     </div>
                   </div>
                 ))}
@@ -660,7 +660,7 @@ export default function HolidayManagementPage() {
                 </CardHeader>
                 <CardContent className="pt-4 space-y-3 text-xs font-semibold">
                   <div className="p-3 rounded-2xl bg-slate-50 dark:bg-zinc-900/40 border leading-relaxed">
-                    💡 Reduce Sprint story point commitment by 15% during July 4th and Thanksgiving holiday weeks to prevent sprint spillover.
+                    Reduce Sprint story point commitment by 15% during July 4th and Thanksgiving holiday weeks to prevent sprint spillover.
                   </div>
                 </CardContent>
               </Card>

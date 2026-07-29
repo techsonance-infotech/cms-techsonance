@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Mail, Lock, Eye, EyeOff, Rocket, Check, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Loader2, Mail, Lock, Eye, EyeOff, Rocket, Check, ArrowRight, ShieldCheck, AlertTriangle } from 'lucide-react';
 import Image from 'next/image';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
@@ -255,7 +255,7 @@ export default function LoginPage() {
           {unverifiedEmail && (
             <div className="mb-4 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 rounded-2xl text-xs space-y-3 animate-in fade-in slide-in-from-top duration-300">
               <div className="flex items-start gap-2.5 text-amber-800 dark:text-amber-300 font-semibold leading-relaxed">
-                <span className="text-base shrink-0 mt-0.5">⚠️</span>
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
                 <div>
                   Your email address is not verified yet. Please check your inbox or click below to resend the verification link.
                 </div>

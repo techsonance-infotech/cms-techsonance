@@ -12,6 +12,7 @@ import { getDashboardType, type UserRole } from '@/lib/permissions';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { EntityCard } from '@/components/ui/entity-card';
+import { getStoredSessionToken, getStoredUser } from '@/lib/client-session';
 
 interface Client {
   id: number;
@@ -58,17 +59,12 @@ export default function ClientsPage() {
     if (initializedRef.current) return;
     initializedRef.current = true;
 
-    const token = localStorage.getItem('session_token');
-    const role = localStorage.getItem('user_role') as UserRole;
+    const token = getStoredSessionToken();
+    const user = getStoredUser();
+    const role = user?.role as UserRole;
     
     if (!token || !role) {
       router.push('/login');
-      return;
-    }
-
-    const dashboardType = getDashboardType(role);
-    if (dashboardType !== 'admin') {
-      router.push('/dashboard');
       return;
     }
 
@@ -106,7 +102,7 @@ export default function ClientsPage() {
         title="Clients"
         description="Manage your client relationships, details, and active billing contacts."
         actions={[
-          <Button key="add" onClick={() => setShowAddDialog(true)}>
+          <Button key="add" onClick={() => setShowAddDialog(true)} className="bg-primary hover:bg-primary/95 text-white font-bold border-none">
             <Plus className="mr-2 h-4 w-4" />
             Add Client
           </Button>
@@ -143,7 +139,7 @@ export default function ClientsPage() {
                 {search ? 'Try adjusting your search criteria' : 'Add your first client profile to get started'}
               </p>
               {!search && (
-                <Button onClick={() => setShowAddDialog(true)} variant="outline" className="mt-4">
+                <Button onClick={() => setShowAddDialog(true)} variant="outline" className="mt-4 border-primary text-primary hover:bg-primary/10 font-bold">
                   Onboard Your First Client
                 </Button>
               )}

@@ -26,6 +26,11 @@ export const createTaskSchema = z.object({
   dueDate: z.string().date().optional().nullable(),
   status: taskStatusSchema.optional(),
   priority: taskPrioritySchema.optional(),
+  parentTaskId: z.coerce.number().int().positive().optional().nullable(),
+  taskType: z.enum(['task', 'subtask', 'bug', 'story', 'epic']).optional(),
+  severity: z.enum(['low', 'medium', 'high', 'critical']).optional(),
+  checklists: z.array(z.any()).optional(),
+  epicId: z.coerce.number().int().positive().optional().nullable(),
 });
 
 export const updateTaskSchema = createTaskSchema.omit({ projectId: true }).partial();

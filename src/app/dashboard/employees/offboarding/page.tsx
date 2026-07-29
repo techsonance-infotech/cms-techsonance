@@ -1121,11 +1121,11 @@ export default function OffboardingCenterPage() {
                               <div>
                                 <Label className="text-xs">Workspace Culture Rating (1-5)</Label>
                                 <select value={cultureRating} onChange={e => setCultureRating(e.target.value)} className="w-full border rounded-lg p-2 bg-transparent text-xs mt-1 border-input outline-none">
-                                  <option value="5">⭐⭐⭐⭐⭐ Outstanding workplace experience</option>
-                                  <option value="4">⭐⭐⭐⭐ Good corporate culture</option>
-                                  <option value="3">⭐⭐⭐ Fair/Neutral experience</option>
-                                  <option value="2">⭐⭐ Needs structural culture modifications</option>
-                                  <option value="1">⭐ Poor management/unsatisfactory experience</option>
+                                  <option value="5">5/5 - Outstanding workplace experience</option>
+                                  <option value="4">4/5 - Good corporate culture</option>
+                                  <option value="3">3/5 - Fair/Neutral experience</option>
+                                  <option value="2">2/5 - Needs structural culture modifications</option>
+                                  <option value="1">1/5 - Poor management/unsatisfactory experience</option>
                                 </select>
                               </div>
                               <div>

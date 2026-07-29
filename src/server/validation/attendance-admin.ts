@@ -60,3 +60,54 @@ export const attendanceToggleSchema = z.object({
 }).refine((value) => value.tagUid || value.employeeId, {
   message: 'Either tagUid or employeeId must be provided',
 });
+
+export const attendancePolicySchema = z.object({
+  name: z.string().trim().min(1).max(150),
+  isDefault: z.boolean().default(false),
+  standardHours: z.coerce.number().positive().default(9.0),
+  minHoursHalfDay: z.coerce.number().positive().default(4.0),
+  minHoursFullDay: z.coerce.number().positive().default(8.0),
+  gracePeriodLateMinutes: z.coerce.number().int().nonnegative().default(15),
+  gracePeriodEarlyExitMinutes: z.coerce.number().int().nonnegative().default(15),
+  isFlexible: z.boolean().default(false),
+  roundingMinutes: z.coerce.number().int().nonnegative().default(0),
+  autoMarkAbsence: z.boolean().default(true),
+  unpaidBreakDurationMinutes: z.coerce.number().int().nonnegative().default(60),
+  paidBreakDurationMinutes: z.coerce.number().int().nonnegative().default(0),
+  overtimeEligibility: z.boolean().default(true),
+  overtimeMinMinutes: z.coerce.number().int().nonnegative().default(30),
+  overtimeRateMultiplier: z.coerce.number().positive().default(1.5),
+  weeklyOffDays: z.string().trim().default('Saturday,Sunday'),
+  targetAssignment: z.record(z.string(), z.unknown()).default({}),
+});
+
+export const regularizationRequestSchema = z.object({
+  date: z.string().date(),
+  reasonType: z.enum(['missing_punch', 'travel', 'wfh', 'forgotten_punch', 'dispute', 'regularization']),
+  notes: z.string().trim().min(1).max(1000),
+  requestedTimeIn: z.string().datetime().optional().nullable(),
+  requestedTimeOut: z.string().datetime().optional().nullable(),
+  attachmentUrl: z.string().url().optional().nullable(),
+  gpsLatitude: z.coerce.number().optional().nullable(),
+  gpsLongitude: z.coerce.number().optional().nullable(),
+});
+
+export const overtimeRequestSchema = z.object({
+  employeeId: z.coerce.number().int().positive(),
+  date: z.string().date(),
+  calculatedOvertimeMinutes: z.coerce.number().int().nonnegative(),
+  approvedOvertimeMinutes: z.coerce.number().int().nonnegative(),
+  reason: z.string().trim().max(1000).optional().nullable(),
+});
+
+export const attendanceLockSchema = z.object({
+  year: z.coerce.number().int().positive(),
+  month: z.coerce.number().int().min(1).max(12),
+  locked: z.boolean().default(true),
+});
+
+export const exceptionResolutionSchema = z.object({
+  exceptionId: z.string().uuid(),
+  resolutionNotes: z.string().trim().min(1).max(1000),
+});
+

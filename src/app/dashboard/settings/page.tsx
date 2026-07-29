@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, Fragment } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
@@ -1652,6 +1652,19 @@ export default function SettingsPage() {
       fetchDataManagementDetails();
     }
   }, [activeTab]);
+
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam) {
+      setActiveTab(tabParam);
+    }
+    const regParam = searchParams.get('registry');
+    if (regParam) {
+      setActiveRegistry(regParam as any);
+    }
+  }, [searchParams]);
 
   // Org Chart & Registries states
   const [orgNodes, setOrgNodes] = useState<any[]>([]);

@@ -28,7 +28,7 @@ export const POST = withApiHandler(async (request, context) => {
   if (employees.length > 0) {
     const notificationsToInsert = employees.map((emp: { user_id: string }) => ({
       user_id: emp.user_id,
-      title: '⏰ Timesheet Submission Reminder',
+      title: 'Timesheet Submission Reminder',
       message: 'Friendly Reminder: Please log and submit your timesheet entries before the pay cycle cutoff.',
       type: 'warning',
       is_read: false,

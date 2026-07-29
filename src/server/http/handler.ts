@@ -6,6 +6,45 @@ import { logApplicationError } from '@/server/logging/mongo-log';
 import { authenticateRequest } from '@/server/auth/session';
 import type { AppRole } from '@/server/auth/constants';
 import { env } from '@/server/config/env';
+import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
+
+async function logSystemErrorToAuditTrail(
+  request: Request,
+  error: any,
+  auth: any,
+  requestId: string,
+  statusCode: number
+) {
+  try {
+    const supabase = getAdminRouteSupabase();
+    const pathname = new URL(request.url).pathname;
+    const tenantId = auth?.user?.tenantId || 'system';
+
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+
+    await supabase.from('audit_logs').insert({
+      tenant_id: tenantId,
+      actor_user_id: auth?.user?.id || null,
+      action: `API_FAILURE: ${statusCode}`,
+      resource_type: 'system_error',
+      resource_id: pathname,
+      method: request.method,
+      path: pathname,
+      correlation_id: requestId,
+      details: {
+        error: errorMessage,
+        stack: errorStack,
+        statusCode,
+        clientIp: request.headers.get('x-forwarded-for') || '127.0.0.1',
+        userAgent: request.headers.get('user-agent') || 'N/A'
+      },
+      created_at: new Date().toISOString()
+    });
+  } catch (err) {
+    logger.error('failed_to_log_audit_error', { error: err });
+  }
+}
 
 interface HandlerOptions {
   requireAuth?: boolean;
@@ -98,12 +137,14 @@ export function withApiHandler(
     const requestId = request.headers.get('x-correlation-id') ?? crypto.randomUUID();
     const startedAt = performance.now();
     const pathname = new URL(request.url).pathname;
+    let authContext: any = null;
 
     try {
       const auth = await authenticateRequest(request, {
         required: options?.requireAuth,
         roles: options?.roles,
       });
+      authContext = auth;
 
       const response = await handler(request, { requestId, auth });
       const durationMs = Math.round((performance.now() - startedAt) * 100) / 100;
@@ -130,6 +171,8 @@ export function withApiHandler(
           durationMs,
           issues: error.issues,
         });
+
+        void logSystemErrorToAuditTrail(request, error, authContext, requestId, 400);
 
         return apiError('Validation failed', {
           status: 400,
@@ -161,6 +204,8 @@ export function withApiHandler(
           },
         });
 
+        void logSystemErrorToAuditTrail(request, error, authContext, requestId, error.statusCode);
+
         return apiError(getSafeClientErrorMessage(pathname, error), {
           status: error.statusCode,
           errors: error.details,
@@ -189,6 +234,8 @@ export function withApiHandler(
           message: extractErrorMessages(error).join(' | ') || 'Unknown schema mismatch',
         });
 
+        void logSystemErrorToAuditTrail(request, error, authContext, requestId, schemaError.statusCode);
+
         return apiError(schemaError.message, {
           status: schemaError.statusCode,
           headers: { 'x-correlation-id': requestId },
@@ -212,6 +259,8 @@ export function withApiHandler(
         category: 'unhandled_error',
         message: crashMessage,
       });
+
+      void logSystemErrorToAuditTrail(request, error, authContext, requestId, 500);
 
       return apiError(
         env.NODE_ENV === 'development' ? `Internal Error: ${crashMessage}` : 'Internal server error',

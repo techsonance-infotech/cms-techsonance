@@ -70,6 +70,7 @@ export default function ShiftManagementPage() {
   // Dynamic API State
   const [roster, setRoster] = useState<RosterEmp[]>([]);
   const [shiftDefs, setShiftDefs] = useState<ShiftDef[]>([]);
+  const [rosterAssignments, setRosterAssignments] = useState<any[]>([]);
   const [shiftSwaps, setShiftSwaps] = useState<SwapReq[]>([]);
   const [utilizationMetrics, setUtilizationMetrics] = useState({
     rosterCoveragePercent: '98.4%',
@@ -105,6 +106,7 @@ export default function ShiftManagementPage() {
         const data = await res.json();
         if (data.employeeRoster) setRoster(data.employeeRoster);
         if (data.shiftDefinitions) setShiftDefs(data.shiftDefinitions);
+        if (data.rosterAssignments) setRosterAssignments(data.rosterAssignments);
         if (data.shiftSwaps) setShiftSwaps(data.shiftSwaps);
         if (data.utilizationMetrics) setUtilizationMetrics(data.utilizationMetrics);
       }
@@ -396,52 +398,91 @@ export default function ShiftManagementPage() {
                 <thead>
                   <tr className="bg-slate-50 dark:bg-zinc-900/60 text-slate-400 font-extrabold border-b uppercase text-[10px]">
                     <th className="p-4 px-6">Employee</th>
-                    <th className="p-4">Mon</th>
-                    <th className="p-4">Tue</th>
-                    <th className="p-4">Wed</th>
-                    <th className="p-4">Thu</th>
-                    <th className="p-4">Fri</th>
-                    <th className="p-4 text-purple-400">Sat (Off)</th>
-                    <th className="p-4 text-purple-400">Sun (Off)</th>
+                    {(() => {
+                      const today = new Date();
+                      const day = today.getDay();
+                      const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+                      const monday = new Date(today.setDate(diff));
+                      return Array.from({ length: 7 }).map((_, i) => {
+                        const d = new Date(monday);
+                        d.setDate(monday.getDate() + i);
+                        const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                        return (
+                          <th key={i} className={`p-4 ${isWeekend ? 'text-purple-400' : ''}`}>
+                            {d.toLocaleDateString('en-US', { weekday: 'short' })} ({d.getDate()})
+                          </th>
+                        );
+                      });
+                    })()}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-zinc-850">
-                  {roster.map((emp, idx) => (
-                    <tr key={emp.id} className="hover:bg-slate-50/70 dark:hover:bg-zinc-900/30">
-                      <td className="p-4 px-6">
-                        <div className="font-extrabold text-slate-900 dark:text-slate-100 text-xs">{emp.name}</div>
-                        <div className="text-[10px] text-slate-400">{emp.department} • {emp.designation}</div>
-                      </td>
+                  {roster.map((emp) => {
+                    const today = new Date();
+                    const day = today.getDay();
+                    const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+                    const monday = new Date(today.setDate(diff));
+                    const weekDates = Array.from({ length: 7 }).map((_, i) => {
+                      const d = new Date(monday);
+                      d.setDate(monday.getDate() + i);
+                      return d.toISOString().split('T')[0];
+                    });
 
-                      {/* Mon-Fri Shift Assignments */}
-                      {[0, 1, 2, 3, 4].map(dayIdx => {
-                        const shiftTypeKey = idx % 2 === 0 ? 'general' : (idx % 3 === 0 ? 'morning' : 'night');
-                        return (
-                          <td key={dayIdx} className="p-3">
-                            <Badge className={`border-none font-bold text-[9px] px-2 py-1 ${
-                              shiftTypeKey === 'night'
-                                ? 'bg-purple-500/10 text-purple-600'
-                                : (shiftTypeKey === 'morning' ? 'bg-amber-500/10 text-amber-600' : 'bg-blue-500/10 text-blue-600')
-                            }`}>
-                              {shiftTypeKey === 'night' ? '🌙 Night (22-07)' : (shiftTypeKey === 'morning' ? '🌅 Morning (06-15)' : '☀️ General (09-18)')}
-                            </Badge>
-                          </td>
-                        );
-                      })}
+                    return (
+                      <tr key={emp.id} className="hover:bg-slate-50/70 dark:hover:bg-zinc-900/30">
+                        <td className="p-4 px-6">
+                          <div className="font-extrabold text-slate-900 dark:text-slate-100 text-xs">{emp.name}</div>
+                          <div className="text-[10px] text-slate-400">{emp.department} • {emp.designation}</div>
+                        </td>
 
-                      {/* Sat-Sun Weekly Off */}
-                      <td className="p-3">
-                        <Badge className="bg-slate-100 dark:bg-zinc-800 text-slate-400 border-none font-bold text-[9px]">
-                          🏝️ Weekly Off
-                        </Badge>
-                      </td>
-                      <td className="p-3">
-                        <Badge className="bg-slate-100 dark:bg-zinc-800 text-slate-400 border-none font-bold text-[9px]">
-                          🏝️ Weekly Off
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))}
+                        {weekDates.map((dateStr) => {
+                          const assignment = rosterAssignments.find(
+                            (a) => String(a.user_id) === String(emp.id) && a.roster_date === dateStr
+                          );
+                          const dObj = new Date(dateStr);
+                          const isWeekend = dObj.getDay() === 0 || dObj.getDay() === 6;
+
+                          if (assignment) {
+                            if (assignment.is_weekly_off) {
+                              return (
+                                <td key={dateStr} className="p-3">
+                                  <Badge className="bg-slate-100 dark:bg-zinc-800 text-slate-400 border-none font-bold text-[9px]">
+                                    Weekly Off
+                                  </Badge>
+                                </td>
+                              );
+                            }
+                            const shift = shiftDefs.find((s) => s.id === assignment.shift_id);
+                            return (
+                              <td key={dateStr} className="p-3">
+                                <Badge className="bg-blue-500/10 text-blue-600 border-none font-bold text-[9px] px-2 py-1">
+                                  {shift ? `${shift.name} (${shift.start_time.slice(0, 5)}-${shift.end_time.slice(0, 5)})` : 'Assigned'}
+                                </Badge>
+                              </td>
+                            );
+                          }
+
+                          if (isWeekend) {
+                            return (
+                              <td key={dateStr} className="p-3">
+                                <Badge className="bg-slate-100 dark:bg-zinc-800 text-slate-400 border-none font-bold text-[9px]">
+                                  Weekly Off
+                                </Badge>
+                              </td>
+                            );
+                          }
+
+                          return (
+                            <td key={dateStr} className="p-3">
+                              <Badge className="bg-slate-100 dark:bg-zinc-800 text-slate-400/60 border-none font-bold text-[9px]">
+                                Not Scheduled
+                              </Badge>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </CardContent>
@@ -637,11 +678,11 @@ export default function ShiftManagementPage() {
                     {shiftSwaps.map(sw => (
                       <tr key={sw.id} className="hover:bg-slate-50/70 dark:hover:bg-zinc-900/30">
                         <td className="p-4 px-6">
-                          <div className="font-extrabold text-slate-900 dark:text-slate-100 text-xs">{sw.requesterName} ↔️ {sw.targetName}</div>
+                          <div className="font-extrabold text-slate-900 dark:text-slate-100 text-xs">{sw.requesterName} &lt;-&gt; {sw.targetName}</div>
                         </td>
 
                         <td className="p-4 font-mono text-slate-500">
-                          {sw.requesterDate} ↔️ {sw.targetDate}
+                          {sw.requesterDate} &lt;-&gt; {sw.targetDate}
                         </td>
 
                         <td className="p-4 text-slate-600 dark:text-slate-300">

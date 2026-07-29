@@ -60,6 +60,9 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
   const [projectMemberIds, setProjectMemberIds] = useState<number[]>([]);
   const [projectTasks, setProjectTasks] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState('general');
+  const [checklist, setChecklist] = useState<any[]>([]);
+  const [newCheckItem, setNewCheckItem] = useState('');
+
   const form = useForm<TaskFormValues>({
     resolver: zodResolver(taskFormSchema),
     defaultValues: {
@@ -75,6 +78,10 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
       loggedHours: '',
       blockedById: '',
       dueDate: '',
+      parentTaskId: '',
+      taskType: 'task',
+      severity: 'medium',
+      epicId: '',
     },
   });
 
@@ -82,6 +89,7 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
     if (open) {
       fetchData();
       if (task) {
+        setChecklist(task.checklists || []);
         form.reset({
           projectId: task.projectId?.toString() || '',
           sprintId: task.sprintId?.toString() || '',
@@ -95,8 +103,13 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
           loggedHours: task.loggedHours?.toString() || '',
           blockedById: task.blockedById?.toString() || '',
           dueDate: task.dueDate ? task.dueDate.split('T')[0] : '',
+          parentTaskId: task.parentTaskId?.toString() || '',
+          taskType: task.taskType || 'task',
+          severity: task.severity || 'medium',
+          epicId: task.epicId?.toString() || '',
         });
       } else {
+        setChecklist([]);
         form.reset({
           projectId: projectId?.toString() || '',
           sprintId: sprintId?.toString() || '',
@@ -110,6 +123,10 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
           loggedHours: '',
           blockedById: '',
           dueDate: '',
+          parentTaskId: '',
+          taskType: 'task',
+          severity: 'medium',
+          epicId: '',
         });
       }
     }
@@ -255,6 +272,11 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
         assignedTo: parseInt(values.assignedTo, 10),
         status: values.status,
         priority: values.priority,
+        parentTaskId: values.parentTaskId ? parseInt(values.parentTaskId, 10) : null,
+        taskType: values.taskType || 'task',
+        severity: values.severity || 'medium',
+        checklists: checklist,
+        epicId: values.epicId ? parseInt(values.epicId, 10) : null,
       };
 
       if (values.description?.trim()) {
@@ -338,12 +360,15 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit, () => toast.error('Please fix the validation errors'))} className="space-y-6">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-2 bg-muted/50 p-1">
+              <TabsList className="grid w-full grid-cols-3 bg-muted/50 p-1">
                 <TabsTrigger value="general" className="gap-2">
                   <LayoutGrid className="h-4 w-4" /> General
                 </TabsTrigger>
                 <TabsTrigger value="productivity" className="gap-2">
                   <Timer className="h-4 w-4" /> Productivity
+                </TabsTrigger>
+                <TabsTrigger value="checklists" className="gap-2">
+                  <CheckCircle2 className="h-4 w-4" /> Checklists
                 </TabsTrigger>
               </TabsList>
 
@@ -707,6 +732,166 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
                       </div>
                     </div>
                   )}
+                </TabsContent>
+
+                <TabsContent value="checklists" className="space-y-4">
+                  {/* Issue Type & Severity */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="taskType"
+                      render={({ field }) => (
+                        <FormItem className="min-w-0">
+                          <Label className="flex items-center gap-1.5 peer-disabled:opacity-70 text-xs font-bold uppercase tracking-wider text-muted-foreground/80 mb-2">
+                             Issue Type
+                          </Label>
+                          <Select
+                            value={field.value || 'task'}
+                            onValueChange={field.onChange}
+                            disabled={loading}
+                          >
+                            <FormControl>
+                              <SelectTrigger className="bg-background/50 w-full">
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="task">Task</SelectItem>
+                              <SelectItem value="subtask">Subtask</SelectItem>
+                              <SelectItem value="bug">Bug</SelectItem>
+                              <SelectItem value="story">Story</SelectItem>
+                              <SelectItem value="epic">Epic</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="severity"
+                      render={({ field }) => (
+                        <FormItem className="min-w-0">
+                          <Label className="flex items-center gap-1.5 peer-disabled:opacity-70 text-xs font-bold uppercase tracking-wider text-muted-foreground/80 mb-2">
+                             Priority Severity
+                          </Label>
+                          <Select
+                            value={field.value || 'medium'}
+                            onValueChange={field.onChange}
+                            disabled={loading}
+                          >
+                            <FormControl>
+                              <SelectTrigger className="bg-background/50 w-full">
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="low">Low</SelectItem>
+                              <SelectItem value="medium">Medium</SelectItem>
+                              <SelectItem value="high">High</SelectItem>
+                              <SelectItem value="critical">Critical</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  {/* Parent Task Selector */}
+                  {form.watch('taskType') === 'subtask' && (
+                    <FormField
+                      control={form.control}
+                      name="parentTaskId"
+                      render={({ field }) => (
+                        <FormItem className="min-w-0">
+                          <Label className="flex items-center gap-1.5 peer-disabled:opacity-70 text-xs font-bold uppercase tracking-wider text-muted-foreground/80 mb-2">
+                            Parent Task Link
+                          </Label>
+                          <Select
+                            value={field.value || 'none'}
+                            onValueChange={(value) => field.onChange(value === 'none' ? '' : value)}
+                            disabled={loading || !selectedProjectId}
+                          >
+                            <FormControl>
+                              <SelectTrigger className="bg-background/50 w-full">
+                                <SelectValue placeholder="Link parent issue" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="none">No Parent Link</SelectItem>
+                              {projectTasks.filter(t => t.id !== task?.id).map((t: any) => (
+                                <SelectItem key={t.id} value={t.id.toString()}>
+                                  #{t.id} - {t.title}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </FormItem>
+                      )}
+                    />
+                  )}
+
+                  {/* Checklist Manager */}
+                  <div className="space-y-3">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground/80">Definition Checklist Items</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Add acceptance criteria checklist item..."
+                        value={newCheckItem}
+                        onChange={e => setNewCheckItem(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            if (newCheckItem.trim()) {
+                              setChecklist(prev => [...prev, { id: Math.random().toString(), text: newCheckItem.trim(), checked: false }]);
+                              setNewCheckItem('');
+                            }
+                          }
+                        }}
+                        className="h-9 bg-background/50"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => {
+                          if (newCheckItem.trim()) {
+                            setChecklist(prev => [...prev, { id: Math.random().toString(), text: newCheckItem.trim(), checked: false }]);
+                            setNewCheckItem('');
+                          }
+                        }}
+                      >
+                        Add
+                      </Button>
+                    </div>
+
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto pt-1">
+                      {checklist.map((item, idx) => (
+                        <div key={item.id} className="flex items-center justify-between p-2 bg-slate-50 dark:bg-zinc-900 rounded border text-xs">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={item.checked}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                setChecklist(prev => prev.map((c, i) => i === idx ? { ...c, checked } : c));
+                              }}
+                              className="rounded border-slate-300 accent-indigo-600"
+                            />
+                            <span className={item.checked ? 'line-through text-slate-400' : 'font-semibold'}>{item.text}</span>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 text-rose-500 hover:text-rose-600"
+                            onClick={() => setChecklist(prev => prev.filter((_, i) => i !== idx))}
+                          >
+                            ×
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </TabsContent>
               </div>
             </Tabs>

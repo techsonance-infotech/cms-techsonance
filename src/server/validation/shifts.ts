@@ -10,7 +10,7 @@ export const shiftSchema = z.object({
 
 export const employeeShiftSchema = z.object({
   employeeId: z.number().int().positive(),
-  shiftId: z.number().int().positive(),
+  shiftId: z.string().uuid(),
   startDate: z.string().date(),
   endDate: z.string().date().optional().nullable().or(z.literal('')),
   isActive: z.boolean().optional().default(true),

@@ -73,6 +73,10 @@ interface DashboardStats {
   pendingApprovals: any[];
   recentProjects: any[];
   financialRunRate?: any[];
+  pendingReviews?: number;
+  pendingDocuments?: number;
+  assetRecovery?: number;
+  missingAttendance?: number;
   insights?: {
     projectDeliveryRate: number;
     attendanceRate: number;

@@ -1562,7 +1562,7 @@ export default function TrainingAndSkillsPage() {
                         <p className="font-bold text-slate-800 dark:text-slate-200 text-sm">{i.name}</p>
                         <p className="text-slate-500 mt-1">{i.qualifications || 'No qualifications documented.'}</p>
                         <div className="flex gap-3 mt-3 text-[10px] text-slate-400">
-                          <span>Rating: ⭐{i.rating}</span>
+                          <span>Rating: {i.rating} / 5</span>
                           <span>Hourly: ${i.hourly_rate}/hr</span>
                         </div>
                       </div>

@@ -151,7 +151,7 @@ export default function ClientDetailPage() {
           </Button>
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-[10px] bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+              <span className="text-[10px] bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
                 Enterprise Client
               </span>
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping"></span>
@@ -165,7 +165,7 @@ export default function ClientDetailPage() {
         </div>
         <Button 
           onClick={() => setShowEditDialog(true)}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold flex items-center gap-2 rounded-lg py-2 px-4 shadow-md shadow-indigo-600/10"
+          className="bg-primary hover:bg-primary/95 text-white font-bold flex items-center gap-2 rounded-lg py-2 px-4 shadow-sm border-none"
         >
           <Edit className="h-4 w-4" />
           Edit Profile
@@ -177,10 +177,10 @@ export default function ClientDetailPage() {
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-              <span className="h-2 w-2 bg-indigo-500 rounded-full"></span>
+              <span className="h-2 w-2 bg-primary rounded-full"></span>
               Onboarding Journey
             </CardTitle>
-            <span className="text-xs text-indigo-600 dark:text-indigo-400 font-bold">50% Completed</span>
+            <span className="text-xs text-primary font-bold">50% Completed</span>
           </div>
         </CardHeader>
         <CardContent className="px-6 pb-6 pt-2">
@@ -198,14 +198,14 @@ export default function ClientDetailPage() {
 
             {/* Step 2: Active */}
             <div className="flex items-start gap-4">
-              <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-lg shadow-indigo-600/20 animate-pulse">
+              <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-lg shadow-primary/20 animate-pulse">
                 2
               </div>
               <div className="flex-1">
-                <p className="font-bold text-indigo-600 dark:text-indigo-400 text-sm">2. Workspace Provisioning</p>
+                <p className="font-bold text-primary text-sm">2. Workspace Provisioning</p>
                 <p className="text-xs text-muted-foreground mt-0.5">CRM database environment setup...</p>
                 <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1 mt-2">
-                  <div className="bg-indigo-600 h-1 rounded-full w-[45%]"></div>
+                  <div className="bg-primary h-1 rounded-full w-[45%]"></div>
                 </div>
               </div>
             </div>
@@ -239,7 +239,7 @@ export default function ClientDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Client Health & Status Scorecard */}
-        <Card className="lg:col-span-2 bg-gradient-to-br from-indigo-500/[0.03] to-slate-500/[0.03] border-slate-150 dark:border-slate-800 shadow-sm rounded-xl">
+        <Card className="lg:col-span-2 bg-gradient-to-br from-primary/[0.03] to-slate-500/[0.03] border-slate-150 dark:border-slate-800 shadow-sm rounded-xl">
           <CardHeader className="pb-3">
             <div className="flex justify-between items-center">
               <CardTitle className="text-lg font-bold">Strategic Account Health</CardTitle>
@@ -264,7 +264,7 @@ export default function ClientDetailPage() {
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Project Velocity</p>
               <div className="flex items-baseline gap-2">
                 <span className="text-4xl font-extrabold text-slate-900 dark:text-white">{projects.length}</span>
-                <span className="text-xs font-bold text-indigo-500">Active Pipelines</span>
+                <span className="text-xs font-bold text-primary">Active Pipelines</span>
               </div>
               <p className="text-xs text-muted-foreground">
                 {projects.filter(p => p.status === 'in_progress').length} in progress, {projects.filter(p => p.status === 'completed').length} completed
@@ -275,7 +275,7 @@ export default function ClientDetailPage() {
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Support Sentiment</p>
               <div className="flex items-baseline gap-2">
                 <span className="text-4xl font-extrabold text-slate-900 dark:text-white">A+</span>
-                <span className="text-xs font-bold text-indigo-500">Daily Syncs</span>
+                <span className="text-xs font-bold text-primary">Daily Syncs</span>
               </div>
               <p className="text-[11px] text-muted-foreground italic truncate">
                 No unresolved escalations in logs.
@@ -291,8 +291,8 @@ export default function ClientDetailPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-indigo-500/10 rounded-lg">
-                <Mail className="h-4.5 w-4.5 text-indigo-600 dark:text-indigo-400" />
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <Mail className="h-4.5 w-4.5 text-primary" />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Corporate Email</p>
@@ -372,28 +372,28 @@ export default function ClientDetailPage() {
         <TabsList className="flex flex-wrap justify-start h-auto gap-1 bg-transparent border-b border-slate-200 dark:border-slate-800 rounded-none p-0 mb-6">
           <TabsTrigger 
             value="projects" 
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-indigo-600 data-[state=active]:bg-transparent data-[state=active]:text-indigo-600 dark:data-[state=active]:text-indigo-400 shadow-none px-5 py-3 font-semibold text-sm transition-all"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary shadow-none px-5 py-3 font-semibold text-sm transition-all"
           >
             <FolderKanban className="h-4 w-4 mr-2" />
             Active Pipelines
           </TabsTrigger>
           <TabsTrigger 
             value="communication" 
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-indigo-600 data-[state=active]:bg-transparent data-[state=active]:text-indigo-600 dark:data-[state=active]:text-indigo-400 shadow-none px-5 py-3 font-semibold text-sm transition-all"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary shadow-none px-5 py-3 font-semibold text-sm transition-all"
           >
             <MessageSquare className="h-4 w-4 mr-2" />
             Communication Logs
           </TabsTrigger>
           <TabsTrigger 
             value="notes" 
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-indigo-600 data-[state=active]:bg-transparent data-[state=active]:text-indigo-600 dark:data-[state=active]:text-indigo-400 shadow-none px-5 py-3 font-semibold text-sm transition-all"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary shadow-none px-5 py-3 font-semibold text-sm transition-all"
           >
             <FileText className="h-4 w-4 mr-2" />
             Internal Notes
           </TabsTrigger>
           <TabsTrigger 
             value="vault" 
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-emerald-600 data-[state=active]:bg-transparent data-[state=active]:text-emerald-600 dark:data-[state=active]:text-emerald-400 shadow-none px-5 py-3 font-semibold text-sm text-emerald-500 transition-all ml-auto"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary shadow-none px-5 py-3 font-semibold text-sm transition-all ml-auto"
           >
             <Lock className="h-4 w-4 mr-2 animate-pulse" />
             Secure Vault
@@ -420,11 +420,11 @@ export default function ClientDetailPage() {
                     <Link
                       key={project.id}
                       href={`/dashboard/projects/${project.id}`}
-                      className="flex flex-col sm:flex-row sm:items-center justify-between p-5 border border-slate-150 dark:border-slate-800 rounded-xl hover:border-indigo-500/30 hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-all group"
+                      className="flex flex-col sm:flex-row sm:items-center justify-between p-5 border border-slate-150 dark:border-slate-800 rounded-xl hover:border-primary/30 hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-all group"
                     >
                       <div className="space-y-1.5">
                         <div className="flex items-center gap-2">
-                          <p className="font-bold text-slate-900 dark:text-slate-50 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                          <p className="font-bold text-slate-900 dark:text-slate-50 group-hover:text-primary transition-colors">
                             {project.name}
                           </p>
                           <Badge className="bg-slate-100 text-slate-600 text-[10px] font-bold py-0.2 px-2 border-none">
@@ -442,7 +442,7 @@ export default function ClientDetailPage() {
                         <div className="w-24 bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden hidden sm:block">
                           <div 
                             className={`h-1.5 rounded-full ${
-                              project.status === 'completed' ? 'bg-emerald-500' : 'bg-indigo-600'
+                              project.status === 'completed' ? 'bg-emerald-500' : 'bg-primary'
                             }`}
                             style={{ width: project.status === 'completed' ? '100%' : '45%' }}
                           />
@@ -452,7 +452,7 @@ export default function ClientDetailPage() {
                             project.status === 'completed' 
                               ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' 
                               : project.status === 'in_progress'
-                              ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400'
+                              ? 'bg-primary/10 text-primary'
                               : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
                           }`}
                         >
@@ -539,7 +539,7 @@ export default function ClientDetailPage() {
                       </td>
                       <td className="py-4 px-4 text-xs text-muted-foreground font-semibold">Dec 2026</td>
                       <td className="py-4 px-4 text-right">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-indigo-600">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-primary">
                           <UploadCloud className="h-4 w-4" />
                         </Button>
                       </td>
@@ -558,7 +558,7 @@ export default function ClientDetailPage() {
                       </td>
                       <td className="py-4 px-4 text-xs text-muted-foreground font-semibold">Jul 2026</td>
                       <td className="py-4 px-4 text-right">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-indigo-600">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-primary">
                           <UploadCloud className="h-4 w-4" />
                         </Button>
                       </td>
@@ -577,7 +577,7 @@ export default function ClientDetailPage() {
                       </td>
                       <td className="py-4 px-4 text-xs text-muted-foreground font-semibold">Indefinite</td>
                       <td className="py-4 px-4 text-right">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-indigo-600">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-primary">
                           <UploadCloud className="h-4 w-4" />
                         </Button>
                       </td>

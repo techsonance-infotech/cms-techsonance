@@ -192,8 +192,8 @@ export function ClientFormDialog({ open, onOpenChange, onSuccess, client }: Clie
         {/* ── Header ── */}
         <DialogHeader className="pb-5 border-b border-border/40">
           <DialogTitle className="flex items-center gap-3 text-xl">
-            <div className="p-2 rounded-xl bg-emerald-500/10 ring-1 ring-emerald-500/20">
-              <Building2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+            <div className="p-2 rounded-xl bg-primary/10 ring-1 ring-primary/20">
+              <Building2 className="h-5 w-5 text-primary" />
             </div>
             {client ? 'Edit Client' : 'Add New Client'}
           </DialogTitle>
@@ -388,7 +388,7 @@ export function ClientFormDialog({ open, onOpenChange, onSuccess, client }: Clie
               <Button
                 type="submit"
                 disabled={loading}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white min-w-[140px]"
+                className="bg-primary hover:bg-primary/95 text-white min-w-[140px]"
               >
                 {loading ? (
                   <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</>

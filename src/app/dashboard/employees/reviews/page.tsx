@@ -711,19 +711,19 @@ export default function ReviewsPage() {
                     <div>
                       <Label htmlFor="fb-rating">Performance Rating</Label>
                       <select id="fb-rating" value={feedbackRating} onChange={e => setFeedbackRating(e.target.value)} className="w-full border rounded-lg p-2 mt-1.5 bg-transparent text-xs border-input h-9 outline-none">
-                        <option value="5">⭐⭐⭐⭐⭐ Exceptional (5)</option>
-                        <option value="4">⭐⭐⭐⭐ Highly Effective (4)</option>
-                        <option value="3">⭐⭐⭐ Meets Goals (3)</option>
-                        <option value="2">⭐⭐ Underperforming (2)</option>
+                        <option value="5">Exceptional (5/5)</option>
+                        <option value="4">Highly Effective (4/5)</option>
+                        <option value="3">Meets Goals (3/5)</option>
+                        <option value="2">Underperforming (2/5)</option>
                       </select>
                     </div>
                     <div>
                       <Label htmlFor="fb-badge">Select Badge</Label>
                       <select id="fb-badge" value={feedbackBadge} onChange={e => setFeedbackBadge(e.target.value)} className="w-full border rounded-lg p-2 mt-1.5 bg-transparent text-xs border-input h-9 outline-none">
-                        <option value="Team Player">🤝 Team Player</option>
-                        <option value="Innovation Star">🚀 Innovation Star</option>
-                        <option value="Customer Champion">🌟 Customer Champion</option>
-                        <option value="Problem Solver">🧠 Problem Solver</option>
+                        <option value="Team Player">Team Player</option>
+                        <option value="Innovation Star">Innovation Star</option>
+                        <option value="Customer Champion">Customer Champion</option>
+                        <option value="Problem Solver">Problem Solver</option>
                       </select>
                     </div>
                   </div>
@@ -872,21 +872,84 @@ export default function ReviewsPage() {
                 <CardTitle className="text-md">Succession Readiness Bench Maps</CardTitle>
               </CardHeader>
               <CardContent className="pt-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-xs">
-                  {successions.map(s => (
-                    <div key={s.id} className="p-4 border rounded-xl hover:bg-slate-50 dark:hover:bg-zinc-900/30 border-slate-100 dark:border-zinc-800 space-y-2">
-                      <div className="flex justify-between items-start">
-                        <p className="font-bold text-slate-800 dark:text-slate-200 text-sm">{s.position_name}</p>
-                        <Badge className="bg-indigo-500/10 text-indigo-500 border-none text-[9px] font-bold py-0.5 px-1.5 uppercase">{s.readiness_timeline.replace(/_/g, ' ')}</Badge>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {successions.map(s => {
+                    const primaryEmp = employees.find(emp => String(emp.id) === String(s.primary_successor_id));
+                    const secondaryEmp = employees.find(emp => String(emp.id) === String(s.secondary_successor_id));
+                    
+                    return (
+                      <div key={s.id} className="p-5 border rounded-2xl hover:bg-slate-50 dark:hover:bg-zinc-900/30 border-slate-100 dark:border-zinc-800 space-y-4 shadow-md bg-white dark:bg-[#1C1C1E] transition">
+                        
+                        <div className="flex justify-between items-center pb-2 border-b border-border/50">
+                          <h4 className="font-bold text-slate-800 dark:text-slate-200 text-sm">Succession Bench</h4>
+                          <span className="text-[8px] bg-primary/10 text-primary font-black px-2 py-0.5 rounded-full uppercase">
+                            Active
+                          </span>
+                        </div>
+
+                        {/* Interactive Succession Flowchart */}
+                        <div className="flex flex-col items-center pt-2">
+                          
+                          {/* Target leadership Role node */}
+                          <div className="bg-primary/5 dark:bg-primary/10 border border-primary/20 p-3 rounded-xl w-full max-w-[280px] text-center shadow-sm">
+                            <div className="text-[9px] font-black text-primary uppercase tracking-wider">Target Key Position</div>
+                            <div className="text-xs font-black mt-1 text-slate-800 dark:text-slate-100">{s.position_name}</div>
+                          </div>
+                          
+                          {/* Node Connector Line */}
+                          <div className="h-5 w-0.5 bg-border/80 my-0.5 relative">
+                            <div className="absolute -bottom-1 -left-0.5 w-1 h-1 rounded-full bg-border" />
+                          </div>
+                          
+                          {/* Primary Successor node */}
+                          <div className="bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-xl w-full max-w-[280px] text-center shadow-sm relative">
+                            <div className="text-[9px] font-black text-emerald-500 uppercase tracking-wider">Primary Successor</div>
+                            <div className="text-xs font-bold mt-1 text-slate-700 dark:text-slate-200">
+                              {primaryEmp ? `${primaryEmp.firstName} ${primaryEmp.lastName}` : 'Unassigned Position'}
+                            </div>
+                            {primaryEmp && (
+                              <div className="text-[9px] text-muted-foreground mt-0.5 font-medium">
+                                {primaryEmp.designation} • {primaryEmp.department}
+                              </div>
+                            )}
+                            <div className="mt-1.5 inline-block text-[8px] bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-extrabold px-2 py-0.5 rounded-full uppercase">
+                              Readiness: {s.readiness_timeline.replace(/_/g, ' ')}
+                            </div>
+                          </div>
+                          
+                          {/* Node Connector Line */}
+                          <div className="h-5 w-0.5 bg-border/80 my-0.5 relative">
+                            <div className="absolute -bottom-1 -left-0.5 w-1 h-1 rounded-full bg-border" />
+                          </div>
+                          
+                          {/* Secondary Successor node */}
+                          <div className="bg-blue-500/5 dark:bg-blue-500/10 border border-blue-500/20 p-3 rounded-xl w-full max-w-[280px] text-center shadow-sm">
+                            <div className="text-[9px] font-black text-blue-500 uppercase tracking-wider">Secondary Successor</div>
+                            <div className="text-xs font-bold mt-1 text-slate-700 dark:text-slate-200">
+                              {secondaryEmp ? `${secondaryEmp.firstName} ${secondaryEmp.lastName}` : 'Unassigned Position'}
+                            </div>
+                            {secondaryEmp && (
+                              <div className="text-[9px] text-muted-foreground mt-0.5 font-medium">
+                                {secondaryEmp.designation} • {secondaryEmp.department}
+                              </div>
+                            )}
+                          </div>
+
+                        </div>
+
+                        {s.risk_mitigation && (
+                          <div className="p-2.5 bg-slate-50 dark:bg-zinc-800/40 rounded-xl border border-border/50 text-[10px] text-muted-foreground italic">
+                            <span className="font-bold not-italic text-slate-600 dark:text-slate-400">Risk Strategy:</span> "{s.risk_mitigation}"
+                          </div>
+                        )}
                       </div>
-                      <div className="text-[10px] text-slate-400 space-y-1">
-                        <p>Primary successor ID: <span className="font-bold text-slate-500">#{s.primary_successor_id || 'Unassigned'}</span></p>
-                        <p>Secondary successor ID: <span className="font-bold text-slate-500">#{s.secondary_successor_id || 'Unassigned'}</span></p>
-                        {s.risk_mitigation && <p className="italic text-slate-500 mt-1">Mitigation: "{s.risk_mitigation}"</p>}
-                      </div>
-                    </div>
-                  ))}
-                  {successions.length === 0 && <p className="col-span-full text-slate-400 italic py-6 text-center">No succession replacement paths documented.</p>}
+                    );
+                  })}
+                  {successions.length === 0 && (
+                    <p className="col-span-full text-slate-400 italic py-12 text-center bg-slate-50/50 dark:bg-zinc-900/10 border border-dashed rounded-2xl">
+                      No succession replacement paths documented. Please use the form on the left to map successors.
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>

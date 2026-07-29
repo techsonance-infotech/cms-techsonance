@@ -219,10 +219,153 @@ export default function FinancePage() {
   const [monthlyReportPage, setMonthlyReportPage] = useState(0);
   const incomePageSize = 5;
 
+  // Finance Control States
+  const [coaList, setCoaList] = useState<any[]>([]);
+  const [costCenterList, setCostCenterList] = useState<any[]>([]);
+  const [ledgerList, setLedgerList] = useState<any[]>([]);
+  const [journalList, setJournalList] = useState<any[]>([]);
+
+  // Finance Control creation forms
+  const [showAddCoa, setShowAddCoa] = useState(false);
+  const [coaCode, setCoaCode] = useState('');
+  const [coaName, setCoaName] = useState('');
+  const [coaType, setCoaType] = useState('Asset');
+
+  const [showAddCostCenter, setShowAddCostCenter] = useState(false);
+  const [ccCode, setCcCode] = useState('');
+  const [ccName, setCcName] = useState('');
+  const [ccBudget, setCcBudget] = useState('');
+
+  const [showAddJournal, setShowAddJournal] = useState(false);
+  const [jNumber, setJNumber] = useState('');
+  const [jDebitAcc, setJDebitAcc] = useState('');
+  const [jCreditAcc, setJCreditAcc] = useState('');
+  const [jAmount, setJAmount] = useState('');
+  const [jNotes, setJNotes] = useState('');
+
+  const fetchControlData = async () => {
+    try {
+      const token = localStorage.getItem('session_token');
+      const res = await fetch('/api/finance/control', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setCoaList(json.data.coa || []);
+        setCostCenterList(json.data.costCenters || []);
+        setLedgerList(json.data.ledger || []);
+        setJournalList(json.data.journalEntries || []);
+      }
+    } catch (err) {
+      console.error('Error fetching control data:', err);
+    }
+  };
+
   useEffect(() => {
     fetchCurrentUser();
     fetchFinanceData();
+    fetchControlData();
   }, []);
+
+  const handleCreateCoa = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!coaCode || !coaName || !coaType) {
+      toast.error('Code, name, and account type are required');
+      return;
+    }
+    try {
+      const res = await fetch('/api/finance/control', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          action: 'create_coa',
+          code: coaCode,
+          name: coaName,
+          type: coaType
+        })
+      });
+      if (res.ok) {
+        toast.success('Chart of Account created successfully!');
+        setCoaCode('');
+        setCoaName('');
+        setShowAddCoa(false);
+        fetchControlData();
+      } else {
+        toast.error('Failed to create Chart of Account');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleCreateCostCenter = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ccCode || !ccName) {
+      toast.error('Code and name are required');
+      return;
+    }
+    try {
+      const res = await fetch('/api/finance/control', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          action: 'create_cost_center',
+          code: ccCode,
+          name: ccName,
+          budgetLimit: ccBudget
+        })
+      });
+      if (res.ok) {
+        toast.success('Cost Center created successfully!');
+        setCcCode('');
+        setCcName('');
+        setCcBudget('');
+        setShowAddCostCenter(false);
+        fetchControlData();
+      } else {
+        toast.error('Failed to create Cost Center');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handlePostJournal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!jNumber || !jDebitAcc || !jCreditAcc || !jAmount) {
+      toast.error('All journal fields are required');
+      return;
+    }
+    try {
+      const res = await fetch('/api/finance/control', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          action: 'post_journal',
+          entryNumber: jNumber,
+          debitAccount: jDebitAcc,
+          creditAccount: jCreditAcc,
+          amount: jAmount,
+          notes: jNotes
+        })
+      });
+      if (res.ok) {
+        toast.success('Journal entry posted to general ledger!');
+        setJNumber('');
+        setJDebitAcc('');
+        setJCreditAcc('');
+        setJAmount('');
+        setJNotes('');
+        setShowAddJournal(false);
+        fetchControlData();
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Failed to post journal entry');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const fetchCurrentUser = async () => {
     try {
@@ -894,7 +1037,7 @@ export default function FinancePage() {
 
       {/* Main Tabs */}
       <Tabs defaultValue="purchase" className="w-full">
-        <TabsList className="grid w-full grid-cols-4 h-12 p-1 bg-muted/50 rounded-xl">
+        <TabsList className="grid w-full grid-cols-5 h-12 p-1 bg-muted/50 rounded-xl">
           <TabsTrigger value="purchase" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2 text-xs sm:text-sm">
             <ShoppingCart className="h-4 w-4 hidden sm:block" />
             Purchases
@@ -910,6 +1053,10 @@ export default function FinancePage() {
           <TabsTrigger value="income" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2 text-xs sm:text-sm">
             <TrendingUp className="h-4 w-4 hidden sm:block" />
             Income
+          </TabsTrigger>
+          <TabsTrigger value="finance_control" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2 text-xs sm:text-sm">
+            <ShieldAlert className="h-4 w-4 hidden sm:block" />
+            Finance Control
           </TabsTrigger>
         </TabsList>
 
@@ -2079,6 +2226,263 @@ export default function FinancePage() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="finance_control" className="space-y-6">
+          
+          {/* Top Actions Grid */}
+          <div className="flex flex-wrap gap-2 justify-end mb-4">
+            <Button onClick={() => setShowAddCoa(true)} className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold h-9 text-xs">
+              <Plus className="mr-1.5 h-4 w-4" /> Add GL Account
+            </Button>
+            <Button onClick={() => setShowAddCostCenter(true)} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold h-9 text-xs">
+              <Plus className="mr-1.5 h-4 w-4" /> Create Cost Center
+            </Button>
+            <Button onClick={() => setShowAddJournal(true)} className="bg-indigo-700 hover:bg-indigo-600 text-white font-bold h-9 text-xs">
+              <Plus className="mr-1.5 h-4 w-4" /> Post Journal Entry
+            </Button>
+          </div>
+
+          {/* Dynamic Dialog: Add COA */}
+          {showAddCoa && (
+            <Card className="border border-indigo-100 dark:border-indigo-950 p-4 bg-slate-50 dark:bg-zinc-950 text-xs">
+              <CardHeader className="p-2"><CardTitle className="text-sm font-bold">Add Chart of Account</CardTitle></CardHeader>
+              <CardContent>
+                <form onSubmit={handleCreateCoa} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-slate-500">Account Code</label>
+                    <Input placeholder="e.g. 1010, 4010" value={coaCode} onChange={e => setCoaCode(e.target.value)} required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-slate-500">Account Name</label>
+                    <Input placeholder="e.g. Petty Cash, Sales Revenue" value={coaName} onChange={e => setCoaName(e.target.value)} required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-slate-500">Account Type</label>
+                    <Select value={coaType} onValueChange={setCoaType}>
+                      <SelectTrigger className="h-9">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Asset">Asset</SelectItem>
+                        <SelectItem value="Liability">Liability</SelectItem>
+                        <SelectItem value="Equity">Equity</SelectItem>
+                        <SelectItem value="Revenue">Revenue</SelectItem>
+                        <SelectItem value="Expense">Expense</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="col-span-3 text-right space-x-2 pt-2">
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setShowAddCoa(false)}>Cancel</Button>
+                    <Button type="submit" size="sm" className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold">Save Account</Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Dynamic Dialog: Add Cost Center */}
+          {showAddCostCenter && (
+            <Card className="border border-emerald-100 dark:border-zinc-800 p-4 bg-slate-50 dark:bg-zinc-950 text-xs">
+              <CardHeader className="p-2"><CardTitle className="text-sm font-bold">Create Cost Center</CardTitle></CardHeader>
+              <CardContent>
+                <form onSubmit={handleCreateCostCenter} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-slate-500">Cost Center Code</label>
+                    <Input placeholder="e.g. CC-ENG, CC-SALES" value={ccCode} onChange={e => setCcCode(e.target.value)} required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-slate-500">Cost Center Name</label>
+                    <Input placeholder="e.g. Engineering, Sales Department" value={ccName} onChange={e => setCcName(e.target.value)} required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-slate-500">Budget Limit (₹)</label>
+                    <Input type="number" placeholder="500000" value={ccBudget} onChange={e => setCcBudget(e.target.value)} />
+                  </div>
+                  <div className="col-span-3 text-right space-x-2 pt-2">
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setShowAddCostCenter(false)}>Cancel</Button>
+                    <Button type="submit" size="sm" className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold">Save Cost Center</Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Dynamic Dialog: Post Journal */}
+          {showAddJournal && (
+            <Card className="border border-indigo-200 dark:border-zinc-800 p-4 bg-slate-50 dark:bg-zinc-950 text-xs">
+              <CardHeader className="p-2"><CardTitle className="text-sm font-bold">Post Manual Journal Entry</CardTitle></CardHeader>
+              <CardContent>
+                <form onSubmit={handlePostJournal} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-slate-500">Journal Entry Number</label>
+                    <Input placeholder="e.g. JR-2026-004" value={jNumber} onChange={e => setJNumber(e.target.value)} required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-slate-500">Transfer Amount (₹)</label>
+                    <Input type="number" placeholder="10000" value={jAmount} onChange={e => setJAmount(e.target.value)} required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-slate-500">Debit GL Account Code</label>
+                    <Select value={jDebitAcc} onValueChange={setJDebitAcc}>
+                      <SelectTrigger className="h-9 bg-white dark:bg-zinc-900">
+                        <SelectValue placeholder="Select Debit Account" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {coaList.map(coa => (
+                          <SelectItem key={coa.id} value={coa.account_code}>{coa.account_code} - {coa.account_name} ({coa.account_type})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-slate-500">Credit GL Account Code</label>
+                    <Select value={jCreditAcc} onValueChange={setJCreditAcc}>
+                      <SelectTrigger className="h-9 bg-white dark:bg-zinc-900">
+                        <SelectValue placeholder="Select Credit Account" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {coaList.map(coa => (
+                          <SelectItem key={coa.id} value={coa.account_code}>{coa.account_code} - {coa.account_name} ({coa.account_type})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5 col-span-2">
+                    <label className="font-bold text-slate-500">Journal Memo Notes</label>
+                    <Input placeholder="Transferring fund reserves or reconciling travel logs" value={jNotes} onChange={e => setJNotes(e.target.value)} />
+                  </div>
+                  <div className="col-span-2 text-right space-x-2 pt-2">
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setShowAddJournal(false)}>Cancel</Button>
+                    <Button type="submit" size="sm" className="bg-indigo-700 hover:bg-indigo-600 text-white font-bold">Post Journal</Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Sub Panels Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            {/* Chart of Accounts (6 Columns) */}
+            <Card className="lg:col-span-6">
+              <CardHeader>
+                <CardTitle className="text-md">Chart of Accounts</CardTitle>
+                <CardDescription>Multi-currency corporate asset and liability registry</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0 overflow-x-auto">
+                <Table className="text-xs">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="pl-4">Code</TableHead>
+                      <TableHead>Account Name</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead className="pr-4 text-right">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {coaList.map(coa => (
+                      <TableRow key={coa.id}>
+                        <td className="pl-4 font-mono font-bold text-slate-500">{coa.account_code}</td>
+                        <td className="font-bold">{coa.account_name}</td>
+                        <td>
+                          <Badge className="bg-slate-100 text-slate-700 border-none font-bold text-[10px]">
+                            {coa.account_type}
+                          </Badge>
+                        </td>
+                        <td className="pr-4 text-right">
+                          <span className="text-emerald-500 font-bold text-[10px]">Active</span>
+                        </td>
+                      </TableRow>
+                    ))}
+                    {coaList.length === 0 && (
+                      <TableRow>
+                        <td colSpan={4} className="text-center py-6 text-slate-400 italic">No Chart of Accounts configured.</td>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            {/* Cost Centers (6 Columns) */}
+            <Card className="lg:col-span-6">
+              <CardHeader>
+                <CardTitle className="text-md">Cost Centers & Department Limits</CardTitle>
+                <CardDescription>Financial cost-limit boundaries and manager ownerships</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0 overflow-x-auto">
+                <Table className="text-xs">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="pl-4">CC Code</TableHead>
+                      <TableHead>Department Name</TableHead>
+                      <TableHead className="text-right">Budget Limit</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {costCenterList.map(cc => (
+                      <TableRow key={cc.id}>
+                        <td className="pl-4 font-mono font-bold text-emerald-600">{cc.code}</td>
+                        <td className="font-bold">{cc.name}</td>
+                        <td className="pr-4 text-right font-black">
+                          ₹{Number(cc.budget_limit || 0).toLocaleString()}
+                        </td>
+                      </TableRow>
+                    ))}
+                    {costCenterList.length === 0 && (
+                      <TableRow>
+                        <td colSpan={3} className="text-center py-6 text-slate-400 italic">No Cost Centers configured.</td>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            {/* General Ledger Postings (Full 12 columns) */}
+            <Card className="col-span-12">
+              <CardHeader>
+                <CardTitle className="text-md">General Ledger Postings</CardTitle>
+                <CardDescription>Immutable double-entry book balancing transactional records</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0 overflow-x-auto">
+                <Table className="text-xs">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="pl-6">Posting Date</TableHead>
+                      <TableHead>Account Code</TableHead>
+                      <TableHead>Ref Transaction</TableHead>
+                      <TableHead className="text-right">Debit</TableHead>
+                      <TableHead className="text-right pr-6">Credit</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {ledgerList.map(item => (
+                      <TableRow key={item.id}>
+                        <td className="pl-6 text-slate-500 font-bold">{new Date(item.posting_date).toLocaleDateString()}</td>
+                        <td className="font-mono font-bold text-indigo-600">{item.account_code}</td>
+                        <td className="capitalize font-semibold text-slate-600">{item.ref_transaction_type} #{item.ref_transaction_id?.substring(0,6)}</td>
+                        <td className="text-right font-bold text-emerald-600">
+                          {Number(item.debit) > 0 ? `₹${Number(item.debit).toLocaleString()}` : '—'}
+                        </td>
+                        <td className="text-right pr-6 font-bold text-rose-600">
+                          {Number(item.credit) > 0 ? `₹${Number(item.credit).toLocaleString()}` : '—'}
+                        </td>
+                      </TableRow>
+                    ))}
+                    {ledgerList.length === 0 && (
+                      <TableRow>
+                        <td colSpan={5} className="text-center py-6 text-slate-400 italic">No general ledger entries posted. Run billing or journal runs.</td>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+          </div>
+
         </TabsContent>
 
         {/* BUSINESS SETTINGS */}

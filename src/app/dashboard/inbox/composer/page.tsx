@@ -110,24 +110,40 @@ export default function CRMComposerPage() {
     }, 800);
   };
 
-  const handleGenerateFromPrompt = () => {
+  const handleGenerateFromPrompt = async () => {
     if (!aiPrompt.trim()) {
       toast.error('Please specify a prompt instruction for the AI');
       return;
     }
     toast.loading('AI is crafting a contextual draft...', { id: 'ai-prompt-loading' });
-    setTimeout(() => {
-      setEmailBody(
-        `<p>Dear Sarah,</p>
-<p>Regarding your prompt instruction: <em>"${aiPrompt}"</em>.</p>
-<p>I wanted to follow up and confirm we have updated our servers to support the high-density inventory calculations you requested. All items will be completed according to our SLA guarantees.</p>
-<p>Looking forward to your thoughts!</p>
-<p>Best regards,</p>
-<p><strong>Alex Rivera</strong><br/><span style="color: #64748b; font-size: 12px;">Senior Account Manager | Nexus ERP</span></p>`
-      );
-      setAiPrompt('');
-      toast.success('AI Draft Generated', { id: 'ai-prompt-loading' });
-    }, 1000);
+    try {
+      const token = localStorage.getItem('session_token');
+      const res = await fetch('/api/crm/ai-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          prompt: aiPrompt,
+          tone: toneFriendly > 70 ? 'Casual' : 'Professional',
+          category: activeTemplate.includes('Reminder') ? 'Payment Reminder' : activeTemplate.includes('Roundtable') ? 'Proposal' : 'Cold Outreach',
+          recipientName: recipients[0] || 'Client'
+        })
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setSubject(json.data.subject);
+        setEmailBody(`<p>${json.data.body.replace(/\n/g, '<br/>')}</p><p><strong>CTA:</strong> ${json.data.cta}</p><p><em>Spam Score check: ${json.data.spamScore}</em></p>`);
+        setAiPrompt('');
+        toast.success('AI Draft Generated', { id: 'ai-prompt-loading' });
+      } else {
+        toast.error('Failed to generate AI email', { id: 'ai-prompt-loading' });
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Error generating AI email', { id: 'ai-prompt-loading' });
+    }
   };
 
   const handleSend = () => {
@@ -136,30 +152,30 @@ export default function CRMComposerPage() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-60px)] overflow-hidden bg-slate-50 text-slate-900">
+    <div className="flex h-[calc(100vh-60px)] overflow-hidden bg-background text-foreground border-t border-border">
       {/* Main Workspace */}
-      <main className="flex-1 flex flex-col bg-white overflow-hidden border-r border-slate-200">
+      <main className="flex-1 flex flex-col bg-card overflow-hidden border-r border-border">
         {/* Composer Header / Control Bar */}
-        <div className="px-6 py-4 flex items-center justify-between border-b border-slate-200 shrink-0">
+        <div className="px-6 py-4 flex items-center justify-between border-b border-border shrink-0">
           <div className="flex items-center gap-3">
             <Button 
               size="icon" 
               variant="ghost" 
               onClick={() => router.push('/dashboard/inbox')} 
-              className="h-8 w-8 text-slate-500 rounded-lg hover:bg-slate-100"
+              className="h-8 w-8 text-muted-foreground rounded-lg hover:bg-accent"
             >
               <ArrowLeft className="h-4.5 w-4.5" />
             </Button>
-            <h2 className="text-base font-bold tracking-tight text-slate-800">New Message</h2>
+            <h2 className="text-base font-bold tracking-tight">New Message</h2>
           </div>
           
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1">
-              <span className="text-[10px] font-bold text-slate-400 uppercase">Template:</span>
+            <div className="flex items-center gap-1.5 bg-accent/30 border border-border rounded-xl px-2.5 py-1">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase">Template:</span>
               <select 
                 value={activeTemplate} 
                 onChange={(e) => handleTemplateChange(e.target.value)}
-                className="bg-transparent border-none text-xs focus:ring-0 cursor-pointer font-semibold text-slate-700 py-0.5"
+                className="bg-transparent border-none text-xs focus:ring-0 cursor-pointer font-semibold py-0.5 text-foreground"
               >
                 <option value="Professional Follow-up">Professional Follow-up</option>
                 <option value="Invoice Reminder">Invoice Reminder</option>
@@ -169,7 +185,7 @@ export default function CRMComposerPage() {
             
             <Button 
               onClick={handleSend}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-[0.98] transition-all"
+              className="bg-primary hover:bg-primary/90 text-white px-5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-[0.98] transition-all border-none"
             >
               Send
               <Send className="h-3.5 w-3.5" />
@@ -178,14 +194,14 @@ export default function CRMComposerPage() {
         </div>
 
         {/* Recipient Fields */}
-        <div className="px-6 py-3 space-y-3 border-b border-slate-150 bg-slate-50/50 shrink-0">
+        <div className="px-6 py-3 space-y-3 border-b border-border bg-accent/10 shrink-0">
           <div className="grid grid-cols-[60px,1fr] items-center">
-            <label className="text-xs font-bold text-slate-400 uppercase">To</label>
+            <label className="text-xs font-bold text-muted-foreground uppercase">To</label>
             <div className="flex flex-wrap gap-1.5 items-center">
               {recipients.map(name => (
                 <div 
                   key={name} 
-                  className="bg-indigo-50 border border-indigo-150 rounded-full px-2.5 py-0.5 flex items-center gap-1.5 text-xs text-indigo-700 font-semibold shadow-sm"
+                  className="bg-primary/10 border border-primary/20 rounded-full px-2.5 py-0.5 flex items-center gap-1.5 text-xs text-primary font-semibold shadow-sm"
                 >
                   <span>{name}</span>
                   <X 
@@ -198,177 +214,163 @@ export default function CRMComposerPage() {
                 value={newRecipient}
                 onChange={(e) => setNewRecipient(e.target.value)}
                 onKeyDown={handleAddRecipient}
-                placeholder={recipients.length === 0 ? "Add recipient and press Enter..." : "Add CC..."}
-                className="bg-transparent border-none focus:ring-0 text-xs flex-1 min-w-[150px] h-7 p-0 focus:outline-none placeholder:text-slate-400"
+                placeholder={recipients.length === 0 ? "Enter recipient name..." : ""}
+                className="flex-1 bg-transparent border-none focus-visible:ring-0 p-0 text-xs h-7 text-foreground placeholder:text-muted-foreground"
               />
             </div>
           </div>
-          <div className="h-px bg-slate-200/50"></div>
+          
           <div className="grid grid-cols-[60px,1fr] items-center">
-            <label className="text-xs font-bold text-slate-400 uppercase">Subject</label>
+            <label className="text-xs font-bold text-muted-foreground uppercase">Subject</label>
             <Input 
-              value={subject}
+              value={subject} 
               onChange={(e) => setSubject(e.target.value)}
-              placeholder="Enter subject line" 
-              className="bg-transparent border-none focus:ring-0 text-sm font-bold text-slate-800 placeholder:text-slate-300 h-8 p-0"
+              className="bg-transparent border-none focus-visible:ring-0 p-0 text-xs h-7 font-semibold text-foreground placeholder:text-muted-foreground"
             />
           </div>
         </div>
 
-        {/* Rich Text Editor Body */}
-        <div className="flex-1 flex flex-col p-6 overflow-hidden">
-          {/* Formatting tools */}
-          <div className="flex items-center gap-1 p-1 border border-slate-200 rounded-xl mb-4 bg-slate-50/50 w-fit shrink-0">
-            <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-500 rounded-lg hover:bg-slate-100">
-              <Bold className="h-4 w-4" />
-            </Button>
-            <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-500 rounded-lg hover:bg-slate-100">
-              <Italic className="h-4 w-4" />
-            </Button>
-            <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-500 rounded-lg hover:bg-slate-100">
-              <Underline className="h-4 w-4" />
-            </Button>
-            <div className="w-px h-5 bg-slate-200 mx-1"></div>
-            <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-500 rounded-lg hover:bg-slate-100">
-              <List className="h-4 w-4" />
-            </Button>
-            <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-500 rounded-lg hover:bg-slate-100">
-              <ListOrdered className="h-4 w-4" />
-            </Button>
-            <div className="w-px h-5 bg-slate-200 mx-1"></div>
-            <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-500 rounded-lg hover:bg-slate-100">
-              <LinkIcon className="h-4 w-4" />
-            </Button>
-            <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-500 rounded-lg hover:bg-slate-100">
-              <ImageIcon className="h-4 w-4" />
-            </Button>
-            <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-500 rounded-lg hover:bg-slate-100">
-              <Paperclip className="h-4 w-4" />
-            </Button>
-          </div>
+        {/* Rich Text Editor Simulation */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          <div className="min-h-[300px] text-xs leading-relaxed focus:outline-none text-foreground"
+            contentEditable
+            suppressContentEditableWarning
+            onInput={(e) => setEmailBody(e.currentTarget.innerHTML)}
+            dangerouslySetInnerHTML={{ __html: emailBody }}
+          />
+        </div>
 
-          {/* Composition Area */}
-          <div className="flex-1 overflow-y-auto">
-            <textarea 
-              value={emailBody.replace(/<[^>]*>/g, '\n').replace(/\n\n+/g, '\n').trim()}
-              onChange={(e) => setEmailBody(e.target.value)}
-              className="w-full h-full bg-transparent border-none text-slate-800 text-sm focus:ring-0 focus:outline-none p-2 leading-relaxed resize-none font-sans"
-              placeholder="Write your email body here..."
-            />
+        {/* Editor Toolbar (Bottom Sticky) */}
+        <div className="px-6 py-3 border-t border-border flex items-center justify-between shrink-0 bg-card">
+          <div className="flex items-center gap-1">
+            <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground"><Bold className="h-4 w-4" /></Button>
+            <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground"><Italic className="h-4 w-4" /></Button>
+            <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground"><Underline className="h-4 w-4" /></Button>
+            <span className="h-4 w-[1px] bg-border mx-1.5" />
+            <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground"><List className="h-4 w-4" /></Button>
+            <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground"><ListOrdered className="h-4 w-4" /></Button>
+            <span className="h-4 w-[1px] bg-border mx-1.5" />
+            <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground"><LinkIcon className="h-4 w-4" /></Button>
+            <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground"><ImageIcon className="h-4 w-4" /></Button>
+            <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground"><Paperclip className="h-4 w-4" /></Button>
           </div>
+          
+          <p className="text-[10px] text-muted-foreground font-semibold">Saved locally at {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
         </div>
       </main>
 
-      {/* AI Assistant Sidebar */}
-      <aside className="w-80 bg-white flex flex-col p-6 border-l border-slate-200 overflow-y-auto shrink-0 gap-6">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-gradient-to-tr from-indigo-600 to-pink-500 rounded-xl flex items-center justify-center shadow-sm">
-            <Sparkles className="h-4.5 w-4.5 text-white" />
+      {/* Right AI Sidebar Panel (320px) */}
+      <aside className="w-80 bg-card p-6 overflow-y-auto shrink-0 hidden lg:block">
+        <div className="flex items-center gap-2 mb-6">
+          <div className="w-8 h-8 bg-primary/10 rounded-xl flex items-center justify-center shadow-sm">
+            <Sparkles className="h-4.5 w-4.5 text-primary" />
           </div>
-          <h3 className="text-sm font-bold tracking-tight text-slate-800">AI Assistant Panel</h3>
+          <div>
+            <h3 className="text-sm font-bold text-foreground">AI Sales Copilot</h3>
+            <p className="text-[10px] text-muted-foreground">Contextual Tone Optimizer</p>
+          </div>
         </div>
 
-        {/* Tone sliders */}
-        <div className="space-y-4 bg-slate-50/50 border border-slate-150 p-4 rounded-2xl">
-          <h4 className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Dynamic Tone Tuning</h4>
-          <div className="space-y-3">
-            <div>
-              <div className="flex justify-between text-xs font-semibold mb-1 text-slate-600">
-                <span>Professional</span>
-                <span>{toneProfessional}%</span>
-              </div>
-              <input 
-                type="range" 
-                min="0" 
-                max="100" 
-                value={toneProfessional}
-                onChange={(e) => setToneProfessional(Number(e.target.value))}
-                className="w-full accent-indigo-600 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer"
-              />
+        {/* Tone Tuning Sliders */}
+        <div className="space-y-6 pb-6 border-b border-border">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs font-semibold">
+              <span className="text-muted-foreground">Warmth & Friendliness</span>
+              <span>{toneFriendly}%</span>
             </div>
-            <div>
-              <div className="flex justify-between text-xs font-semibold mb-1 text-slate-600">
-                <span>Friendly / Warm</span>
-                <span>{toneFriendly}%</span>
-              </div>
-              <input 
-                type="range" 
-                min="0" 
-                max="100" 
-                value={toneFriendly}
-                onChange={(e) => setToneFriendly(Number(e.target.value))}
-                className="w-full accent-indigo-600 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer"
-              />
-            </div>
-            <div>
-              <div className="flex justify-between text-xs font-semibold mb-1 text-slate-600">
-                <span>Urgency</span>
-                <span>{toneUrgent}%</span>
-              </div>
-              <input 
-                type="range" 
-                min="0" 
-                max="100" 
-                value={toneUrgent}
-                onChange={(e) => setToneUrgent(Number(e.target.value))}
-                className="w-full accent-indigo-600 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer"
-              />
-            </div>
+            <input 
+              type="range" 
+              min="0" max="100" 
+              value={toneFriendly} 
+              onChange={(e) => setToneFriendly(Number(e.target.value))}
+              className="w-full accent-primary h-1 bg-accent rounded-lg appearance-none cursor-pointer"
+            />
           </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs font-semibold">
+              <span className="text-muted-foreground">Professional Vocabulary</span>
+              <span>{toneProfessional}%</span>
+            </div>
+            <input 
+              type="range" 
+              min="0" max="100" 
+              value={toneProfessional} 
+              onChange={(e) => setToneProfessional(Number(e.target.value))}
+              className="w-full accent-primary h-1 bg-accent rounded-lg appearance-none cursor-pointer"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs font-semibold">
+              <span className="text-muted-foreground">Urgency & Call-to-action</span>
+              <span>{toneUrgent}%</span>
+            </div>
+            <input 
+              type="range" 
+              min="0" max="100" 
+              value={toneUrgent} 
+              onChange={(e) => setToneUrgent(Number(e.target.value))}
+              className="w-full accent-primary h-1 bg-accent rounded-lg appearance-none cursor-pointer"
+            />
+          </div>
+
           <Button 
             onClick={handleImproveTone}
-            className="w-full mt-2 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 text-indigo-700 font-bold py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-[0.98]"
+            className="w-full mt-2 bg-primary/10 border border-primary/20 hover:bg-primary/20 text-primary font-bold py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-[0.98]"
           >
-            <Sparkles className="h-3.5 w-3.5" />
-            Apply Tone Optimizations
+            Optimize Tone
+            <ChevronRight className="h-4.5 w-4.5" />
           </Button>
         </div>
 
-        {/* Action cards */}
-        <div className="space-y-2">
-          <h4 className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">AI Operations</h4>
-          <button className="w-full text-left p-3.5 rounded-2xl border border-slate-150 bg-white hover:border-indigo-300 hover:bg-indigo-50/10 cursor-pointer transition-all flex items-start gap-3 shadow-sm group">
-            <span className="p-2 bg-indigo-50 rounded-xl text-indigo-600"><Clock className="h-4.5 w-4.5" /></span>
-            <div className="flex-1 min-w-0">
-              <p className="font-bold text-xs text-slate-800">Summarize Previous Threads</p>
-              <p className="text-[10px] text-slate-400 mt-0.5 leading-relaxed">Extract core alignment outcomes from recent WhatsApp messages.</p>
-            </div>
-          </button>
+        {/* AI Quick Templates */}
+        <div className="py-6 space-y-3 border-b border-border">
+          <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Suggested AI Templates</h4>
           
-          <button className="w-full text-left p-3.5 rounded-2xl border border-slate-150 bg-white hover:border-indigo-300 hover:bg-indigo-50/10 cursor-pointer transition-all flex items-start gap-3 shadow-sm group">
-            <span className="p-2 bg-indigo-50 rounded-xl text-indigo-600"><Smile className="h-4.5 w-4.5" /></span>
-            <div className="flex-1 min-w-0">
-              <p className="font-bold text-xs text-slate-800">Generate Standard Follow-up</p>
-              <p className="text-[10px] text-slate-400 mt-0.5 leading-relaxed">Let AI frame automated schedules and delivery trackers.</p>
+          <button className="w-full text-left p-3.5 rounded-2xl border border-border bg-background hover:border-primary/40 hover:bg-primary/5 cursor-pointer transition-all flex items-start gap-3 shadow-sm group">
+            <span className="p-2 bg-primary/10 rounded-xl text-primary"><Clock className="h-4.5 w-4.5" /></span>
+            <div>
+              <p className="text-xs font-bold group-hover:text-primary transition-colors">Nudge Decision Makers</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Polite reminder for review</p>
+            </div>
+          </button>
+
+          <button className="w-full text-left p-3.5 rounded-2xl border border-border bg-background hover:border-primary/40 hover:bg-primary/5 cursor-pointer transition-all flex items-start gap-3 shadow-sm group">
+            <span className="p-2 bg-primary/10 rounded-xl text-primary"><Smile className="h-4.5 w-4.5" /></span>
+            <div>
+              <p className="text-xs font-bold group-hover:text-primary transition-colors">Q4 Project Proposal</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Outline implementation SOW</p>
             </div>
           </button>
         </div>
 
-        {/* AI Context Card */}
-        <div className="bg-indigo-50/50 rounded-2xl p-4 border border-indigo-100 flex items-start gap-3 shadow-sm">
-          <Info className="h-4.5 w-4.5 text-indigo-600 shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <p className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider mb-1">Contextual Insight</p>
-            <p className="text-[11px] text-slate-600 leading-relaxed font-medium">
-              Sarah Connor typically responds best to data-driven bullet lists sent before 10 AM. She has a high engagement momentum of <span className="text-emerald-600 font-bold">92%</span>.
-            </p>
+        {/* Context Warning */}
+        <div className="py-6 space-y-4">
+          <div className="bg-primary/10 rounded-2xl p-4 border border-primary/20 flex items-start gap-3 shadow-sm">
+            <Info className="h-4.5 w-4.5 text-primary shrink-0 mt-0.5" />
+            <div>
+              <p className="text-[10px] font-bold text-primary uppercase tracking-wider mb-1">Contextual Insight</p>
+              <p className="text-[10px] text-primary/80 leading-relaxed">
+                We detected that Sarah Chen viewed the grand total proposal 3 hours ago. Leverage this timing with an active follow-up prompt.
+              </p>
+            </div>
           </div>
-        </div>
 
-        {/* Input prompt area */}
-        <div className="mt-auto pt-4 border-t border-slate-100">
-          <div className="relative">
+          {/* AI Custom Prompt Area */}
+          <div className="space-y-3 relative">
             <textarea 
               value={aiPrompt}
               onChange={(e) => setAiPrompt(e.target.value)}
-              placeholder="Ask AI to write a paragraph..." 
-              className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-xs focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none h-24 placeholder:text-slate-400"
+              placeholder="Ask Sales Copilot to write: 'Ask Sarah for a call next Monday morning...'"
+              className="w-full bg-accent border border-border rounded-2xl p-3 text-xs focus:ring-2 focus:ring-primary focus:border-transparent resize-none h-24 placeholder:text-muted-foreground text-foreground"
             />
             <Button 
+              size="icon"
               onClick={handleGenerateFromPrompt}
-              className="absolute bottom-2.5 right-2.5 p-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors h-7 w-7 flex items-center justify-center"
+              className="absolute bottom-2.5 right-2.5 p-2 bg-primary hover:bg-primary/90 text-white rounded-lg transition-colors h-7 w-7 flex items-center justify-center border-none"
             >
-              <Sparkles className="h-3.5 w-3.5" />
+              <Sparkles className="h-4 w-4" />
             </Button>
           </div>
         </div>

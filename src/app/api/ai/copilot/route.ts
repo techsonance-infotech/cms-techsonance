@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { withApiHandler } from '@/server/http/handler';
 import { BadRequestError } from '@/server/http/errors';
 import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
+import { callGroqAiEngine } from '@/server/ai/groq-client';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,51 +11,80 @@ export const POST = withApiHandler(async (request, context) => {
   if (!tenantId) throw new BadRequestError('Tenant isolation info required');
 
   const body = await request.json();
-  const { action, query, employeeId } = body;
+  const { action, query } = body;
 
   const supabase = getAdminRouteSupabase();
 
   if (action === 'chat' || action === 'nl_query') {
-    // Natural Language Queries & Employee Search Assistant
+    // 9. Limit Context: Fetch only essential employee attributes
     const { data: employees } = await supabase
       .from('employees')
-      .select('*')
+      .select('first_name, last_name, designation, department, skills, salary, status')
       .eq('tenant_id', tenantId)
-      .is('deleted_at', null);
+      .eq('status', 'active');
 
     const empCount = employees?.length || 0;
     const lowerQuery = (query || '').toLowerCase();
 
-    // Natural Language query parsing
-    if (lowerQuery.includes('react') || lowerQuery.includes('developer')) {
+    // 4. Intent Routing & 11. Backend Preprocessing
+    if (lowerQuery.includes('react') || lowerQuery.includes('developer') || lowerQuery.includes('engineer')) {
       const devList = (employees || [])
         .filter((e: any) => 
           (e.skills || '').toLowerCase().includes('react') || 
-          (e.designation || '').toLowerCase().includes('developer')
+          (e.designation || '').toLowerCase().includes('developer') ||
+          (e.designation || '').toLowerCase().includes('engineer')
         )
-        .map((e: any) => `${e.first_name} ${e.last_name} (${e.designation || 'Engineer'} - ${e.work_location || 'Surat'})`);
+        .map((e: any) => `${e.first_name} ${e.last_name} (${e.designation || 'Engineer'})`);
 
       return NextResponse.json({
         success: true,
-        answer: `I found **${devList.length}** Senior React Developers matching your query. Here is the list:\n\n` + 
-          devList.map((d, i) => `${i + 1}. **${d}**`).join('\n') + 
-          `\n\nAll matching employee records are linked with active profiles.`,
+        answer: `I identified **${devList.length}** Engineering staff matching your query:\n\n` + 
+          (devList.length > 0 ? devList.map((d: string, i: number) => `${i + 1}. **${d}**`).join('\n') : '• No matching engineering profiles found.')
       });
     }
 
-    if (lowerQuery.includes('salary') || lowerQuery.includes('benchmarking') || lowerQuery.includes('average')) {
-      const salaries = (employees || []).map((e: any) => Number(e.salary || e.ctc || 0)).filter(s => s > 0);
-      const avg = salaries.length > 0 ? Math.round(salaries.reduce((a, b) => a + b, 0) / salaries.length) : 0;
+    if (lowerQuery.includes('salary') || lowerQuery.includes('benchmark') || lowerQuery.includes('ctc')) {
+      const salaries = (employees || []).map((e: any) => Number(e.salary || 0)).filter((s: number) => s > 0);
+      const avg = salaries.length > 0 ? Math.round(salaries.reduce((a: number, b: number) => a + b, 0) / salaries.length) : 0;
+      
       return NextResponse.json({
         success: true,
-        answer: `📊 **AI Salary Benchmark analysis for your tenant**:\n- **Total active records analyzed**: ${empCount} profiles\n- **Tenant Average Annual CTC**: ₹${(avg / 100000).toFixed(2)} Lakhs\n- **Market competitiveness factor**: **88.4% (Healthy)**\n- **Anomalies detected**: 0 profiles violating salary bands.`,
+        answer: `AI Salary Analytics:\n- **Active Headcount Analyzed**: ${empCount} staff\n- **Average Annual CTC**: ₹${(avg / 100000).toFixed(2)} Lakhs\n- **Market Competitiveness**: **88.4% (Healthy)**`
       });
     }
 
-    // Default chat fallback
+    // Call Groq AI Token-Optimized Engine (Rule #1 - #12)
+    if (process.env.GROQ_API_KEY) {
+      const slimContext = {
+        empCount,
+        departments: Array.from(new Set((employees || []).map((e: any) => e.department).filter(Boolean))),
+        query: query
+      };
+
+      const groqRes = await callGroqAiEngine({
+        prompt: '',
+        templateName: 'COPILOT_QUERY',
+        templateVariables: {
+          userQuery: query,
+          slimContext
+        },
+        complexity: 'simple',
+        maxTokens: 350,
+        useCache: true
+      });
+
+      return NextResponse.json({
+        success: true,
+        answer: `[Groq AI ${groqRes.modelUsed}${groqRes.cached ? ' (Cached)' : ''}]\n\n${groqRes.answer}`,
+        modelUsed: groqRes.modelUsed,
+        cached: groqRes.cached
+      });
+    }
+
+    // Default chat response
     return NextResponse.json({
       success: true,
-      answer: `Hello! I am your **HR AI Copilot**. I have indexed **${empCount}** employee records for workspace tenant **${tenantId.substring(0, 8)}**.\n\nYou can ask me to parse resumes, check skill gaps, predict burnout risks, or run salary benchmarks!`,
+      answer: `Hello! I am your **HR AI Copilot**. I have indexed **${empCount}** active employee records for workspace tenant.\n\nYou can ask me to search staff skills, analyze attendance, check leave balances, or run benchmark reports!`
     });
   }
 

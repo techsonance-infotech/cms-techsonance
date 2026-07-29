@@ -247,5 +247,12 @@ export function normalizeSupabaseTaskRecord(
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at ?? null,
+    parentTaskId: row.parent_id === null ? null : Number(row.parent_id),
+    estimatedHours: row.estimated_hours === null ? null : Number(row.estimated_hours),
+    loggedHours: row.logged_hours === null ? null : Number(row.logged_hours),
+    taskType: row.task_type ?? 'task',
+    severity: row.severity ?? 'medium',
+    checklists: row.checklists ?? [],
+    epicId: row.epic_id === null ? null : Number(row.epic_id),
   };
 }

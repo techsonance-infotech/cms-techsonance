@@ -36,6 +36,7 @@ export const MOVEMENT_TYPES = [
 
 export interface RosterEmployee {
   id: string;
+  employeeTableId?: string;
   name: string;
   email: string;
   department: string;

@@ -157,7 +157,7 @@ export default function DashboardLayout({
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
-      <DashboardSidebar user={user} companyName={companyName} />
+      <DashboardSidebar user={user} companyName={companyName || undefined} />
       
       {/* Mobile Sidebar Sheet Drawer */}
       <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
@@ -169,7 +169,7 @@ export default function DashboardLayout({
             user={user} 
             isMobile 
             onClose={() => setMobileSidebarOpen(false)} 
-            companyName={companyName}
+            companyName={companyName || undefined}
           />
         </SheetContent>
       </Sheet>

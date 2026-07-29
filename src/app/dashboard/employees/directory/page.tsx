@@ -2439,7 +2439,7 @@ export default function EmployeeDirectoryPage() {
                 {[
                   { text: "Passport expires in 30 days (Aditya Sen)", type: "warning" },
                   { text: "Probation ends this week (Neha Gupta)", type: "info" },
-                  { text: "Birthday tomorrow (Rushabh Jain 🎉)", type: "success" },
+                  { text: "Birthday tomorrow (Rushabh Jain)", type: "success" },
                   { text: "Pending performance review (Siddharth Roy)", type: "warning" },
                   { text: "Pending documents / KYC missing (Priya Patel)", type: "error" },
                   { text: "Missing attendance alert: 2 consecutive days (Kunal Shah)", type: "error" },

@@ -41,6 +41,18 @@ import {
 import { hasPermission, hasFullAccess, UserRole } from '@/lib/permissions';
 import ReaderManagement from '@/components/dashboard/ReaderManagement';
 import { LeaveRequestDialog } from '@/components/dashboard/LeaveRequestDialog';
+import MonthlyRegister from '@/components/attendance/MonthlyRegister';
+import RegularizationTab from '@/components/attendance/RegularizationTab';
+import ExceptionsTab from '@/components/attendance/ExceptionsTab';
+import OvertimeTab from '@/components/attendance/OvertimeTab';
+import RosterTab from '@/components/attendance/RosterTab';
+import PolicyConfigurator from '@/components/attendance/PolicyConfigurator';
+import PunchConsole from '@/components/attendance/PunchConsole';
+import EmployeeOvertimeTab from '@/components/attendance/EmployeeOvertimeTab';
+import AttendanceStatsGrid from '@/components/attendance/AttendanceStatsGrid';
+import BreakCard from '@/components/attendance/BreakCard';
+import AiAssistant from '@/components/attendance/AiAssistant';
+
 
 interface LeaveRequest {
   id: number;
@@ -100,6 +112,7 @@ interface UserData {
 interface User {
   id: number;
   role: UserRole;
+  tenantId?: string;
 }
 
 const formatLocalDate = (date: Date) => {
@@ -414,6 +427,11 @@ export default function AttendancePage() {
       if (response.ok) {
         const data = await response.json();
         setEmployees(data);
+
+        // Fallback default employee selection for administrator test profiles
+        if (data && data.length > 0) {
+          setEmployeeId((prev: any) => prev || Number(data[0].id));
+        }
 
         // Fetch user details for all employees
         const userIds = data.map((emp: Employee) => emp.userId);
@@ -1010,9 +1028,9 @@ export default function AttendancePage() {
     try {
       const token = localStorage.getItem('session_token');
 
-      // Create ISO datetime strings with Z suffix for API validation
-      const checkInISO = `${attendanceForm.date}T${attendanceForm.timeIn}:00Z`;
-      const checkOutISO = `${attendanceForm.date}T${attendanceForm.timeOut}:00Z`;
+      // Create ISO datetime strings with +05:30 offset for IST API validation
+      const checkInISO = `${attendanceForm.date}T${attendanceForm.timeIn}:00+05:30`;
+      const checkOutISO = `${attendanceForm.date}T${attendanceForm.timeOut}:00+05:30`;
 
       // Calculate work hours (deduct 1 hour for lunch)
       const inTime = new Date(checkInISO).getTime();
@@ -1260,10 +1278,10 @@ export default function AttendancePage() {
     };
   };
 
-  const isFullAccessUser = currentUser && hasFullAccess(currentUser.role as UserRole);
-  const canApproveLeaves = currentUser && hasPermission(currentUser.role as UserRole, 'myAccount', 'canApprove');
-  const canEditAttendance = currentUser && hasPermission(currentUser.role as UserRole, 'myAccount', 'canEdit');
-  const canDeleteRecords = currentUser && hasPermission(currentUser.role as UserRole, 'myAccount', 'canDelete');
+  const isFullAccessUser = !!(currentUser && hasFullAccess(currentUser.role as UserRole));
+  const canApproveLeaves = !!(currentUser && hasPermission(currentUser.role as UserRole, 'myAccount', 'canApprove'));
+  const canEditAttendance = !!(currentUser && hasPermission(currentUser.role as UserRole, 'myAccount', 'canEdit'));
+  const canDeleteRecords = !!(currentUser && hasPermission(currentUser.role as UserRole, 'myAccount', 'canDelete'));
 
   const stats = getAttendanceStats();
 
@@ -1334,13 +1352,26 @@ export default function AttendancePage() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         {/* Only show tabs for admin roles — employees get direct view without tab header */}
-        {isFullAccessUser && (
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="all-attendance">All Attendance</TabsTrigger>
-            <TabsTrigger value="attendance"><Clock className="mr-2 h-4 w-4" />My Attendance</TabsTrigger>
-            <TabsTrigger value="attendance-settings"><Settings className="mr-2 h-4 w-4" />Settings & Policies</TabsTrigger>
-          </TabsList>
-        )}
+        <TabsList className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100 dark:bg-[#18191B] rounded-lg w-full justify-start">
+          {isFullAccessUser ? (
+            <>
+              <TabsTrigger value="all-attendance" className="text-xs">Daily Register</TabsTrigger>
+              <TabsTrigger value="monthly-register" className="text-xs">Monthly Register</TabsTrigger>
+              <TabsTrigger value="regularization" className="text-xs">Regularizations</TabsTrigger>
+              <TabsTrigger value="exceptions" className="text-xs">Anomalies & AI Alerts</TabsTrigger>
+              <TabsTrigger value="overtime" className="text-xs">Overtime</TabsTrigger>
+              <TabsTrigger value="shift-roster" className="text-xs">Shift Roster</TabsTrigger>
+              <TabsTrigger value="attendance" className="text-xs">My Attendance</TabsTrigger>
+              <TabsTrigger value="attendance-settings" className="text-xs">Settings & Policies</TabsTrigger>
+            </>
+          ) : (
+            <>
+              <TabsTrigger value="attendance" className="text-xs">My Attendance</TabsTrigger>
+              <TabsTrigger value="regularization" className="text-xs">Regularizations</TabsTrigger>
+              <TabsTrigger value="shift-roster" className="text-xs">My Roster</TabsTrigger>
+            </>
+          )}
+        </TabsList>
 
         
 
@@ -1903,435 +1934,372 @@ export default function AttendancePage() {
           </TabsContent>
         )}
 
-        
+        {/* Monthly Register Tab */}
+        {isFullAccessUser && (
+          <TabsContent value="monthly-register">
+            <MonthlyRegister
+              tenantId={currentUser?.tenantId || ''}
+              isFullAccess={isFullAccessUser}
+              employees={employees.map((e: any) => {
+                const profile = users.find(u => u.id === e.userId);
+                return {
+                  id: Number(e.id),
+                  employeeId: e.employeeId,
+                  department: e.department,
+                  firstName: profile?.firstName || '',
+                  lastName: profile?.lastName || '',
+                };
+              })}
+            />
+          </TabsContent>
+        )}
 
-        
+        {/* Regularization Tab */}
+        <TabsContent value="regularization">
+          <RegularizationTab
+            tenantId={currentUser?.tenantId || ''}
+            isFullAccess={isFullAccessUser}
+            employeeId={employeeId}
+            employees={employees.map((e: any) => {
+              const profile = users.find(u => u.id === e.userId);
+              return {
+                id: Number(e.id),
+                employeeId: e.employeeId,
+                department: e.department,
+                firstName: profile?.firstName || '',
+                lastName: profile?.lastName || '',
+              };
+            })}
+          />
+        </TabsContent>
+
+        {/* Exceptions & AI Alerts Tab */}
+        {isFullAccessUser && (
+          <TabsContent value="exceptions">
+            <ExceptionsTab tenantId={currentUser?.tenantId || ''} />
+          </TabsContent>
+        )}
+
+        {/* Overtime Tab */}
+        {isFullAccessUser && (
+          <TabsContent value="overtime">
+            <OvertimeTab tenantId={currentUser?.tenantId || ''} />
+          </TabsContent>
+        )}
+
+        {/* Shift Roster & Swaps Tab */}
+        <TabsContent value="shift-roster">
+          <RosterTab
+            tenantId={currentUser?.tenantId || ''}
+            isFullAccess={isFullAccessUser}
+            employees={employees.map((e: any) => {
+              const profile = users.find(u => u.id === e.userId);
+              return {
+                id: Number(e.id),
+                employeeId: e.employeeId,
+                department: e.department,
+                firstName: profile?.firstName || '',
+                lastName: profile?.lastName || '',
+              };
+            })}
+          />
+        </TabsContent>
+
 
         {/* Attendance Tab (Personal) */}
         {(true) && (
-          <TabsContent value="attendance">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>Attendance</CardTitle>
-                    <CardDescription>View your attendance records and log daily work hours</CardDescription>
-                  </div>
-                  <Dialog open={showAttendanceDialog} onOpenChange={setShowAttendanceDialog}>
-                    <DialogTrigger asChild>
-                      <Button>
-                        <Clock className="mr-2 h-4 w-4" />
-                        Log Attendance
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Log Daily Attendance</DialogTitle>
-                        <DialogDescription>
-                          Record your time in and time out. Lunch break (1 hour) will be automatically deducted for shifts over 4 hours.
-                        </DialogDescription>
-                      </DialogHeader>
+          <TabsContent value="attendance" className="space-y-6">
+            <Tabs defaultValue="console" className="space-y-6">
+              <TabsList className="bg-slate-50 dark:bg-[#18191B] p-1 border border-border rounded-lg text-xs font-bold text-slate-500">
+                <TabsTrigger value="console" className="text-xs">My Attendance Portal</TabsTrigger>
+                <TabsTrigger value="overtime-claims" className="text-xs">My Overtime Claims</TabsTrigger>
+                <TabsTrigger value="history" className="text-xs">My Attendance Logs & Ledger</TabsTrigger>
+              </TabsList>
 
-                      <div className="space-y-4">
-                        {isFullAccessUser && (
-                          <div className="space-y-2">
-                            <Label>Employee *</Label>
-                            <Select
-                              value={attendanceForm.employeeId}
-                              onValueChange={(value) => setAttendanceForm({ ...attendanceForm, employeeId: value })}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select employee" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {employees.map((emp) => {
-                                  const user = users.find(u => u.id === emp.userId);
-                                  return (
-                                    <SelectItem key={emp.id} value={emp.id.toString()}>
-                                      {user ? `${user.firstName} ${user.lastName}` : 'Unknown'} ({emp.employeeId})
-                                    </SelectItem>
-                                  );
-                                })}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        )}
+              <TabsContent value="console" className="space-y-6">
+                <PunchConsole
+                  employeeId={employeeId}
+                  onPunchSuccess={fetchAttendance}
+                  todayRecord={attendance.find(r => r.date === formatLocalDate(new Date()))}
+                />
 
-                        <div className="space-y-2">
-                          <Label>Date *</Label>
-                          <Input
-                            type="date"
-                            value={attendanceForm.date}
-                            onChange={(e) => setAttendanceForm({ ...attendanceForm, date: e.target.value })}
-                            max={formatLocalDate(new Date(new Date().getTime() + 24 * 60 * 60 * 1000))} // Allow up to tomorrow for timezone safety
-                          />
-                        </div>
+                {/* Attendance Analytics Grid */}
+                <AttendanceStatsGrid attendance={attendance} />
 
-                        <div className="space-y-2">
-                          <Label>Time In *</Label>
-                          <Input
-                            type="time"
-                            value={attendanceForm.timeIn}
-                            onChange={(e) => setAttendanceForm({ ...attendanceForm, timeIn: e.target.value })}
-                          />
-                        </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Break Tracking Control */}
+                  <BreakCard
+                    employeeId={employeeId}
+                    onBreakChange={fetchAttendance}
+                    todayRecord={attendance.find(r => r.date === formatLocalDate(new Date()))}
+                  />
 
-                        <div className="space-y-2">
-                          <Label>Time Out *</Label>
-                          <Input
-                            type="time"
-                            value={attendanceForm.timeOut}
-                            onChange={(e) => setAttendanceForm({ ...attendanceForm, timeOut: e.target.value })}
-                          />
-                        </div>
+                  {/* AI Attendance Virtual Assistant */}
+                  <AiAssistant employeeId={employeeId} />
+                </div>
+              </TabsContent>
 
-                        <div className="space-y-2">
-                          <Label>Notes (Optional)</Label>
-                          <Textarea
-                            value={attendanceForm.notes}
-                            onChange={(e) => setAttendanceForm({ ...attendanceForm, notes: e.target.value })}
-                            placeholder="Any additional notes..."
-                            rows={2}
-                          />
-                        </div>
+              <TabsContent value="overtime-claims" className="space-y-6">
+                <EmployeeOvertimeTab employeeId={employeeId} />
+              </TabsContent>
+
+              <TabsContent value="history" className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle>Attendance History</CardTitle>
+                        <CardDescription>View your attendance records and daily work hours log.</CardDescription>
                       </div>
-
-                      <DialogFooter>
-                        <Button
-                          variant="outline"
-                          onClick={() => setShowAttendanceDialog(false)}
-                          disabled={loading}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {/* Filters */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <div className="space-y-2">
+                        <Label>Month</Label>
+                        <Select
+                          value={selectedMonth.toString()}
+                          onValueChange={(value) => setSelectedMonth(parseInt(value))}
                         >
-                          Cancel
-                        </Button>
-                        <Button onClick={handleAttendanceSubmit} disabled={loading}>
-                          {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                          Submit Attendance
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Filters */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="space-y-2">
-                    <Label>Month</Label>
-                    <Select
-                      value={selectedMonth.toString()}
-                      onValueChange={(value) => setSelectedMonth(parseInt(value))}
-                    >
-                      <SelectTrigger className="h-10">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Array.from({ length: 12 }, (_, i) => (
-                          <SelectItem key={i + 1} value={(i + 1).toString()}>
-                            {new Date(2024, i).toLocaleString('default', { month: 'long' })}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Year</Label>
-                    <Select
-                      value={selectedYear.toString()}
-                      onValueChange={(value) => setSelectedYear(parseInt(value))}
-                    >
-                      <SelectTrigger className="h-10">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Array.from({ length: 5 }, (_, i) => {
-                          const year = new Date().getFullYear() - 2 + i;
-                          return (
-                            <SelectItem key={year} value={year.toString()}>
-                              {year}
-                            </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>From Date</Label>
-                    <Input
-                      type="date"
-                      value={attendanceStartDate}
-                      onChange={(e) => setAttendanceStartDate(e.target.value)}
-                      className="h-10"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>To Date</Label>
-                    <Input
-                      type="date"
-                      value={attendanceEndDate}
-                      onChange={(e) => setAttendanceEndDate(e.target.value)}
-                      className="h-10"
-                    />
-                  </div>
-                </div>
-
-                {/* Stats */}
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                  <Card>
-                    <CardHeader className="pb-3 text-center md:text-left">
-                      <CardDescription>Working Days</CardDescription>
-                      <CardTitle className="text-2xl">{stats.workingDays}</CardTitle>
-                    </CardHeader>
-                  </Card>
-                  <Card>
-                    <CardHeader className="pb-3 text-center md:text-left">
-                      <CardDescription>Present Days</CardDescription>
-                      <CardTitle className="text-2xl">{stats.presentDays}</CardTitle>
-                    </CardHeader>
-                  </Card>
-                  <Card>
-                    <CardHeader className="pb-3 text-center md:text-left">
-                      <CardDescription>Leave Days</CardDescription>
-                      <div className="flex items-baseline gap-2 justify-center md:justify-start">
-                        <CardTitle className="text-2xl">{stats.leaveDays}</CardTitle>
-                        {stats.pendingLeaveDays > 0 && (
-                          <span className="text-[10px] text-muted-foreground whitespace-nowrap bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">
-                            {stats.pendingLeaveDays} pending
-                          </span>
-                        )}
+                          <SelectTrigger className="h-10">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Array.from({ length: 12 }, (_, i) => (
+                              <SelectItem key={i + 1} value={(i + 1).toString()}>
+                                {new Date(2024, i).toLocaleString('default', { month: 'long' })}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
-                    </CardHeader>
-                  </Card>
-                  <Card>
-                    <CardHeader className="pb-3 text-center md:text-left">
-                      <CardDescription>Holidays</CardDescription>
-                      <CardTitle className="text-2xl">{stats.holidays}</CardTitle>
-                    </CardHeader>
-                  </Card>
-                  <Card className="border-primary/20 bg-primary/5">
-                    <CardHeader className="pb-3 text-center md:text-left">
-                      <div className="flex items-center justify-between">
-                        <CardDescription className="text-primary font-medium">Month Total</CardDescription>
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${stats.monthlyDifference >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                          {formatDuration(stats.monthlyDifference)}
-                        </span>
-                      </div>
-                      <CardTitle className="text-2xl text-primary">{formatDuration(stats.monthlyTotalHours, false)}</CardTitle>
-                    </CardHeader>
-                  </Card>
-                  <Card className={stats.weeklyTotalHours >= stats.weeklyTarget ? "border-emerald-500/30 bg-emerald-500/5" : "border-amber-500/30 bg-amber-500/5"}>
-                    <CardHeader className="pb-3 text-center md:text-left">
-                      <CardDescription className="flex items-center justify-between">
-                        <span className="font-medium text-[10px] md:text-xs">Weekly (40h)</span>
-                        <span className="hidden xl:inline text-[10px] uppercase font-bold text-muted-foreground">{stats.weeklyDifference >= 0 ? 'Goal Met' : 'Awaiting Progress'}</span>
-                      </CardDescription>
-                      <div className="flex items-baseline justify-center md:justify-start gap-2">
-                        <CardTitle className="text-xl md:text-2xl">
-                          {formatDuration(stats.weeklyTotalHours, false)}
-                          <span className="text-xs font-normal text-muted-foreground ml-1">/40</span>
-                        </CardTitle>
-                        <span className={`text-[10px] font-medium ${stats.weeklyDifference >= 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
-                          ({formatDuration(stats.weeklyDifference)})
-                        </span>
-                      </div>
-                    </CardHeader>
-                  </Card>
-                </div>
 
-                {/* Table */}
-                <div className="max-h-[600px] overflow-y-auto rounded-md border">
-                  <Table>
-                    <TableHeader className="sticky top-0 bg-background z-10">
-                      <TableRow>
-                        <TableHead>No</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead>In Time</TableHead>
-                        <TableHead>Out Time</TableHead>
-                        <TableHead>Work Hours</TableHead>
-                        <TableHead>Method</TableHead>
-                        <TableHead>Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {loading ? (
-                        <TableSkeleton columns={7} rows={10} />
-                      ) : attendance.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                            No attendance records found
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        attendance.map((record, index) => {
-                          // Support both old checkIn and new timeIn fields
-                          const tIn = record.timeIn || record.checkIn;
-                          const tOut = record.timeOut || record.checkOut;
-                          const workHours = calculateWorkHours(tIn, tOut);
+                      <div className="space-y-2">
+                        <Label>Year</Label>
+                        <Select
+                          value={selectedYear.toString()}
+                          onValueChange={(value) => setSelectedYear(parseInt(value))}
+                        >
+                          <SelectTrigger className="h-10">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Array.from({ length: 5 }, (_, i) => {
+                              const y = new Date().getFullYear() - 2 + i;
+                              return (
+                                <SelectItem key={y} value={y.toString()}>
+                                  {y}
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                      </div>
 
-                          return (
-                            <TableRow key={record.id}>
-                              <TableCell>{personalAttendancePage * PAGE_SIZE + index + 1}</TableCell>
-                              <TableCell className="font-medium">{formatDateOrdinal(record.date)}</TableCell>
-                              <TableCell>
-                                {tIn ? new Date(tIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
-                              </TableCell>
-                              <TableCell>
-                                {tOut ? new Date(tOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
-                              </TableCell>
-                              <TableCell>
-                                {(() => {
-                                  const stats = calculateWorkHours(tIn, tOut);
-                                  return (
-                                    <div className="flex flex-col">
-                                      <span>{formatDuration(calculateWorkHours(tIn, tOut).hours, false)}</span>
-                                      {stats.hours > 0 && (
-                                        <span className={`text-[10px] font-semibold ${stats.type === 'Full Day' ? 'text-emerald-600' : 'text-amber-600'}`}>
-                                          {stats.type}
-                                        </span>
-                                      )}
-                                    </div>
-                                  );
-                                })()}
-                              </TableCell>
-                              <TableCell>
-                                <Badge
-                                  variant="outline"
-                                  className={`capitalize text-[10px] px-1.5 py-0 ${(record.checkInMethod === 'rfid' || record.checkInMethod === 'nfc')
-                                    ? 'bg-blue-500/10 text-blue-700 border-blue-200'
-                                    : ''
-                                    }`}
-                                >
-                                  {(record.checkInMethod === 'rfid' || record.checkInMethod === 'nfc') ? 'RFID Attendance' :
-                                    record.checkInMethod === 'legacy' ? 'Manual' :
-                                      (record.checkInMethod || 'Manual')}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                <Badge className={
-                                  record.status === 'present' ? 'bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/25 border-emerald-200' :
-                                    record.status === 'absent' ? 'bg-red-500/15 text-red-700 hover:bg-red-500/25 border-red-200' :
-                                      'bg-amber-500/15 text-amber-700 hover:bg-amber-500/25 border-amber-200'
-                                }>
-                                  {record.status}
-                                </Badge>
+                      <div className="space-y-2">
+                        <Label>Start Date</Label>
+                        <Input
+                          type="date"
+                          value={attendanceStartDate}
+                          onChange={(e) => setAttendanceStartDate(e.target.value)}
+                          className="h-10"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>End Date</Label>
+                        <Input
+                          type="date"
+                          value={attendanceEndDate}
+                          onChange={(e) => setAttendanceEndDate(e.target.value)}
+                          className="h-10"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button onClick={fetchAttendance} disabled={loading} variant="outline" className="h-10">
+                        {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Apply Filters
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          setAttendanceStartDate('');
+                          setAttendanceEndDate('');
+                          setSelectedMonth(new Date().getMonth() + 1);
+                          setSelectedYear(new Date().getFullYear());
+                        }}
+                        variant="ghost"
+                        className="h-10"
+                      >
+                        Reset
+                      </Button>
+                    </div>
+
+                    {/* Stats summary cards */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4">
+                      <Card>
+                        <CardHeader className="pb-3 text-center md:text-left">
+                          <CardDescription>Present Days</CardDescription>
+                          <CardTitle className="text-2xl">{stats.presentDays}</CardTitle>
+                        </CardHeader>
+                      </Card>
+                      <Card>
+                        <CardHeader className="pb-3 text-center md:text-left">
+                          <CardDescription>Holidays</CardDescription>
+                          <CardTitle className="text-2xl">{stats.holidays}</CardTitle>
+                        </CardHeader>
+                      </Card>
+                      <Card className="border-primary/20 bg-primary/5">
+                        <CardHeader className="pb-3 text-center md:text-left">
+                          <div className="flex items-center justify-between">
+                            <CardDescription className="text-primary font-medium">Month Total</CardDescription>
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${stats.monthlyDifference >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                              {formatDuration(stats.monthlyDifference)}
+                            </span>
+                          </div>
+                          <CardTitle className="text-2xl text-primary">{formatDuration(stats.monthlyTotalHours, false)}</CardTitle>
+                        </CardHeader>
+                      </Card>
+                      <Card className={stats.weeklyTotalHours >= stats.weeklyTarget ? "border-emerald-500/30 bg-emerald-500/5" : "border-amber-500/30 bg-amber-500/5"}>
+                        <CardHeader className="pb-3 text-center md:text-left">
+                          <CardDescription className="flex items-center justify-between">
+                            <span className="font-medium text-[10px] md:text-xs">Weekly (40h)</span>
+                            <span className="hidden xl:inline text-[10px] uppercase font-bold text-muted-foreground">{stats.weeklyDifference >= 0 ? 'Goal Met' : 'Awaiting Progress'}</span>
+                          </CardDescription>
+                          <div className="flex items-baseline justify-center md:justify-start gap-2">
+                            <CardTitle className="text-xl md:text-2xl">
+                              {formatDuration(stats.weeklyTotalHours, false)}
+                              <span className="text-xs font-normal text-muted-foreground ml-1">/40</span>
+                            </CardTitle>
+                            <span className={`text-[10px] font-medium ${stats.weeklyDifference >= 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                              ({formatDuration(stats.weeklyDifference)})
+                            </span>
+                          </div>
+                        </CardHeader>
+                      </Card>
+                    </div>
+
+                    {/* Table */}
+                    <div className="max-h-[600px] overflow-y-auto rounded-md border">
+                      <Table>
+                        <TableHeader className="sticky top-0 bg-background z-10">
+                          <TableRow>
+                            <TableHead>No</TableHead>
+                            <TableHead>Date</TableHead>
+                            <TableHead>In Time</TableHead>
+                            <TableHead>Out Time</TableHead>
+                            <TableHead>Work Hours</TableHead>
+                            <TableHead>Method</TableHead>
+                            <TableHead>Status</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {loading ? (
+                            <TableSkeleton columns={7} rows={10} />
+                          ) : attendance.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                                No attendance records found
                               </TableCell>
                             </TableRow>
-                          );
-                        })
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
+                          ) : (
+                            attendance.map((record, index) => {
+                              // Support both old checkIn and new timeIn fields
+                              const tIn = record.timeIn || record.checkIn;
+                              const tOut = record.timeOut || record.checkOut;
+                              const workHours = calculateWorkHours(tIn, tOut);
 
-                {/* Pagination */}
-                <div className="flex items-center justify-between pt-4 border-t">
-                  <div className="text-sm text-muted-foreground">
-                    Page {personalAttendancePage + 1}
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPersonalAttendancePage(p => Math.max(0, p - 1))}
-                      disabled={personalAttendancePage === 0 || loading}
-                    >
-                      <ChevronLeft className="h-4 w-4 mr-1" /> Previous
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPersonalAttendancePage(p => p + 1)}
-                      disabled={attendance.length < PAGE_SIZE || loading}
-                    >
-                      Next <ChevronRight className="h-4 w-4 ml-1" />
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                              return (
+                                <TableRow key={record.id}>
+                                  <TableCell>{personalAttendancePage * PAGE_SIZE + index + 1}</TableCell>
+                                  <TableCell className="font-medium">{formatDateOrdinal(record.date)}</TableCell>
+                                  <TableCell>
+                                    {tIn ? new Date(tIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
+                                  </TableCell>
+                                  <TableCell>
+                                    {tOut ? new Date(tOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
+                                  </TableCell>
+                                  <TableCell>
+                                    {(() => {
+                                      const stats = calculateWorkHours(tIn, tOut);
+                                      return (
+                                        <div className="flex flex-col">
+                                          <span>{formatDuration(calculateWorkHours(tIn, tOut).hours, false)}</span>
+                                          {stats.hours > 0 && (
+                                            <span className={`text-[10px] font-semibold ${stats.type === 'Full Day' ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                              {stats.type}
+                                            </span>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge
+                                      variant="outline"
+                                      className={`capitalize text-[10px] px-1.5 py-0 ${(record.checkInMethod === 'rfid' || record.checkInMethod === 'nfc')
+                                        ? 'bg-blue-500/10 text-blue-700 border-blue-200'
+                                        : ''
+                                        }`}
+                                    >
+                                      {(record.checkInMethod === 'rfid' || record.checkInMethod === 'nfc') ? 'RFID Attendance' :
+                                        record.checkInMethod === 'legacy' ? 'Manual' :
+                                          (record.checkInMethod || 'Manual')}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge className={
+                                      record.status === 'present' ? 'bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/25 border-emerald-200' :
+                                        record.status === 'absent' ? 'bg-red-500/15 text-red-700 hover:bg-red-500/25 border-red-200' :
+                                          'bg-amber-500/15 text-amber-700 hover:bg-amber-500/25 border-amber-200'
+                                    }>
+                                      {record.status}
+                                    </Badge>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    {/* Pagination */}
+                    <div className="flex items-center justify-between pt-4 border-t">
+                      <div className="text-sm text-muted-foreground">
+                        Page {personalAttendancePage + 1}
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setPersonalAttendancePage(p => Math.max(0, p - 1))}
+                          disabled={personalAttendancePage === 0 || loading}
+                        >
+                          <ChevronLeft className="h-4 w-4 mr-1" /> Previous
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setPersonalAttendancePage(p => p + 1)}
+                          disabled={attendance.length < PAGE_SIZE || loading}
+                        >
+                          Next <ChevronRight className="h-4 w-4 ml-1" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
           </TabsContent>
         )}
 
         {isFullAccessUser && (
-          <TabsContent value="attendance-settings">
-            <Card className="border border-border bg-card shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-sm font-bold flex items-center gap-2">
-                  <Settings className="h-5 w-5 text-[#f87941]" />
-                  Global Attendance Policies & Geofencing Configurator
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  Define corporate geofence radius coordinates, IP restrictions, and standard working hours.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleSaveSettings} className="space-y-4 max-w-lg text-xs font-semibold">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label className="text-slate-500">Office Latitude</Label>
-                      <Input
-                        type="text"
-                        placeholder="e.g. 19.0760"
-                        value={officeLatitude}
-                        onChange={e => setOfficeLatitude(e.target.value)}
-                        className="bg-white dark:bg-[#1E1F22] text-xs h-9"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-slate-500">Office Longitude</Label>
-                      <Input
-                        type="text"
-                        placeholder="e.g. 72.8777"
-                        value={officeLongitude}
-                        onChange={e => setOfficeLongitude(e.target.value)}
-                        className="bg-white dark:bg-[#1E1F22] text-xs h-9"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label className="text-slate-500">Geofence Radius (meters)</Label>
-                      <Input
-                        type="number"
-                        placeholder="500"
-                        value={geofenceRadius}
-                        onChange={e => setGeofenceRadius(Number(e.target.value))}
-                        className="bg-white dark:bg-[#1E1F22] text-xs h-9"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-slate-500">Standard Work Hours</Label>
-                      <Input
-                        type="number"
-                        step="0.5"
-                        placeholder="9.0"
-                        value={standardHours}
-                        onChange={e => setStandardHours(Number(e.target.value))}
-                        className="bg-white dark:bg-[#1E1F22] text-xs h-9"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-slate-500">Allowed IP addresses (comma separated)</Label>
-                    <Input
-                      type="text"
-                      placeholder="e.g. 192.168.1.1, 10.0.0.1 (Leave empty for unrestricted)"
-                      value={allowedIps}
-                      onChange={e => setAllowedIps(e.target.value)}
-                      className="bg-white dark:bg-[#1E1F22] text-xs h-9"
-                    />
-                  </div>
-
-                  <div className="pt-2 text-right">
-                    <Button type="submit" disabled={savingSettings} className="bg-[#f87941] hover:bg-[#e06634] text-white font-bold h-9 text-xs">
-                      {savingSettings ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Policies'}
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
+          <TabsContent value="attendance-settings" className="space-y-6">
+            <PolicyConfigurator tenantId={currentUser?.tenantId || ''} />
           </TabsContent>
         )}
 
