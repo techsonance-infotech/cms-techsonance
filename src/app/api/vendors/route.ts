@@ -1,109 +1,135 @@
+import { NextResponse } from 'next/server';
+import { withApiHandler } from '@/server/http/handler';
+import { BadRequestError, NotFoundError, ConflictError } from '@/server/http/errors';
+import { createVendorSchema, updateVendorSchema } from '@/server/validation/procurement';
+import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
+import { safeInsert } from '@/server/supabase/safe-insert';
 
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
-import { vendors } from '@/db/schema';
-import { eq, desc } from 'drizzle-orm';
-
-export async function GET(request: NextRequest) {
-    try {
-        const searchParams = request.nextUrl.searchParams;
-        const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : undefined;
-        const id = searchParams.get('id') ? parseInt(searchParams.get('id')!) : undefined;
-
-        if (id) {
-            const result = await db.select().from(vendors).where(eq(vendors.id, id));
-            if (result.length === 0) return NextResponse.json({ error: 'Vendor not found' }, { status: 404 });
-            return NextResponse.json(result[0]);
-        }
-
-        let query = db.select().from(vendors).orderBy(desc(vendors.createdAt));
-
-        if (limit) {
-            // @ts-ignore
-            query = query.limit(limit);
-        }
-
-        const result = await query;
-        return NextResponse.json(result);
-    } catch (error) {
-        console.error('Error fetching vendors:', error);
-        return NextResponse.json({ error: 'Failed to fetch vendors' }, { status: 500 });
-    }
+function normalizeSupabaseVendorRow(row: Record<string, unknown>) {
+  return {
+    id: Number(row.id),
+    name: row.name,
+    contactPerson: row.contact_person ?? null,
+    email: row.email ?? null,
+    phone: row.phone ?? null,
+    address: row.address ?? null,
+    status: row.status,
+    createdAt: row.created_at ?? null,
+    updatedAt: row.updated_at ?? null,
+  };
 }
 
-export async function POST(request: NextRequest) {
-    try {
-        const body = await request.json();
-        const { name, contactPerson, email, phone, address, status } = body;
+export const GET = withApiHandler(async (request, context) => {
+  const searchParams = new URL(request.url).searchParams;
+  const id = searchParams.get('id');
+  const limit = searchParams.get('limit') ? Math.min(Number(searchParams.get('limit')), 100) : 50;
+  const offset = searchParams.get('offset') ? Math.max(Number(searchParams.get('offset')), 0) : 0;
+  const search = searchParams.get('search');
 
-        if (!name) {
-            return NextResponse.json({ error: 'Vendor name is required' }, { status: 400 });
-        }
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  const supabase = getAdminRouteSupabase();
 
-        const result = await db.insert(vendors).values({
-            name,
-            contactPerson,
-            email,
-            phone,
-            address,
-            status: status || 'active',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-        }).returning();
+  if (id) {
+    const { data, error } = await supabase
+      .from('vendors')
+      .select('*')
+      .eq('id', Number(id))
+      .eq('tenant_id', tenantId)
+      .single();
+    if (error || !data) throw new NotFoundError('Vendor not found');
+    return NextResponse.json(normalizeSupabaseVendorRow(data));
+  }
+  let query = supabase
+    .from('vendors')
+    .select('*', { count: 'exact' })
+    .eq('tenant_id', tenantId);
+  if (search) {
+    query = query.or(`name.ilike.%${search}%,contact_person.ilike.%${search}%,email.ilike.%${search}%`);
+  }
+  const { data, count, error } = await query.order('created_at', { ascending: false }).range(offset, offset + limit - 1);
+  if (error) throw error;
+  return NextResponse.json({ success: true, data: ((data as Record<string, unknown>[] | null) ?? []).map(normalizeSupabaseVendorRow), message: 'Vendors fetched successfully', errors: null, meta: { page: Math.floor(offset / limit) + 1, limit, total: Number(count ?? 0) } });
+}, { requireAuth: true, roles: ['Employee'] });
 
-        return NextResponse.json(result[0], { status: 201 });
-    } catch (error) {
-        console.error('Error creating vendor:', error);
-        return NextResponse.json({ error: 'Failed to create vendor' }, { status: 500 });
-    }
-}
+export const POST = withApiHandler(async (request, context) => {
+  const payload = createVendorSchema.parse(await request.json());
 
-export async function PUT(request: NextRequest) {
-    try {
-        const searchParams = request.nextUrl.searchParams;
-        const id = searchParams.get('id');
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  const supabase = getAdminRouteSupabase();
 
-        if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 });
+  // Check for duplicate vendor name in same tenant
+  const { data: existing } = await supabase
+    .from('vendors')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .ilike('name', payload.name.trim())
+    .maybeSingle();
+  if (existing) {
+    throw new ConflictError('A vendor with this name already exists');
+  }
 
-        const body = await request.json();
-        const { name, contactPerson, email, phone, address, status } = body;
+  const { data, error } = await safeInsert('vendors', {
+    name: payload.name,
+    contact_person: payload.contactPerson ?? null,
+    email: payload.email ?? null,
+    phone: payload.phone ?? null,
+    address: payload.address ?? null,
+    status: payload.status ?? 'active',
+    tenant_id: tenantId,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }, supabase);
 
-        const result = await db.update(vendors)
-            .set({
-                name,
-                contactPerson,
-                email,
-                phone,
-                address,
-                status,
-                updatedAt: new Date().toISOString()
-            })
-            .where(eq(vendors.id, parseInt(id)))
-            .returning();
+  if (error || !data) throw error ?? new Error('Failed to create vendor');
+  return NextResponse.json(normalizeSupabaseVendorRow(data as Record<string, unknown>), { status: 201 });
+}, { requireAuth: true, roles: ['Manager'] });
 
-        if (result.length === 0) {
-            return NextResponse.json({ error: 'Vendor not found' }, { status: 404 });
-        }
+export const PUT = withApiHandler(async (request, context) => {
+  const id = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('Valid vendor id is required');
+  const payload = updateVendorSchema.parse(await request.json());
 
-        return NextResponse.json(result[0]);
-    } catch (error) {
-        console.error('Error updating vendor:', error);
-        return NextResponse.json({ error: 'Failed to update vendor' }, { status: 500 });
-    }
-}
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  const supabase = getAdminRouteSupabase();
+  const { data, error } = await supabase.from('vendors').update({
+    ...(payload.name !== undefined ? { name: payload.name } : {}),
+    ...(payload.contactPerson !== undefined ? { contact_person: payload.contactPerson ?? null } : {}),
+    ...(payload.email !== undefined ? { email: payload.email ?? null } : {}),
+    ...(payload.phone !== undefined ? { phone: payload.phone ?? null } : {}),
+    ...(payload.address !== undefined ? { address: payload.address ?? null } : {}),
+    ...(payload.status !== undefined ? { status: payload.status } : {}),
+    updated_at: new Date().toISOString(),
+  })
+  .eq('id', id)
+  .eq('tenant_id', tenantId)
+  .select('*')
+  .single();
+  if (error || !data) throw new NotFoundError('Vendor not found');
+  return NextResponse.json(normalizeSupabaseVendorRow(data));
+}, { requireAuth: true, roles: ['Manager'] });
 
-export async function DELETE(request: NextRequest) {
-    try {
-        const searchParams = request.nextUrl.searchParams;
-        const id = searchParams.get('id');
+export const DELETE = withApiHandler(async (request, context) => {
+  const id = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('Valid vendor id is required');
 
-        if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 });
-
-        await db.delete(vendors).where(eq(vendors.id, parseInt(id)));
-
-        return NextResponse.json({ success: true });
-    } catch (error) {
-        console.error('Error deleting vendor:', error);
-        return NextResponse.json({ error: 'Failed to delete vendor' }, { status: 500 });
-    }
-}
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const supabase = getAdminRouteSupabase();
+  const { data, error } = await supabase
+    .from('vendors')
+    .delete()
+    .eq('id', id)
+    .eq('tenant_id', tenantId)
+    .select('*')
+    .single();
+  if (error || !data) throw new NotFoundError('Vendor not found');
+  return NextResponse.json({ success: true, vendor: normalizeSupabaseVendorRow(data) });
+}, { requireAuth: true, roles: ['Manager'] });

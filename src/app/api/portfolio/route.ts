@@ -1,366 +1,171 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
-import { portfolio } from '@/db/schema';
-import { eq, like, and, or, desc } from 'drizzle-orm';
-import { safeErrorMessage } from '@/lib/constants';
+import { withApiHandler } from '@/server/http/handler';
+import { BadRequestError, NotFoundError } from '@/server/http/errors';
+import { apiSuccess } from '@/server/http/response';
+import { createPortfolioItemSchema, updatePortfolioItemSchema } from '@/server/validation/assets';
+import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
 
-export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-
-    // Single record fetch
-    if (id) {
-      if (!id || isNaN(parseInt(id))) {
-        return NextResponse.json({ 
-          error: "Valid ID is required",
-          code: "INVALID_ID" 
-        }, { status: 400 });
-      }
-
-      const record = await db.select()
-        .from(portfolio)
-        .where(eq(portfolio.id, parseInt(id)))
-        .limit(1);
-
-      if (record.length === 0) {
-        return NextResponse.json({ 
-          error: 'Portfolio item not found',
-          code: 'NOT_FOUND' 
-        }, { status: 404 });
-      }
-
-      return NextResponse.json(record[0], { status: 200 });
-    }
-
-    // List with pagination, search, and filtering
-    const limit = Math.min(parseInt(searchParams.get('limit') ?? '10'), 100);
-    const offset = parseInt(searchParams.get('offset') ?? '0');
-    const search = searchParams.get('search');
-    const category = searchParams.get('category');
-    const status = searchParams.get('status');
-    const technology = searchParams.get('technology');
-
-    let query = db.select().from(portfolio);
-    const conditions = [];
-
-    // Search across title and clientName
-    if (search) {
-      conditions.push(
-        or(
-          like(portfolio.title, `%${search}%`),
-          like(portfolio.clientName, `%${search}%`)
-        )
-      );
-    }
-
-    // Filter by category
-    if (category) {
-      conditions.push(eq(portfolio.category, category));
-    }
-
-    // Filter by status
-    if (status) {
-      conditions.push(eq(portfolio.status, status));
-    }
-
-    // Filter by technology (JSON array search)
-    if (technology) {
-      conditions.push(like(portfolio.technologies, `%${technology}%`));
-    }
-
-    // Apply all conditions
-    if (conditions.length > 0) {
-      query = query.where(and(...conditions));
-    }
-
-    // Sort by createdAt DESC
-    const results = await query
-      .orderBy(desc(portfolio.createdAt))
-      .limit(limit)
-      .offset(offset);
-
-    return NextResponse.json(results, { status: 200 });
-  } catch (error) {
-    console.error('GET error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error)
-    }, { status: 500 });
-  }
+function normalizeSupabasePortfolioRow(row: Record<string, unknown>) {
+  return {
+    id: Number(row.id),
+    title: row.title,
+    clientName: row.client_name,
+    category: row.category,
+    description: row.description ?? null,
+    projectUrl: row.project_url ?? null,
+    thumbnail: row.thumbnail ?? null,
+    images: row.images ?? null,
+    technologies: row.technologies ?? null,
+    status: row.status,
+    createdAt: row.created_at ?? null,
+  };
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { title, clientName, category, description, projectUrl, thumbnail, images, technologies } = body;
+export const GET = withApiHandler(async (request, context) => {
+  const searchParams = new URL(request.url).searchParams;
+  const id = searchParams.get('id');
 
-    // Validate required fields
-    if (!title || title.trim() === '') {
-      return NextResponse.json({ 
-        error: "Title is required",
-        code: "MISSING_TITLE" 
-      }, { status: 400 });
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  const supabase = getAdminRouteSupabase();
+
+  if (id) {
+    const portfolioId = Number(id);
+    if (!Number.isInteger(portfolioId) || portfolioId <= 0) {
+      throw new BadRequestError('Valid portfolio item id is required');
     }
 
-    if (!clientName || clientName.trim() === '') {
-      return NextResponse.json({ 
-        error: "Client name is required",
-        code: "MISSING_CLIENT_NAME" 
-      }, { status: 400 });
-    }
-
-    if (!category || category.trim() === '') {
-      return NextResponse.json({ 
-        error: "Category is required",
-        code: "MISSING_CATEGORY" 
-      }, { status: 400 });
-    }
-
-    // Validate images is valid JSON array if provided
-    if (images !== undefined && images !== null) {
-      if (!Array.isArray(images)) {
-        return NextResponse.json({ 
-          error: "Images must be a valid JSON array",
-          code: "INVALID_IMAGES_FORMAT" 
-        }, { status: 400 });
-      }
-    }
-
-    // Validate technologies is valid JSON array if provided
-    if (technologies !== undefined && technologies !== null) {
-      if (!Array.isArray(technologies)) {
-        return NextResponse.json({ 
-          error: "Technologies must be a valid JSON array",
-          code: "INVALID_TECHNOLOGIES_FORMAT" 
-        }, { status: 400 });
-      }
-    }
-
-    // Prepare insert data
-    const insertData: any = {
-      title: title.trim(),
-      clientName: clientName.trim(),
-      category: category.trim(),
-      status: 'active',
-      createdAt: new Date().toISOString(),
-    };
-
-    if (description !== undefined && description !== null) {
-      insertData.description = description.trim();
-    }
-
-    if (projectUrl !== undefined && projectUrl !== null) {
-      insertData.projectUrl = projectUrl.trim();
-    }
-
-    if (thumbnail !== undefined && thumbnail !== null) {
-      insertData.thumbnail = thumbnail.trim();
-    }
-
-    if (images !== undefined && images !== null) {
-      insertData.images = JSON.stringify(images);
-    }
-
-    if (technologies !== undefined && technologies !== null) {
-      insertData.technologies = JSON.stringify(technologies);
-    }
-
-    const newRecord = await db.insert(portfolio)
-      .values(insertData)
-      .returning();
-
-    return NextResponse.json(newRecord[0], { status: 201 });
-  } catch (error) {
-    console.error('POST error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error)
-    }, { status: 500 });
+    const { data: item, error } = await supabase
+      .from('portfolio')
+      .select('*')
+      .eq('id', portfolioId)
+      .eq('tenant_id', tenantId)
+      .single();
+    if (error || !item) throw new NotFoundError('Portfolio item not found');
+    return apiSuccess(normalizeSupabasePortfolioRow(item), 'Portfolio item fetched successfully');
   }
-}
 
-export async function PUT(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+  const limit = Math.min(Math.max(Number(searchParams.get('limit') ?? '10'), 1), 100);
+  const offset = Math.max(Number(searchParams.get('offset') ?? '0'), 0);
+  const search = searchParams.get('search');
+  const category = searchParams.get('category');
+  const status = searchParams.get('status');
+  const technology = searchParams.get('technology');
+  let query = supabase
+    .from('portfolio')
+    .select('*', { count: 'exact' })
+    .eq('tenant_id', tenantId);
 
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json({ 
-        error: "Valid ID is required",
-        code: "INVALID_ID" 
-      }, { status: 400 });
-    }
+  if (search) query = query.or(`title.ilike.%${search}%,client_name.ilike.%${search}%`);
+  if (category) query = query.eq('category', category);
+  if (status) query = query.eq('status', status);
+  if (technology) query = query.contains('technologies', [technology]);
 
-    // Check if record exists
-    const existing = await db.select()
-      .from(portfolio)
-      .where(eq(portfolio.id, parseInt(id)))
-      .limit(1);
+  const { data, count, error } = await query
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+  if (error) throw error;
 
-    if (existing.length === 0) {
-      return NextResponse.json({ 
-        error: 'Portfolio item not found',
-        code: 'NOT_FOUND' 
-      }, { status: 404 });
-    }
+  return apiSuccess(
+    ((data as Record<string, unknown>[] | null) ?? []).map(normalizeSupabasePortfolioRow),
+    'Portfolio items fetched successfully',
+    { meta: { page: Math.floor(offset / limit) + 1, limit, total: Number(count ?? 0) } }
+  );
+}, { requireAuth: true, roles: ['Employee'] });
 
-    const body = await request.json();
-    const { title, clientName, category, description, projectUrl, thumbnail, images, technologies, status } = body;
+export const POST = withApiHandler(async (request, context) => {
+  const payload = createPortfolioItemSchema.parse(await request.json());
 
-    // Validate status enum if provided
-    if (status !== undefined && status !== null) {
-      const validStatuses = ['active', 'archived'];
-      if (!validStatuses.includes(status)) {
-        return NextResponse.json({ 
-          error: "Status must be either 'active' or 'archived'",
-          code: "INVALID_STATUS" 
-        }, { status: 400 });
-      }
-    }
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  const supabase = getAdminRouteSupabase();
+  const { data: created, error } = await supabase.from('portfolio').insert({
+    title: payload.title.trim(),
+    client_name: payload.clientName.trim(),
+    category: payload.category.trim(),
+    description: payload.description?.trim() || null,
+    project_url: payload.projectUrl?.trim() || null,
+    thumbnail: payload.thumbnail?.trim() || null,
+    images: payload.images ?? null,
+    technologies: payload.technologies ?? null,
+    status: 'active',
+    tenant_id: tenantId,
+    created_at: new Date().toISOString(),
+  }).select('*').single();
 
-    // Validate images is valid JSON array if provided
-    if (images !== undefined && images !== null) {
-      if (!Array.isArray(images)) {
-        return NextResponse.json({ 
-          error: "Images must be a valid JSON array",
-          code: "INVALID_IMAGES_FORMAT" 
-        }, { status: 400 });
-      }
-    }
+  if (error || !created) throw error ?? new Error('Failed to create portfolio item');
+  return apiSuccess(normalizeSupabasePortfolioRow(created), 'Portfolio item created successfully', { status: 201 });
+}, { requireAuth: true, roles: ['Manager'] });
 
-    // Validate technologies is valid JSON array if provided
-    if (technologies !== undefined && technologies !== null) {
-      if (!Array.isArray(technologies)) {
-        return NextResponse.json({ 
-          error: "Technologies must be a valid JSON array",
-          code: "INVALID_TECHNOLOGIES_FORMAT" 
-        }, { status: 400 });
-      }
-    }
-
-    // Prepare update data
-    const updateData: any = {};
-
-    if (title !== undefined && title !== null) {
-      if (title.trim() === '') {
-        return NextResponse.json({ 
-          error: "Title cannot be empty",
-          code: "EMPTY_TITLE" 
-        }, { status: 400 });
-      }
-      updateData.title = title.trim();
-    }
-
-    if (clientName !== undefined && clientName !== null) {
-      if (clientName.trim() === '') {
-        return NextResponse.json({ 
-          error: "Client name cannot be empty",
-          code: "EMPTY_CLIENT_NAME" 
-        }, { status: 400 });
-      }
-      updateData.clientName = clientName.trim();
-    }
-
-    if (category !== undefined && category !== null) {
-      if (category.trim() === '') {
-        return NextResponse.json({ 
-          error: "Category cannot be empty",
-          code: "EMPTY_CATEGORY" 
-        }, { status: 400 });
-      }
-      updateData.category = category.trim();
-    }
-
-    if (description !== undefined) {
-      updateData.description = description !== null ? description.trim() : null;
-    }
-
-    if (projectUrl !== undefined) {
-      updateData.projectUrl = projectUrl !== null ? projectUrl.trim() : null;
-    }
-
-    if (thumbnail !== undefined) {
-      updateData.thumbnail = thumbnail !== null ? thumbnail.trim() : null;
-    }
-
-    if (images !== undefined) {
-      updateData.images = images !== null ? JSON.stringify(images) : null;
-    }
-
-    if (technologies !== undefined) {
-      updateData.technologies = technologies !== null ? JSON.stringify(technologies) : null;
-    }
-
-    if (status !== undefined) {
-      updateData.status = status;
-    }
-
-    const updated = await db.update(portfolio)
-      .set(updateData)
-      .where(eq(portfolio.id, parseInt(id)))
-      .returning();
-
-    if (updated.length === 0) {
-      return NextResponse.json({ 
-        error: 'Failed to update portfolio item',
-        code: 'UPDATE_FAILED' 
-      }, { status: 500 });
-    }
-
-    return NextResponse.json(updated[0], { status: 200 });
-  } catch (error) {
-    console.error('PUT error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error)
-    }, { status: 500 });
+export const PUT = withApiHandler(async (request, context) => {
+  const portfolioId = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(portfolioId) || portfolioId <= 0) {
+    throw new BadRequestError('Valid portfolio item id is required');
   }
-}
 
-export async function DELETE(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json({ 
-        error: "Valid ID is required",
-        code: "INVALID_ID" 
-      }, { status: 400 });
-    }
-
-    // Check if record exists
-    const existing = await db.select()
-      .from(portfolio)
-      .where(eq(portfolio.id, parseInt(id)))
-      .limit(1);
-
-    if (existing.length === 0) {
-      return NextResponse.json({ 
-        error: 'Portfolio item not found',
-        code: 'NOT_FOUND' 
-      }, { status: 404 });
-    }
-
-    // Soft delete by setting status to 'archived'
-    const deleted = await db.update(portfolio)
-      .set({ status: 'archived' })
-      .where(eq(portfolio.id, parseInt(id)))
-      .returning();
-
-    if (deleted.length === 0) {
-      return NextResponse.json({ 
-        error: 'Failed to delete portfolio item',
-        code: 'DELETE_FAILED' 
-      }, { status: 500 });
-    }
-
-    return NextResponse.json({ 
-      message: 'Portfolio item archived successfully',
-      data: deleted[0]
-    }, { status: 200 });
-  } catch (error) {
-    console.error('DELETE error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error)
-    }, { status: 500 });
+  const payload = updatePortfolioItemSchema.parse(await request.json());
+  if (Object.keys(payload).length === 0) {
+    throw new BadRequestError('At least one field is required to update a portfolio item');
   }
-}
+
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  const supabase = getAdminRouteSupabase();
+  const { data: existing } = await supabase
+    .from('portfolio')
+    .select('id')
+    .eq('id', portfolioId)
+    .eq('tenant_id', tenantId)
+    .single();
+  if (!existing) throw new NotFoundError('Portfolio item not found');
+
+  const { data: updated, error } = await supabase.from('portfolio').update({
+    ...(payload.title !== undefined ? { title: payload.title.trim() } : {}),
+    ...(payload.clientName !== undefined ? { client_name: payload.clientName.trim() } : {}),
+    ...(payload.category !== undefined ? { category: payload.category.trim() } : {}),
+    ...(payload.description !== undefined ? { description: payload.description?.trim() || null } : {}),
+    ...(payload.projectUrl !== undefined ? { project_url: payload.projectUrl?.trim() || null } : {}),
+    ...(payload.thumbnail !== undefined ? { thumbnail: payload.thumbnail?.trim() || null } : {}),
+    ...(payload.images !== undefined ? { images: payload.images ?? null } : {}),
+    ...(payload.technologies !== undefined ? { technologies: payload.technologies ?? null } : {}),
+    ...(payload.status !== undefined ? { status: payload.status } : {}),
+  })
+  .eq('id', portfolioId)
+  .eq('tenant_id', tenantId)
+  .select('*')
+  .single();
+
+  if (error || !updated) throw error ?? new Error('Failed to update portfolio item');
+  return apiSuccess(normalizeSupabasePortfolioRow(updated), 'Portfolio item updated successfully');
+}, { requireAuth: true, roles: ['Manager'] });
+
+export const DELETE = withApiHandler(async (request, context) => {
+  const portfolioId = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(portfolioId) || portfolioId <= 0) {
+    throw new BadRequestError('Valid portfolio item id is required');
+  }
+
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  const supabase = getAdminRouteSupabase();
+  const { data: existing } = await supabase
+    .from('portfolio')
+    .select('id')
+    .eq('id', portfolioId)
+    .eq('tenant_id', tenantId)
+    .single();
+  if (!existing) throw new NotFoundError('Portfolio item not found');
+
+  const { data: deleted, error } = await supabase
+    .from('portfolio')
+    .delete()
+    .eq('id', portfolioId)
+    .eq('tenant_id', tenantId)
+    .select('*')
+    .single();
+  if (error || !deleted) throw error ?? new Error('Failed to delete portfolio item');
+  return apiSuccess(normalizeSupabasePortfolioRow(deleted), 'Portfolio item deleted successfully');
+}, { requireAuth: true, roles: ['Admin'] });

@@ -1,208 +1,119 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
-import { nfcTags, employees, users } from '@/db/schema';
-import { eq, and, desc } from 'drizzle-orm';
-import { getCurrentUser } from '@/lib/auth';
+import { withApiHandler } from '@/server/http/handler';
+import { ConflictError, NotFoundError, BadRequestError } from '@/server/http/errors';
+import { apiSuccess } from '@/server/http/response';
+import { createEnrollmentSchema } from '@/server/validation/devices';
+import {
+  buildLegacyUserIdMap,
+  getCurrentSupabaseActor,
+  getAdminRouteSupabase,
+} from '@/server/supabase/route-helpers';
+import { listSupabaseProfilesByAuthIds } from '@/server/supabase/users';
 
-const VALID_STATUSES = ['active', 'inactive', 'lost', 'damaged'];
-
-export async function POST(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ 
-        error: 'Authentication required',
-        code: 'UNAUTHORIZED' 
-      }, { status: 401 });
-    }
-
-    // Check role permissions (admin or hr only)
-    if (user.role !== 'cms_administrator' && user.role !== 'hr_manager') {
-      return NextResponse.json({ 
-        error: 'Insufficient permissions. Admin or HR role required.',
-        code: 'FORBIDDEN' 
-      }, { status: 403 });
-    }
-
-    const body = await request.json();
-    const { tagUid, employeeId } = body;
-
-    // Security check: reject if enrolledBy provided in body
-    if ('enrolledBy' in body) {
-      return NextResponse.json({ 
-        error: "enrolledBy cannot be provided in request body",
-        code: "ENROLLED_BY_NOT_ALLOWED" 
-      }, { status: 400 });
-    }
-
-    // Validate required fields
-    if (!tagUid || typeof tagUid !== 'string' || tagUid.trim() === '') {
-      return NextResponse.json({ 
-        error: 'tagUid is required and must be a non-empty string',
-        code: 'INVALID_TAG_UID' 
-      }, { status: 400 });
-    }
-
-    if (!employeeId || typeof employeeId !== 'number') {
-      return NextResponse.json({ 
-        error: 'employeeId is required and must be a valid integer',
-        code: 'INVALID_EMPLOYEE_ID' 
-      }, { status: 400 });
-    }
-
-    // Validate employee exists
-    const employee = await db.select()
-      .from(employees)
-      .where(eq(employees.id, employeeId))
-      .limit(1);
-
-    if (employee.length === 0) {
-      return NextResponse.json({ 
-        error: 'Employee not found',
-        code: 'EMPLOYEE_NOT_FOUND' 
-      }, { status: 400 });
-    }
-
-    // Validate tagUid is unique (not already enrolled)
-    const existingTag = await db.select()
-      .from(nfcTags)
-      .where(eq(nfcTags.tagUid, tagUid.trim()))
-      .limit(1);
-
-    if (existingTag.length > 0) {
-      return NextResponse.json({ 
-        error: 'NFC tag is already enrolled',
-        code: 'TAG_ALREADY_ENROLLED' 
-      }, { status: 400 });
-    }
-
-    // Create enrollment
-    const now = new Date().toISOString();
-    const newEnrollment = await db.insert(nfcTags)
-      .values({
-        tagUid: tagUid.trim(),
-        employeeId: employeeId,
-        status: 'active',
-        enrolledAt: now,
-        enrolledBy: user.id,
-        createdAt: now,
-      })
-      .returning();
-
-    // Fetch enrollment with employee details
-    const enrollmentWithEmployee = await db.select({
-      id: nfcTags.id,
-      tagUid: nfcTags.tagUid,
-      employeeId: nfcTags.employeeId,
-      status: nfcTags.status,
-      enrolledAt: nfcTags.enrolledAt,
-      enrolledBy: nfcTags.enrolledBy,
-      lastUsedAt: nfcTags.lastUsedAt,
-      readerId: nfcTags.readerId,
-      createdAt: nfcTags.createdAt,
-      employee: {
-        id: employees.id,
-        firstName: users.firstName,
-        lastName: users.lastName,
-        email: users.email,
-        department: employees.department,
-      }
-    })
-      .from(nfcTags)
-      .innerJoin(employees, eq(nfcTags.employeeId, employees.id))
-      .innerJoin(users, eq(employees.userId, users.id))
-      .where(eq(nfcTags.id, newEnrollment[0].id))
-      .limit(1);
-
-    return NextResponse.json(enrollmentWithEmployee[0], { status: 201 });
-
-  } catch (error) {
-    console.error('POST enrollment error:', error);
-    return NextResponse.json({ 
-      error: 'Internal server error: ' + (error instanceof Error ? error.message : 'Unknown error')
-    }, { status: 500 });
-  }
+async function buildSupabaseEnrollmentEmployeeMap(tenantId: string, employeeIds: number[]) {
+  if (!employeeIds.length) return new Map<number, Record<string, unknown>>();
+  const supabase = getAdminRouteSupabase();
+  const { data: employeeRows, error } = await supabase
+    .from('employees')
+    .select('id,user_id,department,status')
+    .in('id', employeeIds)
+    .eq('tenant_id', tenantId);
+  if (error) throw error;
+  const rows = (employeeRows as { id: number; user_id: string; department: string; status: string }[] | null) ?? [];
+  const profiles = await listSupabaseProfilesByAuthIds(rows.map((row) => row.user_id), { useAdmin: true, tenantId });
+  return new Map<number, Record<string, unknown>>(rows.map((row) => {
+    const profile = profiles.get(row.user_id);
+    return [Number(row.id), {
+      id: Number(row.id),
+      firstName: profile?.first_name ?? null,
+      lastName: profile?.last_name ?? null,
+      email: profile?.email ?? null,
+      department: row.department,
+      status: row.status,
+      photoUrl: profile?.avatar_url ?? null,
+    }];
+  }));
 }
 
-export async function GET(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ 
-        error: 'Authentication required',
-        code: 'UNAUTHORIZED' 
-      }, { status: 401 });
-    }
-
-    const { searchParams } = new URL(request.url);
-    
-    // Pagination
-    const limit = Math.min(parseInt(searchParams.get('limit') ?? '10'), 100);
-    const offset = parseInt(searchParams.get('offset') ?? '0');
-    
-    // Filters
-    const statusFilter = searchParams.get('status');
-    const employeeIdFilter = searchParams.get('employee_id');
-
-    // Validate status if provided
-    if (statusFilter && !VALID_STATUSES.includes(statusFilter)) {
-      return NextResponse.json({ 
-        error: `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}`,
-        code: 'INVALID_STATUS' 
-      }, { status: 400 });
-    }
-
-    // Validate employee_id if provided
-    if (employeeIdFilter && isNaN(parseInt(employeeIdFilter))) {
-      return NextResponse.json({ 
-        error: 'Invalid employee_id. Must be a valid integer',
-        code: 'INVALID_EMPLOYEE_ID' 
-      }, { status: 400 });
-    }
-
-    const conditions = [];
-    
-    if (statusFilter) {
-      conditions.push(eq(nfcTags.status, statusFilter));
-    }
-    
-    if (employeeIdFilter) {
-      conditions.push(eq(nfcTags.employeeId, parseInt(employeeIdFilter)));
-    }
-
-    // Apply sorting and pagination
-    const results = await db.select({
-      id: nfcTags.id,
-      tagUid: nfcTags.tagUid,
-      employeeId: nfcTags.employeeId,
-      status: nfcTags.status,
-      enrolledAt: nfcTags.enrolledAt,
-      enrolledBy: nfcTags.enrolledBy,
-      lastUsedAt: nfcTags.lastUsedAt,
-      readerId: nfcTags.readerId,
-      createdAt: nfcTags.createdAt,
-      employee: {
-        id: employees.id,
-        firstName: users.firstName,
-        lastName: users.lastName,
-        email: users.email,
-        department: employees.department,
-      }
-    })
-      .from(nfcTags)
-      .innerJoin(employees, eq(nfcTags.employeeId, employees.id))
-      .innerJoin(users, eq(employees.userId, users.id))
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(desc(nfcTags.enrolledAt))
-      .limit(limit)
-      .offset(offset);
-
-    return NextResponse.json(results, { status: 200 });
-
-  } catch (error) {
-    console.error('GET enrollments error:', error);
-    return NextResponse.json({ 
-      error: 'Internal server error: ' + (error instanceof Error ? error.message : 'Unknown error')
-    }, { status: 500 });
-  }
+function normalizeSupabaseEnrollmentRow(
+  row: Record<string, unknown>,
+  enrolledByMap: Map<string, number | null>,
+  employeeMap: Map<number, Record<string, unknown>>
+) {
+  const enrolledBy = typeof row.enrolled_by === 'string' ? enrolledByMap.get(row.enrolled_by) ?? null : null;
+  const employeeId = row.employee_id === null ? null : Number(row.employee_id);
+  return {
+    id: Number(row.id),
+    tagUid: row.tag_uid,
+    employeeId,
+    status: row.status,
+    enrolledAt: row.enrolled_at ?? null,
+    enrolledBy,
+    lastUsedAt: row.last_used_at ?? null,
+    readerId: row.reader_id ?? null,
+    createdAt: row.created_at ?? null,
+    ...(employeeId ? { employee: employeeMap.get(employeeId) ?? null } : {}),
+  };
 }
+
+export const GET = withApiHandler(async (request, context) => {
+  const searchParams = new URL(request.url).searchParams;
+  const limit = Math.min(Math.max(Number(searchParams.get('limit') ?? '10'), 1), 100);
+  const offset = Math.max(Number(searchParams.get('offset') ?? '0'), 0);
+  const status = searchParams.get('status');
+  const employeeIdParam = searchParams.get('employee_id');
+
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  const supabase = getAdminRouteSupabase();
+  let query = supabase.from('nfc_tags').select('*', { count: 'exact' }).eq('tenant_id', tenantId);
+  if (status) query = query.eq('status', status);
+  if (employeeIdParam) {
+    const employeeId = Number(employeeIdParam);
+    if (!Number.isInteger(employeeId) || employeeId <= 0) {
+      throw new BadRequestError('Valid employee id is required');
+    }
+    query = query.eq('employee_id', employeeId);
+  }
+  const { data, count, error } = await query.order('enrolled_at', { ascending: false }).range(offset, offset + limit - 1);
+  if (error) throw error;
+  const rows = (data as Record<string, unknown>[] | null) ?? [];
+  const enrolledByMap = await buildLegacyUserIdMap(accessToken, rows.map((row) => String(row.enrolled_by)).filter(Boolean), tenantId);
+  const employeeMap = await buildSupabaseEnrollmentEmployeeMap(
+    tenantId,
+    rows.map((row) => Number(row.employee_id)).filter((value) => Number.isInteger(value) && value > 0)
+  );
+  return apiSuccess(rows.map((row) => normalizeSupabaseEnrollmentRow(row, enrolledByMap, employeeMap)), 'Enrollments fetched successfully', {
+    meta: { page: Math.floor(offset / limit) + 1, limit, total: Number(count ?? 0) },
+  });
+}, { requireAuth: true, roles: ['Admin'] });
+
+export const POST = withApiHandler(async (request, context) => {
+  const payload = createEnrollmentSchema.parse(await request.json());
+
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  const actor = await getCurrentSupabaseActor(accessToken);
+  const supabase = getAdminRouteSupabase();
+  const [[employee], [existingTag]] = await Promise.all([
+    supabase.from('employees').select('id').eq('id', payload.employeeId).eq('tenant_id', tenantId).single(),
+    supabase.from('nfc_tags').select('id').eq('tag_uid', payload.tagUid).eq('tenant_id', tenantId).single(),
+  ]);
+  if (!employee.data) throw new NotFoundError('Employee not found');
+  if (existingTag.data) throw new ConflictError('NFC tag is already enrolled');
+  const now = new Date().toISOString();
+  const { data: created, error } = await supabase.from('nfc_tags').insert({
+    tag_uid: payload.tagUid.trim(),
+    employee_id: payload.employeeId,
+    status: 'active',
+    enrolled_at: now,
+    enrolled_by: actor.authUserId,
+    tenant_id: tenantId,
+    created_at: now,
+  }).select('*').single();
+  if (error || !created) throw error ?? new Error('Failed to create enrollment');
+  const enrolledByMap = await buildLegacyUserIdMap(accessToken, [actor.authUserId], tenantId);
+  const employeeMap = await buildSupabaseEnrollmentEmployeeMap(tenantId, [payload.employeeId]);
+  return apiSuccess(normalizeSupabaseEnrollmentRow(created, enrolledByMap, employeeMap), 'Enrollment created successfully', { status: 201 });
+}, { requireAuth: true, roles: ['Admin'] });

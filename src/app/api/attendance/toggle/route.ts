@@ -1,211 +1,197 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
-import { attendanceRecords, nfcTags, employees, users } from '@/db/schema';
-import { eq, and, isNull, sql } from 'drizzle-orm';
-import { getCurrentUser } from '@/lib/auth';
+import { withApiHandler } from '@/server/http/handler';
+import { BadRequestError, NotFoundError, UnprocessableEntityError } from '@/server/http/errors';
+import { apiSuccess } from '@/server/http/response';
+import { attendanceToggleSchema } from '@/server/validation/attendance-admin';
+import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
+import { listSupabaseProfilesByAuthIds } from '@/server/supabase/users';
 
-export async function POST(request: NextRequest) {
-  try {
-    // Authentication check
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
+export const POST = withApiHandler(async (request, context) => {
+  const payload = attendanceToggleSchema.parse(await request.json());
+  const authHeader = request.headers.get('authorization');
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  const supabase = getAdminRouteSupabase();
+  let finalEmployeeId = payload.employeeId ?? null;
+  let checkInMethod = 'manual';
 
-    const body = await request.json();
-    const {
-      tagUid,
-      employeeId,
-      readerId,
-      location,
-      idempotencyKey,
-      locationLatitude,
-      locationLongitude,
-      metadata
-    } = body;
-
-    // Validate that either tagUid or employeeId is provided
-    if (!tagUid && !employeeId) {
-      return NextResponse.json({
-        error: 'Either tagUid or employeeId must be provided',
-        code: 'MISSING_IDENTIFIER'
-      }, { status: 400 });
-    }
-
-    let finalEmployeeId = employeeId;
-    let checkInMethod = 'manual';
-    let finalTagUid = tagUid;
-
-    // If tagUid provided, look up employee from NFC tag
-    if (tagUid) {
-      const tag = await db.select()
-        .from(nfcTags)
-        .where(eq(nfcTags.tagUid, tagUid))
-        .limit(1);
-
-      if (tag.length === 0) {
-        return NextResponse.json({
-          error: 'NFC tag not found',
-          code: 'TAG_NOT_FOUND'
-        }, { status: 400 });
-      }
-
-      // Validate tag is active
-      if (tag[0].status !== 'active') {
-        return NextResponse.json({
-          error: 'NFC tag is not active',
-          code: 'TAG_INACTIVE'
-        }, { status: 400 });
-      }
-
-      // Get employee ID from tag
-      if (!tag[0].employeeId) {
-        return NextResponse.json({
-          error: 'NFC tag is not assigned to any employee',
-          code: 'TAG_NOT_ASSIGNED'
-        }, { status: 400 });
-      }
-
-      finalEmployeeId = tag[0].employeeId;
-      checkInMethod = 'nfc';
-
-      // Update tag's lastUsedAt and readerId
-      await db.update(nfcTags)
-        .set({
-          lastUsedAt: new Date().toISOString(),
-          readerId: readerId || tag[0].readerId
-        })
-        .where(eq(nfcTags.tagUid, tagUid));
-    }
-
-    // Validate employee exists
-    const employee = await db.select({
-      id: employees.id,
-      name: sql<string>`${users.firstName} || ' ' || ${users.lastName}`.as('name'),
-      email: users.email,
-      department: employees.department,
-      photoUrl: users.avatarUrl,
+  if (payload.tagUid) {
+    const { data: tag } = await supabase
+      .from('nfc_tags')
+      .select('*')
+      .eq('tag_uid', payload.tagUid)
+      .eq('tenant_id', tenantId)
+      .single();
+    if (!tag) throw new NotFoundError('NFC tag not found');
+    if (tag.status !== 'active') throw new UnprocessableEntityError('NFC tag is not active');
+    if (!tag.employee_id) throw new BadRequestError('NFC tag is not assigned to an employee');
+    finalEmployeeId = Number(tag.employee_id);
+    checkInMethod = 'nfc';
+    await supabase.from('nfc_tags').update({
+      last_used_at: new Date().toISOString(),
+      reader_id: payload.readerId ?? tag.reader_id,
     })
-      .from(employees)
-      .innerJoin(users, eq(employees.userId, users.id))
-      .where(eq(employees.id, finalEmployeeId))
-      .limit(1);
+    .eq('tag_uid', payload.tagUid)
+    .eq('tenant_id', tenantId);
+  }
 
-    if (employee.length === 0) {
-      return NextResponse.json({
-        error: 'Employee not found',
-        code: 'EMPLOYEE_NOT_FOUND'
-      }, { status: 400 });
-    }
+  if (!finalEmployeeId) throw new BadRequestError('A valid employee identifier is required');
+  const { data: employee } = await supabase
+    .from('employees')
+    .select('*')
+    .eq('id', finalEmployeeId)
+    .eq('tenant_id', tenantId)
+    .single();
+  if (!employee) throw new NotFoundError('Employee not found');
+  const profiles = await listSupabaseProfilesByAuthIds([String(employee.user_id)], { 
+    useAdmin: true, 
+    tenantId 
+  });
+  const profile = profiles.get(String(employee.user_id));
+  const employeeView = {
+    id: Number(employee.id),
+    name: `${profile?.first_name ?? ''} ${profile?.last_name ?? ''}`.trim(),
+    email: profile?.email ?? null,
+    department: employee.department,
+    photoUrl: profile?.avatar_url ?? null,
+  };
 
-    // Get today's date in YYYY-MM-DD format
-    const today = new Date().toISOString().split('T')[0];
-    const now = new Date().toISOString();
+  const today = new Date().toISOString().slice(0, 10);
+  const now = new Date().toISOString();
+  
+  const targetDate = new Date();
+  const isWeekend = targetDate.getUTCDay() === 0 || targetDate.getUTCDay() === 6;
 
-    // Check if there's an active check-in for today (no timeOut)
-    const activeCheckIn = await db.select()
-      .from(attendanceRecords)
-      .where(
-        and(
-          eq(attendanceRecords.employeeId, finalEmployeeId),
-          eq(attendanceRecords.date, today),
-          isNull(attendanceRecords.timeOut)
-        )
-      )
-      .limit(1);
+  // 1. Try to find an active checkout in BOTH regular records and pending requests
+  const { data: activeCheckIn } = await supabase.from('attendance_records').select('*')
+    .eq('employee_id', finalEmployeeId)
+    .eq('date', today)
+    .eq('tenant_id', tenantId)
+    .is('time_out', null)
+    .maybeSingle();
 
-    // SCENARIO 1: Active check-in exists → Perform TIME OUT
-    if (activeCheckIn.length > 0) {
-      const checkInRecord = activeCheckIn[0];
-      
-      // Calculate duration in minutes
-      const timeInDate = new Date(checkInRecord.timeIn);
-      const timeOutDate = new Date(now);
-      const durationMinutes = Math.floor(
-        (timeOutDate.getTime() - timeInDate.getTime()) / (1000 * 60)
-      );
+  const { data: pendingCheckIn } = await supabase.from('attendance_requests').select('*')
+    .eq('employee_id', finalEmployeeId)
+    .eq('date', today)
+    .eq('tenant_id', tenantId)
+    .is('time_out', null)
+    .maybeSingle();
 
-      // Update attendance record with check-out time and duration
-      const updated = await db.update(attendanceRecords)
-        .set({
-          timeOut: now,
-          duration: durationMinutes,
-        })
-        .where(eq(attendanceRecords.id, checkInRecord.id))
-        .returning();
+  const currentCheckIn = activeCheckIn || pendingCheckIn;
+  const isPendingTable = !!pendingCheckIn;
 
-      return NextResponse.json({
-        action: 'checkout',
-        ...updated[0],
-        employee: {
-          id: employee[0].id,
-          name: employee[0].name,
-          email: employee[0].email,
-          department: employee[0].department,
-          photoUrl: employee[0].photoUrl
-        },
-        message: `Time Out recorded successfully. Duration: ${durationMinutes} minutes`
-      }, { status: 200 });
-    }
-
-    // SCENARIO 2: No active check-in → Perform TIME IN
+  if (currentCheckIn) {
+    const { data: settings } = await supabase.from('tenant_attendance_settings').select('standard_work_hours').eq('tenant_id', tenantId).maybeSingle();
+    let computedOvertime: number | null = null;
+    const stdHours = settings?.standard_work_hours ? Number(settings.standard_work_hours) : 9.0;
     
-    // Idempotency check for check-in
-    if (idempotencyKey) {
-      const existingRecord = await db.select()
-        .from(attendanceRecords)
-        .where(eq(attendanceRecords.idempotencyKey, idempotencyKey))
-        .limit(1);
-
-      if (existingRecord.length > 0) {
-        return NextResponse.json({
-          action: 'checkin',
-          ...existingRecord[0],
-          employee: employee[0],
-          message: 'Check-in already processed (idempotency)'
-        }, { status: 200 });
+    const duration = Math.floor((new Date(now).getTime() - new Date(String(currentCheckIn.time_in)).getTime()) / 60000);
+    if (duration) {
+      const hours = duration / 60;
+      if (hours > stdHours) {
+          computedOvertime = Number((hours - stdHours).toFixed(2));
       }
     }
+    
+    const tableToUpdate = isPendingTable ? 'attendance_requests' : 'attendance_records';
+    
+    const { data: updated, error } = await supabase.from(tableToUpdate).update({
+      time_out: now,
+      duration,
+      overtime_hours: computedOvertime
+    })
+    .eq('id', currentCheckIn.id)
+    .eq('tenant_id', tenantId)
+    .select('*')
+    .single();
+    if (error || !updated) throw error ?? new Error('Failed to toggle checkout');
 
-    // Create new attendance record for TIME IN
-    const newRecord = await db.insert(attendanceRecords)
-      .values({
-        employeeId: finalEmployeeId,
-        date: today,
-        timeIn: now,
-        timeOut: null,
-        locationLatitude: locationLatitude || null,
-        locationLongitude: locationLongitude || null,
-        duration: null,
-        status: 'present',
-        checkInMethod,
-        readerId: readerId || null,
-        location: location || null,
-        tagUid: finalTagUid || null,
-        idempotencyKey: idempotencyKey || null,
-        syncedAt: null,
-        metadata: metadata ? JSON.stringify(metadata) : null,
-        createdAt: now
-      })
-      .returning();
-
-    return NextResponse.json({
-      action: 'checkin',
-      ...newRecord[0],
-      employee: {
-        id: employee[0].id,
-        name: employee[0].name,
-        email: employee[0].email,
-        department: employee[0].department,
-        photoUrl: employee[0].photoUrl
-      },
-      message: 'Time In recorded successfully'
-    }, { status: 201 });
-
-  } catch (error) {
-    console.error('POST toggle error:', error);
-    return NextResponse.json({
-      error: 'Internal server error: ' + (error instanceof Error ? error.message : 'Unknown error')
-    }, { status: 500 });
+    return apiSuccess({
+      action: 'checkout',
+      ...updated,
+      employee: employeeView,
+      status: isPendingTable ? 'pending_approval' : updated.status
+    }, `Time Out recorded successfully. Duration: ${duration} minutes`);
   }
-}
+
+  if (payload.idempotencyKey) {
+    // Check both tables
+    const { data: existingRecords } = await supabase.from('attendance_records').select('*').eq('idempotency_key', payload.idempotencyKey).eq('tenant_id', tenantId).maybeSingle();
+    const { data: existingRequests } = await supabase.from('attendance_requests').select('*').eq('id', payload.idempotencyKey).eq('tenant_id', tenantId).maybeSingle(); // Request ID is usually used if idempotency isn't on table, but let's just do records check for idempotency
+    
+    if (existingRecords) {
+      return apiSuccess({ action: 'checkin', ...existingRecords, employee: employeeView }, 'Check-in already processed');
+    }
+  }
+
+  if (isWeekend) {
+    // INSERT AS PENDING REQUEST if it's the weekend
+    // User requested Option 2: Tap now, justify later.
+    // They will need to log into the web UI to provide notes. 
+    
+    const { data: createdReq, error: reqError } = await supabase.from('attendance_requests').insert({
+      employee_id: finalEmployeeId,
+      date: today,
+      time_in: now,
+      time_out: null,
+      duration: null,
+      status: 'pending',
+      check_in_method: checkInMethod,
+      reader_id: payload.readerId ?? null,
+      location: payload.location ?? null,
+      notes: null, // Left null intentionally so UI flags it later
+      tenant_id: tenantId,
+      created_at: now,
+      metadata: payload.metadata ?? null,
+    }).select('*').single();
+    
+    if (reqError || !createdReq) throw reqError ?? new Error('Failed to toggle pending checkin');
+
+    // Notify the employee that they MUST add notes via the dashboard
+    await supabase.from('notifications').insert({
+      user_id: employee.user_id,
+      title: 'Missing Weekend Notes',
+      message: 'You tapped in on a weekend! Please login to the dashboard and provide your justification notes so HR can approve this attendance.',
+      type: 'warning',
+      link: '/dashboard/attendance',
+      is_read: false,
+      tenant_id: tenantId,
+      created_at: now,
+    });
+
+    return apiSuccess({
+      action: 'checkin',
+      ...createdReq,
+      employee: employeeView,
+      status: 'pending_approval'
+    }, 'Time In recorded successfully (Pending Justification)', { status: 202 });
+  }
+
+  // STANDARD WEEKDAY INSERTION
+  const { data: created, error } = await supabase.from('attendance_records').insert({
+    employee_id: finalEmployeeId,
+    date: today,
+    time_in: now,
+    time_out: null,
+    location_latitude: payload.locationLatitude ?? null,
+    location_longitude: payload.locationLongitude ?? null,
+    duration: null,
+    status: 'present',
+    check_in_method: checkInMethod,
+    reader_id: payload.readerId ?? null,
+    location: payload.location ?? null,
+    tag_uid: payload.tagUid ?? null,
+    idempotency_key: payload.idempotencyKey ?? null,
+    synced_at: null,
+    metadata: payload.metadata ?? null,
+    tenant_id: tenantId,
+    created_at: now,
+  }).select('*').single();
+  if (error || !created) throw error ?? new Error('Failed to toggle checkin');
+
+  return apiSuccess({
+    action: 'checkin',
+    ...created,
+    employee: employeeView,
+  }, 'Time In recorded successfully', { status: 201 });
+}, { requireAuth: true, roles: ['Employee'] });

@@ -37,10 +37,14 @@ export function ProjectTasksBoard({ projectId }: { projectId: number }) {
   const fetchTasks = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/tasks?projectId=${projectId}&limit=100`);
+      const token = localStorage.getItem('session_token');
+      const response = await fetch(`/api/tasks?projectId=${projectId}&limit=100`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
       if (response.ok) {
-        const data = await response.json();
-        setTasks(data);
+        const result = await response.json();
+        // API returns { success, data: [...] } or plain array
+        setTasks(Array.isArray(result) ? result : (result.data ?? []));
       }
     } catch (error) {
       console.error('Error fetching tasks:', error);

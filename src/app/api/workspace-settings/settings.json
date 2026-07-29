@@ -1,0 +1,87 @@
+{
+  "dc98ef2f-c32a-460f-965b-6d6f209721c7": {
+    "language": "English (India)",
+    "country": "India",
+    "officeHours": "09:00 AM - 06:00 PM",
+    "notifyEmail": true,
+    "notifySms": false,
+    "notifyWhatsapp": true,
+    "notifySlack": true,
+    "aiModel": "gemini-1.5-pro",
+    "aiTemperature": 0.2,
+    "aiPromptTemplate": "Act as a secure enterprise coding assistant. Follow strict compliance protocols...",
+    "aiAssistantName": "Antigravity Workspace Engine",
+    "uploadedDocuments": [],
+    "themeMode": "Follow System Settings",
+    "secondaryColor": "#F9B095",
+    "sidebarStyle": "Classic Sidebar",
+    "navigationStyle": "Left Side Navigation",
+    "dashboardLayout": "Standard Grid Layout",
+    "widgetConfig": "Default Analytics Layout",
+    "cardDensity": "Cozy (Standard padding)",
+    "compactMode": false,
+    "logoUrl": "/api/upload?kind=avatar&path=avatar%2F1784906453103-9403916-techsonance_logo.png",
+    "loginScreenStyle": "Modern Glassmorphic",
+    "registerScreenStyle": "Classic Elegant",
+    "emailTemplateStyle": "Corporate Minimalist",
+    "pdfBrandingStyle": "Modern Signature",
+    "invoiceBrandingStyle": "Clean Minimalist",
+    "primaryFont": "Inter (Default)",
+    "borderRadius": "12px",
+    "animationsEnabled": true,
+    "costCenters": [
+      "CC-ENG-01",
+      "CC-QA-02",
+      "CC-MKT-03",
+      "CC-HR-04"
+    ],
+    "grades": [
+      "G1",
+      "G2",
+      "G3",
+      "G4",
+      "G5"
+    ],
+    "bands": [
+      "Band A",
+      "Band B",
+      "Band C"
+    ],
+    "designations": [
+      "Software Engineer",
+      "Product Manager",
+      "QA Engineer",
+      "HR Associate",
+      "CEO"
+    ],
+    "jobLevels": [
+      "L1 (Junior)",
+      "L2 (Mid)",
+      "L3 (Senior)",
+      "L4 (Lead)",
+      "L5 (Director)"
+    ],
+    "employmentTypes": [
+      "Full-Time",
+      "Part-Time",
+      "Contractor",
+      "Intern"
+    ],
+    "workModes": [
+      "Work From Office",
+      "Work From Home (Remote)",
+      "Hybrid (2 days office)"
+    ],
+    "shifts": [
+      "General engineering Shift",
+      "US Night Shift",
+      "UK Afternoon Shift"
+    ],
+    "teams": [
+      "Engineering Core",
+      "QA Core",
+      "Product Design",
+      "People Operations"
+    ]
+  }
+}

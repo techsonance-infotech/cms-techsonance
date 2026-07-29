@@ -1,99 +1,108 @@
 import { NextRequest } from 'next/server';
-import { db } from '@/db';
-import { users, sessions, employees } from '@/db/schema';
-import { eq } from 'drizzle-orm';
-import { UserRole } from './permissions';
+import { authenticateRequest } from '@/server/auth/session';
+import { getRouteSupabase } from '@/server/supabase/route-helpers';
 
 export interface User {
   id: number;
   email: string;
   firstName: string;
   lastName: string;
-  role: UserRole;
+  role: string;
   avatarUrl: string | null;
   phone: string | null;
-  // Employee details from left join
+  tenantId?: string | null;
   employeeRecordId?: number | null;
   employeeId?: string | null;
   department?: string | null;
   designation?: string | null;
   dateOfJoining?: string | null;
   dateOfBirth?: string | null;
-  skills?: any;
+  skills?: unknown;
   salary?: number | null;
   status?: string | null;
+  employmentType?: string | null;
+  hourlyRate?: number | null;
+  ctc?: number | null;
+  pfNumber?: string | null;
+  uanNumber?: string | null;
+  bankName?: string | null;
+  bankAccountNumber?: string | null;
+  ifscCode?: string | null;
+  managerId?: string | null;
+  maritalStatus?: string | null;
+  bloodGroup?: string | null;
+  nationality?: string | null;
+  panNumber?: string | null;
+  aadhaarNumber?: string | null;
+  emergencyContactName?: string | null;
+  emergencyContactRelationship?: string | null;
+  emergencyContactPhone?: string | null;
+  emergencyContactAddress?: string | null;
+  gender?: string | null;
 }
 
 export async function getCurrentUser(request: NextRequest): Promise<User | null> {
   try {
-    // Get token from Authorization header
-    const authHeader = request.headers.get('authorization');
-    const sessionToken = authHeader?.replace('Bearer ', '');
+    const auth = await authenticateRequest(request, { required: false });
+    if (!auth) return null;
 
-    if (!sessionToken) {
-      return null;
+    const supabase = getRouteSupabase(auth.accessToken);
+    const providerUserId = auth.user.providerUserId ?? null;
+    let employee: Record<string, any> | null = null;
+
+    if (providerUserId) {
+      const { data } = await supabase
+        .from('employees')
+        .select('*')
+        .eq('user_id', providerUserId)
+        .is('deleted_at', null)
+        .maybeSingle();
+      employee = data;
     }
 
-    // Find valid session
-    const session = await db
-      .select()
-      .from(sessions)
-      .where(eq(sessions.token, sessionToken))
-      .limit(1);
-
-    if (session.length === 0) {
-      return null;
-    }
-
-    // Check if session is expired
-    const expiresAt = new Date(session[0].expiresAt);
-    if (expiresAt < new Date()) {
-      return null;
-    }
-
-    // Get user with employee details
-    const user = await db
-      .select({
-        id: users.id,
-        email: users.email,
-        firstName: users.firstName,
-        lastName: users.lastName,
-        role: users.role,
-        avatarUrl: users.avatarUrl,
-        phone: users.phone,
-        isActive: users.isActive,
-        // Employee fields
-        employeeRecordId: employees.id,
-        employeeId: employees.employeeId,
-        department: employees.department,
-        designation: employees.designation,
-        dateOfJoining: employees.dateOfJoining,
-        dateOfBirth: employees.dateOfBirth,
-        skills: employees.skills,
-        salary: employees.salary,
-        status: employees.status,
-      })
-      .from(users)
-      .leftJoin(employees, eq(users.id, employees.userId))
-      .where(eq(users.id, session[0].userId))
-      .limit(1);
-
-    if (user.length === 0 || !user[0].isActive) {
-      return null;
-    }
-
-    // Omit isActive from the returned User type to match the interface
-    const { isActive, ...returnUser } = user[0];
-    return returnUser as User;
-  } catch (error) {
-    console.error('getCurrentUser error:', error);
+    return {
+      id: auth.user.id,
+      email: auth.user.email,
+      firstName: auth.user.firstName,
+      lastName: auth.user.lastName,
+      role: auth.user.role,
+      avatarUrl: auth.user.avatarUrl,
+      phone: auth.user.phone,
+      tenantId: auth.user.tenantId ?? null,
+      employeeRecordId: employee ? Number(employee.id) : null,
+      employeeId: employee?.employee_id ?? null,
+      department: employee?.department ?? null,
+      designation: employee?.designation ?? null,
+      dateOfJoining: employee?.date_of_joining ?? null,
+      dateOfBirth: employee?.date_of_birth ?? null,
+      skills: employee?.skills ?? null,
+      salary: employee?.salary === null || employee?.salary === undefined ? null : Number(employee.salary),
+      status: employee?.status ?? null,
+      employmentType: employee?.employment_type ?? null,
+      hourlyRate: employee?.hourly_rate === null || employee?.hourly_rate === undefined ? null : Number(employee.hourly_rate),
+      ctc: employee?.ctc === null || employee?.ctc === undefined ? null : Number(employee.ctc),
+      pfNumber: employee?.pf_number ?? null,
+      uanNumber: employee?.uan_number ?? null,
+      bankName: employee?.bank_name ?? null,
+      bankAccountNumber: employee?.bank_account_number ?? null,
+      ifscCode: employee?.ifsc_code ?? null,
+      managerId: employee?.manager_id ?? null,
+      maritalStatus: employee?.marital_status ?? null,
+      bloodGroup: employee?.blood_group ?? null,
+      nationality: employee?.nationality ?? null,
+      panNumber: employee?.pan_number ?? null,
+      aadhaarNumber: employee?.aadhaar_number ?? null,
+      emergencyContactName: employee?.emergency_contact_name ?? null,
+      emergencyContactRelationship: employee?.emergency_contact_relationship ?? null,
+      emergencyContactPhone: employee?.emergency_contact_phone ?? null,
+      emergencyContactAddress: employee?.emergency_contact_address ?? null,
+      gender: employee?.gender ?? null,
+    };
+  } catch {
     return null;
   }
 }
 
 export async function getServerUser(): Promise<User | null> {
-  // This function is for server components
-  // Since we're using bearer tokens, it can't be used in server components
-  // Server components should fetch from /api/auth/me with the token
   return null;
 }

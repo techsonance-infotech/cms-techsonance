@@ -1,432 +1,200 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
-import { sprints, projects } from '@/db/schema';
-import { eq, like, and, or, desc, asc, gte, lte } from 'drizzle-orm';
-import { getCurrentUser } from '@/lib/auth';
-import { safeErrorMessage } from '@/lib/constants';
+import { NextResponse } from 'next/server';
+import { withApiHandler } from '@/server/http/handler';
+import { BadRequestError, NotFoundError, UnprocessableEntityError } from '@/server/http/errors';
+import { createSprintSchema, sprintStatusSchema, updateSprintSchema } from '@/server/validation/sprints';
+import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
 
-const VALID_STATUSES = ['planning', 'active', 'completed', 'cancelled'] as const;
-const INVALID_STATUS_TRANSITIONS: Record<string, string[]> = {
-  'completed': ['planning'],
-  'cancelled': ['planning', 'active']
+const invalidStatusTransitions: Record<string, string[]> = {
+  completed: ['planning'],
+  cancelled: ['planning', 'active'],
 };
 
-function isValidISODate(dateString: string): boolean {
-  const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
-  if (!isoDateRegex.test(dateString)) return false;
-  const date = new Date(dateString);
-  return date instanceof Date && !isNaN(date.getTime());
+function normalizeSupabaseSprintRow(row: Record<string, unknown>) {
+  return {
+    id: Number(row.id),
+    projectId: Number(row.project_id),
+    name: row.name,
+    goal: row.goal ?? null,
+    startDate: row.start_date,
+    endDate: row.end_date,
+    status: row.status,
+    version: row.version ?? 1,
+    createdAt: row.created_at ?? null,
+    updatedAt: row.updated_at ?? null,
+    deletedAt: row.deleted_at ?? null,
+  };
 }
 
-export async function GET(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+export const GET = withApiHandler(async (request, context) => {
+  const searchParams = new URL(request.url).searchParams;
+  const id = searchParams.get('id');
+
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const supabase = getAdminRouteSupabase();
+
+  if (id) {
+    const sprintId = Number(id);
+    if (!Number.isInteger(sprintId) || sprintId <= 0) {
+      throw new BadRequestError('Valid sprint id is required');
     }
+    const { data: sprint, error } = await supabase
+      .from('sprints')
+      .select('*')
+      .eq('id', sprintId)
+      .eq('tenant_id', tenantId)
+      .single();
+    if (error || !sprint) throw new NotFoundError('Sprint not found');
+    return NextResponse.json(normalizeSupabaseSprintRow(sprint));
+  }
 
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+  const limit = Math.min(Number(searchParams.get('limit') ?? '10'), 100);
+  const offset = Math.max(Number(searchParams.get('offset') ?? '0'), 0);
+  const sortField = searchParams.get('sort') ?? 'startDate';
+  const ascending = searchParams.get('order') === 'asc';
+  
+  let query = supabase
+    .from('sprints')
+    .select('*', { count: 'exact' })
+    .eq('tenant_id', tenantId);
+  const search = searchParams.get('search');
+  const projectId = searchParams.get('projectId');
+  const status = searchParams.get('status');
+  const startDate = searchParams.get('startDate');
+  const endDate = searchParams.get('endDate');
+  if (search) query = query.or(`name.ilike.%${search}%,goal.ilike.%${search}%`);
+  if (projectId) query = query.eq('project_id', Number(projectId));
+  if (status) query = query.eq('status', sprintStatusSchema.parse(status));
+  if (startDate) query = query.gte('start_date', startDate);
+  if (endDate) query = query.lte('end_date', endDate);
 
-    // Single sprint by ID
-    if (id) {
-      if (!id || isNaN(parseInt(id))) {
-        return NextResponse.json({ 
-          error: 'Valid ID is required',
-          code: 'INVALID_ID' 
-        }, { status: 400 });
-      }
+  const sortColumn = sortField === 'name' ? 'name' : sortField === 'status' ? 'status' : sortField === 'endDate' ? 'end_date' : 'start_date';
+  const { data, count, error } = await query.order(sortColumn, { ascending }).range(offset, offset + limit - 1);
+  if (error) throw error;
 
-      const sprint = await db.select()
-        .from(sprints)
-        .where(eq(sprints.id, parseInt(id)))
-        .limit(1);
+  return NextResponse.json({
+    success: true,
+    data: ((data as Record<string, unknown>[] | null) ?? []).map(normalizeSupabaseSprintRow),
+    message: 'Sprints fetched successfully',
+    errors: null,
+    meta: { page: Math.floor(offset / limit) + 1, limit, total: Number(count ?? 0) },
+  });
+}, { requireAuth: true, roles: ['Employee'] });
 
-      if (sprint.length === 0) {
-        return NextResponse.json({ 
-          error: 'Sprint not found',
-          code: 'SPRINT_NOT_FOUND' 
-        }, { status: 404 });
-      }
+export const POST = withApiHandler(async (request, context) => {
+  const payload = createSprintSchema.parse(await request.json());
 
-      return NextResponse.json(sprint[0], { status: 200 });
-    }
+  if (new Date(payload.endDate) <= new Date(payload.startDate)) {
+    throw new UnprocessableEntityError('End date must be after start date');
+  }
 
-    // List with filters and pagination
-    const limit = Math.min(parseInt(searchParams.get('limit') ?? '10'), 100);
-    const offset = parseInt(searchParams.get('offset') ?? '0');
-    const search = searchParams.get('search');
-    const projectId = searchParams.get('projectId');
-    const status = searchParams.get('status');
-    const startDateGte = searchParams.get('startDate');
-    const endDateLte = searchParams.get('endDate');
-    const sortField = searchParams.get('sort') ?? 'startDate';
-    const sortOrder = searchParams.get('order') ?? 'desc';
-
-    let query = db.select().from(sprints);
-    const conditions = [];
-
-    // Search filter
-    if (search) {
-      conditions.push(
-        or(
-          like(sprints.name, `%${search}%`),
-          like(sprints.goal, `%${search}%`)
-        )
-      );
-    }
-
-    // ProjectId filter
-    if (projectId && !isNaN(parseInt(projectId))) {
-      conditions.push(eq(sprints.projectId, parseInt(projectId)));
-    }
-
-    // Status filter
-    if (status && VALID_STATUSES.includes(status as any)) {
-      conditions.push(eq(sprints.status, status));
-    }
-
-    // Date range filters
-    if (startDateGte && isValidISODate(startDateGte)) {
-      conditions.push(gte(sprints.startDate, startDateGte));
-    }
-
-    if (endDateLte && isValidISODate(endDateLte)) {
-      conditions.push(lte(sprints.endDate, endDateLte));
-    }
-
-    // Apply conditions
-    if (conditions.length > 0) {
-      query = query.where(and(...conditions));
-    }
-
-    // Apply sorting
-    const orderFn = sortOrder === 'asc' ? asc : desc;
-    const sortColumn = sortField === 'name' ? sprints.name :
-                       sortField === 'status' ? sprints.status :
-                       sortField === 'endDate' ? sprints.endDate :
-                       sprints.startDate;
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const supabase = getAdminRouteSupabase();
+  const { data: project } = await supabase
+    .from('projects')
+    .select('id')
+    .eq('id', payload.projectId)
+    .eq('tenant_id', tenantId)
+    .single();
     
-    query = query.orderBy(orderFn(sortColumn));
+  if (!project) throw new NotFoundError('Project not found');
 
-    // Apply pagination
-    const results = await query.limit(limit).offset(offset);
+  const now = new Date().toISOString();
+  const { data: created, error } = await supabase.from('sprints').insert({
+    project_id: payload.projectId,
+    name: payload.name.trim(),
+    goal: payload.goal?.trim() || null,
+    start_date: payload.startDate,
+    end_date: payload.endDate,
+    status: payload.status ?? 'planning',
+    tenant_id: tenantId,
+    created_at: now,
+    updated_at: now,
+  }).select('*').single();
 
-    return NextResponse.json(results, { status: 200 });
-
-  } catch (error) {
-    console.error('GET error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
+  if (error) {
+    if ((error as any).code === '23505') {
+      throw new BadRequestError('A sprint with this identifier already exists. Please try again.');
+    }
+    throw new Error(error.message);
   }
-}
+  if (!created) throw new Error('Failed to create sprint');
+  return NextResponse.json(normalizeSupabaseSprintRow(created), { status: 201 });
+}, { requireAuth: true, roles: ['Manager'] });
 
-export async function POST(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
+export const PUT = withApiHandler(async (request, context) => {
+  const id = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('Valid sprint id is required');
 
-    const body = await request.json();
+  const payload = updateSprintSchema.parse(await request.json());
 
-    // Security check: reject if user identifier fields provided
-    if ('userId' in body || 'user_id' in body || 'createdBy' in body) {
-      return NextResponse.json({ 
-        error: "User ID cannot be provided in request body",
-        code: "USER_ID_NOT_ALLOWED" 
-      }, { status: 400 });
-    }
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const supabase = getAdminRouteSupabase();
+  const { data: existingSprint } = await supabase
+    .from('sprints')
+    .select('*')
+    .eq('id', id)
+    .eq('tenant_id', tenantId)
+    .single();
+    
+  if (!existingSprint) throw new NotFoundError('Sprint not found');
 
-    const { projectId, name, goal, startDate, endDate, status = 'planning' } = body;
-
-    // Validate required fields
-    if (!projectId) {
-      return NextResponse.json({ 
-        error: 'Project ID is required',
-        code: 'MISSING_PROJECT_ID' 
-      }, { status: 400 });
-    }
-
-    if (isNaN(parseInt(projectId))) {
-      return NextResponse.json({ 
-        error: 'Project ID must be a valid integer',
-        code: 'INVALID_PROJECT_ID' 
-      }, { status: 400 });
-    }
-
-    if (!name || typeof name !== 'string' || name.trim().length === 0) {
-      return NextResponse.json({ 
-        error: 'Sprint name is required and must be a non-empty string',
-        code: 'MISSING_NAME' 
-      }, { status: 400 });
-    }
-
-    if (!startDate) {
-      return NextResponse.json({ 
-        error: 'Start date is required',
-        code: 'MISSING_START_DATE' 
-      }, { status: 400 });
-    }
-
-    if (!endDate) {
-      return NextResponse.json({ 
-        error: 'End date is required',
-        code: 'MISSING_END_DATE' 
-      }, { status: 400 });
-    }
-
-    // Validate date formats
-    if (!isValidISODate(startDate)) {
-      return NextResponse.json({ 
-        error: 'Start date must be in YYYY-MM-DD format',
-        code: 'INVALID_START_DATE_FORMAT' 
-      }, { status: 400 });
-    }
-
-    if (!isValidISODate(endDate)) {
-      return NextResponse.json({ 
-        error: 'End date must be in YYYY-MM-DD format',
-        code: 'INVALID_END_DATE_FORMAT' 
-      }, { status: 400 });
-    }
-
-    // Validate end date is after start date
-    if (new Date(endDate) <= new Date(startDate)) {
-      return NextResponse.json({ 
-        error: 'End date must be after start date',
-        code: 'INVALID_DATE_RANGE' 
-      }, { status: 400 });
-    }
-
-    // Validate status
-    if (!VALID_STATUSES.includes(status)) {
-      return NextResponse.json({ 
-        error: `Status must be one of: ${VALID_STATUSES.join(', ')}`,
-        code: 'INVALID_STATUS' 
-      }, { status: 400 });
-    }
-
-    // Validate project exists
-    const project = await db.select()
-      .from(projects)
-      .where(eq(projects.id, parseInt(projectId)))
-      .limit(1);
-
-    if (project.length === 0) {
-      return NextResponse.json({ 
-        error: 'Project not found',
-        code: 'PROJECT_NOT_FOUND' 
-      }, { status: 400 });
-    }
-
-    // Create sprint
-    const now = new Date().toISOString();
-    const newSprint = await db.insert(sprints)
-      .values({
-        projectId: parseInt(projectId),
-        name: name.trim(),
-        goal: goal ? goal.trim() : null,
-        startDate,
-        endDate,
-        status,
-        createdAt: now,
-        updatedAt: now
-      })
-      .returning();
-
-    return NextResponse.json(newSprint[0], { status: 201 });
-
-  } catch (error) {
-    console.error('POST error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
+  const nextStart = payload.startDate ?? String(existingSprint.start_date);
+  const nextEnd = payload.endDate ?? String(existingSprint.end_date);
+  if (new Date(nextEnd) <= new Date(nextStart)) {
+    throw new UnprocessableEntityError('End date must be after start date');
   }
-}
 
-export async function PUT(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  if (payload.status) {
+    const invalidTransitions = invalidStatusTransitions[String(existingSprint.status)] ?? [];
+    if (invalidTransitions.includes(payload.status)) {
+      throw new UnprocessableEntityError(`Cannot transition from ${existingSprint.status} to ${payload.status}`);
     }
-
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json({ 
-        error: 'Valid ID is required',
-        code: 'INVALID_ID' 
-      }, { status: 400 });
-    }
-
-    const body = await request.json();
-
-    // Security check: reject if user identifier fields provided
-    if ('userId' in body || 'user_id' in body || 'createdBy' in body) {
-      return NextResponse.json({ 
-        error: "User ID cannot be provided in request body",
-        code: "USER_ID_NOT_ALLOWED" 
-      }, { status: 400 });
-    }
-
-    // Check if sprint exists
-    const existingSprint = await db.select()
-      .from(sprints)
-      .where(eq(sprints.id, parseInt(id)))
-      .limit(1);
-
-    if (existingSprint.length === 0) {
-      return NextResponse.json({ 
-        error: 'Sprint not found',
-        code: 'SPRINT_NOT_FOUND' 
-      }, { status: 404 });
-    }
-
-    const currentSprint = existingSprint[0];
-    const { name, goal, startDate, endDate, status } = body;
-    const updates: any = {};
-
-    // Validate and add name
-    if (name !== undefined) {
-      if (typeof name !== 'string' || name.trim().length === 0) {
-        return NextResponse.json({ 
-          error: 'Sprint name must be a non-empty string',
-          code: 'INVALID_NAME' 
-        }, { status: 400 });
-      }
-      updates.name = name.trim();
-    }
-
-    // Add goal
-    if (goal !== undefined) {
-      updates.goal = goal ? goal.trim() : null;
-    }
-
-    // Validate and add dates
-    const newStartDate = startDate ?? currentSprint.startDate;
-    const newEndDate = endDate ?? currentSprint.endDate;
-
-    if (startDate !== undefined) {
-      if (!isValidISODate(startDate)) {
-        return NextResponse.json({ 
-          error: 'Start date must be in YYYY-MM-DD format',
-          code: 'INVALID_START_DATE_FORMAT' 
-        }, { status: 400 });
-      }
-      updates.startDate = startDate;
-    }
-
-    if (endDate !== undefined) {
-      if (!isValidISODate(endDate)) {
-        return NextResponse.json({ 
-          error: 'End date must be in YYYY-MM-DD format',
-          code: 'INVALID_END_DATE_FORMAT' 
-        }, { status: 400 });
-      }
-      updates.endDate = endDate;
-    }
-
-    // Validate date range
-    if (new Date(newEndDate) <= new Date(newStartDate)) {
-      return NextResponse.json({ 
-        error: 'End date must be after start date',
-        code: 'INVALID_DATE_RANGE' 
-      }, { status: 400 });
-    }
-
-    // Validate status and status transitions
-    if (status !== undefined) {
-      if (!VALID_STATUSES.includes(status)) {
-        return NextResponse.json({ 
-          error: `Status must be one of: ${VALID_STATUSES.join(', ')}`,
-          code: 'INVALID_STATUS' 
-        }, { status: 400 });
-      }
-
-      // Check for invalid status transitions
-      const currentStatus = currentSprint.status;
-      const invalidTransitions = INVALID_STATUS_TRANSITIONS[currentStatus];
-      if (invalidTransitions && invalidTransitions.includes(status)) {
-        return NextResponse.json({ 
-          error: `Cannot transition from ${currentStatus} to ${status}`,
-          code: 'INVALID_STATUS_TRANSITION' 
-        }, { status: 400 });
-      }
-
-      updates.status = status;
-    }
-
-    // Always update timestamp
-    updates.updatedAt = new Date().toISOString();
-
-    // Update sprint
-    const updatedSprint = await db.update(sprints)
-      .set(updates)
-      .where(eq(sprints.id, parseInt(id)))
-      .returning();
-
-    return NextResponse.json(updatedSprint[0], { status: 200 });
-
-  } catch (error) {
-    console.error('PUT error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
   }
-}
 
-export async function DELETE(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
+  const { data: updated, error } = await supabase.from('sprints').update({
+    ...(payload.name !== undefined ? { name: payload.name.trim() } : {}),
+    ...(payload.goal !== undefined ? { goal: payload.goal?.trim() || null } : {}),
+    ...(payload.startDate !== undefined ? { start_date: payload.startDate } : {}),
+    ...(payload.endDate !== undefined ? { end_date: payload.endDate } : {}),
+    ...(payload.status !== undefined ? { status: payload.status } : {}),
+    updated_at: new Date().toISOString(),
+  })
+  .eq('id', id)
+  .eq('tenant_id', tenantId)
+  .select('*')
+  .single();
+  if (error || !updated) throw error ?? new Error('Failed to update sprint');
+  return NextResponse.json(normalizeSupabaseSprintRow(updated));
+}, { requireAuth: true, roles: ['Manager'] });
 
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+export const DELETE = withApiHandler(async (request, context) => {
+  const id = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('Valid sprint id is required');
 
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json({ 
-        error: 'Valid ID is required',
-        code: 'INVALID_ID' 
-      }, { status: 400 });
-    }
-
-    // Check if sprint exists
-    const existingSprint = await db.select()
-      .from(sprints)
-      .where(eq(sprints.id, parseInt(id)))
-      .limit(1);
-
-    if (existingSprint.length === 0) {
-      return NextResponse.json({ 
-        error: 'Sprint not found',
-        code: 'SPRINT_NOT_FOUND' 
-      }, { status: 404 });
-    }
-
-    // Soft delete by setting status to cancelled
-    const deletedSprint = await db.update(sprints)
-      .set({
-        status: 'cancelled',
-        updatedAt: new Date().toISOString()
-      })
-      .where(eq(sprints.id, parseInt(id)))
-      .returning();
-
-    return NextResponse.json({
-      message: 'Sprint deleted successfully',
-      sprint: deletedSprint[0]
-    }, { status: 200 });
-
-  } catch (error) {
-    console.error('DELETE error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
-  }
-}
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const supabase = getAdminRouteSupabase();
+  const { data: deleted, error } = await supabase
+    .from('sprints')
+    .update({
+      status: 'cancelled',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .eq('tenant_id', tenantId)
+    .select('*')
+    .single();
+  if (error || !deleted) throw new NotFoundError('Sprint not found');
+  return NextResponse.json({ message: 'Sprint deleted successfully', sprint: normalizeSupabaseSprintRow(deleted) });
+}, { requireAuth: true, roles: ['Manager'] });

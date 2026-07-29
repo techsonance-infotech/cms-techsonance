@@ -1,199 +1,309 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
-import { attendanceRecords, nfcTags, employees, users } from '@/db/schema';
-import { eq, and, sql } from 'drizzle-orm';
-import { getCurrentUser } from '@/lib/auth';
+import { NextResponse } from 'next/server';
+import { withApiHandler } from '@/server/http/handler';
+import { BadRequestError, ConflictError, NotFoundError } from '@/server/http/errors';
+import { checkInSchema } from '@/server/validation/attendance';
+import { getCurrentSupabaseActor, getAdminRouteSupabase } from '@/server/supabase/route-helpers';
+import { listSupabaseProfilesByAuthIds } from '@/server/supabase/users';
+import { getPolicyForEmployee, getShiftForEmployee, applyRounding, parseShiftTime } from '@/server/attendance/engine';
+import { detectAttendanceAnomaly } from '@/server/ai/attendance-anomaly';
+import { logAuditAction, publishDomainEvent } from '@/server/events/dispatcher';
 
-export async function POST(request: NextRequest) {
-  try {
-    // Authentication check
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
-
-    const body = await request.json();
-    const {
-      tagUid,
-      employeeId,
-      readerId,
-      location,
-      idempotencyKey,
-      locationLatitude,
-      locationLongitude,
-      metadata
-    } = body;
-
-    // Validate that either tagUid or employeeId is provided
-    if (!tagUid && !employeeId) {
-      return NextResponse.json({
-        error: 'Either tagUid or employeeId must be provided',
-        code: 'MISSING_IDENTIFIER'
-      }, { status: 400 });
-    }
-
-    // Idempotency check
-    if (idempotencyKey) {
-      const existingRecord = await db.select()
-        .from(attendanceRecords)
-        .where(eq(attendanceRecords.idempotencyKey, idempotencyKey))
-        .limit(1);
-
-      if (existingRecord.length > 0) {
-        // Get employee details for existing record
-        const employeeData = await db.select({
-          id: employees.id,
-          name: sql<string>`${users.firstName} || ' ' || ${users.lastName}`.as('name'),
-          email: users.email,
-          department: employees.department,
-          photoUrl: users.avatarUrl,
-        })
-          .from(employees)
-          .innerJoin(users, eq(employees.userId, users.id))
-          .where(eq(employees.id, existingRecord[0].employeeId))
-          .limit(1);
-
-        return NextResponse.json({
-          ...existingRecord[0],
-          employee: employeeData[0] || null,
-          message: 'Check-in already processed (idempotency)'
-        }, { status: 200 });
-      }
-    }
-
-    let finalEmployeeId = employeeId;
-    let checkInMethod = 'manual';
-    let finalTagUid = tagUid;
-
-    // If tagUid provided, look up employee from NFC tag
-    if (tagUid) {
-      const tag = await db.select()
-        .from(nfcTags)
-        .where(eq(nfcTags.tagUid, tagUid))
-        .limit(1);
-
-      if (tag.length === 0) {
-        return NextResponse.json({
-          error: 'NFC tag not found',
-          code: 'TAG_NOT_FOUND'
-        }, { status: 400 });
-      }
-
-      // Validate tag is active
-      if (tag[0].status !== 'active') {
-        return NextResponse.json({
-          error: 'NFC tag is not active',
-          code: 'TAG_INACTIVE'
-        }, { status: 400 });
-      }
-
-      // Get employee ID from tag
-      if (!tag[0].employeeId) {
-        return NextResponse.json({
-          error: 'NFC tag is not assigned to any employee',
-          code: 'TAG_NOT_ASSIGNED'
-        }, { status: 400 });
-      }
-
-      finalEmployeeId = tag[0].employeeId;
-      checkInMethod = 'nfc';
-
-      // Update tag's lastUsedAt and readerId
-      await db.update(nfcTags)
-        .set({
-          lastUsedAt: new Date().toISOString(),
-          readerId: readerId || tag[0].readerId
-        })
-        .where(eq(nfcTags.tagUid, tagUid));
-    }
-
-    // Validate employee exists
-    const employee = await db.select({
-      id: employees.id,
-      name: sql<string>`${users.firstName} || ' ' || ${users.lastName}`.as('name'),
-      email: users.email,
-      department: employees.department,
-      photoUrl: users.avatarUrl,
-    })
-      .from(employees)
-      .innerJoin(users, eq(employees.userId, users.id))
-      .where(eq(employees.id, finalEmployeeId))
-      .limit(1);
-
-    if (employee.length === 0) {
-      return NextResponse.json({
-        error: 'Employee not found',
-        code: 'EMPLOYEE_NOT_FOUND'
-      }, { status: 400 });
-    }
-
-    // Check if already checked in today
-    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
-    const existingCheckIn = await db.select()
-      .from(attendanceRecords)
-      .where(
-        and(
-          eq(attendanceRecords.employeeId, finalEmployeeId),
-          eq(attendanceRecords.date, today)
-        )
-      )
-      .limit(1);
-
-    // If already checked in today and no checkout, return existing record
-    if (existingCheckIn.length > 0 && !existingCheckIn[0].timeOut) {
-      return NextResponse.json({
-        ...existingCheckIn[0],
-        employee: {
-          id: employee[0].id,
-          name: employee[0].name,
-          email: employee[0].email,
-          department: employee[0].department,
-          photoUrl: employee[0].photoUrl
-        },
-        message: 'Already checked in today'
-      }, { status: 200 });
-    }
-
-    // Create new attendance record
-    const now = new Date().toISOString();
-    const newRecord = await db.insert(attendanceRecords)
-      .values({
-        employeeId: finalEmployeeId,
-        date: today,
-        timeIn: now,
-        timeOut: null,
-        locationLatitude: locationLatitude || null,
-        locationLongitude: locationLongitude || null,
-        duration: null,
-        status: 'present',
-        checkInMethod,
-        readerId: readerId || null,
-        location: location || null,
-        tagUid: finalTagUid || null,
-        idempotencyKey: idempotencyKey || null,
-        syncedAt: null,
-        metadata: metadata ? JSON.stringify(metadata) : null,
-        createdAt: now
-      })
-      .returning();
-
-    // Return with employee details
-    return NextResponse.json({
-      ...newRecord[0],
-      employee: {
-        id: employee[0].id,
-        name: employee[0].name,
-        email: employee[0].email,
-        department: employee[0].department,
-        photoUrl: employee[0].photoUrl
-      },
-      message: 'Check-in successful'
-    }, { status: 201 });
-
-  } catch (error) {
-    console.error('POST error:', error);
-    return NextResponse.json({
-      error: 'Internal server error: ' + (error instanceof Error ? error.message : 'Unknown error')
-    }, { status: 500 });
+async function resolveSupabaseEmployee(accessToken: string, tenantId: string, tagUid?: string | null, employeeId?: number | null) {
+  const supabase = getAdminRouteSupabase();
+  if (tagUid) {
+    const { data: tag } = await supabase
+      .from('nfc_tags')
+      .select('*')
+      .eq('tag_uid', tagUid)
+      .eq('tenant_id', tenantId)
+      .single();
+    if (!tag) throw new NotFoundError('NFC tag not found');
+    if (tag.status !== 'active') throw new ConflictError('NFC tag is not active');
+    if (!tag.employee_id) throw new ConflictError('NFC tag is not assigned to any employee');
+    return { employeeId: Number(tag.employee_id), checkInMethod: 'nfc' as const, tag };
   }
+  if (!employeeId) throw new BadRequestError('Either tagUid or employeeId must be provided');
+  return { employeeId, checkInMethod: 'manual' as const, tag: null };
 }
+
+export const POST = withApiHandler(async (request, context) => {
+  const payload = checkInSchema.parse(await request.json());
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const actor = await getCurrentSupabaseActor(accessToken);
+  const supabase = getAdminRouteSupabase();
+
+  if (payload.idempotencyKey) {
+    const { data: existingByKey } = await supabase
+      .from('attendance_records')
+      .select('*')
+      .eq('idempotency_key', payload.idempotencyKey)
+      .eq('tenant_id', tenantId)
+      .single();
+    if (existingByKey) {
+      return NextResponse.json({ ...existingByKey, message: 'Check-in already processed (idempotency)' });
+    }
+  }
+
+  const resolved = await resolveSupabaseEmployee(accessToken, tenantId, payload.tagUid, payload.employeeId);
+  const { data: employee } = await supabase
+    .from('employees')
+    .select('*')
+    .eq('id', resolved.employeeId)
+    .eq('tenant_id', tenantId)
+    .single();
+  if (!employee) throw new NotFoundError('Employee not found');
+  const profiles = await listSupabaseProfilesByAuthIds([String(employee.user_id)], { accessToken, tenantId, useAdmin: true });
+  const profile = profiles.get(String(employee.user_id));
+  const employeeView = {
+    id: Number(employee.id),
+    name: `${profile?.first_name ?? ''} ${profile?.last_name ?? ''}`.trim(),
+    email: profile?.email ?? null,
+    department: employee.department,
+    photoUrl: profile?.avatar_url ?? null,
+  };
+
+  const isAdminLike = actor.role === 'Admin' || actor.role === 'SuperAdmin' || actor.role === 'Manager';
+  if (!isAdminLike && String(employee.user_id) !== actor.authUserId) {
+    throw new BadRequestError('Insufficient permissions. You can only log your own attendance.');
+  }
+
+  const nowDate = new Date();
+  const today = nowDate.toISOString().split('T')[0];
+  const minuteStart = new Date(nowDate);
+  minuteStart.setSeconds(0, 0);
+  const minuteEnd = new Date(minuteStart.getTime() + 60_000);
+  
+  const { data: sameMinuteRecord } = await supabase.from('attendance_records').select('*')
+    .eq('employee_id', resolved.employeeId)
+    .eq('date', today)
+    .eq('tenant_id', tenantId)
+    .gte('time_in', minuteStart.toISOString())
+    .lt('time_in', minuteEnd.toISOString())
+    .single();
+  if (sameMinuteRecord) {
+    return NextResponse.json({ ...sameMinuteRecord, employee: employeeView, message: 'Check-in already exists for this minute' });
+  }
+
+  if (resolved.tag) {
+    await supabase.from('nfc_tags').update({
+      last_used_at: nowDate.toISOString(),
+      reader_id: payload.readerId || resolved.tag.reader_id,
+    })
+    .eq('tag_uid', String(resolved.tag.tag_uid))
+    .eq('tenant_id', tenantId);
+  }
+
+  // --- RESOLVE POLICY & SHIFT RULES ---
+  const policy = await getPolicyForEmployee(supabase, tenantId, resolved.employeeId);
+  const shift = await getShiftForEmployee(supabase, tenantId, resolved.employeeId, today);
+
+  const roundedIn = applyRounding(nowDate, policy.rounding_minutes);
+  const shiftStart = parseShiftTime(shift.start_time, today);
+
+  // Late Arrival Check
+  let isLate = false;
+  let status = 'present';
+  if (!policy.is_flexible) {
+    const lateThreshold = new Date(shiftStart.getTime() + policy.grace_period_late_minutes * 60000);
+    if (roundedIn > lateThreshold) {
+      isLate = true;
+      status = 'late';
+    }
+  }
+
+  const clientIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip');
+  const userAgent = request.headers.get('user-agent');
+
+  // --- AI ANOMALY & FRAUD DETECTION ---
+  const aiResult = await detectAttendanceAnomaly({
+    employeeId: resolved.employeeId,
+    date: today,
+    timeIn: nowDate.toISOString(),
+    locationLatitude: payload.locationLatitude,
+    locationLongitude: payload.locationLongitude,
+    officeLatitude: policy.target_assignment?.office_latitude ?? null,
+    officeLongitude: policy.target_assignment?.office_longitude ?? null,
+    geofenceRadiusMeters: policy.target_assignment?.geofence_radius ?? 500,
+    allowedIps: policy.target_assignment?.allowed_ips ?? '',
+    clientIp,
+    userAgent,
+    shiftStart: shift.start_time,
+    shiftEnd: shift.end_time,
+  });
+
+  const violationFlags: any = {};
+  if (aiResult.isAnomaly) {
+    violationFlags[aiResult.anomalyType] = aiResult.details;
+  }
+
+  const targetDateObj = new Date(today);
+  const isWeekend = targetDateObj.getDay() === 0 || targetDateObj.getDay() === 6;
+
+  // ROUTE TO APPROVAL QUEUE IF WEEKEND OR ANOMALY DETECTED
+  if (isWeekend || aiResult.isAnomaly) {
+    const { data: requestRecord, error: requestError } = await supabase.from('attendance_requests').insert({
+      employee_id: resolved.employeeId,
+      date: today,
+      time_in: nowDate.toISOString(),
+      time_out: null,
+      duration: null,
+      status: 'pending',
+      check_in_method: resolved.checkInMethod,
+      location: payload.location ?? null,
+      reader_id: payload.readerId ?? null,
+      notes: payload.metadata?.notes ?? (isWeekend ? 'Weekend Check-in' : `AI Alert: ${aiResult.details}`),
+      violation_flags: violationFlags,
+      metadata: { 
+        ...payload.metadata, 
+        aiConfidence: aiResult.confidenceScore, 
+        aiDetails: aiResult.details,
+        clientIp,
+        userAgent
+      },
+      tenant_id: tenantId,
+      created_at: nowDate.toISOString(),
+      updated_at: nowDate.toISOString(),
+      requested_time_in: nowDate.toISOString(),
+      reason_type: isWeekend ? 'regularization' : 'dispute',
+      gps_latitude: payload.locationLatitude ?? null,
+      gps_longitude: payload.locationLongitude ?? null,
+      ai_fraud_check: {
+        isAnomaly: aiResult.isAnomaly,
+        anomalyType: aiResult.anomalyType,
+        confidenceScore: aiResult.confidenceScore,
+        details: aiResult.details,
+        recommendation: aiResult.recommendation
+      }
+    }).select('*').single();
+
+    if (requestError || !requestRecord) throw requestError ?? new Error('Failed to create attendance request');
+
+    // Create Exception Log for Audits
+    if (aiResult.isAnomaly) {
+      await supabase.from('attendance_exceptions').insert({
+        tenant_id: tenantId,
+        employee_id: resolved.employeeId,
+        date: today,
+        exception_type: aiResult.anomalyType,
+        severity: aiResult.confidenceScore > 80 ? 'high' : 'medium',
+        details: aiResult.details,
+        ai_detected: true,
+        ai_confidence: aiResult.confidenceScore,
+        resolved: false,
+        created_at: nowDate.toISOString(),
+      });
+
+      await publishDomainEvent(supabase, tenantId, 'AttendanceAnomalyDetected', {
+        employeeId: resolved.employeeId,
+        date: today,
+        anomalyType: aiResult.anomalyType,
+        confidenceScore: aiResult.confidenceScore,
+        details: aiResult.details
+      });
+    }
+
+    // Publish Event
+    await publishDomainEvent(supabase, tenantId, 'AttendanceRegularized', {
+      requestId: requestRecord.id,
+      employeeId: resolved.employeeId,
+      date: today,
+      reasonType: 'regularization'
+    });
+
+    // Write Audit Log
+    await logAuditAction(supabase, {
+      tenantId,
+      employeeId: resolved.employeeId,
+      actorId: actor.legacyUserId ? String(actor.legacyUserId) : null,
+      actionType: 'regularize_request',
+      clientIp,
+      userAgent,
+      gpsCoordinates: payload.locationLatitude ? `${payload.locationLatitude},${payload.locationLongitude}` : null,
+      metadata: { isAnomaly: aiResult.isAnomaly, checkInMethod: resolved.checkInMethod }
+    });
+
+    return NextResponse.json({ 
+      success: true, 
+      routedToQueue: true, 
+      message: isWeekend ? 'Weekend check-in routed to approval queue.' : `Check-in routed to approval queue: ${aiResult.details}` 
+    }, { status: 202 });
+  }
+
+  // NORMAL CHECK-IN
+  const metadata = {
+    ...payload.metadata,
+    clientIp,
+    userAgent,
+    roundedIn: roundedIn.toISOString()
+  };
+
+  const { data: created, error } = await supabase.from('attendance_records').insert({
+    employee_id: resolved.employeeId,
+    date: today,
+    time_in: nowDate.toISOString(),
+    time_out: null,
+    location_latitude: payload.locationLatitude ?? null,
+    location_longitude: payload.locationLongitude ?? null,
+    duration: null,
+    status,
+    check_in_method: resolved.checkInMethod,
+    reader_id: payload.readerId ?? null,
+    location: payload.location ?? null,
+    tag_uid: payload.tagUid ?? null,
+    idempotency_key: payload.idempotencyKey ?? null,
+    synced_at: null,
+    metadata,
+    tenant_id: tenantId,
+    created_at: nowDate.toISOString(),
+  }).select('*').single();
+
+  if (error || !created) throw error ?? new Error('Failed to create attendance record');
+
+  // Trigger Late Arrival Exception if applicable
+  if (isLate) {
+    await supabase.from('attendance_exceptions').insert({
+      tenant_id: tenantId,
+      employee_id: resolved.employeeId,
+      date: today,
+      exception_type: 'late_arrival',
+      severity: 'low',
+      details: `Checked in late at ${nowDate.toLocaleTimeString()} (Shift start: ${shift.start_time}).`,
+      ai_detected: false,
+      resolved: false,
+      created_at: nowDate.toISOString(),
+    });
+
+    await publishDomainEvent(supabase, tenantId, 'AttendancePolicyViolationDetected', {
+      employeeId: resolved.employeeId,
+      date: today,
+      violationType: 'late_arrival'
+    });
+  }
+
+  // Publish Event
+  await publishDomainEvent(supabase, tenantId, 'AttendanceMarked', {
+    recordId: created.id,
+    employeeId: resolved.employeeId,
+    date: today,
+    status
+  });
+
+  // Write Audit Log
+  await logAuditAction(supabase, {
+    tenantId,
+    employeeId: resolved.employeeId,
+    actorId: actor.legacyUserId ? String(actor.legacyUserId) : null,
+    actionType: 'check_in',
+    recordId: Number(created.id),
+    clientIp,
+    userAgent,
+    gpsCoordinates: payload.locationLatitude ? `${payload.locationLatitude},${payload.locationLongitude}` : null,
+    metadata: { checkInMethod: resolved.checkInMethod, status }
+  });
+
+  return NextResponse.json({ ...created, employee: employeeView, message: 'Check-in successful' }, { status: 201 });
+}, { requireAuth: true, roles: ['Employee'] });
+

@@ -10,7 +10,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: Geist, Inter, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -45,84 +45,130 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --color-surface-container-highest: #d3e4fe;
+  --color-surface-container-lowest: #ffffff;
+  --color-accent-pink: #FF00D9;
+  --color-tertiary-container: #c05900;
+  --color-status-success: #10b981;
+  --color-status-info: #0ea5e9;
+  --color-status-error: #ef4444;
+  --color-status-warning: #f59e0b;
+  --color-surface-dim: #cbdbf5;
+  --color-surface-container-low: #eff4ff;
+  --color-surface-subtle: #f8fafc;
+  --color-surface-container: #e5eeff;
+  --color-surface-container-high: #dce9ff;
+  --color-border-base: #e2e8f0;
+  
+  /* Brand Specific Colors */
+  --color-primary-dark: var(--primary-dark);
+  --color-primary-light: var(--primary-light);
+  --color-accent-cyan: var(--accent-cyan);
+  --color-accent-aqua: var(--accent-aqua);
 }
 
 :root {
-  --radius: 0.625rem;
-  /* Brand Colors: #00C2FF (cyan blue) and #0A1A2F (deep navy) */
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.18 0.05 240);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.05 240);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.05 240);
-  --primary: oklch(0.72 0.15 220);
-  /* #00C2FF cyan blue */
-  --primary-foreground: oklch(0.98 0.01 240);
-  --secondary: oklch(0.92 0.02 240);
-  --secondary-foreground: oklch(0.18 0.05 240);
-  --muted: oklch(0.94 0.01 240);
-  --muted-foreground: oklch(0.50 0.03 240);
-  --accent: oklch(0.72 0.15 220);
-  --accent-foreground: oklch(0.98 0.01 240);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.88 0.01 240);
-  --input: oklch(0.88 0.01 240);
-  --ring: oklch(0.72 0.15 220);
-  --chart-1: oklch(0.72 0.15 220);
-  --chart-2: oklch(0.65 0.12 200);
-  --chart-3: oklch(0.55 0.10 180);
-  --chart-4: oklch(0.60 0.13 260);
-  --chart-5: oklch(0.50 0.08 240);
-  --sidebar: oklch(0.18 0.05 240);
-  /* #0A1A2F deep navy */
-  --sidebar-foreground: oklch(0.98 0.01 240);
-  --sidebar-primary: oklch(0.72 0.15 220);
-  /* #00C2FF cyan blue */
-  --sidebar-primary-foreground: oklch(0.98 0.01 240);
-  --sidebar-accent: oklch(0.25 0.05 240);
-  --sidebar-accent-foreground: oklch(0.98 0.01 240);
-  --sidebar-border: oklch(0.30 0.05 240);
-  --sidebar-ring: oklch(0.72 0.15 220);
+  --radius: 1rem; /* 16px border-radius default */
+  
+  /* Brand Specific Palette */
+  --primary: #F87941;
+  --primary-hover: #F4662B;
+  --primary-active: #E95B1F;
+  --primary-light: #F9B095;
+  --primary-soft: #FFE7DC;
+  
+  /* Layout Theme Tokens */
+  --background: #FDFCFC;
+  --foreground: #45464A;
+  
+  --card: #FFFFFF;
+  --card-foreground: #2F3035;
+  
+  --popover: #FFFFFF;
+  --popover-foreground: #2F3035;
+  
+  --primary-foreground: #FFFFFF;
+  
+  --secondary: #F4F3F4;
+  --secondary-foreground: #2F3035;
+  
+  --muted: #F4F3F4;
+  --muted-foreground: #6B6C70;
+  
+  --accent: #FFF5F1;
+  --accent-foreground: #F87941;
+  
+  --destructive: #E53935;
+  --destructive-foreground: #FFFFFF;
+  
+  --border: #ECEBEC;
+  --input: #E6E4E6;
+  --ring: #F87941;
+  
+  /* Chart Tokens mapped to Brand */
+  --chart-1: #F87941;
+  --chart-2: #F9B095;
+  --chart-3: #2F3035;
+  --chart-4: #B1B1B1;
+  --chart-5: #E6E4E6;
+
+  /* Sidebar Specific (Clean Light Style per design spec) */
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #66676A;
+  --sidebar-primary: #FFE9DE;
+  --sidebar-primary-foreground: #F87941;
+  --sidebar-accent: #FFF5F1;
+  --sidebar-accent-foreground: #F87941;
+  --sidebar-border: #ECEBEC;
+  --sidebar-ring: #F87941;
 }
 
 .dark {
-  /* Brand Colors: #00C2FF (cyan blue) and #0A1A2F (deep navy) */
-  --background: oklch(0.145 0 0);
-  /* #0A1A2F deep navy */
-  --foreground: oklch(0.95 0.01 240);
-  --card: oklch(0.20 0.05 240);
-  --card-foreground: oklch(0.95 0.01 240);
-  --popover: oklch(0.20 0.05 240);
-  --popover-foreground: oklch(0.95 0.01 240);
-  --primary: oklch(0.72 0.15 220);
-  /* #00C2FF cyan blue */
-  --primary-foreground: oklch(0.15 0.05 240);
-  --secondary: oklch(0.28 0.05 240);
-  --secondary-foreground: oklch(0.95 0.01 240);
-  --muted: oklch(0.28 0.05 240);
-  --muted-foreground: oklch(0.65 0.02 240);
-  --accent: oklch(0.72 0.15 220);
-  --accent-foreground: oklch(0.15 0.05 240);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(0.30 0.05 240);
-  --input: oklch(0.25 0.05 240);
-  --ring: oklch(0.72 0.15 220);
-  --chart-1: oklch(0.72 0.15 220);
-  --chart-2: oklch(0.65 0.12 200);
-  --chart-3: oklch(0.55 0.10 180);
-  --chart-4: oklch(0.60 0.13 260);
-  --chart-5: oklch(0.50 0.08 240);
-  --sidebar: oklch(0.18 0.05 240);
-  /* #0A1A2F deep navy */
-  --sidebar-foreground: oklch(0.95 0.01 240);
-  --sidebar-primary: oklch(0.72 0.15 220);
-  /* #00C2FF cyan blue */
-  --sidebar-primary-foreground: oklch(0.15 0.05 240);
-  --sidebar-accent: oklch(0.28 0.05 240);
-  --sidebar-accent-foreground: oklch(0.95 0.01 240);
-  --sidebar-border: oklch(0.30 0.05 240);
-  --sidebar-ring: oklch(0.72 0.15 220);
+  /* Premium Deep Slate Palette using brand colors */
+  --background: #2F3035;
+  --foreground: #FDFCFC;
+  
+  --card: #37383E;
+  --card-foreground: #FDFCFC;
+  
+  --popover: #2F3035;
+  --popover-foreground: #FDFCFC;
+  
+  --primary: #F87941;
+  --primary-foreground: #FFFFFF;
+  
+  --secondary: #37383E;
+  --secondary-foreground: #E6E4E6;
+  
+  --muted: #37383E;
+  --muted-foreground: #B1B1B1;
+  
+  --accent: #37383E;
+  --accent-foreground: #F87941;
+  
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+  
+  --border: #37383E;
+  --input: #37383E;
+  --ring: #F87941;
+  
+  /* Chart Tokens */
+  --chart-1: #F87941;
+  --chart-2: #F9B095;
+  --chart-3: #E6E4E6;
+  --chart-4: #2F3035;
+  --chart-5: #B1B1B1;
+
+  /* Sidebar dark/black mode theme */
+  --sidebar: #1E1F22;
+  --sidebar-foreground: #B5B7BA;
+  --sidebar-primary: #382319;
+  --sidebar-primary-foreground: #F87941;
+  --sidebar-accent: #2E2F33;
+  --sidebar-accent-foreground: #F87941;
+  --sidebar-border: #2E2F33;
+  --sidebar-ring: #F87941;
 }
 
 @layer base {
@@ -131,6 +177,7 @@
   }
 
   body {
+    font-family: Geist, Inter, system-ui, sans-serif;
     @apply bg-background text-foreground;
   }
 }
@@ -138,4 +185,38 @@
 /* Hide Next.js error overlay portal */
 nextjs-portal {
   display: none !important;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(229, 231, 235, 0.3) 25%,
+    rgba(229, 231, 235, 0.5) 50%,
+    rgba(229, 231, 235, 0.3) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite linear;
+}
+
+.dark .animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(31, 41, 55, 0.3) 25%,
+    rgba(31, 41, 55, 0.5) 50%,
+    rgba(31, 41, 55, 0.3) 75%
+  );
+  background-size: 200% 100%;
+}
+
+.bg-brand-gradient {
+  background: linear-gradient(135deg, #F87941 0%, #F4662B 100%) !important;
 }

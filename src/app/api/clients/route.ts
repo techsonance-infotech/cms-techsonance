@@ -1,372 +1,259 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
-import { clients, users } from '@/db/schema';
-import { eq, like, and, or, desc } from 'drizzle-orm';
-import { safeErrorMessage } from '@/lib/constants';
+import { NextResponse } from 'next/server';
+import { withApiHandler } from '@/server/http/handler';
+import { BadRequestError, NotFoundError } from '@/server/http/errors';
+import { clientStatusSchema, createClientSchema, updateClientSchema } from '@/server/validation/clients';
+import {
+  buildLegacyUserIdMap,
+  getAdminRouteSupabase,
+  getCurrentSupabaseActor,
+} from '@/server/supabase/route-helpers';
 
-// Email validation regex
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-// Valid status enum values
-const VALID_STATUSES = ['active', 'inactive', 'prospect'];
-
-// Validate email format
-function isValidEmail(email: string): boolean {
-  return EMAIL_REGEX.test(email);
+function normalizeSupabaseClientRow(row: Record<string, unknown>, userMap: Map<string, number | null>) {
+  const createdBy = typeof row.created_by === 'string' ? userMap.get(row.created_by) ?? null : null;
+  return {
+    id: Number(row.id),
+    companyName: row.company_name,
+    contactPerson: row.contact_person,
+    email: row.email,
+    phone: row.phone ?? null,
+    address: row.address ?? null,
+    industry: row.industry ?? null,
+    status: row.status,
+    createdBy,
+    createdAt: row.created_at ?? null,
+    updatedAt: row.updated_at ?? null,
+    notes: row.notes ?? null,
+  };
 }
 
-// Validate status value
-function isValidStatus(status: string): boolean {
-  return VALID_STATUSES.includes(status);
-}
-
-export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-
-    // Single client by ID
-    if (id) {
-      if (!id || isNaN(parseInt(id))) {
-        return NextResponse.json(
-          { error: 'Valid ID is required', code: 'INVALID_ID' },
-          { status: 400 }
-        );
-      }
-
-      const client = await db
-        .select()
-        .from(clients)
-        .where(eq(clients.id, parseInt(id)))
-        .limit(1);
-
-      if (client.length === 0) {
-        return NextResponse.json(
-          { error: 'Client not found', code: 'CLIENT_NOT_FOUND' },
-          { status: 404 }
-        );
-      }
-
-      return NextResponse.json(client[0], { status: 200 });
-    }
-
-    // List clients with pagination, search, and filtering
-    const limit = Math.min(parseInt(searchParams.get('limit') ?? '10'), 100);
-    const offset = parseInt(searchParams.get('offset') ?? '0');
-    const search = searchParams.get('search');
-    const status = searchParams.get('status');
-    const industry = searchParams.get('industry');
-    const sort = searchParams.get('sort') ?? 'createdAt';
-    const order = searchParams.get('order') ?? 'desc';
-
-    let query = db.select().from(clients);
-
-    // Build where conditions
-    const conditions = [];
-
-    // Search across companyName, contactPerson, and email
-    if (search) {
-      conditions.push(
-        or(
-          like(clients.companyName, `%${search}%`),
-          like(clients.contactPerson, `%${search}%`),
-          like(clients.email, `%${search}%`)
-        )
-      );
-    }
-
-    // Filter by status
-    if (status) {
-      if (!isValidStatus(status)) {
-        return NextResponse.json(
-          { 
-            error: 'Invalid status value. Must be one of: active, inactive, prospect',
-            code: 'INVALID_STATUS' 
-          },
-          { status: 400 }
-        );
-      }
-      conditions.push(eq(clients.status, status));
-    }
-
-    // Filter by industry
-    if (industry) {
-      conditions.push(eq(clients.industry, industry));
-    }
-
-    // Apply conditions
-    if (conditions.length > 0) {
-      query = query.where(conditions.length === 1 ? conditions[0] : and(...conditions));
-    }
-
-    // Apply sorting
-    const sortColumn = clients[sort as keyof typeof clients] || clients.createdAt;
-    query = order === 'asc' ? query.orderBy(sortColumn) : query.orderBy(desc(sortColumn));
-
-    // Apply pagination
-    const results = await query.limit(limit).offset(offset);
-
-    return NextResponse.json(results, { status: 200 });
-  } catch (error) {
-    console.error('GET error:', error);
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 }
-    );
+/** Check for duplicate email or phone in the same tenant. Returns a conflict message or null. */
+async function checkDuplicates(
+  supabase: ReturnType<typeof getAdminRouteSupabase>,
+  tenantId: string,
+  email: string,
+  phone: string | null | undefined,
+  excludeId?: number
+): Promise<string | null> {
+  // Check email uniqueness (case-insensitive)
+  let emailQuery = supabase
+    .from('clients')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .ilike('email', email);
+  if (excludeId) emailQuery = emailQuery.neq('id', excludeId);
+  const { data: emailConflict } = await emailQuery.limit(1);
+  if (emailConflict && emailConflict.length > 0) {
+    return 'A client with this email address already exists.';
   }
-}
 
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { companyName, contactPerson, email, phone, address, industry, notes, createdBy, status } = body;
-
-    // Validate required fields
-    if (!companyName || typeof companyName !== 'string' || companyName.trim() === '') {
-      return NextResponse.json(
-        { error: 'Company name is required', code: 'MISSING_COMPANY_NAME' },
-        { status: 400 }
-      );
+  // Check phone uniqueness (only if phone is provided)
+  if (phone && phone.trim()) {
+    let phoneQuery = supabase
+      .from('clients')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('phone', phone.trim());
+    if (excludeId) phoneQuery = phoneQuery.neq('id', excludeId);
+    const { data: phoneConflict } = await phoneQuery.limit(1);
+    if (phoneConflict && phoneConflict.length > 0) {
+      return 'A client with this phone number already exists.';
     }
-
-    if (!contactPerson || typeof contactPerson !== 'string' || contactPerson.trim() === '') {
-      return NextResponse.json(
-        { error: 'Contact person is required', code: 'MISSING_CONTACT_PERSON' },
-        { status: 400 }
-      );
-    }
-
-    if (!email || typeof email !== 'string' || email.trim() === '') {
-      return NextResponse.json(
-        { error: 'Email is required', code: 'MISSING_EMAIL' },
-        { status: 400 }
-      );
-    }
-
-    if (!createdBy || isNaN(parseInt(createdBy))) {
-      return NextResponse.json(
-        { error: 'Valid createdBy user ID is required', code: 'MISSING_CREATED_BY' },
-        { status: 400 }
-      );
-    }
-
-    // Validate email format
-    const sanitizedEmail = email.trim().toLowerCase();
-    if (!isValidEmail(sanitizedEmail)) {
-      return NextResponse.json(
-        { error: 'Invalid email format', code: 'INVALID_EMAIL_FORMAT' },
-        { status: 400 }
-      );
-    }
-
-    // Validate status if provided
-    const clientStatus = status?.trim() || 'active';
-    if (!isValidStatus(clientStatus)) {
-      return NextResponse.json(
-        { 
-          error: 'Invalid status value. Must be one of: active, inactive, prospect',
-          code: 'INVALID_STATUS' 
-        },
-        { status: 400 }
-      );
-    }
-
-    // Verify createdBy user exists
-    const userExists = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, parseInt(createdBy)))
-      .limit(1);
-
-    if (userExists.length === 0) {
-      return NextResponse.json(
-        { error: 'User with specified createdBy ID does not exist', code: 'USER_NOT_FOUND' },
-        { status: 400 }
-      );
-    }
-
-    // Prepare client data
-    const now = new Date().toISOString();
-    const clientData = {
-      companyName: companyName.trim(),
-      contactPerson: contactPerson.trim(),
-      email: sanitizedEmail,
-      phone: phone?.trim() || null,
-      address: address?.trim() || null,
-      industry: industry?.trim() || null,
-      notes: notes?.trim() || null,
-      status: clientStatus,
-      createdBy: parseInt(createdBy),
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    // Insert client
-    const newClient = await db
-      .insert(clients)
-      .values(clientData)
-      .returning();
-
-    return NextResponse.json(newClient[0], { status: 201 });
-  } catch (error) {
-    console.error('POST error:', error);
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 }
-    );
   }
+
+  return null;
 }
 
-export async function PUT(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+export const GET = withApiHandler(async (request, context) => {
+  const searchParams = new URL(request.url).searchParams;
+  const id = searchParams.get('id');
 
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json(
-        { error: 'Valid ID is required', code: 'INVALID_ID' },
-        { status: 400 }
-      );
-    }
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const supabase = getAdminRouteSupabase();
 
-    const body = await request.json();
-    const { companyName, contactPerson, email, phone, address, industry, notes, status } = body;
-
-    // Check if client exists
-    const existingClient = await db
-      .select()
-      .from(clients)
-      .where(eq(clients.id, parseInt(id)))
-      .limit(1);
-
-    if (existingClient.length === 0) {
-      return NextResponse.json(
-        { error: 'Client not found', code: 'CLIENT_NOT_FOUND' },
-        { status: 404 }
-      );
-    }
-
-    // Validate fields if provided
-    if (companyName !== undefined && (typeof companyName !== 'string' || companyName.trim() === '')) {
-      return NextResponse.json(
-        { error: 'Company name cannot be empty', code: 'INVALID_COMPANY_NAME' },
-        { status: 400 }
-      );
-    }
-
-    if (contactPerson !== undefined && (typeof contactPerson !== 'string' || contactPerson.trim() === '')) {
-      return NextResponse.json(
-        { error: 'Contact person cannot be empty', code: 'INVALID_CONTACT_PERSON' },
-        { status: 400 }
-      );
-    }
-
-    if (email !== undefined) {
-      if (typeof email !== 'string' || email.trim() === '') {
-        return NextResponse.json(
-          { error: 'Email cannot be empty', code: 'INVALID_EMAIL' },
-          { status: 400 }
-        );
-      }
-
-      const sanitizedEmail = email.trim().toLowerCase();
-      if (!isValidEmail(sanitizedEmail)) {
-        return NextResponse.json(
-          { error: 'Invalid email format', code: 'INVALID_EMAIL_FORMAT' },
-          { status: 400 }
-        );
-      }
-    }
-
-    if (status !== undefined && !isValidStatus(status)) {
-      return NextResponse.json(
-        { 
-          error: 'Invalid status value. Must be one of: active, inactive, prospect',
-          code: 'INVALID_STATUS' 
-        },
-        { status: 400 }
-      );
-    }
-
-    // Prepare update data (only include provided fields)
-    const updateData: any = {
-      updatedAt: new Date().toISOString(),
-    };
-
-    if (companyName !== undefined) updateData.companyName = companyName.trim();
-    if (contactPerson !== undefined) updateData.contactPerson = contactPerson.trim();
-    if (email !== undefined) updateData.email = email.trim().toLowerCase();
-    if (phone !== undefined) updateData.phone = phone?.trim() || null;
-    if (address !== undefined) updateData.address = address?.trim() || null;
-    if (industry !== undefined) updateData.industry = industry?.trim() || null;
-    if (notes !== undefined) updateData.notes = notes?.trim() || null;
-    if (status !== undefined) updateData.status = status;
-
-    // Update client
-    const updated = await db
-      .update(clients)
-      .set(updateData)
-      .where(eq(clients.id, parseInt(id)))
-      .returning();
-
-    return NextResponse.json(updated[0], { status: 200 });
-  } catch (error) {
-    console.error('PUT error:', error);
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 }
-    );
+  if (id) {
+    const { data, error } = await supabase
+      .from('clients')
+      .select('*')
+      .eq('id', Number(id))
+      .eq('tenant_id', tenantId)
+      .single();
+      
+    if (error || !data) throw new NotFoundError('Client not found');
+    const userMap = await buildLegacyUserIdMap(accessToken, [String(data.created_by)], tenantId);
+    return NextResponse.json(normalizeSupabaseClientRow(data, userMap));
   }
-}
 
-export async function DELETE(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+  const limit = Math.min(Number(searchParams.get('limit') ?? '10'), 100);
+  const offset = Math.max(Number(searchParams.get('offset') ?? '0'), 0);
+  const search = searchParams.get('search');
+  const status = searchParams.get('status');
+  const industry = searchParams.get('industry');
+  
+  let query = supabase
+    .from('clients')
+    .select('*', { count: 'exact' })
+    .eq('tenant_id', tenantId);
 
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json(
-        { error: 'Valid ID is required', code: 'INVALID_ID' },
-        { status: 400 }
-      );
-    }
-
-    // Check if client exists
-    const existingClient = await db
-      .select()
-      .from(clients)
-      .where(eq(clients.id, parseInt(id)))
-      .limit(1);
-
-    if (existingClient.length === 0) {
-      return NextResponse.json(
-        { error: 'Client not found', code: 'CLIENT_NOT_FOUND' },
-        { status: 404 }
-      );
-    }
-
-    // Soft delete by setting status to 'inactive'
-    const deleted = await db
-      .update(clients)
-      .set({
-        status: 'inactive',
-        updatedAt: new Date().toISOString(),
-      })
-      .where(eq(clients.id, parseInt(id)))
-      .returning();
-
-    return NextResponse.json(
-      {
-        message: 'Client successfully deleted (soft delete)',
-        client: deleted[0],
-      },
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error('DELETE error:', error);
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 }
-    );
+  if (search) {
+    query = query.or(`company_name.ilike.%${search}%,contact_person.ilike.%${search}%,email.ilike.%${search}%`);
   }
-}
+  if (status) query = query.eq('status', clientStatusSchema.parse(status));
+  if (industry) query = query.eq('industry', industry);
+
+  const { data, count, error } = await query
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  if (error) throw new Error(error.message);
+
+  const userMap = await buildLegacyUserIdMap(
+    accessToken,
+    ((data as Record<string, unknown>[] | null) ?? []).map((row) => String(row.created_by)).filter(Boolean),
+    tenantId
+  );
+
+  return NextResponse.json({
+    success: true,
+    data: ((data as Record<string, unknown>[] | null) ?? []).map((row) => normalizeSupabaseClientRow(row, userMap)),
+    message: 'Clients fetched successfully',
+    errors: null,
+    meta: {
+      page: Math.floor(offset / limit) + 1,
+      limit,
+      total: Number(count ?? 0),
+    },
+  });
+}, { requireAuth: true, roles: ['Employee'] });
+
+export const POST = withApiHandler(async (request, context) => {
+  const payload = createClientSchema.parse(await request.json());
+
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const supabase = getAdminRouteSupabase();
+
+  // Pre-insert uniqueness check — avoids raw Postgres PK/unique constraint crashes
+  const conflict = await checkDuplicates(supabase, tenantId, payload.email.toLowerCase().trim(), payload.phone);
+  if (conflict) throw new BadRequestError(conflict);
+
+  const actor = await getCurrentSupabaseActor(accessToken);
+  const now = new Date().toISOString();
+  const { data, error } = await supabase.from('clients').insert({
+    company_name: payload.companyName.trim(),
+    contact_person: payload.contactPerson.trim(),
+    email: payload.email.toLowerCase().trim(),
+    phone: payload.phone?.trim() || null,
+    address: payload.address?.trim() || null,
+    industry: payload.industry?.trim() || null,
+    notes: payload.notes?.trim() || null,
+    status: payload.status ?? 'active',
+    tenant_id: tenantId,
+    created_by: actor.authUserId,
+    created_at: now,
+    updated_at: now,
+  }).select('*').single();
+
+  if (error) {
+    // Fallback: catch unique constraint violations from DB directly (code 23505)
+    if (error.code === '23505') {
+      if (error.message.includes('email')) throw new BadRequestError('A client with this email address already exists.');
+      if (error.message.includes('phone')) throw new BadRequestError('A client with this phone number already exists.');
+      throw new BadRequestError('A client with these details already exists.');
+    }
+    throw new Error(error.message);
+  }
+  if (!data) throw new Error('Failed to create client');
+
+  const userMap = await buildLegacyUserIdMap(accessToken, [actor.authUserId], tenantId);
+  return NextResponse.json(normalizeSupabaseClientRow(data, userMap), { status: 201 });
+}, { requireAuth: true, roles: ['Manager'] });
+
+export const PUT = withApiHandler(async (request, context) => {
+  const id = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('Valid client id is required');
+
+  const payload = updateClientSchema.parse(await request.json());
+
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const supabase = getAdminRouteSupabase();
+  const { data: existing } = await supabase
+    .from('clients')
+    .select('*')
+    .eq('id', id)
+    .eq('tenant_id', tenantId)
+    .single();
+    
+  if (!existing) throw new NotFoundError('Client not found');
+
+  // Pre-update uniqueness check (exclude current record)
+  const emailToCheck = payload.email ? payload.email.toLowerCase().trim() : null;
+  const phoneToCheck = payload.phone ?? null;
+  if (emailToCheck || phoneToCheck) {
+    const conflict = await checkDuplicates(
+      supabase,
+      tenantId,
+      emailToCheck ?? String(existing.email),
+      phoneToCheck,
+      id
+    );
+    if (conflict) throw new BadRequestError(conflict);
+  }
+
+  const { data, error } = await supabase.from('clients').update({
+    ...(payload.companyName !== undefined ? { company_name: payload.companyName.trim() } : {}),
+    ...(payload.contactPerson !== undefined ? { contact_person: payload.contactPerson.trim() } : {}),
+    ...(payload.email !== undefined ? { email: payload.email.toLowerCase().trim() } : {}),
+    ...(payload.phone !== undefined ? { phone: payload.phone?.trim() || null } : {}),
+    ...(payload.address !== undefined ? { address: payload.address?.trim() || null } : {}),
+    ...(payload.industry !== undefined ? { industry: payload.industry?.trim() || null } : {}),
+    ...(payload.notes !== undefined ? { notes: payload.notes?.trim() || null } : {}),
+    ...(payload.status !== undefined ? { status: payload.status } : {}),
+    updated_at: new Date().toISOString(),
+  })
+  .eq('id', id)
+  .eq('tenant_id', tenantId)
+  .select('*')
+  .single();
+
+  if (error) {
+    if (error.code === '23505') {
+      if (error.message.includes('email')) throw new BadRequestError('A client with this email address already exists.');
+      if (error.message.includes('phone')) throw new BadRequestError('A client with this phone number already exists.');
+      throw new BadRequestError('A client with these details already exists.');
+    }
+    throw new Error(error.message);
+  }
+  if (!data) throw new Error('Failed to update client');
+
+  const userMap = await buildLegacyUserIdMap(accessToken, [String(data.created_by)]);
+  return NextResponse.json(normalizeSupabaseClientRow(data, userMap));
+}, { requireAuth: true, roles: ['Manager'] });
+
+export const DELETE = withApiHandler(async (request, context) => {
+  const id = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('Valid client id is required');
+
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const supabase = getAdminRouteSupabase();
+  const { data, error } = await supabase
+    .from('clients')
+    .delete()
+    .eq('id', id)
+    .eq('tenant_id', tenantId)
+    .select('*')
+    .single();
+  if (error || !data) throw new NotFoundError('Client not found');
+  const userMap = await buildLegacyUserIdMap(accessToken, [String(data.created_by)]);
+  return NextResponse.json({ message: 'Client deleted successfully', client: normalizeSupabaseClientRow(data, userMap) });
+}, { requireAuth: true, roles: ['Manager'] });

@@ -1,359 +1,200 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
-import { companyHolidays } from '@/db/schema';
-import { eq, and, desc } from 'drizzle-orm';
-import { getCurrentUser } from '@/lib/auth';
-import { safeErrorMessage } from '@/lib/constants';
+import { withApiHandler } from '@/server/http/handler';
+import { BadRequestError, ConflictError, NotFoundError } from '@/server/http/errors';
+import { apiSuccess } from '@/server/http/response';
+import { companyHolidaySchema, updateCompanyHolidaySchema } from '@/server/validation/settings';
+import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
+import { getSupabaseAdminClient } from '@/server/supabase/admin';
 
-export async function GET(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
-
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-
-    // Single record by ID
-    if (id) {
-      if (!id || isNaN(parseInt(id))) {
-        return NextResponse.json({ 
-          error: 'Valid ID is required',
-          code: 'INVALID_ID' 
-        }, { status: 400 });
-      }
-
-      const record = await db.select()
-        .from(companyHolidays)
-        .where(eq(companyHolidays.id, parseInt(id)))
-        .limit(1);
-
-      if (record.length === 0) {
-        return NextResponse.json({ 
-          error: 'Company holiday not found',
-          code: 'NOT_FOUND' 
-        }, { status: 404 });
-      }
-
-      return NextResponse.json(record[0], { status: 200 });
-    }
-
-    // List with pagination and filtering
-    const limit = Math.min(parseInt(searchParams.get('limit') ?? '10'), 100);
-    const offset = parseInt(searchParams.get('offset') ?? '0');
-    const year = searchParams.get('year');
-
-    const conditions = [];
-    if (year) {
-      const yearInt = parseInt(year);
-      if (isNaN(yearInt)) {
-        return NextResponse.json({ 
-          error: 'Invalid year format',
-          code: 'INVALID_YEAR' 
-        }, { status: 400 });
-      }
-      conditions.push(eq(companyHolidays.year, yearInt));
-    }
-
-    const results = await db.select()
-      .from(companyHolidays)
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(companyHolidays.date)
-      .limit(limit)
-      .offset(offset);
-
-    return NextResponse.json(results, { status: 200 });
-
-  } catch (error) {
-    console.error('GET error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
-  }
+function normalizeSupabaseCompanyHoliday(row: Record<string, unknown>) {
+  return {
+    id: Number(row.id),
+    date: row.date,
+    reason: row.reason,
+    year: Number(row.year),
+    createdAt: row.created_at ?? null,
+  };
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+export const GET = withApiHandler(async (request, context) => {
+  const searchParams = new URL(request.url).searchParams;
+  const id = searchParams.get('id');
+
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  const supabase = getAdminRouteSupabase();
+
+  if (id) {
+    const holidayId = Number(id);
+    if (!Number.isInteger(holidayId) || holidayId <= 0) {
+      throw new BadRequestError('Valid company holiday id is required');
     }
 
-    // Role check: Only admin, CMS Admin, or HR can create holidays
-    if (user.role !== 'admin' && user.role !== 'cms_administrator' && user.role !== 'hr_manager') {
-      return NextResponse.json({ 
-        error: 'Insufficient permissions. Admin or HR role required.',
-        code: 'FORBIDDEN' 
-      }, { status: 403 });
+    // Attempt to heal the sequence via raw SQL using Admin privileges
+    try {
+      const admin = getSupabaseAdminClient() as any;
+      await admin.rpc('exec_sql', {
+        query: `SELECT setval(pg_get_serial_sequence('public.company_holidays', 'id'), COALESCE((SELECT MAX(id) FROM public.company_holidays), 0) + 1, false)`
+      });
+    } catch {
+      // If RPC doesn't exist, the retry may still work if the collision was transient
     }
 
-    const body = await request.json();
-    const { date, reason, year } = body;
-
-    // Validate required fields
-    if (!date) {
-      return NextResponse.json({ 
-        error: 'Date is required',
-        code: 'MISSING_DATE' 
-      }, { status: 400 });
-    }
-
-    if (!reason) {
-      return NextResponse.json({ 
-        error: 'Reason is required',
-        code: 'MISSING_REASON' 
-      }, { status: 400 });
-    }
-
-    // Validate date format (YYYY-MM-DD)
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!dateRegex.test(date)) {
-      return NextResponse.json({ 
-        error: 'Invalid date format. Expected YYYY-MM-DD',
-        code: 'INVALID_DATE_FORMAT' 
-      }, { status: 400 });
-    }
-
-    // Validate date is a valid date
-    const parsedDate = new Date(date);
-    if (isNaN(parsedDate.getTime())) {
-      return NextResponse.json({ 
-        error: 'Invalid date value',
-        code: 'INVALID_DATE_VALUE' 
-      }, { status: 400 });
-    }
-
-    // Auto-extract year from date if not provided
-    let holidayYear = year;
-    if (!holidayYear) {
-      holidayYear = parsedDate.getFullYear();
-    } else {
-      // Validate year if provided
-      const yearInt = parseInt(holidayYear);
-      if (isNaN(yearInt) || yearInt < 1000 || yearInt > 9999) {
-        return NextResponse.json({ 
-          error: 'Invalid year. Must be a 4-digit integer',
-          code: 'INVALID_YEAR' 
-        }, { status: 400 });
-      }
-      holidayYear = yearInt;
-    }
-
-    // Check for duplicate date
-    const existingHoliday = await db.select()
-      .from(companyHolidays)
-      .where(eq(companyHolidays.date, date))
-      .limit(1);
-
-    if (existingHoliday.length > 0) {
-      return NextResponse.json({ 
-        error: 'A holiday with this date already exists',
-        code: 'DUPLICATE_DATE' 
-      }, { status: 400 });
-    }
-
-    // Create new holiday
-    const newHoliday = await db.insert(companyHolidays)
-      .values({
-        date: date.trim(),
-        reason: reason.trim(),
-        year: holidayYear,
-        createdAt: new Date().toISOString()
-      })
-      .returning();
-
-    return NextResponse.json(newHoliday[0], { status: 201 });
-
-  } catch (error) {
-    console.error('POST error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
+    const { data: holiday, error } = await supabase
+      .from('company_holidays')
+      .select('*')
+      .eq('id', holidayId)
+      .eq('tenant_id', tenantId)
+      .single();
+    if (error || !holiday) throw new NotFoundError('Company holiday not found');
+    return apiSuccess(normalizeSupabaseCompanyHoliday(holiday), 'Company holiday fetched successfully');
   }
-}
 
-export async function PUT(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  const limit = Math.min(Math.max(Number(searchParams.get('limit') ?? '10'), 1), 100);
+  const offset = Math.max(Number(searchParams.get('offset') ?? '0'), 0);
+  const year = searchParams.get('year');
+  let query = supabase
+    .from('company_holidays')
+    .select('*', { count: 'exact' })
+    .eq('tenant_id', tenantId);
+
+  if (year !== null) {
+    const parsedYear = Number(year);
+    if (!Number.isInteger(parsedYear) || parsedYear < 1000 || parsedYear > 9999) {
+      throw new BadRequestError('Year must be a valid 4-digit number');
     }
-
-    // Role check: Only admin, CMS Admin, or HR can update holidays
-    if (user.role !== 'admin' && user.role !== 'cms_administrator' && user.role !== 'hr_manager') {
-      return NextResponse.json({ 
-        error: 'Insufficient permissions. Admin or HR role required.',
-        code: 'FORBIDDEN' 
-      }, { status: 403 });
-    }
-
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json({ 
-        error: 'Valid ID is required',
-        code: 'INVALID_ID' 
-      }, { status: 400 });
-    }
-
-    // Check if record exists
-    const existing = await db.select()
-      .from(companyHolidays)
-      .where(eq(companyHolidays.id, parseInt(id)))
-      .limit(1);
-
-    if (existing.length === 0) {
-      return NextResponse.json({ 
-        error: 'Company holiday not found',
-        code: 'NOT_FOUND' 
-      }, { status: 404 });
-    }
-
-    const body = await request.json();
-    const { date, reason, year } = body;
-
-    const updates: any = {};
-
-    // Validate and update date if provided
-    if (date !== undefined) {
-      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-      if (!dateRegex.test(date)) {
-        return NextResponse.json({ 
-          error: 'Invalid date format. Expected YYYY-MM-DD',
-          code: 'INVALID_DATE_FORMAT' 
-        }, { status: 400 });
-      }
-
-      const parsedDate = new Date(date);
-      if (isNaN(parsedDate.getTime())) {
-        return NextResponse.json({ 
-          error: 'Invalid date value',
-          code: 'INVALID_DATE_VALUE' 
-        }, { status: 400 });
-      }
-
-      // Check for duplicate date (excluding current record)
-      const duplicateCheck = await db.select()
-        .from(companyHolidays)
-        .where(and(
-          eq(companyHolidays.date, date),
-        ))
-        .limit(1);
-
-      if (duplicateCheck.length > 0 && duplicateCheck[0].id !== parseInt(id)) {
-        return NextResponse.json({ 
-          error: 'A holiday with this date already exists',
-          code: 'DUPLICATE_DATE' 
-        }, { status: 400 });
-      }
-
-      updates.date = date.trim();
-      
-      // Auto-update year based on new date
-      updates.year = parsedDate.getFullYear();
-    }
-
-    // Validate and update reason if provided
-    if (reason !== undefined) {
-      if (!reason.trim()) {
-        return NextResponse.json({ 
-          error: 'Reason cannot be empty',
-          code: 'INVALID_REASON' 
-        }, { status: 400 });
-      }
-      updates.reason = reason.trim();
-    }
-
-    // Validate and update year if explicitly provided (overrides auto-extracted year)
-    if (year !== undefined) {
-      const yearInt = parseInt(year);
-      if (isNaN(yearInt) || yearInt < 1000 || yearInt > 9999) {
-        return NextResponse.json({ 
-          error: 'Invalid year. Must be a 4-digit integer',
-          code: 'INVALID_YEAR' 
-        }, { status: 400 });
-      }
-      updates.year = yearInt;
-    }
-
-    // Check if there are any updates
-    if (Object.keys(updates).length === 0) {
-      return NextResponse.json({ 
-        error: 'No valid fields to update',
-        code: 'NO_UPDATES' 
-      }, { status: 400 });
-    }
-
-    // Perform update
-    const updated = await db.update(companyHolidays)
-      .set(updates)
-      .where(eq(companyHolidays.id, parseInt(id)))
-      .returning();
-
-    return NextResponse.json(updated[0], { status: 200 });
-
-  } catch (error) {
-    console.error('PUT error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
+    query = query.eq('year', parsedYear);
   }
-}
 
-export async function DELETE(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
+  const { data, count, error } = await query
+    .order('date', { ascending: searchParams.get('order') !== 'desc' })
+    .range(offset, offset + limit - 1);
+  if (error) throw error;
 
-    // Role check: Only admin, CMS Admin, or HR can delete holidays
-    if (user.role !== 'admin' && user.role !== 'cms_administrator' && user.role !== 'hr_manager') {
-      return NextResponse.json({ 
-        error: 'Insufficient permissions. Admin or HR role required.',
-        code: 'FORBIDDEN' 
-      }, { status: 403 });
-    }
+  return apiSuccess(
+    ((data as Record<string, unknown>[] | null) ?? []).map(normalizeSupabaseCompanyHoliday),
+    'Company holidays fetched successfully',
+    { meta: { page: Math.floor(offset / limit) + 1, limit, total: Number(count ?? 0) } }
+  );
+}, { requireAuth: true, roles: ['Employee'] });
 
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+export const POST = withApiHandler(async (request, context) => {
+  const payload = companyHolidaySchema.parse(await request.json());
+  const year = payload.year ?? Number(payload.date.slice(0, 4));
 
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json({ 
-        error: 'Valid ID is required',
-        code: 'INVALID_ID' 
-      }, { status: 400 });
-    }
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  const supabase = getAdminRouteSupabase();
 
-    // Check if record exists
-    const existing = await db.select()
-      .from(companyHolidays)
-      .where(eq(companyHolidays.id, parseInt(id)))
-      .limit(1);
+  // Manual ID Generation to bypass broken database sequences
+  const { data: maxRecord } = await supabase
+    .from('company_holidays')
+    .select('id')
+    .order('id', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const nextId = (maxRecord?.id || 0) + 1;
 
-    if (existing.length === 0) {
-      return NextResponse.json({ 
-        error: 'Company holiday not found',
-        code: 'NOT_FOUND' 
-      }, { status: 404 });
-    }
-
-    // Delete the record
-    const deleted = await db.delete(companyHolidays)
-      .where(eq(companyHolidays.id, parseInt(id)))
-      .returning();
-
-    return NextResponse.json({
-      message: 'Company holiday deleted successfully',
-      data: deleted[0]
-    }, { status: 200 });
-
-  } catch (error) {
-    console.error('DELETE error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
+  const { data: existing } = await supabase
+    .from('company_holidays')
+    .select('id')
+    .eq('date', payload.date)
+    .eq('tenant_id', tenantId)
+    .single();
+  if (existing) {
+    throw new ConflictError('A company holiday already exists for that date');
   }
-}
+
+  const { data: created, error } = await supabase.from('company_holidays').insert({
+    id: nextId,
+    date: payload.date,
+    reason: payload.reason.trim(),
+    year,
+    tenant_id: tenantId,
+    created_at: new Date().toISOString(),
+  }).select('*').single();
+  if (error || !created) throw error ?? new Error('Failed to create company holiday');
+  return apiSuccess(normalizeSupabaseCompanyHoliday(created), 'Company holiday created successfully', { status: 201 });
+}, { requireAuth: true, roles: ['Admin'] });
+
+export const PUT = withApiHandler(async (request, context) => {
+  const holidayId = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(holidayId) || holidayId <= 0) {
+    throw new BadRequestError('Valid company holiday id is required');
+  }
+
+  const payload = updateCompanyHolidaySchema.parse(await request.json());
+  if (Object.keys(payload).length === 0) {
+    throw new BadRequestError('At least one field is required to update a company holiday');
+  }
+
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  const supabase = getAdminRouteSupabase();
+  const { data: existing } = await supabase
+    .from('company_holidays')
+    .select('*')
+    .eq('id', holidayId)
+    .eq('tenant_id', tenantId)
+    .single();
+  if (!existing) {
+    throw new NotFoundError('Company holiday not found');
+  }
+
+  const nextDate = payload.date ?? String(existing.date);
+  const { data: duplicate } = await supabase
+    .from('company_holidays')
+    .select('id')
+    .eq('date', nextDate)
+    .eq('tenant_id', tenantId)
+    .single();
+  if (duplicate && Number(duplicate.id) !== holidayId) {
+    throw new ConflictError('A company holiday already exists for that date');
+  }
+
+  const { data: updated, error } = await supabase.from('company_holidays').update({
+    ...(payload.date !== undefined ? { date: payload.date } : {}),
+    ...(payload.reason !== undefined ? { reason: payload.reason.trim() } : {}),
+    ...(payload.reason !== undefined ? { reason: payload.reason.trim() } : {}),
+    year: payload.year ?? Number(nextDate.slice(0, 4)),
+  })
+  .eq('id', holidayId)
+  .eq('tenant_id', tenantId)
+  .select('*')
+  .single();
+  if (error || !updated) throw error ?? new Error('Failed to update company holiday');
+  return apiSuccess(normalizeSupabaseCompanyHoliday(updated), 'Company holiday updated successfully');
+}, { requireAuth: true, roles: ['Admin'] });
+
+export const DELETE = withApiHandler(async (request, context) => {
+  const holidayId = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(holidayId) || holidayId <= 0) {
+    throw new BadRequestError('Valid company holiday id is required');
+  }
+
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  const supabase = getAdminRouteSupabase();
+  const { data: existing } = await supabase
+    .from('company_holidays')
+    .select('id')
+    .eq('id', holidayId)
+    .eq('tenant_id', tenantId)
+    .single();
+  if (!existing) {
+    throw new NotFoundError('Company holiday not found');
+  }
+
+  const { data: deleted, error } = await supabase
+    .from('company_holidays')
+    .delete()
+    .eq('id', holidayId)
+    .eq('tenant_id', tenantId)
+    .select('*')
+    .single();
+  if (error || !deleted) throw error ?? new Error('Failed to delete company holiday');
+  return apiSuccess(normalizeSupabaseCompanyHoliday(deleted), 'Company holiday deleted successfully');
+}, { requireAuth: true, roles: ['Admin'] });

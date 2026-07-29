@@ -1,343 +1,235 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
-import { projectDocuments, projects, users } from '@/db/schema';
-import { eq, like, and, or, desc, asc } from 'drizzle-orm';
-import { getCurrentUser } from '@/lib/auth';
-import { safeErrorMessage } from '@/lib/constants';
+import { withApiHandler } from '@/server/http/handler';
+import { BadRequestError, ForbiddenError, NotFoundError } from '@/server/http/errors';
+import { apiSuccess } from '@/server/http/response';
+import { createProjectDocumentSchema, updateProjectDocumentSchema } from '@/server/validation/assets';
+import {
+  buildLegacyUserIdMap,
+  getCurrentSupabaseActor,
+  getAdminRouteSupabase,
+  resolveAuthUserIdFromLegacyUserId,
+} from '@/server/supabase/route-helpers';
 
-export async function GET(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
+function normalizeSupabaseProjectDocumentRow(
+  row: Record<string, unknown>,
+  userMap: Map<string, number | null>
+) {
+  const uploadedBy = typeof row.uploaded_by === 'string' ? userMap.get(row.uploaded_by) ?? null : null;
 
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-
-    // Single document by ID
-    if (id) {
-      if (isNaN(parseInt(id))) {
-        return NextResponse.json({ 
-          error: "Valid ID is required",
-          code: "INVALID_ID" 
-        }, { status: 400 });
-      }
-
-      const document = await db.select()
-        .from(projectDocuments)
-        .where(eq(projectDocuments.id, parseInt(id)))
-        .limit(1);
-
-      if (document.length === 0) {
-        return NextResponse.json({ error: 'Document not found' }, { status: 404 });
-      }
-
-      return NextResponse.json(document[0]);
-    }
-
-    // List with pagination and filtering
-    const limit = Math.min(parseInt(searchParams.get('limit') ?? '10'), 100);
-    const offset = parseInt(searchParams.get('offset') ?? '0');
-    const projectId = searchParams.get('projectId');
-    const uploadedBy = searchParams.get('uploadedBy');
-    const search = searchParams.get('search');
-    const sort = searchParams.get('sort') ?? 'uploadedAt';
-    const order = searchParams.get('order') ?? 'desc';
-
-    let query = db.select().from(projectDocuments);
-
-    // Build filter conditions
-    const conditions = [];
-
-    if (projectId) {
-      if (isNaN(parseInt(projectId))) {
-        return NextResponse.json({ 
-          error: "Valid project ID is required",
-          code: "INVALID_PROJECT_ID" 
-        }, { status: 400 });
-      }
-      conditions.push(eq(projectDocuments.projectId, parseInt(projectId)));
-    }
-
-    if (uploadedBy) {
-      if (isNaN(parseInt(uploadedBy))) {
-        return NextResponse.json({ 
-          error: "Valid uploaded by user ID is required",
-          code: "INVALID_UPLOADED_BY" 
-        }, { status: 400 });
-      }
-      conditions.push(eq(projectDocuments.uploadedBy, parseInt(uploadedBy)));
-    }
-
-    if (search) {
-      conditions.push(
-        or(
-          like(projectDocuments.name, `%${search}%`),
-          like(projectDocuments.fileUrl, `%${search}%`)
-        )
-      );
-    }
-
-    if (conditions.length > 0) {
-      query = query.where(and(...conditions));
-    }
-
-    // Apply sorting
-    const sortColumn = sort === 'name' ? projectDocuments.name : projectDocuments.uploadedAt;
-    query = order === 'asc' 
-      ? query.orderBy(asc(sortColumn))
-      : query.orderBy(desc(sortColumn));
-
-    const results = await query.limit(limit).offset(offset);
-
-    return NextResponse.json(results);
-  } catch (error) {
-    console.error('GET error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
-  }
+  return {
+    id: Number(row.id),
+    projectId: Number(row.project_id),
+    name: row.name,
+    fileUrl: row.file_url,
+    uploadedBy,
+    uploadedAt: row.uploaded_at ?? null,
+  };
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+export const GET = withApiHandler(async (request, context) => {
+  const searchParams = new URL(request.url).searchParams;
+  const id = searchParams.get('id');
+  const user = context.auth!.user;
+  const tenantId = user.tenantId;
+  const isAdminLike = user.role === 'Admin' || user.role === 'SuperAdmin' || user.role === 'Manager';
+
+  const accessToken = context.auth?.accessToken;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  const actor = await getCurrentSupabaseActor(accessToken);
+  const supabase = getAdminRouteSupabase();
+
+  if (id) {
+    const documentId = Number(id);
+    if (!Number.isInteger(documentId) || documentId <= 0) {
+      throw new BadRequestError('Valid project document id is required');
     }
 
-    const body = await request.json();
-
-    // Security check: reject if uploadedBy provided in body
-    if ('uploadedBy' in body || 'uploaded_by' in body) {
-      return NextResponse.json({ 
-        error: "Uploaded by user ID cannot be provided in request body",
-        code: "UPLOADED_BY_NOT_ALLOWED" 
-      }, { status: 400 });
+    const { data: document, error } = await supabase
+      .from('project_documents')
+      .select('*')
+      .eq('id', documentId)
+      .eq('tenant_id', tenantId)
+      .single();
+    if (error || !document) throw new NotFoundError('Project document not found');
+    if (!isAdminLike && document.uploaded_by !== actor.authUserId) {
+      throw new ForbiddenError('You do not have permission to view this project document');
     }
 
-    const { projectId, name, fileUrl } = body;
-
-    // Validate required fields
-    if (!projectId) {
-      return NextResponse.json({ 
-        error: "Project ID is required",
-        code: "MISSING_PROJECT_ID" 
-      }, { status: 400 });
-    }
-
-    if (!name || typeof name !== 'string' || name.trim() === '') {
-      return NextResponse.json({ 
-        error: "Valid document name is required",
-        code: "INVALID_NAME" 
-      }, { status: 400 });
-    }
-
-    if (!fileUrl || typeof fileUrl !== 'string' || fileUrl.trim() === '') {
-      return NextResponse.json({ 
-        error: "Valid file URL is required",
-        code: "INVALID_FILE_URL" 
-      }, { status: 400 });
-    }
-
-    // Validate projectId is a number
-    if (isNaN(parseInt(projectId))) {
-      return NextResponse.json({ 
-        error: "Valid project ID is required",
-        code: "INVALID_PROJECT_ID" 
-      }, { status: 400 });
-    }
-
-    // Validate project exists
-    const project = await db.select()
-      .from(projects)
-      .where(eq(projects.id, parseInt(projectId)))
-      .limit(1);
-
-    if (project.length === 0) {
-      return NextResponse.json({ 
-        error: "Project not found",
-        code: "PROJECT_NOT_FOUND" 
-      }, { status: 404 });
-    }
-
-    // Validate user exists (uploadedBy)
-    const uploadingUser = await db.select()
-      .from(users)
-      .where(eq(users.id, user.id))
-      .limit(1);
-
-    if (uploadingUser.length === 0) {
-      return NextResponse.json({ 
-        error: "User not found",
-        code: "USER_NOT_FOUND" 
-      }, { status: 404 });
-    }
-
-    // Create document
-    const newDocument = await db.insert(projectDocuments)
-      .values({
-        projectId: parseInt(projectId),
-        name: name.trim(),
-        fileUrl: fileUrl.trim(),
-        uploadedBy: user.id,
-        uploadedAt: new Date().toISOString()
-      })
-      .returning();
-
-    return NextResponse.json(newDocument[0], { status: 201 });
-  } catch (error) {
-    console.error('POST error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
+    const userMap = await buildLegacyUserIdMap(accessToken, [String(document.uploaded_by)].filter(Boolean), tenantId);
+    return apiSuccess(normalizeSupabaseProjectDocumentRow(document, userMap), 'Project document fetched successfully');
   }
-}
 
-export async function PUT(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  const limit = Math.min(Math.max(Number(searchParams.get('limit') ?? '10'), 1), 100);
+  const offset = Math.max(Number(searchParams.get('offset') ?? '0'), 0);
+  const projectIdParam = searchParams.get('projectId');
+  const uploadedByParam = searchParams.get('uploadedBy');
+  const search = searchParams.get('search');
+  const sort = searchParams.get('sort') === 'name' ? 'name' : 'uploaded_at';
+  const ascending = searchParams.get('order') === 'asc';
+  let query = supabase
+    .from('project_documents')
+    .select('*', { count: 'exact' })
+    .eq('tenant_id', tenantId);
+
+  if (projectIdParam) {
+    const projectId = Number(projectIdParam);
+    if (!Number.isInteger(projectId) || projectId <= 0) {
+      throw new BadRequestError('Valid project id is required');
     }
-
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json({ 
-        error: "Valid ID is required",
-        code: "INVALID_ID" 
-      }, { status: 400 });
-    }
-
-    const body = await request.json();
-
-    // Security check: reject if uploadedBy provided in body
-    if ('uploadedBy' in body || 'uploaded_by' in body) {
-      return NextResponse.json({ 
-        error: "Uploaded by user ID cannot be provided in request body",
-        code: "UPLOADED_BY_NOT_ALLOWED" 
-      }, { status: 400 });
-    }
-
-    // Check if document exists
-    const existingDocument = await db.select()
-      .from(projectDocuments)
-      .where(eq(projectDocuments.id, parseInt(id)))
-      .limit(1);
-
-    if (existingDocument.length === 0) {
-      return NextResponse.json({ error: 'Document not found' }, { status: 404 });
-    }
-
-    const updates: {
-      name?: string;
-      fileUrl?: string;
-      projectId?: number;
-    } = {};
-
-    // Validate and prepare updates
-    if (body.name !== undefined) {
-      if (typeof body.name !== 'string' || body.name.trim() === '') {
-        return NextResponse.json({ 
-          error: "Valid document name is required",
-          code: "INVALID_NAME" 
-        }, { status: 400 });
-      }
-      updates.name = body.name.trim();
-    }
-
-    if (body.fileUrl !== undefined) {
-      if (typeof body.fileUrl !== 'string' || body.fileUrl.trim() === '') {
-        return NextResponse.json({ 
-          error: "Valid file URL is required",
-          code: "INVALID_FILE_URL" 
-        }, { status: 400 });
-      }
-      updates.fileUrl = body.fileUrl.trim();
-    }
-
-    if (body.projectId !== undefined) {
-      if (isNaN(parseInt(body.projectId))) {
-        return NextResponse.json({ 
-          error: "Valid project ID is required",
-          code: "INVALID_PROJECT_ID" 
-        }, { status: 400 });
-      }
-
-      // Validate project exists
-      const project = await db.select()
-        .from(projects)
-        .where(eq(projects.id, parseInt(body.projectId)))
-        .limit(1);
-
-      if (project.length === 0) {
-        return NextResponse.json({ 
-          error: "Project not found",
-          code: "PROJECT_NOT_FOUND" 
-        }, { status: 404 });
-      }
-
-      updates.projectId = parseInt(body.projectId);
-    }
-
-    // Update document
-    const updatedDocument = await db.update(projectDocuments)
-      .set(updates)
-      .where(eq(projectDocuments.id, parseInt(id)))
-      .returning();
-
-    return NextResponse.json(updatedDocument[0]);
-  } catch (error) {
-    console.error('PUT error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
+    query = query.eq('project_id', projectId);
   }
-}
 
-export async function DELETE(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  if (uploadedByParam) {
+    const uploadedBy = Number(uploadedByParam);
+    if (!Number.isInteger(uploadedBy) || uploadedBy <= 0) {
+      throw new BadRequestError('Valid uploadedBy user id is required');
     }
-
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json({ 
-        error: "Valid ID is required",
-        code: "INVALID_ID" 
-      }, { status: 400 });
+    if (!isAdminLike && uploadedBy !== user.id) {
+      throw new ForbiddenError('You can only filter by your own uploads');
     }
-
-    // Check if document exists
-    const existingDocument = await db.select()
-      .from(projectDocuments)
-      .where(eq(projectDocuments.id, parseInt(id)))
-      .limit(1);
-
-    if (existingDocument.length === 0) {
-      return NextResponse.json({ error: 'Document not found' }, { status: 404 });
-    }
-
-    // Delete document
-    const deleted = await db.delete(projectDocuments)
-      .where(eq(projectDocuments.id, parseInt(id)))
-      .returning();
-
-    return NextResponse.json({
-      message: 'Document deleted successfully',
-      document: deleted[0]
-    });
-  } catch (error) {
-    console.error('DELETE error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
+    query = query.eq('uploaded_by', await resolveAuthUserIdFromLegacyUserId(accessToken, uploadedBy, tenantId));
+  } else if (!isAdminLike) {
+    query = query.eq('uploaded_by', actor.authUserId);
   }
-}
+
+  if (search) {
+    query = query.or(`name.ilike.%${search}%,file_url.ilike.%${search}%`);
+  }
+
+  const { data, count, error } = await query
+    .order(sort, { ascending })
+    .range(offset, offset + limit - 1);
+
+  if (error) throw error;
+
+  const rows = (data as Record<string, unknown>[] | null) ?? [];
+  const userMap = await buildLegacyUserIdMap(accessToken, rows.map((row) => String(row.uploaded_by)).filter(Boolean), tenantId);
+
+  return apiSuccess(
+    rows.map((row) => normalizeSupabaseProjectDocumentRow(row, userMap)),
+    'Project documents fetched successfully',
+    { meta: { page: Math.floor(offset / limit) + 1, limit, total: Number(count ?? 0) } }
+  );
+}, { requireAuth: true, roles: ['Employee'] });
+
+export const POST = withApiHandler(async (request, context) => {
+  const payload = createProjectDocumentSchema.parse(await request.json());
+
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const actor = await getCurrentSupabaseActor(accessToken);
+  const supabase = getAdminRouteSupabase();
+  const { data: project } = await supabase
+    .from('projects')
+    .select('id')
+    .eq('id', payload.projectId)
+    .eq('tenant_id', tenantId)
+    .single();
+  if (!project) throw new NotFoundError('Project not found');
+
+  const { data: created, error } = await supabase.from('project_documents').insert({
+    project_id: payload.projectId,
+    name: payload.name.trim(),
+    file_url: payload.fileUrl.trim(),
+    uploaded_by: actor.authUserId,
+    tenant_id: tenantId,
+    uploaded_at: new Date().toISOString(),
+  }).select('*').single();
+
+  if (error || !created) throw error ?? new Error('Failed to create project document');
+  const userMap = await buildLegacyUserIdMap(accessToken, [actor.authUserId], tenantId);
+  return apiSuccess(normalizeSupabaseProjectDocumentRow(created, userMap), 'Project document created successfully', { status: 201 });
+}, { requireAuth: true, roles: ['Employee'] });
+
+export const PUT = withApiHandler(async (request, context) => {
+  const documentId = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(documentId) || documentId <= 0) {
+    throw new BadRequestError('Valid project document id is required');
+  }
+
+  const payload = updateProjectDocumentSchema.parse(await request.json());
+  if (Object.keys(payload).length === 0) {
+    throw new BadRequestError('At least one field is required to update a project document');
+  }
+
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  const actor = await getCurrentSupabaseActor(accessToken);
+  const supabase = getAdminRouteSupabase();
+  const { data: existing } = await supabase
+    .from('project_documents')
+    .select('*')
+    .eq('id', documentId)
+    .eq('tenant_id', tenantId)
+    .single();
+  if (!existing) throw new NotFoundError('Project document not found');
+
+  const currentUser = context.auth!.user;
+  const isCurrentAdminLike = currentUser.role === 'Admin' || currentUser.role === 'SuperAdmin' || currentUser.role === 'Manager';
+  if (!isCurrentAdminLike && existing.uploaded_by !== actor.authUserId) {
+    throw new ForbiddenError('You do not have permission to update this project document');
+  }
+
+  if (payload.projectId !== undefined) {
+    const { data: project } = await supabase
+      .from('projects')
+      .select('id')
+      .eq('id', payload.projectId)
+      .eq('tenant_id', tenantId)
+      .single();
+    if (!project) throw new NotFoundError('Project not found');
+  }
+
+  const { data: updated, error } = await supabase.from('project_documents').update({
+    ...(payload.projectId !== undefined ? { project_id: payload.projectId } : {}),
+    ...(payload.name !== undefined ? { name: payload.name.trim() } : {}),
+    ...(payload.fileUrl !== undefined ? { file_url: payload.fileUrl.trim() } : {}),
+  })
+  .eq('id', documentId)
+  .eq('tenant_id', tenantId)
+  .select('*')
+  .single();
+
+  if (error || !updated) throw error ?? new Error('Failed to update project document');
+  const userMap = await buildLegacyUserIdMap(accessToken, [String(updated.uploaded_by)].filter(Boolean), tenantId);
+  return apiSuccess(normalizeSupabaseProjectDocumentRow(updated, userMap), 'Project document updated successfully');
+}, { requireAuth: true, roles: ['Employee'] });
+
+export const DELETE = withApiHandler(async (request, context) => {
+  const documentId = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(documentId) || documentId <= 0) {
+    throw new BadRequestError('Valid project document id is required');
+  }
+
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  const actor = await getCurrentSupabaseActor(accessToken);
+  const supabase = getAdminRouteSupabase();
+  const { data: existing } = await supabase
+    .from('project_documents')
+    .select('*')
+    .eq('id', documentId)
+    .eq('tenant_id', tenantId)
+    .single();
+  if (!existing) throw new NotFoundError('Project document not found');
+
+  const currentUser = context.auth!.user;
+  const isCurrentAdminLike = currentUser.role === 'Admin' || currentUser.role === 'SuperAdmin' || currentUser.role === 'Manager';
+  if (!isCurrentAdminLike && existing.uploaded_by !== actor.authUserId) {
+    throw new ForbiddenError('You do not have permission to delete this project document');
+  }
+
+  const { data: deleted, error } = await supabase
+    .from('project_documents')
+    .delete()
+    .eq('id', documentId)
+    .eq('tenant_id', tenantId)
+    .select('*')
+    .single();
+  if (error || !deleted) throw error ?? new Error('Failed to delete project document');
+  const userMap = await buildLegacyUserIdMap(accessToken, [String(deleted.uploaded_by)].filter(Boolean), tenantId);
+  return apiSuccess(normalizeSupabaseProjectDocumentRow(deleted, userMap), 'Project document deleted successfully');
+}, { requireAuth: true, roles: ['Employee'] });

@@ -1,368 +1,227 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
-import { chatMessages, users } from '@/db/schema';
-import { eq, and, or, desc, asc } from 'drizzle-orm';
-import { getCurrentUser } from '@/lib/auth';
-import { safeErrorMessage } from '@/lib/constants';
+import { NextResponse } from 'next/server';
+import { withApiHandler } from '@/server/http/handler';
+import { BadRequestError, ForbiddenError, NotFoundError } from '@/server/http/errors';
+import { createChatMessageSchema, updateChatMessageSchema } from '@/server/validation/internal-comms';
+import {
+  buildLegacyUserIdMap,
+  getCurrentSupabaseActor,
+  getAdminRouteSupabase,
+  resolveAuthUserIdFromLegacyUserId,
+} from '@/server/supabase/route-helpers';
 
-export async function GET(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
+function normalizeSupabaseChatMessageRow(
+  row: Record<string, unknown>,
+  userMap: Map<string, number | null>
+) {
+  const senderId = typeof row.sender_id === 'string' ? userMap.get(row.sender_id) ?? null : null;
+  const receiverId = typeof row.receiver_id === 'string' ? userMap.get(row.receiver_id) ?? null : null;
 
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-
-    // Single record fetch
-    if (id) {
-      if (!id || isNaN(parseInt(id))) {
-        return NextResponse.json({ 
-          error: "Valid ID is required",
-          code: "INVALID_ID" 
-        }, { status: 400 });
-      }
-
-      const message = await db.select()
-        .from(chatMessages)
-        .where(
-          and(
-            eq(chatMessages.id, parseInt(id)),
-            or(
-              eq(chatMessages.senderId, user.id),
-              eq(chatMessages.receiverId, user.id)
-            )
-          )
-        )
-        .limit(1);
-
-      if (message.length === 0) {
-        return NextResponse.json({ error: 'Chat message not found' }, { status: 404 });
-      }
-
-      return NextResponse.json(message[0], { status: 200 });
-    }
-
-    // List with pagination and filtering
-    const limit = Math.min(parseInt(searchParams.get('limit') ?? '50'), 100);
-    const offset = parseInt(searchParams.get('offset') ?? '0');
-    const senderId = searchParams.get('senderId');
-    const receiverId = searchParams.get('receiverId');
-    const roomId = searchParams.get('roomId');
-    const isRead = searchParams.get('isRead');
-    const sort = searchParams.get('sort') ?? 'createdAt';
-    const order = searchParams.get('order') ?? 'asc';
-
-    const conditions = [
-      or(
-        eq(chatMessages.senderId, user.id),
-        eq(chatMessages.receiverId, user.id)
-      )
-    ];
-
-    if (senderId && !isNaN(parseInt(senderId))) {
-      conditions.push(eq(chatMessages.senderId, parseInt(senderId)));
-    }
-
-    if (receiverId && !isNaN(parseInt(receiverId))) {
-      conditions.push(eq(chatMessages.receiverId, parseInt(receiverId)));
-    }
-
-    if (roomId) {
-      conditions.push(eq(chatMessages.roomId, roomId));
-    }
-
-    if (isRead !== null && (isRead === 'true' || isRead === 'false')) {
-      conditions.push(eq(chatMessages.isRead, isRead === 'true'));
-    }
-
-    let query = db.select()
-      .from(chatMessages)
-      .where(and(...conditions));
-
-    // Apply sorting
-    if (sort === 'createdAt') {
-      query = order === 'desc' 
-        ? query.orderBy(desc(chatMessages.createdAt))
-        : query.orderBy(asc(chatMessages.createdAt));
-    }
-
-    const results = await query.limit(limit).offset(offset);
-
-    return NextResponse.json(results, { status: 200 });
-  } catch (error) {
-    console.error('GET error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
-  }
+  return {
+    id: Number(row.id),
+    senderId,
+    receiverId,
+    roomId: row.room_id ?? null,
+    message: row.message,
+    attachments: row.attachments ?? null,
+    createdAt: row.created_at ?? null,
+    isRead: Boolean(row.is_read),
+  };
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+export const GET = withApiHandler(async (request, context) => {
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get('id');
+
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const actor = await getCurrentSupabaseActor(accessToken);
+  const supabase = getAdminRouteSupabase();
+
+  if (id) {
+    const messageId = Number(id);
+    if (!Number.isInteger(messageId) || messageId <= 0) {
+      throw new BadRequestError('Valid chat message id is required');
     }
-
-    const body = await request.json();
-
-    // Security: Prevent user ID injection
-    if ('senderId' in body || 'sender_id' in body) {
-      return NextResponse.json({ 
-        error: "Sender ID cannot be provided in request body",
-        code: "SENDER_ID_NOT_ALLOWED" 
-      }, { status: 400 });
-    }
-
-    const { message, receiverId, roomId, attachments } = body;
-
-    // Validate required fields
-    if (!message || message.trim() === '') {
-      return NextResponse.json({ 
-        error: "Message is required and cannot be empty",
-        code: "MISSING_MESSAGE" 
-      }, { status: 400 });
-    }
-
-    // Validate receiverId exists if provided
-    if (receiverId !== undefined && receiverId !== null) {
-      if (isNaN(parseInt(receiverId))) {
-        return NextResponse.json({ 
-          error: "Valid receiver ID is required",
-          code: "INVALID_RECEIVER_ID" 
-        }, { status: 400 });
-      }
-
-      const receiver = await db.select()
-        .from(users)
-        .where(eq(users.id, parseInt(receiverId)))
-        .limit(1);
-
-      if (receiver.length === 0) {
-        return NextResponse.json({ 
-          error: "Receiver user not found",
-          code: "RECEIVER_NOT_FOUND" 
-        }, { status: 400 });
-      }
-    }
-
-    // Validate attachments is valid JSON array if provided
-    if (attachments !== undefined && attachments !== null) {
-      if (!Array.isArray(attachments)) {
-        return NextResponse.json({ 
-          error: "Attachments must be a valid JSON array",
-          code: "INVALID_ATTACHMENTS" 
-        }, { status: 400 });
-      }
-    }
-
-    const now = new Date().toISOString();
-
-    const insertData: any = {
-      senderId: user.id,
-      message: message.trim(),
-      createdAt: now,
-      isRead: false,
-    };
-
-    if (receiverId !== undefined && receiverId !== null) {
-      insertData.receiverId = parseInt(receiverId);
-    }
-
-    if (roomId !== undefined && roomId !== null) {
-      insertData.roomId = roomId;
-    }
-
-    if (attachments !== undefined && attachments !== null) {
-      insertData.attachments = attachments;
-    }
-
-    const newMessage = await db.insert(chatMessages)
-      .values(insertData)
-      .returning();
-
-    return NextResponse.json(newMessage[0], { status: 201 });
-  } catch (error) {
-    console.error('POST error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
+    const { data: message, error } = await supabase
+      .from('chat_messages')
+      .select('*')
+      .eq('id', messageId)
+      .eq('tenant_id', tenantId)
+      .or(`sender_id.eq.${actor.authUserId},receiver_id.eq.${actor.authUserId}`)
+      .single();
+    if (error || !message) throw new NotFoundError('Chat message not found');
+    const userMap = await buildLegacyUserIdMap(
+      accessToken,
+      [String(message.sender_id), String(message.receiver_id)].filter((value) => value && value !== 'null')
+    );
+    return NextResponse.json(normalizeSupabaseChatMessageRow(message, userMap));
   }
-}
 
-export async function PUT(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  const limit = Math.min(Number(searchParams.get('limit') ?? '50'), 100);
+  const offset = Math.max(Number(searchParams.get('offset') ?? '0'), 0);
+  const senderId = searchParams.get('senderId');
+  const receiverId = searchParams.get('receiverId');
+  const roomId = searchParams.get('roomId');
+  const isRead = searchParams.get('isRead');
+  let query = supabase
+    .from('chat_messages')
+    .select('*', { count: 'exact' })
+    .eq('tenant_id', tenantId)
+    .or(`sender_id.eq.${actor.authUserId},receiver_id.eq.${actor.authUserId}`);
+
+  if (senderId) {
+    const numericSenderId = Number(senderId);
+    if (!Number.isInteger(numericSenderId) || numericSenderId <= 0) {
+      throw new BadRequestError('Valid sender id is required');
     }
-
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json({ 
-        error: "Valid ID is required",
-        code: "INVALID_ID" 
-      }, { status: 400 });
-    }
-
-    const body = await request.json();
-
-    // Security: Prevent user ID injection
-    if ('senderId' in body || 'sender_id' in body) {
-      return NextResponse.json({ 
-        error: "Sender ID cannot be provided in request body",
-        code: "SENDER_ID_NOT_ALLOWED" 
-      }, { status: 400 });
-    }
-
-    // Check if message exists and belongs to user (as sender)
-    const existing = await db.select()
-      .from(chatMessages)
-      .where(
-        and(
-          eq(chatMessages.id, parseInt(id)),
-          or(
-            eq(chatMessages.senderId, user.id),
-            eq(chatMessages.receiverId, user.id)
-          )
-        )
-      )
-      .limit(1);
-
-    if (existing.length === 0) {
-      return NextResponse.json({ error: 'Chat message not found' }, { status: 404 });
-    }
-
-    const { message, isRead, attachments } = body;
-    const updates: any = {};
-
-    // Only sender can edit message content
-    if (message !== undefined) {
-      if (existing[0].senderId !== user.id) {
-        return NextResponse.json({ 
-          error: "Only the sender can edit the message content",
-          code: "UNAUTHORIZED_EDIT" 
-        }, { status: 403 });
-      }
-
-      if (!message || message.trim() === '') {
-        return NextResponse.json({ 
-          error: "Message cannot be empty",
-          code: "EMPTY_MESSAGE" 
-        }, { status: 400 });
-      }
-
-      updates.message = message.trim();
-    }
-
-    // Only receiver can mark as read
-    if (isRead !== undefined) {
-      if (existing[0].receiverId !== user.id) {
-        return NextResponse.json({ 
-          error: "Only the receiver can mark the message as read",
-          code: "UNAUTHORIZED_READ_UPDATE" 
-        }, { status: 403 });
-      }
-
-      updates.isRead = Boolean(isRead);
-    }
-
-    // Only sender can update attachments
-    if (attachments !== undefined) {
-      if (existing[0].senderId !== user.id) {
-        return NextResponse.json({ 
-          error: "Only the sender can update attachments",
-          code: "UNAUTHORIZED_ATTACHMENT_UPDATE" 
-        }, { status: 403 });
-      }
-
-      if (attachments !== null && !Array.isArray(attachments)) {
-        return NextResponse.json({ 
-          error: "Attachments must be a valid JSON array",
-          code: "INVALID_ATTACHMENTS" 
-        }, { status: 400 });
-      }
-
-      updates.attachments = attachments;
-    }
-
-    if (Object.keys(updates).length === 0) {
-      return NextResponse.json({ 
-        error: "No valid fields to update",
-        code: "NO_UPDATES" 
-      }, { status: 400 });
-    }
-
-    const updated = await db.update(chatMessages)
-      .set(updates)
-      .where(eq(chatMessages.id, parseInt(id)))
-      .returning();
-
-    return NextResponse.json(updated[0], { status: 200 });
-  } catch (error) {
-    console.error('PUT error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
+    query = query.eq('sender_id', await resolveAuthUserIdFromLegacyUserId(accessToken, numericSenderId));
   }
-}
-
-export async function DELETE(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  if (receiverId) {
+    const numericReceiverId = Number(receiverId);
+    if (!Number.isInteger(numericReceiverId) || numericReceiverId <= 0) {
+      throw new BadRequestError('Valid receiver id is required');
     }
-
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json({ 
-        error: "Valid ID is required",
-        code: "INVALID_ID" 
-      }, { status: 400 });
-    }
-
-    // Check if message exists and user is the sender
-    const existing = await db.select()
-      .from(chatMessages)
-      .where(
-        and(
-          eq(chatMessages.id, parseInt(id)),
-          eq(chatMessages.senderId, user.id)
-        )
-      )
-      .limit(1);
-
-    if (existing.length === 0) {
-      return NextResponse.json({ 
-        error: 'Chat message not found or you are not authorized to delete it',
-        code: 'MESSAGE_NOT_FOUND_OR_UNAUTHORIZED'
-      }, { status: 404 });
-    }
-
-    const deleted = await db.delete(chatMessages)
-      .where(
-        and(
-          eq(chatMessages.id, parseInt(id)),
-          eq(chatMessages.senderId, user.id)
-        )
-      )
-      .returning();
-
-    return NextResponse.json({
-      message: 'Chat message deleted successfully',
-      deleted: deleted[0]
-    }, { status: 200 });
-  } catch (error) {
-    console.error('DELETE error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
+    query = query.eq('receiver_id', await resolveAuthUserIdFromLegacyUserId(accessToken, numericReceiverId));
   }
-}
+  if (roomId) query = query.eq('room_id', roomId);
+  if (isRead === 'true' || isRead === 'false') query = query.eq('is_read', isRead === 'true');
+
+  const { data, count, error } = await query
+    .order('created_at', { ascending: searchParams.get('order') !== 'desc' })
+    .range(offset, offset + limit - 1);
+  if (error) throw error;
+
+  const rows = (data as Record<string, unknown>[] | null) ?? [];
+  const userMap = await buildLegacyUserIdMap(
+    accessToken,
+    rows.flatMap((row) => [String(row.sender_id), String(row.receiver_id)]).filter((value) => value && value !== 'null')
+  );
+
+  return NextResponse.json({
+    success: true,
+    data: rows.map((row) => normalizeSupabaseChatMessageRow(row, userMap)),
+    message: 'Chat messages fetched successfully',
+    errors: null,
+    meta: { page: Math.floor(offset / limit) + 1, limit, total: Number(count ?? 0) },
+  });
+}, { requireAuth: true, roles: ['Employee'] });
+
+export const POST = withApiHandler(async (request, context) => {
+  const payload = createChatMessageSchema.parse(await request.json());
+
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const actor = await getCurrentSupabaseActor(accessToken);
+  const supabase = getAdminRouteSupabase();
+  let receiverAuthUserId: string | null = null;
+
+  if (payload.receiverId) {
+    receiverAuthUserId = await resolveAuthUserIdFromLegacyUserId(accessToken, payload.receiverId);
+  }
+
+  const { data: created, error } = await supabase.from('chat_messages').insert({
+    sender_id: actor.authUserId,
+    receiver_id: receiverAuthUserId,
+    room_id: payload.roomId?.trim() || null,
+    message: payload.message.trim(),
+    attachments: payload.attachments ?? null,
+    tenant_id: tenantId,
+    created_at: new Date().toISOString(),
+    is_read: false,
+  }).select('*').single();
+
+  if (error || !created) throw error ?? new Error('Failed to create chat message');
+  const userMap = await buildLegacyUserIdMap(
+    accessToken,
+    [actor.authUserId, receiverAuthUserId].filter((value): value is string => Boolean(value))
+  );
+  return NextResponse.json(normalizeSupabaseChatMessageRow(created, userMap), { status: 201 });
+}, { requireAuth: true, roles: ['Employee'] });
+
+export const PUT = withApiHandler(async (request, context) => {
+  const id = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('Valid chat message id is required');
+  const payload = updateChatMessageSchema.parse(await request.json());
+
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const actor = await getCurrentSupabaseActor(accessToken);
+  const supabase = getAdminRouteSupabase();
+  const { data: existing } = await supabase
+    .from('chat_messages')
+    .select('*')
+    .eq('id', id)
+    .eq('tenant_id', tenantId)
+    .single();
+  if (!existing) throw new NotFoundError('Chat message not found');
+  if (payload.message !== undefined && existing.sender_id !== actor.authUserId) {
+    throw new ForbiddenError('Only the sender can edit the message content');
+  }
+  if (
+    payload.isRead !== undefined &&
+    existing.receiver_id !== actor.authUserId &&
+    existing.sender_id !== actor.authUserId
+  ) {
+    throw new ForbiddenError('Unauthorized');
+  }
+
+  const { data: updated, error } = await supabase.from('chat_messages').update({
+    ...(payload.message !== undefined ? { message: payload.message.trim() } : {}),
+    ...(payload.isRead !== undefined ? { is_read: payload.isRead } : {}),
+    ...(payload.attachments !== undefined ? { attachments: payload.attachments ?? null } : {}),
+  })
+  .eq('id', id)
+  .eq('tenant_id', tenantId)
+  .select('*')
+  .single();
+
+  if (error || !updated) throw error ?? new Error('Failed to update chat message');
+  const userMap = await buildLegacyUserIdMap(
+    accessToken,
+    [String(updated.sender_id), String(updated.receiver_id)].filter((value) => value && value !== 'null')
+  );
+  return NextResponse.json(normalizeSupabaseChatMessageRow(updated, userMap));
+}, { requireAuth: true, roles: ['Employee'] });
+
+export const DELETE = withApiHandler(async (request, context) => {
+  const id = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('Valid chat message id is required');
+
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const actor = await getCurrentSupabaseActor(accessToken);
+  const supabase = getAdminRouteSupabase();
+  const { data: existing } = await supabase
+    .from('chat_messages')
+    .select('*')
+    .eq('id', id)
+    .eq('tenant_id', tenantId)
+    .single();
+  if (!existing) throw new NotFoundError('Chat message not found');
+  if (existing.sender_id !== actor.authUserId) throw new ForbiddenError('Only the sender can delete a chat message');
+
+  const { data: deleted, error } = await supabase
+    .from('chat_messages')
+    .delete()
+    .eq('id', id)
+    .eq('tenant_id', tenantId)
+    .select('*')
+    .single();
+  if (error || !deleted) throw error ?? new Error('Failed to delete chat message');
+  const userMap = await buildLegacyUserIdMap(
+    accessToken,
+    [String(deleted.sender_id), String(deleted.receiver_id)].filter((value) => value && value !== 'null')
+  );
+  return NextResponse.json({
+    message: 'Chat message deleted successfully',
+    data: normalizeSupabaseChatMessageRow(deleted, userMap),
+  });
+}, { requireAuth: true, roles: ['Employee'] });

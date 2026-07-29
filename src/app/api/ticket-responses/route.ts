@@ -1,302 +1,165 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
-import { ticketResponses, tickets, users } from '@/db/schema';
-import { eq, and, desc, asc } from 'drizzle-orm';
-import { safeErrorMessage } from '@/lib/constants';
+import { NextResponse } from 'next/server';
+import { withApiHandler } from '@/server/http/handler';
+import { BadRequestError, ForbiddenError, NotFoundError } from '@/server/http/errors';
+import { createTicketResponseSchema, updateTicketResponseSchema } from '@/server/validation/helpdesk';
+import {
+  buildLegacyUserIdMap,
+  getCurrentSupabaseActor,
+  getAdminRouteSupabase,
+  resolveAuthUserIdFromLegacyUserId,
+} from '@/server/supabase/route-helpers';
 
-export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-
-    // Single ticket response by ID
-    if (id) {
-      if (isNaN(parseInt(id))) {
-        return NextResponse.json({ 
-          error: "Valid ID is required",
-          code: "INVALID_ID" 
-        }, { status: 400 });
-      }
-
-      const ticketResponse = await db.select()
-        .from(ticketResponses)
-        .where(eq(ticketResponses.id, parseInt(id)))
-        .limit(1);
-
-      if (ticketResponse.length === 0) {
-        return NextResponse.json({ 
-          error: 'Ticket response not found',
-          code: 'NOT_FOUND' 
-        }, { status: 404 });
-      }
-
-      return NextResponse.json(ticketResponse[0], { status: 200 });
-    }
-
-    // List with pagination and filtering
-    const limit = Math.min(parseInt(searchParams.get('limit') ?? '10'), 100);
-    const offset = parseInt(searchParams.get('offset') ?? '0');
-    const ticketId = searchParams.get('ticketId');
-    const userId = searchParams.get('userId');
-
-    let query = db.select().from(ticketResponses);
-
-    // Apply filters
-    const filters = [];
-    if (ticketId) {
-      if (isNaN(parseInt(ticketId))) {
-        return NextResponse.json({ 
-          error: "Valid ticketId is required",
-          code: "INVALID_TICKET_ID" 
-        }, { status: 400 });
-      }
-      filters.push(eq(ticketResponses.ticketId, parseInt(ticketId)));
-    }
-    if (userId) {
-      if (isNaN(parseInt(userId))) {
-        return NextResponse.json({ 
-          error: "Valid userId is required",
-          code: "INVALID_USER_ID" 
-        }, { status: 400 });
-      }
-      filters.push(eq(ticketResponses.userId, parseInt(userId)));
-    }
-
-    if (filters.length > 0) {
-      query = query.where(and(...filters));
-    }
-
-    // Sort by createdAt in ascending order (chronological)
-    const results = await query
-      .orderBy(asc(ticketResponses.createdAt))
-      .limit(limit)
-      .offset(offset);
-
-    return NextResponse.json(results, { status: 200 });
-
-  } catch (error) {
-    console.error('GET error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
-  }
+async function assertSupabaseTicketAccess(ticketId: number, authUserId: string, isAdminLike: boolean, tenantId: string) {
+  const supabase = getAdminRouteSupabase();
+  const { data: ticket } = await supabase
+    .from('tickets')
+    .select('*')
+    .eq('id', ticketId)
+    .eq('tenant_id', tenantId)
+    .single();
+  if (!ticket) throw new NotFoundError('Ticket not found');
+  if (!isAdminLike && ticket.created_by !== authUserId) throw new ForbiddenError('Unauthorized');
+  return ticket;
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { ticketId, userId, message, attachments } = body;
-
-    // Validate required fields
-    if (!ticketId) {
-      return NextResponse.json({ 
-        error: "ticketId is required",
-        code: "MISSING_TICKET_ID" 
-      }, { status: 400 });
-    }
-
-    if (!userId) {
-      return NextResponse.json({ 
-        error: "userId is required",
-        code: "MISSING_USER_ID" 
-      }, { status: 400 });
-    }
-
-    if (!message || message.trim() === '') {
-      return NextResponse.json({ 
-        error: "message is required and cannot be empty",
-        code: "MISSING_MESSAGE" 
-      }, { status: 400 });
-    }
-
-    // Validate IDs are valid integers
-    if (isNaN(parseInt(ticketId))) {
-      return NextResponse.json({ 
-        error: "Valid ticketId is required",
-        code: "INVALID_TICKET_ID" 
-      }, { status: 400 });
-    }
-
-    if (isNaN(parseInt(userId))) {
-      return NextResponse.json({ 
-        error: "Valid userId is required",
-        code: "INVALID_USER_ID" 
-      }, { status: 400 });
-    }
-
-    // Validate ticketId exists
-    const ticketExists = await db.select()
-      .from(tickets)
-      .where(eq(tickets.id, parseInt(ticketId)))
-      .limit(1);
-
-    if (ticketExists.length === 0) {
-      return NextResponse.json({ 
-        error: "Ticket not found",
-        code: "TICKET_NOT_FOUND" 
-      }, { status: 400 });
-    }
-
-    // Validate userId exists
-    const userExists = await db.select()
-      .from(users)
-      .where(eq(users.id, parseInt(userId)))
-      .limit(1);
-
-    if (userExists.length === 0) {
-      return NextResponse.json({ 
-        error: "User not found",
-        code: "USER_NOT_FOUND" 
-      }, { status: 400 });
-    }
-
-    // Validate attachments if provided
-    let validatedAttachments = null;
-    if (attachments !== undefined && attachments !== null) {
-      if (!Array.isArray(attachments)) {
-        return NextResponse.json({ 
-          error: "attachments must be a valid JSON array",
-          code: "INVALID_ATTACHMENTS" 
-        }, { status: 400 });
-      }
-      validatedAttachments = attachments;
-    }
-
-    // Create ticket response
-    const newTicketResponse = await db.insert(ticketResponses)
-      .values({
-        ticketId: parseInt(ticketId),
-        userId: parseInt(userId),
-        message: message.trim(),
-        attachments: validatedAttachments,
-        createdAt: new Date().toISOString()
-      })
-      .returning();
-
-    return NextResponse.json(newTicketResponse[0], { status: 201 });
-
-  } catch (error) {
-    console.error('POST error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
-  }
+function normalizeSupabaseTicketResponseRow(row: Record<string, unknown>, userMap: Map<string, number | null>) {
+  const userId = typeof row.user_id === 'string' ? userMap.get(row.user_id) ?? null : null;
+  return {
+    id: Number(row.id),
+    ticketId: Number(row.ticket_id),
+    userId,
+    message: row.message,
+    attachments: row.attachments ?? null,
+    createdAt: row.created_at ?? null,
+  };
 }
 
-export async function PUT(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+export const GET = withApiHandler(async (request, context) => {
+  const isAdminLike = context.auth!.user.role === 'Admin' || context.auth!.user.role === 'SuperAdmin';
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get('id');
 
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json({ 
-        error: "Valid ID is required",
-        code: "INVALID_ID" 
-      }, { status: 400 });
-    }
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const actor = await getCurrentSupabaseActor(accessToken);
+  const supabase = getAdminRouteSupabase();
 
-    // Check if ticket response exists
-    const existing = await db.select()
-      .from(ticketResponses)
-      .where(eq(ticketResponses.id, parseInt(id)))
-      .limit(1);
-
-    if (existing.length === 0) {
-      return NextResponse.json({ 
-        error: 'Ticket response not found',
-        code: 'NOT_FOUND' 
-      }, { status: 404 });
-    }
-
-    const body = await request.json();
-    const { message, attachments } = body;
-
-    // Build update object
-    const updates: any = {};
-
-    if (message !== undefined) {
-      if (typeof message !== 'string' || message.trim() === '') {
-        return NextResponse.json({ 
-          error: "message cannot be empty",
-          code: "INVALID_MESSAGE" 
-        }, { status: 400 });
-      }
-      updates.message = message.trim();
-    }
-
-    if (attachments !== undefined) {
-      if (attachments !== null && !Array.isArray(attachments)) {
-        return NextResponse.json({ 
-          error: "attachments must be a valid JSON array or null",
-          code: "INVALID_ATTACHMENTS" 
-        }, { status: 400 });
-      }
-      updates.attachments = attachments;
-    }
-
-    // Check if there's anything to update
-    if (Object.keys(updates).length === 0) {
-      return NextResponse.json({ 
-        error: "No valid fields to update",
-        code: "NO_UPDATE_FIELDS" 
-      }, { status: 400 });
-    }
-
-    // Update ticket response
-    const updated = await db.update(ticketResponses)
-      .set(updates)
-      .where(eq(ticketResponses.id, parseInt(id)))
-      .returning();
-
-    return NextResponse.json(updated[0], { status: 200 });
-
-  } catch (error) {
-    console.error('PUT error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
+  if (id) {
+    const { data: response, error } = await supabase
+      .from('ticket_responses')
+      .select('*')
+      .eq('id', Number(id))
+      .eq('tenant_id', tenantId)
+      .single();
+    if (error || !response) throw new NotFoundError('Ticket response not found');
+    await assertSupabaseTicketAccess(Number(response.ticket_id), actor.authUserId, isAdminLike, tenantId);
+    const userMap = await buildLegacyUserIdMap(accessToken, [String(response.user_id)]);
+    return NextResponse.json(normalizeSupabaseTicketResponseRow(response, userMap));
   }
-}
+  const limit = Math.min(Number(searchParams.get('limit') ?? '10'), 100);
+  const offset = Math.max(Number(searchParams.get('offset') ?? '0'), 0);
+  const ticketId = searchParams.get('ticketId');
+  const userId = searchParams.get('userId');
+  if (ticketId) await assertSupabaseTicketAccess(Number(ticketId), actor.authUserId, isAdminLike, tenantId);
+  let query = supabase
+    .from('ticket_responses')
+    .select('*', { count: 'exact' })
+    .eq('tenant_id', tenantId);
+  if (ticketId) query = query.eq('ticket_id', Number(ticketId));
+  if (userId) query = query.eq('user_id', await resolveAuthUserIdFromLegacyUserId(accessToken, Number(userId)));
+  const { data, count, error } = await query.order('created_at', { ascending: true }).range(offset, offset + limit - 1);
+  if (error) throw error;
+  const rows = (data as Record<string, unknown>[] | null) ?? [];
+  const userMap = await buildLegacyUserIdMap(accessToken, rows.map((row) => String(row.user_id)).filter(Boolean));
+  return NextResponse.json({ success: true, data: rows.map((row) => normalizeSupabaseTicketResponseRow(row, userMap)), message: 'Ticket responses fetched successfully', errors: null, meta: { page: Math.floor(offset / limit) + 1, limit, total: Number(count ?? 0) } });
+}, { requireAuth: true, roles: ['Employee'] });
 
-export async function DELETE(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+export const POST = withApiHandler(async (request, context) => {
+  const payload = createTicketResponseSchema.parse(await request.json());
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const actor = await getCurrentSupabaseActor(accessToken);
+  await assertSupabaseTicketAccess(payload.ticketId, actor.authUserId, context.auth!.user.role === 'Admin' || context.auth!.user.role === 'SuperAdmin', tenantId);
+  const supabase = getAdminRouteSupabase();
+  const { data, error } = await supabase.from('ticket_responses').insert({
+    ticket_id: payload.ticketId,
+    user_id: actor.authUserId,
+    message: payload.message,
+    attachments: payload.attachments ?? null,
+    tenant_id: tenantId,
+    created_at: new Date().toISOString(),
+  }).select('*').single();
+  if (error || !data) throw error ?? new Error('Failed to create ticket response');
+  const userMap = await buildLegacyUserIdMap(accessToken, [actor.authUserId]);
+  return NextResponse.json(normalizeSupabaseTicketResponseRow(data, userMap), { status: 201 });
+}, { requireAuth: true, roles: ['Employee'] });
 
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json({ 
-        error: "Valid ID is required",
-        code: "INVALID_ID" 
-      }, { status: 400 });
-    }
+export const PUT = withApiHandler(async (request, context) => {
+  const id = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('Valid ticket response id is required');
+  const payload = updateTicketResponseSchema.parse(await request.json());
 
-    // Check if ticket response exists
-    const existing = await db.select()
-      .from(ticketResponses)
-      .where(eq(ticketResponses.id, parseInt(id)))
-      .limit(1);
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const actor = await getCurrentSupabaseActor(accessToken);
+  const supabase = getAdminRouteSupabase();
+  const { data: existing } = await supabase
+    .from('ticket_responses')
+    .select('*')
+    .eq('id', id)
+    .eq('tenant_id', tenantId)
+    .single();
+    
+  if (!existing) throw new NotFoundError('Ticket response not found');
+  const isAdminLike = context.auth!.user.role === 'Admin' || context.auth!.user.role === 'SuperAdmin';
+  if (!isAdminLike && existing.user_id !== actor.authUserId) throw new ForbiddenError('Unauthorized');
+  const { data, error } = await supabase.from('ticket_responses').update({
+    ...(payload.message !== undefined ? { message: payload.message } : {}),
+    ...(payload.attachments !== undefined ? { attachments: payload.attachments ?? null } : {}),
+  })
+  .eq('id', id)
+  .eq('tenant_id', tenantId)
+  .select('*')
+  .single();
+  if (error || !data) throw error ?? new Error('Failed to update ticket response');
+  const userMap = await buildLegacyUserIdMap(accessToken, [String(data.user_id)]);
+  return NextResponse.json(normalizeSupabaseTicketResponseRow(data, userMap));
+}, { requireAuth: true, roles: ['Employee'] });
 
-    if (existing.length === 0) {
-      return NextResponse.json({ 
-        error: 'Ticket response not found',
-        code: 'NOT_FOUND' 
-      }, { status: 404 });
-    }
+export const DELETE = withApiHandler(async (request, context) => {
+  const id = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('Valid ticket response id is required');
 
-    // Delete ticket response
-    const deleted = await db.delete(ticketResponses)
-      .where(eq(ticketResponses.id, parseInt(id)))
-      .returning();
-
-    return NextResponse.json({ 
-      message: 'Ticket response deleted successfully',
-      data: deleted[0]
-    }, { status: 200 });
-
-  } catch (error) {
-    console.error('DELETE error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
-  }
-}
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const actor = await getCurrentSupabaseActor(accessToken);
+  const supabase = getAdminRouteSupabase();
+  const { data: existing } = await supabase
+    .from('ticket_responses')
+    .select('*')
+    .eq('id', id)
+    .eq('tenant_id', tenantId)
+    .single();
+    
+  if (!existing) throw new NotFoundError('Ticket response not found');
+  const isAdminLike = context.auth!.user.role === 'Admin' || context.auth!.user.role === 'SuperAdmin';
+  if (!isAdminLike && existing.user_id !== actor.authUserId) throw new ForbiddenError('Unauthorized');
+  const { data, error } = await supabase
+    .from('ticket_responses')
+    .delete()
+    .eq('id', id)
+    .eq('tenant_id', tenantId)
+    .select('*')
+    .single();
+  if (error || !data) throw error ?? new Error('Failed to delete ticket response');
+  const userMap = await buildLegacyUserIdMap(accessToken, [String(data.user_id)]);
+  return NextResponse.json({ message: 'Ticket response deleted successfully', data: normalizeSupabaseTicketResponseRow(data, userMap) });
+}, { requireAuth: true, roles: ['Employee'] });

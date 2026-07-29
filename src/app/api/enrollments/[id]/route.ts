@@ -1,129 +1,100 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
-import { nfcTags } from '@/db/schema';
-import { eq, and } from 'drizzle-orm';
-import { getCurrentUser } from '@/lib/auth';
+import { NextRequest } from 'next/server';
+import { authenticateRequest } from '@/server/auth/session';
+import { apiError, apiSuccess } from '@/server/http/response';
+import { ApiError, BadRequestError, NotFoundError } from '@/server/http/errors';
+import { updateEnrollmentSchema } from '@/server/validation/devices';
+import { buildLegacyUserIdMap, getAdminRouteSupabase } from '@/server/supabase/route-helpers';
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+function normalizeSupabaseEnrollmentRow(row: Record<string, unknown>, enrolledByMap: Map<string, number | null>) {
+  const enrolledBy = typeof row.enrolled_by === 'string' ? enrolledByMap.get(row.enrolled_by) ?? null : null;
+  return {
+    id: Number(row.id),
+    tagUid: row.tag_uid,
+    employeeId: row.employee_id === null ? null : Number(row.employee_id),
+    status: row.status,
+    enrolledAt: row.enrolled_at ?? null,
+    enrolledBy,
+    lastUsedAt: row.last_used_at ?? null,
+    readerId: row.reader_id ?? null,
+    createdAt: row.created_at ?? null,
+  };
+}
+
+function parseEnrollmentId(id: string) {
+  const enrollmentId = Number(id);
+  if (!Number.isInteger(enrollmentId) || enrollmentId <= 0) {
+    throw new BadRequestError('Valid enrollment id is required');
+  }
+  return enrollmentId;
+}
+
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    // Authentication check
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json(
-        { error: 'Authentication required', code: 'AUTHENTICATION_REQUIRED' },
-        { status: 401 }
-      );
-    }
+    const auth = await authenticateRequest(request, { required: true, roles: ['Admin'] });
+    const { id } = await params;
+    const enrollmentId = parseEnrollmentId(id);
+    const payload = updateEnrollmentSchema.parse(await request.json());
 
-    // Role-based authorization check
-    if (user.role !== 'cms_administrator' && user.role !== 'hr_manager') {
-      return NextResponse.json(
-        {
-          error: 'Insufficient permissions. Admin or HR role required',
-          code: 'INSUFFICIENT_PERMISSIONS'
-        },
-        { status: 403 }
-      );
-    }
-
-    // Validate ID parameter
-    const id = params.id;
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json(
-        { error: 'Valid enrollment ID is required', code: 'INVALID_ID' },
-        { status: 400 }
-      );
-    }
-
-    // Check if enrollment exists
-    const existingEnrollment = await db
-      .select()
-      .from(nfcTags)
-      .where(eq(nfcTags.id, parseInt(id)))
-      .limit(1);
-
-    if (existingEnrollment.length === 0) {
-      return NextResponse.json(
-        { error: 'Enrollment not found', code: 'ENROLLMENT_NOT_FOUND' },
-        { status: 404 }
-      );
-    }
-
-    // Deactivate the enrollment (update status to 'inactive')
-    const deactivatedEnrollment = await db
-      .update(nfcTags)
-      .set({
-        status: 'inactive',
-      })
-      .where(eq(nfcTags.id, parseInt(id)))
-      .returning();
-
-    return NextResponse.json(
-      {
-        message: 'Enrollment deactivated successfully',
-        enrollment: deactivatedEnrollment[0],
-      },
-      { status: 200 }
-    );
+    const accessToken = auth?.accessToken;
+    const tenantId = auth?.user.tenantId;
+    if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+    const supabase = getAdminRouteSupabase();
+    const { data: existing } = await supabase
+      .from('nfc_tags')
+      .select('*')
+      .eq('id', enrollmentId)
+      .eq('tenant_id', tenantId)
+      .single();
+    if (!existing) throw new NotFoundError('Enrollment not found');
+    const { data: updated, error } = await supabase.from('nfc_tags').update({
+      status: payload.status,
+    })
+    .eq('id', enrollmentId)
+    .eq('tenant_id', tenantId)
+    .select('*')
+    .single();
+    if (error || !updated) throw error ?? new Error('Failed to update enrollment');
+    const enrolledByMap = await buildLegacyUserIdMap(accessToken, [String(updated.enrolled_by)].filter(Boolean), tenantId);
+    return apiSuccess(normalizeSupabaseEnrollmentRow(updated, enrolledByMap), 'Enrollment updated successfully');
   } catch (error) {
-    console.error('DELETE enrollment error:', error);
-    return NextResponse.json(
-      {
-        error: 'Internal server error: ' + (error instanceof Error ? error.message : 'Unknown error'),
-        code: 'INTERNAL_SERVER_ERROR'
-      },
-      { status: 500 }
-    );
+    if (error instanceof ApiError) {
+      return apiError(error.message, { status: error.statusCode, errors: error.details });
+    }
+    return apiError(error instanceof Error ? error.message : 'Internal server error');
   }
 }
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
+    const auth = await authenticateRequest(request, { required: true, roles: ['Admin'] });
+    const { id } = await params;
+    const enrollmentId = parseEnrollmentId(id);
 
-    if (user.role !== 'cms_administrator' && user.role !== 'hr_manager') {
-      return NextResponse.json({
-        error: 'Insufficient permissions',
-        code: 'FORBIDDEN'
-      }, { status: 403 });
-    }
-
-    const id = parseInt(params.id);
-    if (isNaN(id)) {
-      return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
-    }
-
-    const body = await request.json();
-    const { status } = body;
-
-    const validStatuses = ['active', 'inactive', 'lost', 'damaged'];
-    if (status && !validStatuses.includes(status)) {
-      return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
-    }
-
-    const existing = await db.select().from(nfcTags).where(eq(nfcTags.id, id)).limit(1);
-    if (existing.length === 0) {
-      return NextResponse.json({ error: 'Enrollment not found' }, { status: 404 });
-    }
-
-    const updated = await db.update(nfcTags)
-      .set({ status })
-      .where(eq(nfcTags.id, id))
-      .returning();
-
-    return NextResponse.json(updated[0], { status: 200 });
-
+    const accessToken = auth?.accessToken;
+    const tenantId = auth?.user.tenantId;
+    if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+    const supabase = getAdminRouteSupabase();
+    const { data: existing } = await supabase
+      .from('nfc_tags')
+      .select('*')
+      .eq('id', enrollmentId)
+      .eq('tenant_id', tenantId)
+      .single();
+    if (!existing) throw new NotFoundError('Enrollment not found');
+    const { data: updated, error } = await supabase.from('nfc_tags').update({
+      status: 'inactive',
+    })
+    .eq('id', enrollmentId)
+    .eq('tenant_id', tenantId)
+    .select('*')
+    .single();
+    if (error || !updated) throw error ?? new Error('Failed to deactivate enrollment');
+    const enrolledByMap = await buildLegacyUserIdMap(accessToken, [String(updated.enrolled_by)].filter(Boolean), tenantId);
+    return apiSuccess(normalizeSupabaseEnrollmentRow(updated, enrolledByMap), 'Enrollment deactivated successfully');
   } catch (error) {
-    console.error('PUT error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    if (error instanceof ApiError) {
+      return apiError(error.message, { status: error.statusCode, errors: error.details });
+    }
+    return apiError(error instanceof Error ? error.message : 'Internal server error');
   }
 }

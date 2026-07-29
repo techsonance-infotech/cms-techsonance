@@ -1,35 +1,153 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { env } from '@/server/config/env';
+
+const publicRoutes = ['/', '/login'];
+const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
+
+function isPublicRoute(pathname: string) {
+  return publicRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+}
+
+function getRequestKey(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  const authHeader = request.headers.get('authorization');
+  const hasAuth = Boolean(authHeader?.startsWith('Bearer ') || request.cookies.get('refresh_token'));
+  const forwardedFor = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
+  const ip = forwardedFor || 'unknown';
+
+  // Apply a stricter rate limit for critical authentication & registration paths
+  const isAuthCriticalRoute = 
+    pathname.startsWith('/api/auth/login') ||
+    pathname.startsWith('/api/auth/register') ||
+    pathname.startsWith('/api/auth/resend-verification') ||
+    pathname.startsWith('/api/auth/verify-email') ||
+    pathname.startsWith('/api/auth/forgot-password');
+
+  if (isAuthCriticalRoute) {
+    return {
+      bucket: `auth_critical:${ip}`,
+      limit: 5,
+    };
+  }
+
+  const isAiOrPlaygroundRoute = 
+    pathname.startsWith('/api/ai') ||
+    pathname.startsWith('/api/developer/keys'); // includes send-playground
+
+  if (isAiOrPlaygroundRoute) {
+    return {
+      bucket: `ai_playground_critical:${ip}`,
+      limit: 10,
+    };
+  }
+
+  return {
+    bucket: `${hasAuth ? 'auth' : 'public'}:${ip}`,
+    limit: hasAuth ? env.AUTH_RATE_LIMIT_PER_MINUTE : env.PUBLIC_RATE_LIMIT_PER_MINUTE,
+  };
+}
+
+function applyRateLimit(request: NextRequest) {
+  const now = Date.now();
+  const { bucket, limit } = getRequestKey(request);
+  const existing = rateLimitStore.get(bucket);
+
+  if (!existing || existing.resetAt <= now) {
+    rateLimitStore.set(bucket, { count: 1, resetAt: now + 60_000 });
+    return null;
+  }
+
+  if (existing.count >= limit) {
+    return NextResponse.json(
+      {
+        success: false,
+        data: null,
+        message: 'Rate limit exceeded',
+        errors: [{ code: 'RATE_LIMIT_EXCEEDED', limit }],
+      },
+      {
+        status: 429,
+        headers: {
+          'retry-after': String(Math.ceil((existing.resetAt - now) / 1000)),
+        },
+      }
+    );
+  }
+
+  existing.count += 1;
+  rateLimitStore.set(bucket, existing);
+  return null;
+}
 
 export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-
-  // Public routes that don't require authentication
-  const publicRoutes = ['/login', '/'];
-
-  // Check if the route is public
-  const isPublicRoute = publicRoutes.some(route => pathname === route || pathname.startsWith(route + '/'));
-
-  // If accessing public route, allow
-  if (isPublicRoute) {
+  // ABSOLUTE BYPASS for file uploads to prevent multipart boundary stripping
+  if (request.nextUrl.pathname === '/api/upload') {
     return NextResponse.next();
   }
 
-  // For protected routes, we can't check localStorage in middleware
-  // So we'll let the client-side handle redirects
-  // Middleware will just pass through
-  return NextResponse.next();
+  const requestId = request.headers.get('x-correlation-id') ?? crypto.randomUUID();
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-correlation-id', requestId);
+
+  // Skip header injection for multipart/form-data to preserve boundaries
+  const contentType = request.headers.get('content-type') || '';
+  if (contentType.includes('multipart/form-data')) {
+    return NextResponse.next();
+  }
+
+  if (request.nextUrl.pathname.startsWith('/api/')) {
+    const limited = applyRateLimit(request);
+
+    if (limited) {
+      limited.headers.set('x-correlation-id', requestId);
+      return limited;
+    }
+  }
+
+  if (!request.nextUrl.pathname.startsWith('/api/') && isPublicRoute(request.nextUrl.pathname)) {
+    const response = NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
+
+    response.headers.set('x-correlation-id', requestId);
+    response.headers.set('x-frame-options', 'DENY');
+    response.headers.set('x-content-type-options', 'nosniff');
+    response.headers.set('referrer-policy', 'strict-origin-when-cross-origin');
+    response.headers.set('x-xss-protection', '1; mode=block');
+    response.headers.set('permissions-policy', 'camera=(), microphone=(), geolocation=()');
+    response.headers.set('strict-transport-security', 'max-age=63072000; includeSubDomains; preload');
+    response.headers.set(
+      'content-security-policy',
+      "default-src 'self'; img-src 'self' data: https: http:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' https: data:; connect-src 'self' https: http:; frame-ancestors 'none';"
+    );
+    return response;
+  }
+
+  const response = NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  });
+
+  response.headers.set('x-correlation-id', requestId);
+  response.headers.set('x-frame-options', 'DENY');
+  response.headers.set('x-content-type-options', 'nosniff');
+  response.headers.set('referrer-policy', 'strict-origin-when-cross-origin');
+  response.headers.set('x-xss-protection', '1; mode=block');
+  response.headers.set('permissions-policy', 'camera=(), microphone=(), geolocation=()');
+  response.headers.set('strict-transport-security', 'max-age=63072000; includeSubDomains; preload');
+  response.headers.set(
+    'content-security-policy',
+    "default-src 'self'; img-src 'self' data: https: http:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' https: data:; connect-src 'self' https: http:; frame-ancestors 'none';"
+  );
+
+  return response;
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
-  ],
+  matcher: ['/((?!api/upload|_next/static|_next/image|favicon.ico).*)'],
 };
+

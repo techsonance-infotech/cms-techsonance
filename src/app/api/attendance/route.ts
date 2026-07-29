@@ -1,410 +1,403 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
-import { attendance, attendanceRecords, employees, users } from '@/db/schema';
-import { eq, and, gte, lte, desc, asc } from 'drizzle-orm';
-import { getCurrentUser } from '@/lib/auth';
+import { NextResponse } from 'next/server';
+import { withApiHandler } from '@/server/http/handler';
+import { BadRequestError, ForbiddenError, NotFoundError, ConflictError } from '@/server/http/errors';
+import { createAttendanceSchema, attendanceStatusSchema } from '@/server/validation/attendance-admin';
+import { getCurrentSupabaseActor, getAdminRouteSupabase } from '@/server/supabase/route-helpers';
+import { listSupabaseProfilesByAuthIds } from '@/server/supabase/users';
 
-export async function GET(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
-
-    const searchParams = request.nextUrl.searchParams;
-    const limit = Math.min(parseInt(searchParams.get('limit') ?? '10'), 100);
-    const offset = parseInt(searchParams.get('offset') ?? '0');
-    const startDate = searchParams.get('start_date');
-    const endDate = searchParams.get('end_date');
-    const employeeId = searchParams.get('employee_id');
-    const readerId = searchParams.get('reader_id');
-    const status = searchParams.get('status');
-    const source = searchParams.get('source'); // 'nfc', 'legacy', or null for both
-
-    // Validate common params
-    if (startDate) {
-      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-      if (!dateRegex.test(startDate)) {
-        return NextResponse.json({ 
-          error: 'Invalid start_date format. Expected YYYY-MM-DD',
-          code: 'INVALID_DATE_FORMAT'
-        }, { status: 400 });
-      }
-    }
-
-    if (endDate) {
-      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-      if (!dateRegex.test(endDate)) {
-        return NextResponse.json({ 
-          error: 'Invalid end_date format. Expected YYYY-MM-DD',
-          code: 'INVALID_DATE_FORMAT'
-        }, { status: 400 });
-      }
-    }
-
-    if (status) {
-      const validStatuses = ['present', 'absent', 'late', 'half_day'];
-      if (!validStatuses.includes(status)) {
-        return NextResponse.json({ 
-          error: 'Invalid status. Must be one of: present, absent, late, half_day',
-          code: 'INVALID_STATUS'
-        }, { status: 400 });
-      }
-    }
-
-    let parsedEmployeeId: number | null = null;
-    if (employeeId) {
-      parsedEmployeeId = parseInt(employeeId);
-      if (isNaN(parsedEmployeeId)) {
-        return NextResponse.json({ 
-          error: 'Invalid employee_id',
-          code: 'INVALID_EMPLOYEE_ID'
-        }, { status: 400 });
-      }
-    }
-
-    // ── Query 1: New attendanceRecords table (NFC + manual entries) ──
-    let nfcResults: any[] = [];
-    if (source !== 'legacy') {
-      const nfcConditions = [];
-      if (startDate) nfcConditions.push(gte(attendanceRecords.date, startDate));
-      if (endDate) nfcConditions.push(lte(attendanceRecords.date, endDate));
-      if (parsedEmployeeId !== null) nfcConditions.push(eq(attendanceRecords.employeeId, parsedEmployeeId));
-      if (readerId) nfcConditions.push(eq(attendanceRecords.readerId, readerId));
-      if (status) nfcConditions.push(eq(attendanceRecords.status, status));
-
-      let nfcQuery = db
-        .select({
-          id: attendanceRecords.id,
-          employeeId: attendanceRecords.employeeId,
-          date: attendanceRecords.date,
-          timeIn: attendanceRecords.timeIn,
-          timeOut: attendanceRecords.timeOut,
-          locationLatitude: attendanceRecords.locationLatitude,
-          locationLongitude: attendanceRecords.locationLongitude,
-          duration: attendanceRecords.duration,
-          status: attendanceRecords.status,
-          checkInMethod: attendanceRecords.checkInMethod,
-          readerId: attendanceRecords.readerId,
-          location: attendanceRecords.location,
-          tagUid: attendanceRecords.tagUid,
-          idempotencyKey: attendanceRecords.idempotencyKey,
-          syncedAt: attendanceRecords.syncedAt,
-          metadata: attendanceRecords.metadata,
-          createdAt: attendanceRecords.createdAt,
-          employee: {
-            id: employees.id,
-            firstName: users.firstName,
-            lastName: users.lastName,
-            email: users.email,
-            department: employees.department,
-            photoUrl: users.avatarUrl,
-            status: employees.status
-          }
-        })
-        .from(attendanceRecords)
-        .leftJoin(employees, eq(attendanceRecords.employeeId, employees.id))
-        .leftJoin(users, eq(employees.userId, users.id))
-        .orderBy(asc(attendanceRecords.date), asc(attendanceRecords.timeIn))
-        .limit(limit + offset); // Fetch enough for merging
-
-      if (nfcConditions.length > 0) {
-        nfcQuery = nfcQuery.where(and(...nfcConditions)) as any;
-      }
-
-      // Map NFC results with prefixed IDs and flag
-      nfcResults = (await nfcQuery).map(r => ({ 
-        ...r, 
-        id: `nfc_${r.id}`, 
-        _source: 'nfc' 
-      }));
-    }
-
-    // ── Query 2: Old attendance table (legacy CMS entries) ──
-    let legacyResults: any[] = [];
-    if (source !== 'nfc' && !readerId) {
-      const legacyConditions = [];
-      if (startDate) legacyConditions.push(gte(attendance.date, startDate));
-      if (endDate) legacyConditions.push(lte(attendance.date, endDate));
-      if (parsedEmployeeId !== null) legacyConditions.push(eq(attendance.employeeId, parsedEmployeeId));
-      if (status) legacyConditions.push(eq(attendance.status, status));
-
-      let legacyQuery = db
-        .select({
-          id: attendance.id,
-          employeeId: attendance.employeeId,
-          date: attendance.date,
-          checkIn: attendance.checkIn,
-          checkOut: attendance.checkOut,
-          status: attendance.status,
-          notes: attendance.notes,
-          empId: employees.id,
-          firstName: users.firstName,
-          lastName: users.lastName,
-          email: users.email,
-          department: employees.department,
-          photoUrl: users.avatarUrl,
-          empStatus: employees.status,
-        })
-        .from(attendance)
-        .leftJoin(employees, eq(attendance.employeeId, employees.id))
-        .leftJoin(users, eq(employees.userId, users.id))
-        .orderBy(asc(attendance.date))
-        .limit(limit + offset);
-
-      if (legacyConditions.length > 0) {
-        legacyQuery = legacyQuery.where(and(...legacyConditions)) as any;
-      }
-
-      const rawLegacy = await legacyQuery;
-
-      // Normalize legacy records and prefix IDs
-      legacyResults = rawLegacy.map(r => ({
-        id: `legacy_${r.id}`,
-        employeeId: r.employeeId,
-        date: r.date,
-        timeIn: r.checkIn,
-        timeOut: r.checkOut,
-        locationLatitude: null,
-        locationLongitude: null,
-        duration: (r.checkIn && r.checkOut)
-          ? Math.floor((new Date(r.checkOut).getTime() - new Date(r.checkIn).getTime()) / 60000)
-          : null,
-        status: r.status,
-        checkInMethod: 'legacy',
-        readerId: null,
-        location: null,
-        tagUid: null,
-        idempotencyKey: null,
-        syncedAt: null,
-        metadata: r.notes ? JSON.stringify({ notes: r.notes }) : null,
-        createdAt: r.checkIn || r.date,
-        employee: {
-          id: r.empId,
-          firstName: r.firstName,
-          lastName: r.lastName,
-          email: r.email,
-          department: r.department,
-          photoUrl: r.photoUrl,
-          status: r.status,
-        },
-        _source: 'legacy',
-      }));
-    }
-
-    // ── De-duplicate: Prefer NFC/RFID over Legacy ──
-    // We remove legacy records if there is an RFID record for the same employee and date
-    const rfidKeys = new Set(nfcResults.map(r => `${r.employeeId}_${r.date}`));
-    const filteredLegacy = legacyResults.filter(r => !rfidKeys.has(`${r.employeeId}_${r.date}`));
-
-    // ── Merge, sort by date descending, and paginate ──
-    const merged = [...nfcResults, ...filteredLegacy]
-      .sort((a, b) => {
-        const dateCompare = (a.date || '').localeCompare(b.date || '');
-        if (dateCompare !== 0) return dateCompare;
-        return (a.timeIn || '').localeCompare(b.timeIn || '');
-      })
-      .slice(offset, offset + limit);
-
-    return NextResponse.json(merged, { status: 200 });
-  } catch (error: any) {
-    console.error('GET attendance error:', error);
-    return NextResponse.json({ 
-      error: 'Internal server error: ' + error.message 
-    }, { status: 500 });
+async function buildAttendanceEmployeeMap(accessToken: string, tenantId: string, employeeIds: number[]) {
+  if (!employeeIds.length) {
+    return new Map<number, {
+      id: number;
+      firstName: string | null;
+      lastName: string | null;
+      email: string | null;
+      department: string | null;
+      photoUrl: string | null;
+      status: string | null;
+    }>();
   }
-}
 
-export async function POST(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
-
-    const body = await request.json();
-    let { employeeId, date, timeIn, timeOut, duration, location, readerId, notes, status } = body;
-
-    if (!employeeId) {
-      return NextResponse.json({ 
-        error: 'employeeId is required',
-        code: 'MISSING_EMPLOYEE_ID'
-      }, { status: 400 });
-    }
-
-    // Parse employeeId to number
-    const parsedEmployeeId = parseInt(employeeId);
-    if (isNaN(parsedEmployeeId)) {
-      return NextResponse.json({ 
-        error: 'Invalid employeeId. Must be a number.',
-        code: 'INVALID_EMPLOYEE_ID'
-      }, { status: 400 });
-    }
-
-    // Permissions check - including project_manager for consolidated view
-    const isAdmin = ['admin', 'cms_administrator', 'hr_manager', 'project_manager', 'management'].includes(user.role);
+  const supabase = getAdminRouteSupabase();
+  const { data } = await supabase
+    .from('employees')
+    .select('*')
+    .in('id', employeeIds)
+    .eq('tenant_id', tenantId);
     
-    if (!isAdmin) {
-      // If not admin, check if the employeeId belongs to the current user
-      const userEmployee = await db.select()
-        .from(employees)
-        .where(eq(employees.userId, user.id))
-        .limit(1);
-        
-      if (userEmployee.length === 0 || userEmployee[0].id !== parsedEmployeeId) {
-        return NextResponse.json({ 
-          error: 'Insufficient permissions. You can only log your own attendance.',
-          code: 'FORBIDDEN'
-        }, { status: 403 });
-      }
-    }
+  const employeeRows = (data as Record<string, unknown>[] | null) ?? [];
+  const profileMap = await listSupabaseProfilesByAuthIds(
+    employeeRows.map((row) => String(row.user_id)).filter(Boolean),
+    { accessToken, tenantId, useAdmin: true }
+  );
 
-    if ('userId' in body || 'user_id' in body) {
-      return NextResponse.json({ 
-        error: "User ID cannot be provided in request body",
-        code: "USER_ID_NOT_ALLOWED" 
-      }, { status: 400 });
-    }
-
-    if (!date) {
-      return NextResponse.json({ 
-        error: 'date is required',
-        code: 'MISSING_DATE'
-      }, { status: 400 });
-    }
-
-    if (!timeIn) {
-      return NextResponse.json({ 
-        error: 'timeIn is required',
-        code: 'MISSING_TIME_IN'
-      }, { status: 400 });
-    }
-
-    if (!status) {
-      return NextResponse.json({ 
-        error: 'status is required',
-        code: 'MISSING_STATUS'
-      }, { status: 400 });
-    }
-
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!dateRegex.test(date)) {
-      return NextResponse.json({ 
-        error: 'Invalid date format. Expected YYYY-MM-DD',
-        code: 'INVALID_DATE_FORMAT'
-      }, { status: 400 });
-    }
-
-    try {
-      new Date(timeIn).toISOString();
-    } catch (e) {
-      return NextResponse.json({ 
-        error: 'Invalid timeIn format. Expected ISO timestamp',
-        code: 'INVALID_TIME_IN'
-      }, { status: 400 });
-    }
-
-    if (timeOut) {
-      try {
-        new Date(timeOut).toISOString();
-      } catch (e) {
-        return NextResponse.json({ 
-          error: 'Invalid timeOut format. Expected ISO timestamp',
-          code: 'INVALID_TIME_OUT'
-        }, { status: 400 });
-      }
-    }
-
-    const validStatuses = ['present', 'absent', 'late', 'half_day'];
-    if (!validStatuses.includes(status)) {
-      return NextResponse.json({ 
-        error: 'Invalid status. Must be one of: present, absent, late, half_day',
-        code: 'INVALID_STATUS'
-      }, { status: 400 });
-    }
-
-    if (duration !== undefined && duration !== null) {
-      if (typeof duration !== 'number' || duration < 0) {
-        return NextResponse.json({ 
-          error: 'Duration must be a non-negative integer',
-          code: 'INVALID_DURATION'
-        }, { status: 400 });
-      }
-    }
-
-    const employeeExists = await db
-      .select()
-      .from(employees)
-      .where(eq(employees.id, parsedEmployeeId))
-      .limit(1);
-
-    if (employeeExists.length === 0) {
-      return NextResponse.json({ 
-        error: 'Employee not found',
-        code: 'EMPLOYEE_NOT_FOUND'
-      }, { status: 400 });
-    }
-
-    // Check for existing attendance in BOTH modern and legacy tables
-    const existingModern = await db
-      .select({ id: attendanceRecords.id })
-      .from(attendanceRecords)
-      .where(
-        and(
-          eq(attendanceRecords.employeeId, parsedEmployeeId),
-          eq(attendanceRecords.date, date)
-        )
-      )
-      .limit(1);
-
-    const existingLegacy = await db
-      .select({ id: attendance.id })
-      .from(attendance)
-      .where(
-        and(
-          eq(attendance.employeeId, parsedEmployeeId),
-          eq(attendance.date, date)
-        )
-      )
-      .limit(1);
-
-    if (existingModern.length > 0 || existingLegacy.length > 0) {
-      return NextResponse.json({ 
-        error: 'Attendance record already exists for this employee on this date. You cannot log a second record for the same day.',
-        code: 'DUPLICATE_ENTRY'
-      }, { status: 400 });
-    }
-
-    let calculatedDuration = duration;
-    if (!calculatedDuration && timeOut) {
-      const timeInMs = new Date(timeIn).getTime();
-      const timeOutMs = new Date(timeOut).getTime();
-      calculatedDuration = Math.floor((timeOutMs - timeInMs) / 1000 / 60);
-    }
-
-    const metadata = notes ? JSON.stringify({ notes, createdBy: user.id }) : JSON.stringify({ createdBy: user.id });
-
-    const newAttendance = await db.insert(attendanceRecords)
-      .values({
-        employeeId: parsedEmployeeId,
-        date,
-        timeIn,
-        timeOut: timeOut || null,
-        duration: calculatedDuration || null,
-        status,
-        checkInMethod: 'manual',
-        location: location || null,
-        readerId: readerId || null,
-        metadata,
-        createdAt: new Date().toISOString()
-      })
-      .returning();
-
-    return NextResponse.json(newAttendance[0], { status: 201 });
-  } catch (error: any) {
-    console.error('POST attendance error:', error);
-    return NextResponse.json({ 
-      error: 'Internal server error: ' + error.message 
-    }, { status: 500 });
-  }
+  return new Map(
+    employeeRows.map((row) => {
+      const profile = profileMap.get(String(row.user_id));
+      return [
+        Number(row.id),
+        {
+          id: Number(row.id),
+          firstName: profile?.first_name ?? null,
+          lastName: profile?.last_name ?? null,
+          email: profile?.email ?? null,
+          department: typeof row.department === 'string' ? row.department : null,
+          photoUrl: profile?.avatar_url ?? null,
+          status: typeof row.status === 'string' ? row.status : null,
+        },
+      ];
+    })
+  );
 }
+
+export const GET = withApiHandler(async (request, context) => {
+  const user = context.auth!.user;
+  const searchParams = new URL(request.url).searchParams;
+  const limit = Math.min(Number(searchParams.get('limit') ?? '10'), 100);
+  const offset = Math.max(Number(searchParams.get('offset') ?? '0'), 0);
+  const startDate = searchParams.get('start_date');
+  const endDate = searchParams.get('end_date');
+  const employeeIdParam = searchParams.get('employee_id');
+  const readerId = searchParams.get('reader_id');
+  const status = searchParams.get('status');
+  const source = searchParams.get('source');
+
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const supabase = getAdminRouteSupabase();
+  const actor = await getCurrentSupabaseActor(accessToken);
+  let employeeId: number | null = employeeIdParam ? Number(employeeIdParam) : null;
+  const isAdminLike = user.role === 'Admin' || user.role === 'SuperAdmin' || user.role === 'Manager';
+
+  if (!isAdminLike) {
+    const { data: selfEmployee } = await supabase
+      .from('employees')
+      .select('id')
+      .eq('user_id', actor.authUserId)
+      .eq('tenant_id', tenantId)
+      .single();
+    if (!selfEmployee) return NextResponse.json([]);
+    employeeId = selfEmployee.id;
+  }
+
+  let modernQuery = supabase
+    .from('attendance_records')
+    .select('*')
+    .eq('tenant_id', tenantId);
+  if (startDate) modernQuery = modernQuery.gte('date', startDate);
+  if (endDate) modernQuery = modernQuery.lte('date', endDate);
+  if (employeeId) modernQuery = modernQuery.eq('employee_id', employeeId);
+  if (readerId) modernQuery = modernQuery.eq('reader_id', readerId);
+  if (status) modernQuery = modernQuery.eq('status', attendanceStatusSchema.parse(status));
+
+  let legacyQuery = supabase
+    .from('attendance')
+    .select('*')
+    .eq('tenant_id', tenantId);
+  if (startDate) legacyQuery = legacyQuery.gte('date', startDate);
+  if (endDate) legacyQuery = legacyQuery.lte('date', endDate);
+  if (employeeId) legacyQuery = legacyQuery.eq('employee_id', employeeId);
+  if (status) legacyQuery = legacyQuery.eq('status', attendanceStatusSchema.parse(status));
+
+  const [nfcResult, legacyResult] = await Promise.all([
+    source === 'legacy'
+      ? Promise.resolve({ data: [] as Record<string, unknown>[] })
+      : modernQuery.order('date', { ascending: false }).order('time_in', { ascending: false }).range(0, limit + offset - 1),
+    source === 'nfc' || readerId
+      ? Promise.resolve({ data: [] as Record<string, unknown>[] })
+      : legacyQuery.order('date', { ascending: false }).range(0, limit + offset - 1),
+  ]);
+
+  const allEmployeeIds = [
+    ...(((nfcResult.data as Record<string, unknown>[] | null) ?? []).map((row) => Number(row.employee_id))),
+    ...(((legacyResult.data as Record<string, unknown>[] | null) ?? []).map((row) => Number(row.employee_id))),
+  ];
+  const employeeMap = await buildAttendanceEmployeeMap(accessToken, tenantId, Array.from(new Set(allEmployeeIds)));
+
+  const normalizedModern = (((nfcResult.data as Record<string, unknown>[] | null) ?? []).map((row) => ({
+    id: `nfc_${row.id}`,
+    employeeId: Number(row.employee_id),
+    date: row.date,
+    timeIn: row.time_in ?? null,
+    timeOut: row.time_out ?? null,
+    locationLatitude: row.location_latitude ?? null,
+    locationLongitude: row.location_longitude ?? null,
+    duration: row.duration ?? null,
+    status: row.status,
+    checkInMethod: row.check_in_method,
+    readerId: row.reader_id ?? null,
+    location: row.location ?? null,
+    tagUid: row.tag_uid ?? null,
+    idempotencyKey: row.idempotency_key ?? null,
+    syncedAt: row.synced_at ?? null,
+    metadata: row.metadata ?? null,
+    createdAt: row.created_at ?? null,
+    employee: employeeMap.get(Number(row.employee_id)) ?? null,
+    _source: 'nfc',
+  })));
+
+  const normalizedLegacy = (((legacyResult.data as Record<string, unknown>[] | null) ?? []).map((row) => {
+    const checkIn = row.check_in ?? null;
+    const checkOut = row.check_out ?? null;
+    return {
+      id: `legacy_${row.id}`,
+      employeeId: Number(row.employee_id),
+      date: row.date,
+      timeIn: checkIn,
+      timeOut: checkOut,
+      locationLatitude: null,
+      locationLongitude: null,
+      duration: checkIn && checkOut ? Math.floor((new Date(String(checkOut)).getTime() - new Date(String(checkIn)).getTime()) / 60000) : null,
+      status: row.status,
+      checkInMethod: 'legacy',
+      readerId: null,
+      location: null,
+      tagUid: null,
+      idempotencyKey: null,
+      syncedAt: null,
+      metadata: row.notes ? JSON.stringify({ notes: row.notes }) : null,
+      createdAt: checkIn || row.date,
+      employee: employeeMap.get(Number(row.employee_id)) ?? null,
+      _source: 'legacy',
+    };
+  }));
+
+  const nfcKeys = new Set(normalizedModern.map((row) => `${row.employeeId}_${row.date}`));
+  const merged = [...normalizedModern, ...normalizedLegacy.filter((row) => !nfcKeys.has(`${row.employeeId}_${row.date}`))]
+    .sort((a, b) => String(b.date ?? '').localeCompare(String(a.date ?? '')) || String(b.timeIn ?? '').localeCompare(String(a.timeIn ?? '')))
+    .slice(offset, offset + limit);
+
+  return NextResponse.json({
+    success: true,
+    data: merged,
+    message: 'Attendance fetched successfully',
+    errors: null,
+    meta: { page: Math.floor(offset / limit) + 1, limit, total: merged.length },
+  });
+}, { requireAuth: true, roles: ['Employee'] });
+
+export const POST = withApiHandler(async (request, context) => {
+  const payload = createAttendanceSchema.parse(await request.json());
+  const user = context.auth!.user;
+
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const supabase = getAdminRouteSupabase();
+  const actor = await getCurrentSupabaseActor(accessToken);
+  const isAdminLike = user.role === 'Admin' || user.role === 'SuperAdmin' || user.role === 'Manager';
+  if (!isAdminLike) {
+    const { data: selfEmployee } = await supabase
+      .from('employees')
+      .select('id')
+      .eq('user_id', actor.authUserId)
+      .eq('tenant_id', tenantId)
+      .single();
+    if (!selfEmployee || selfEmployee.id !== payload.employeeId) {
+      throw new ForbiddenError('Insufficient permissions. You can only log your own attendance.');
+    }
+  }
+
+  const { data: employee } = await supabase
+    .from('employees')
+    .select('id')
+    .eq('id', payload.employeeId)
+    .eq('tenant_id', tenantId)
+    .single();
+  if (!employee) throw new NotFoundError('Employee not found');
+
+  const { data: existingModern } = await supabase
+    .from('attendance_records')
+    .select('id')
+    .eq('employee_id', payload.employeeId)
+    .eq('date', payload.date)
+    .eq('tenant_id', tenantId)
+    .maybeSingle();
+    
+  const { data: existingLegacy } = await supabase
+    .from('attendance')
+    .select('id')
+    .eq('employee_id', payload.employeeId)
+    .eq('date', payload.date)
+    .eq('tenant_id', tenantId)
+    .maybeSingle();
+    
+  if (existingModern || existingLegacy) {
+    throw new ConflictError('Attendance record already exists for this employee on this date.');
+  }
+
+  const duration = payload.duration ?? (payload.timeOut ? Math.floor((new Date(payload.timeOut).getTime() - new Date(payload.timeIn).getTime()) / 60000) : null);
+
+  const targetDate = new Date(payload.date);
+  const isWeekend = targetDate.getUTCDay() === 0 || targetDate.getUTCDay() === 6;
+
+  // --- ADVANCED TRACKING: CONFIGURATION, GEOFENCING, IP, & OVERTIME ---
+  const clientIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip');
+  const { data: settings } = await supabase.from('tenant_attendance_settings').select('*').eq('tenant_id', tenantId).maybeSingle();
+  
+  let isOutOfBounds = false;
+  let violationFlags: any = null;
+  let computedOvertime: number | null = null;
+  const stdHours = settings?.standard_work_hours ? Number(settings.standard_work_hours) : 9.0;
+
+  if (settings) {
+    if (settings.allowed_ips && settings.allowed_ips.trim() !== '') {
+       const allowed = settings.allowed_ips.split(',').map((ip: string) => ip.trim());
+       if (clientIp && !allowed.includes(clientIp)) {
+          isOutOfBounds = true;
+          violationFlags = { ...violationFlags, ip_violation: clientIp };
+       }
+    }
+    
+    if (payload.locationLatitude && payload.locationLongitude && settings.office_latitude && settings.office_longitude) {
+       const { calculateDistanceMeters } = await import('@/server/utils/geolocation');
+       const distance = calculateDistanceMeters(
+          payload.locationLatitude, payload.locationLongitude,
+          settings.office_latitude, settings.office_longitude
+       );
+       if (distance > (settings.geofence_radius_meters || 500)) {
+          isOutOfBounds = true;
+          violationFlags = { ...violationFlags, location_violation: Math.round(distance) };
+       }
+    }
+  }
+
+  if (duration) {
+      const hours = duration / 60;
+      if (hours > stdHours) {
+          computedOvertime = Number((hours - stdHours).toFixed(2));
+      }
+  }
+  // -------------------------------------------------------------------
+
+  // Route to Approval Queue if it's a Weekend OR if it violated Geofencing/IP rules
+  if (isWeekend || isOutOfBounds) {
+    if (isWeekend && (!payload.notes || payload.notes.trim() === '')) {
+      throw new BadRequestError('Notes are strictly required for weekend attendance logging.');
+    }
+
+    // Insert into pending requests
+    const { data: requestRecord, error: requestError } = await supabase.from('attendance_requests').insert({
+      employee_id: payload.employeeId,
+      date: payload.date,
+      time_in: payload.timeIn,
+      time_out: payload.timeOut ?? null,
+      duration,
+      status: 'pending',
+      check_in_method: 'manual',
+      location: payload.location ?? null,
+      reader_id: payload.readerId ?? null,
+      notes: payload.notes,
+      tenant_id: tenantId,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      metadata: { createdBy: actor.legacyUserId },
+      violation_flags: violationFlags
+    }).select('*').single();
+
+    if (requestError || !requestRecord) throw requestError ?? new Error('Failed to create attendance request');
+
+    // Notify admins about the pending attendance
+    const { data: adminUsers } = await supabase
+      .from('users')
+      .select('id')
+      .in('role', ['Admin', 'SuperAdmin', 'Manager'])
+      .eq('tenant_id', tenantId);
+
+    if (adminUsers) {
+      const title = isWeekend ? 'Pending Weekend Attendance' : 'Out-of-Bounds Attendance Attempt';
+      let message = `Employee ID ${payload.employeeId} logged attendance for ${payload.date}. `;
+      if (violationFlags?.ip_violation) message += `(IP Mismatch: ${violationFlags.ip_violation}) `;
+      if (violationFlags?.location_violation) message += `(Geofence Exceeded: ${violationFlags.location_violation}m) `;
+
+      const notifications = adminUsers.map((admin: any) => ({
+        user_id: admin.id,
+        title: title,
+        message: message.trim(),
+        type: 'warning',
+        link: '/dashboard/attendance',
+        is_read: false,
+        tenant_id: tenantId,
+        created_at: new Date().toISOString(),
+      }));
+      await supabase.from('notifications').insert(notifications);
+    }
+
+    return NextResponse.json({
+      id: requestRecord.id,
+      employeeId: Number(requestRecord.employee_id),
+      date: requestRecord.date,
+      timeIn: requestRecord.time_in,
+      timeOut: requestRecord.time_out,
+      duration: requestRecord.duration,
+      status: 'pending_approval',
+      checkInMethod: requestRecord.check_in_method,
+      readerId: requestRecord.reader_id,
+      location: requestRecord.location,
+      metadata: requestRecord.metadata,
+      createdAt: requestRecord.created_at,
+    }, { status: 202 });
+  }
+
+  // STANDARD WEEKDAY INSERTION
+  // FETCH MAX ID TO BYPASS SEQUENCE INCONSISTENCIES
+  const { data: maxRecord } = await supabase
+    .from('attendance_records')
+    .select('id')
+    .order('id', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const nextId = (maxRecord?.id || 0) + 1;
+
+  const { data, error } = await supabase.from('attendance_records').insert({
+    id: nextId,
+    employee_id: payload.employeeId,
+    date: payload.date,
+    time_in: payload.timeIn,
+    time_out: payload.timeOut ?? null,
+    duration,
+    overtime_hours: computedOvertime,
+    status: payload.status,
+    check_in_method: 'manual',
+    location: payload.location ?? null,
+    reader_id: payload.readerId ?? null,
+    idempotency_key: crypto.randomUUID(),
+    metadata: payload.notes ? { notes: payload.notes, createdBy: actor.legacyUserId } : { createdBy: actor.legacyUserId },
+    violation_flags: violationFlags,
+    tenant_id: tenantId,
+    created_at: new Date().toISOString(),
+  }).select('*').single();
+
+  if (error || !data) throw error ?? new Error('Failed to create attendance');
+
+  // Trigger automation workflow
+  try {
+    const { triggerAutomationWorkflow } = await import('@/server/automation/runner');
+    await triggerAutomationWorkflow(tenantId, 'attendance_logged', {
+      employeeId: data.employee_id,
+      date: data.date,
+      status: data.status,
+      violationFlags: data.violation_flags,
+    });
+  } catch (err: any) {
+    console.error('Failed to trigger automation workflow for attendance log:', err.message);
+  }
+
+  return NextResponse.json({
+    id: data.id,
+    employeeId: Number(data.employee_id),
+    date: data.date,
+    timeIn: data.time_in,
+    timeOut: data.time_out,
+    duration: data.duration,
+    status: data.status,
+    checkInMethod: data.check_in_method,
+    readerId: data.reader_id,
+    location: data.location,
+    metadata: data.metadata,
+    createdAt: data.created_at,
+  }, { status: 201 });
+}, { requireAuth: true, roles: ['Employee'] });

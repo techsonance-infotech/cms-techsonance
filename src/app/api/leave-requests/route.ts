@@ -1,509 +1,243 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
-import { leaveRequests, employees, users } from '@/db/schema';
-import { eq, and, gte, lte, desc } from 'drizzle-orm';
-import { getCurrentUser } from '@/lib/auth';
-import { hasFullAccess, type UserRole } from '@/lib/permissions';
+import { NextResponse } from 'next/server';
+import { withApiHandler } from '@/server/http/handler';
+import { BadRequestError, ForbiddenError, NotFoundError, UnprocessableEntityError } from '@/server/http/errors';
+import { createLeaveRequestSchema, updateLeaveRequestSchema } from '@/server/validation/hr';
 import {
-  LEAVE_TYPES,
-  APPROVAL_STATUSES,
-  DEFAULT_PAGE_SIZE,
-  MAX_PAGE_SIZE,
-  isValidEnum,
-  safeErrorMessage,
-} from '@/lib/constants';
+  buildLegacyUserIdMap,
+  getCurrentSupabaseActor,
+  getAdminRouteSupabase,
+} from '@/server/supabase/route-helpers';
 
-export async function GET(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
+async function getCurrentSupabaseEmployee(tenantId: string, authUserId: string) {
+  const supabase = getAdminRouteSupabase();
+  const { data: employee } = await supabase
+    .from('employees')
+    .select('id')
+    .eq('user_id', authUserId)
+    .eq('tenant_id', tenantId)
+    .single();
+  return employee ?? null;
+}
 
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+function normalizeSupabaseLeaveRequestRow(
+  row: Record<string, unknown>,
+  userMap: Map<string, number | null>
+) {
+  const approvedBy = typeof row.approved_by === 'string' ? userMap.get(row.approved_by) ?? null : null;
+  return {
+    id: Number(row.id),
+    employeeId: Number(row.employee_id),
+    leaveType: row.leave_type,
+    startDate: row.start_date,
+    endDate: row.end_date,
+    reason: row.reason,
+    status: row.status,
+    leavePeriod: row.leave_period,
+    actualDays: row.actual_days,
+    approvedBy,
+    createdAt: row.created_at ?? null,
+    updatedAt: row.updated_at ?? null,
+  };
+}
+
+export const GET = withApiHandler(async (request, context) => {
+  const user = context.auth!.user;
+  const isAdminLike = user.role === 'Admin' || user.role === 'SuperAdmin' || user.role === 'Manager';
+  const searchParams = new URL(request.url).searchParams;
+  const id = searchParams.get('id');
+
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const actor = await getCurrentSupabaseActor(accessToken);
+  const supabase = getAdminRouteSupabase();
+
+  if (id) {
+    const leaveRequestId = Number(id);
+    if (!Number.isInteger(leaveRequestId) || leaveRequestId <= 0) {
+      throw new BadRequestError('Valid leave request id is required');
     }
-
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-
-    const isAdmin = hasFullAccess(user.role as UserRole);
-
-    // Single record fetch
-    if (id) {
-      if (isNaN(parseInt(id))) {
-        return NextResponse.json({
-          error: "Valid ID is required",
-          code: "INVALID_ID"
-        }, { status: 400 });
-      }
-
-      const leaveRequest = await db.select()
-        .from(leaveRequests)
-        .where(eq(leaveRequests.id, parseInt(id)))
-        .limit(1);
-
-      if (leaveRequest.length === 0) {
-        return NextResponse.json({
-          error: 'Leave request not found',
-          code: "NOT_FOUND"
-        }, { status: 404 });
-      }
-
-      // Authorization check for single record
-      if (!isAdmin) {
-        const userEmployee = await db.select()
-          .from(employees)
-          .where(eq(employees.userId, user.id))
-          .limit(1);
-
-        if (userEmployee.length === 0 || userEmployee[0].id !== leaveRequest[0].employeeId) {
-          return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-        }
-      }
-
-      return NextResponse.json(leaveRequest[0], { status: 200 });
+    const { data: leaveRequest, error } = await supabase
+      .from('leave_requests')
+      .select('*')
+      .eq('id', leaveRequestId)
+      .eq('tenant_id', tenantId)
+      .single();
+    if (error || !leaveRequest) throw new NotFoundError('Leave request not found');
+    if (!isAdminLike) {
+      const employee = await getCurrentSupabaseEmployee(tenantId, actor.authUserId);
+      if (!employee || Number(employee.id) !== Number(leaveRequest.employee_id)) throw new ForbiddenError('Unauthorized');
     }
-
-    // List with filters, pagination, and sorting
-    const limit = Math.min(parseInt(searchParams.get('limit') ?? String(DEFAULT_PAGE_SIZE)), MAX_PAGE_SIZE);
-    const offset = parseInt(searchParams.get('offset') ?? '0');
-    let employeeId = searchParams.get('employeeId');
-    const leaveType = searchParams.get('leaveType');
-    const status = searchParams.get('status');
-    const startDate = searchParams.get('startDate');
-    const endDate = searchParams.get('endDate');
-    const order = searchParams.get('order') ?? 'desc';
-
-    const conditions = [];
-
-    // Enforce access control
-    if (!isAdmin) {
-      const userEmployee = await db.select()
-        .from(employees)
-        .where(eq(employees.userId, user.id))
-        .limit(1);
-
-      if (userEmployee.length === 0) {
-        return NextResponse.json([], { status: 200 });
-      }
-
-      employeeId = userEmployee[0].id.toString();
-      conditions.push(eq(leaveRequests.employeeId, userEmployee[0].id));
-    } else if (employeeId) {
-      if (isNaN(parseInt(employeeId))) {
-        return NextResponse.json({
-          error: "Valid employee ID is required",
-          code: "INVALID_EMPLOYEE_ID"
-        }, { status: 400 });
-      }
-      conditions.push(eq(leaveRequests.employeeId, parseInt(employeeId)));
-    }
-
-    if (leaveType) {
-      if (!isValidEnum(leaveType, LEAVE_TYPES)) {
-        return NextResponse.json({
-          error: `Invalid leave type. Must be one of: ${LEAVE_TYPES.join(', ')}`,
-          code: "INVALID_LEAVE_TYPE"
-        }, { status: 400 });
-      }
-      conditions.push(eq(leaveRequests.leaveType, leaveType));
-    }
-
-    if (status) {
-      if (!isValidEnum(status, APPROVAL_STATUSES)) {
-        return NextResponse.json({
-          error: `Invalid status. Must be one of: ${APPROVAL_STATUSES.join(', ')}`,
-          code: "INVALID_STATUS"
-        }, { status: 400 });
-      }
-      conditions.push(eq(leaveRequests.status, status));
-    }
-
-    if (startDate) {
-      conditions.push(gte(leaveRequests.startDate, startDate));
-    }
-
-    if (endDate) {
-      conditions.push(lte(leaveRequests.endDate, endDate));
-    }
-
-    const query = db.select().from(leaveRequests);
+    const approvedByIds = leaveRequest.approved_by && typeof leaveRequest.approved_by === 'string'
+      ? [leaveRequest.approved_by]
+      : [];
+    const userMap = await buildLegacyUserIdMap(accessToken, approvedByIds, tenantId);
+    return NextResponse.json(normalizeSupabaseLeaveRequestRow(leaveRequest, userMap));
+  }
+  const limit = Math.min(Number(searchParams.get('limit') ?? '10'), 100);
+  const offset = Math.max(Number(searchParams.get('offset') ?? '0'), 0);
+  const employeeIdParam = searchParams.get('employeeId');
+  const leaveType = searchParams.get('leaveType');
+  const status = searchParams.get('status');
+  const startDate = searchParams.get('startDate');
+  const endDate = searchParams.get('endDate');
+  
+  let query = supabase
+    .from('leave_requests')
+    .select('*', { count: 'exact' })
+    .eq('tenant_id', tenantId);
     
-    // @ts-ignore - Drizzle dynamic query building type loss
-    let dynamicQuery: any = query;
-
-    if (conditions.length > 0) {
-      dynamicQuery = dynamicQuery.where(and(...conditions));
-    }
-
-    // Apply sorting
-    if (order === 'asc') {
-      dynamicQuery = dynamicQuery.orderBy(leaveRequests.createdAt);
-    } else {
-      dynamicQuery = dynamicQuery.orderBy(desc(leaveRequests.createdAt));
-    }
-
-    const results = await dynamicQuery.limit(limit).offset(offset);
-
-    return NextResponse.json(results, { status: 200 });
-
-  } catch (error) {
-    console.error('GET error:', error);
-    return NextResponse.json({
-      error: safeErrorMessage(error)
-    }, { status: 500 });
+  if (!isAdminLike) {
+    const employee = await getCurrentSupabaseEmployee(tenantId, actor.authUserId);
+    if (!employee) return NextResponse.json([]);
+    query = query.eq('employee_id', employee.id);
+  } else if (employeeIdParam) {
+    query = query.eq('employee_id', Number(employeeIdParam));
   }
-}
+  if (leaveType) query = query.eq('leave_type', leaveType);
+  if (status) query = query.eq('status', status);
+  if (startDate) query = query.gte('start_date', startDate);
+  if (endDate) query = query.lte('end_date', endDate);
+  const { data, count, error } = await query.order('created_at', { ascending: false }).range(offset, offset + limit - 1);
+  if (error) throw error;
+  const rows = (data as Record<string, unknown>[] | null) ?? [];
+  const approvedByIds = rows
+    .map((row) => row.approved_by)
+    .filter((approvedBy): approvedBy is string => typeof approvedBy === 'string' && approvedBy !== 'null' && approvedBy !== 'undefined');
+  const userMap = await buildLegacyUserIdMap(accessToken, approvedByIds, tenantId);
+  return NextResponse.json({
+    success: true,
+    data: rows.map((row) => normalizeSupabaseLeaveRequestRow(row, userMap)),
+    message: 'Leave requests fetched successfully',
+    errors: null,
+    meta: { page: Math.floor(offset / limit) + 1, limit, total: Number(count ?? 0) },
+  });
+}, { requireAuth: true, roles: ['Employee'] });
 
-export async function POST(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
+export const POST = withApiHandler(async (request, context) => {
+  const payload = createLeaveRequestSchema.parse(await request.json());
+  const user = context.auth!.user;
+  const isAdminLike = user.role === 'Admin' || user.role === 'SuperAdmin' || user.role === 'Manager';
+  if (new Date(payload.startDate) > new Date(payload.endDate)) throw new UnprocessableEntityError('Start date must be before end date');
 
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const actor = await getCurrentSupabaseActor(accessToken);
+  const supabase = getAdminRouteSupabase();
+  const employeeId = isAdminLike && payload.employeeId ? payload.employeeId : (await getCurrentSupabaseEmployee(tenantId, actor.authUserId))?.id;
+  if (!employeeId) throw new NotFoundError('Employee record not found for current user');
+  const { data: employee } = await supabase
+    .from('employees')
+    .select('id')
+    .eq('id', employeeId)
+    .eq('tenant_id', tenantId)
+    .single();
+  if (!employee) throw new NotFoundError('Employee not found');
+  const now = new Date().toISOString();
+  const { data: created, error } = await supabase.from('leave_requests').insert({
+    employee_id: employeeId,
+    leave_type: payload.leaveType,
+    start_date: payload.startDate,
+    end_date: payload.endDate,
+    reason: payload.reason.trim(),
+    status: 'pending',
+    leave_period: payload.leavePeriod ?? 'full_day',
+    actual_days: payload.actualDays ?? 1,
+    approved_by: null,
+    tenant_id: tenantId,
+    created_at: now,
+    updated_at: now,
+  }).select('*').single();
+  if (error || !created) throw error ?? new Error('Failed to create leave request');
+  return NextResponse.json(normalizeSupabaseLeaveRequestRow(created, new Map()), { status: 201 });
+}, { requireAuth: true, roles: ['Employee'] });
 
-    const body = await request.json();
-    const { leaveType, startDate, endDate, reason, leavePeriod, actualDays } = body;
-    const isAdmin = hasFullAccess(user.role as UserRole);
+export const PUT = withApiHandler(async (request, context) => {
+  const id = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('Valid leave request id is required');
+  const payload = updateLeaveRequestSchema.parse(await request.json());
+  const user = context.auth!.user;
+  const isAdminLike = user.role === 'Admin' || user.role === 'SuperAdmin' || user.role === 'Manager';
 
-    // Validate required fields
-    if (!leaveType) {
-      return NextResponse.json({
-        error: "Leave type is required",
-        code: "MISSING_LEAVE_TYPE"
-      }, { status: 400 });
-    }
-
-    if (!startDate) {
-      return NextResponse.json({
-        error: "Start date is required",
-        code: "MISSING_START_DATE"
-      }, { status: 400 });
-    }
-
-    if (!endDate) {
-      return NextResponse.json({
-        error: "End date is required",
-        code: "MISSING_END_DATE"
-      }, { status: 400 });
-    }
-
-    if (!reason || reason.trim() === '') {
-      return NextResponse.json({
-        error: "Reason is required",
-        code: "MISSING_REASON"
-      }, { status: 400 });
-    }
-
-    // Validate leave type enum
-    if (!isValidEnum(leaveType, LEAVE_TYPES)) {
-      return NextResponse.json({
-        error: `Invalid leave type. Must be one of: ${LEAVE_TYPES.join(', ')}`,
-        code: "INVALID_LEAVE_TYPE"
-      }, { status: 400 });
-    }
-
-    // Validate dates
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-
-    if (isNaN(start.getTime())) {
-      return NextResponse.json({
-        error: "Invalid start date format",
-        code: "INVALID_START_DATE"
-      }, { status: 400 });
-    }
-
-    if (isNaN(end.getTime())) {
-      return NextResponse.json({
-        error: "Invalid end date format",
-        code: "INVALID_END_DATE"
-      }, { status: 400 });
-    }
-
-    if (start > end) {
-      return NextResponse.json({
-        error: "Start date must be before end date",
-        code: "INVALID_DATE_RANGE"
-      }, { status: 400 });
-    }
-
-    // Determine employee ID
-    let employeeIdNum: number;
-
-    if (isAdmin && body.employeeId) {
-      // Admin can create leave request for any employee
-      employeeIdNum = parseInt(body.employeeId);
-      if (isNaN(employeeIdNum)) {
-        return NextResponse.json({
-          error: "Valid employee ID is required",
-          code: "INVALID_EMPLOYEE_ID"
-        }, { status: 400 });
-      }
-    } else {
-      // Employees can only create leave requests for themselves
-      const userEmployee = await db.select()
-        .from(employees)
-        .where(eq(employees.userId, user.id))
-        .limit(1);
-
-      if (userEmployee.length === 0) {
-        return NextResponse.json({
-          error: "Employee record not found for current user",
-          code: "EMPLOYEE_NOT_FOUND"
-        }, { status: 404 });
-      }
-      employeeIdNum = userEmployee[0].id;
-    }
-
-    // Validate employee exists
-    const employee = await db.select()
-      .from(employees)
-      .where(eq(employees.id, employeeIdNum))
-      .limit(1);
-
-    if (employee.length === 0) {
-      return NextResponse.json({
-        error: "Employee not found",
-        code: "EMPLOYEE_NOT_FOUND"
-      }, { status: 400 });
-    }
-
-    // Create leave request
-    const now = new Date().toISOString();
-    const newLeaveRequest = await db.insert(leaveRequests)
-      .values({
-        employeeId: employeeIdNum,
-        leaveType: leaveType,
-        startDate: startDate,
-        endDate: endDate,
-        reason: reason.trim(),
-        status: 'pending',
-        leavePeriod: leavePeriod || 'full_day',
-        actualDays: actualDays || 1.0,
-        approvedBy: null,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .returning();
-
-    return NextResponse.json(newLeaveRequest[0], { status: 201 });
-
-  } catch (error) {
-    console.error('POST error:', error);
-    return NextResponse.json({
-      error: safeErrorMessage(error)
-    }, { status: 500 });
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const actor = await getCurrentSupabaseActor(accessToken);
+  const supabase = getAdminRouteSupabase();
+  const { data: existing } = await supabase
+    .from('leave_requests')
+    .select('*')
+    .eq('id', id)
+    .eq('tenant_id', tenantId)
+    .single();
+    
+  if (!existing) throw new NotFoundError('Leave request not found');
+  if (!isAdminLike) {
+    const employee = await getCurrentSupabaseEmployee(tenantId, actor.authUserId);
+    if (!employee || Number(employee.id) !== Number(existing.employee_id)) throw new ForbiddenError('Unauthorized');
+    if (existing.status !== 'pending') throw new BadRequestError('Only pending leave requests can be modified');
   }
-}
+  const nextStart = payload.startDate ?? String(existing.start_date);
+  const nextEnd = payload.endDate ?? String(existing.end_date);
+  if (new Date(nextStart) > new Date(nextEnd)) throw new UnprocessableEntityError('Start date must be before end date');
+  const { data: updated, error } = await supabase.from('leave_requests').update({
+    ...(payload.leaveType !== undefined ? { leave_type: payload.leaveType } : {}),
+    ...(payload.startDate !== undefined ? { start_date: payload.startDate } : {}),
+    ...(payload.endDate !== undefined ? { end_date: payload.endDate } : {}),
+    ...(payload.reason !== undefined ? { reason: payload.reason.trim() } : {}),
+    ...(payload.leavePeriod !== undefined ? { leave_period: payload.leavePeriod } : {}),
+    ...(payload.actualDays !== undefined ? { actual_days: payload.actualDays } : {}),
+    ...(payload.status !== undefined
+      ? { status: payload.status, approved_by: isAdminLike && payload.status === 'approved' ? actor.authUserId : existing.approved_by }
+      : {}),
+    updated_at: new Date().toISOString(),
+  })
+  .eq('id', id)
+  .eq('tenant_id', tenantId)
+  .select('*')
+  .single();
+  if (error || !updated) throw error ?? new Error('Failed to update leave request');
+  const userMap = await buildLegacyUserIdMap(accessToken, [updated.approved_by].filter(Boolean).map(String), tenantId);
+  return NextResponse.json(normalizeSupabaseLeaveRequestRow(updated, userMap));
+}, { requireAuth: true, roles: ['Employee'] });
 
-export async function PUT(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
+export const DELETE = withApiHandler(async (request, context) => {
+  const id = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('Valid leave request id is required');
+  const user = context.auth!.user;
+  const isAdminLike = user.role === 'Admin' || user.role === 'SuperAdmin' || user.role === 'Manager';
 
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
-
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json({
-        error: "Valid ID is required",
-        code: "INVALID_ID"
-      }, { status: 400 });
-    }
-
-    // Check if record exists
-    const existing = await db.select()
-      .from(leaveRequests)
-      .where(eq(leaveRequests.id, parseInt(id)))
-      .limit(1);
-
-    if (existing.length === 0) {
-      return NextResponse.json({
-        error: 'Leave request not found',
-        code: "NOT_FOUND"
-      }, { status: 404 });
-    }
-
-    const body = await request.json();
-    const isAdmin = hasFullAccess(user.role as UserRole);
-
-    // Non-admin can only update their own pending leave requests
-    if (!isAdmin) {
-      const userEmployee = await db.select()
-        .from(employees)
-        .where(eq(employees.userId, user.id))
-        .limit(1);
-
-      if (userEmployee.length === 0 || userEmployee[0].id !== existing[0].employeeId) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-      }
-
-      // Employees can only edit pending requests
-      if (existing[0].status !== 'pending') {
-        return NextResponse.json({
-          error: 'Can only edit pending leave requests',
-          code: 'CANNOT_EDIT'
-        }, { status: 400 });
-      }
-    }
-
-    const { leaveType, startDate, endDate, reason, status } = body;
-    const updates: any = {
-      updatedAt: new Date().toISOString()
-    };
-
-    // Validate and update leaveType
-    if (leaveType !== undefined) {
-      if (!isValidEnum(leaveType, LEAVE_TYPES)) {
-        return NextResponse.json({
-          error: `Invalid leave type. Must be one of: ${LEAVE_TYPES.join(', ')}`,
-          code: "INVALID_LEAVE_TYPE"
-        }, { status: 400 });
-      }
-      updates.leaveType = leaveType;
-    }
-
-    // Admin status changes (approve/reject)
-    if (status !== undefined) {
-      if (!isValidEnum(status, APPROVAL_STATUSES)) {
-        return NextResponse.json({
-          error: `Invalid status. Must be one of: ${APPROVAL_STATUSES.join(', ')}`,
-          code: "INVALID_STATUS"
-        }, { status: 400 });
-      }
-
-      // Only admin can change status
-      if (!isAdmin) {
-        return NextResponse.json({
-          error: 'Only admin/HR can approve or reject leave requests',
-          code: 'FORBIDDEN'
-        }, { status: 403 });
-      }
-
-      updates.status = status;
-      if (status === 'approved' || status === 'rejected') {
-        updates.approvedBy = user.id;
-      }
-    }
-
-    // Validate and update dates
-    if (startDate !== undefined) {
-      const start = new Date(startDate);
-      if (isNaN(start.getTime())) {
-        return NextResponse.json({
-          error: "Invalid start date format",
-          code: "INVALID_START_DATE"
-        }, { status: 400 });
-      }
-      updates.startDate = startDate;
-    }
-
-    if (endDate !== undefined) {
-      const end = new Date(endDate);
-      if (isNaN(end.getTime())) {
-        return NextResponse.json({
-          error: "Invalid end date format",
-          code: "INVALID_END_DATE"
-        }, { status: 400 });
-      }
-      updates.endDate = endDate;
-    }
-
-    // Validate date range
-    const finalStartDate = updates.startDate || existing[0].startDate;
-    const finalEndDate = updates.endDate || existing[0].endDate;
-
-    if (new Date(finalStartDate) > new Date(finalEndDate)) {
-      return NextResponse.json({
-        error: "Start date must be before end date",
-        code: "INVALID_DATE_RANGE"
-      }, { status: 400 });
-    }
-
-    // Update reason
-    if (reason !== undefined) {
-      if (reason.trim() === '') {
-        return NextResponse.json({
-          error: "Reason cannot be empty",
-          code: "INVALID_REASON"
-        }, { status: 400 });
-      }
-      updates.reason = reason.trim();
-    }
-
-    const updated = await db.update(leaveRequests)
-      .set(updates)
-      .where(eq(leaveRequests.id, parseInt(id)))
-      .returning();
-
-    return NextResponse.json(updated[0], { status: 200 });
-
-  } catch (error) {
-    console.error('PUT error:', error);
-    return NextResponse.json({
-      error: safeErrorMessage(error)
-    }, { status: 500 });
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const actor = await getCurrentSupabaseActor(accessToken);
+  const supabase = getAdminRouteSupabase();
+  const { data: existing } = await supabase
+    .from('leave_requests')
+    .select('*')
+    .eq('id', id)
+    .eq('tenant_id', tenantId)
+    .single();
+    
+  if (!existing) throw new NotFoundError('Leave request not found');
+  if (!isAdminLike) {
+    const employee = await getCurrentSupabaseEmployee(tenantId, actor.authUserId);
+    if (!employee || Number(employee.id) !== Number(existing.employee_id)) throw new ForbiddenError('Unauthorized');
+    if (existing.status !== 'pending') throw new BadRequestError('Only pending leave requests can be deleted');
   }
-}
-
-export async function DELETE(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
-
-    // Only admin/HR can delete (reject) leave requests
-    if (!hasFullAccess(user.role as UserRole)) {
-      return NextResponse.json({ error: 'Only admin/HR can delete leave requests' }, { status: 403 });
-    }
-
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json({
-        error: "Valid ID is required",
-        code: "INVALID_ID"
-      }, { status: 400 });
-    }
-
-    // Check if record exists
-    const existing = await db.select()
-      .from(leaveRequests)
-      .where(eq(leaveRequests.id, parseInt(id)))
-      .limit(1);
-
-    if (existing.length === 0) {
-      return NextResponse.json({
-        error: 'Leave request not found',
-        code: "NOT_FOUND"
-      }, { status: 404 });
-    }
-
-    // Instead of deleting, reject the leave request
-    const rejected = await db.update(leaveRequests)
-      .set({
-        status: 'rejected',
-        approvedBy: user.id,
-        updatedAt: new Date().toISOString()
-      })
-      .where(eq(leaveRequests.id, parseInt(id)))
-      .returning();
-
-    return NextResponse.json({
-      message: 'Leave request rejected successfully',
-      data: rejected[0]
-    }, { status: 200 });
-
-  } catch (error) {
-    console.error('DELETE error:', error);
-    return NextResponse.json({
-      error: safeErrorMessage(error)
-    }, { status: 500 });
-  }
-}
+  const { data: deleted, error } = await supabase
+    .from('leave_requests')
+    .delete()
+    .eq('id', id)
+    .eq('tenant_id', tenantId)
+    .select('*')
+    .single();
+  if (error || !deleted) throw error ?? new Error('Failed to delete leave request');
+  const userMap = await buildLegacyUserIdMap(accessToken, [deleted.approved_by].filter(Boolean).map(String), tenantId);
+  return NextResponse.json({ message: 'Leave request deleted successfully', leaveRequest: normalizeSupabaseLeaveRequestRow(deleted, userMap) });
+}, { requireAuth: true, roles: ['Employee'] });

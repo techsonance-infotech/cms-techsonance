@@ -1,22 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Plus, Search, Mail, Phone, Building2, Eye } from 'lucide-react';
+import { Plus, Search, Building2 } from 'lucide-react';
 import { InlineTableSkeleton } from '@/components/ui/dashboard-skeleton';
 import { ClientFormDialog } from '@/components/clients/client-form-dialog';
-import Link from 'next/link';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { useRouter } from 'next/navigation';
+import { getDashboardType, type UserRole } from '@/lib/permissions';
+import { PageHeader } from '@/components/ui/page-header';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { EntityCard } from '@/components/ui/entity-card';
+import { getStoredSessionToken, getStoredUser } from '@/lib/client-session';
 
 interface Client {
   id: number;
@@ -35,172 +31,167 @@ export default function ClientsPage() {
   const [search, setSearch] = useState('');
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
-  const pageSize = 10;
+  const [authorized, setAuthorized] = useState(false);
+  const router = useRouter();
+  const pageSize = 9; // Grid friendly size
 
-  useEffect(() => {
-    fetchClients();
-  }, []);
+  const initializedRef = useRef(false);
 
-  const fetchClients = async () => {
+  const fetchClients = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/clients?limit=100');
+      const token = localStorage.getItem('session_token');
+      const response = await fetch('/api/clients?limit=100', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
       if (response.ok) {
-        const data = await response.json();
-        setClients(data);
+        const result = await response.json();
+        setClients(Array.isArray(result) ? result : (result.data ?? []));
       }
     } catch (error) {
       console.error('Error fetching clients:', error);
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+
+    const token = getStoredSessionToken();
+    const user = getStoredUser();
+    const role = user?.role as UserRole;
+    
+    if (!token || !role) {
+      router.push('/login');
+      return;
+    }
+
+    setAuthorized(true);
+    fetchClients();
+  }, [router, fetchClients]);
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    setCurrentPage(0);
   };
 
-  const filteredClients = clients.filter((client) =>
-    client.companyName.toLowerCase().includes(search.toLowerCase()) ||
-    client.contactPerson.toLowerCase().includes(search.toLowerCase()) ||
-    client.email.toLowerCase().includes(search.toLowerCase())
-  );
+  if (!authorized) {
+    return <InlineTableSkeleton rows={5} columns={7} />;
+  }
 
-  // Calculate paginated clients
+  const filteredClients = clients.filter((client) => {
+    const q = search.toLowerCase();
+    return (
+      client.companyName.toLowerCase().includes(q) ||
+      client.contactPerson.toLowerCase().includes(q) ||
+      client.email.toLowerCase().includes(q)
+    );
+  });
+
+  const totalPages = Math.ceil(filteredClients.length / pageSize);
   const paginatedClients = filteredClients.slice(
     currentPage * pageSize,
     (currentPage + 1) * pageSize
   );
 
-  // Reset page when search changes
-  useEffect(() => {
-    setCurrentPage(0);
-  }, [search]);
-
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Clients</h2>
-          <p className="text-muted-foreground">
-            Manage your client relationships and projects
-          </p>
-        </div>
-        <Button onClick={() => setShowAddDialog(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Client
-        </Button>
-      </div>
+      <PageHeader
+        title="Clients"
+        description="Manage your client relationships, details, and active billing contacts."
+        actions={[
+          <Button key="add" onClick={() => setShowAddDialog(true)} className="bg-primary hover:bg-primary/95 text-white font-bold border-none">
+            <Plus className="mr-2 h-4 w-4" />
+            Add Client
+          </Button>
+        ]}
+        breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Clients' }]}
+      />
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>All Clients</CardTitle>
-              <CardDescription>
-                {filteredClients.length} client{filteredClients.length !== 1 ? 's' : ''} found
-              </CardDescription>
+      <Card className="border-none shadow-none bg-transparent">
+        <CardHeader className="px-0 pt-0 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <CardTitle className="text-xl">Client Profiles</CardTitle>
+            <CardDescription>
+              {filteredClients.length} client{filteredClients.length !== 1 ? 's' : ''} recorded in directory
+            </CardDescription>
+          </div>
+          <div className="relative w-full md:w-72">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search clients by name or contact..."
+              value={search}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              className="pl-9 bg-card/60 backdrop-blur-sm"
+            />
+          </div>
+        </CardHeader>
+        <CardContent className="px-0 pt-4">
+          {loading ? (
+            <InlineTableSkeleton rows={5} columns={7} />
+          ) : filteredClients.length === 0 ? (
+            <div className="text-center py-16 bg-card/30 rounded-2xl border border-dashed border-muted">
+              <Building2 className="mx-auto h-12 w-12 text-muted-foreground/30 animate-pulse" />
+              <h3 className="mt-4 text-lg font-semibold">No clients found</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                {search ? 'Try adjusting your search criteria' : 'Add your first client profile to get started'}
+              </p>
+              {!search && (
+                <Button onClick={() => setShowAddDialog(true)} variant="outline" className="mt-4 border-primary text-primary hover:bg-primary/10 font-bold">
+                  Onboard Your First Client
+                </Button>
+              )}
             </div>
-                <div className="relative w-64">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search clients..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="pl-8"
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {paginatedClients.map((client) => (
+                  <EntityCard
+                    key={client.id}
+                    title={client.companyName}
+                    subtitle={client.industry || 'General Sector'}
+                    badge={<StatusBadge status={client.status} />}
+                    metadata={[
+                      { label: 'Primary Contact', value: client.contactPerson },
+                      { label: 'Email', value: client.email },
+                    ]}
+                    href={`/dashboard/clients/${client.id}`}
                   />
-                </div>
+                ))}
               </div>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <InlineTableSkeleton rows={5} columns={7} />
-              ) : filteredClients.length === 0 ? (
-                <div className="text-center py-8">
-                  <Building2 className="mx-auto h-12 w-12 text-muted-foreground" />
-                  <h3 className="mt-4 text-lg font-semibold">No clients found</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {search ? 'Try a different search term' : 'Get started by adding your first client'}
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <div className="rounded-md border max-h-[600px] overflow-y-auto">
-                    <Table>
-                      <TableHeader className="sticky top-0 bg-background z-10">
-                        <TableRow>
-                          <TableHead>Company</TableHead>
-                          <TableHead>Contact Person</TableHead>
-                          <TableHead>Email</TableHead>
-                          <TableHead>Phone</TableHead>
-                          <TableHead>Industry</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {paginatedClients.map((client) => (
-                          <TableRow key={client.id}>
-                            <TableCell className="font-medium">{client.companyName}</TableCell>
-                            <TableCell>{client.contactPerson}</TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <Mail className="h-4 w-4 text-muted-foreground" />
-                                <span className="text-sm">{client.email}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              {client.phone ? (
-                                <div className="flex items-center gap-2">
-                                  <Phone className="h-4 w-4 text-muted-foreground" />
-                                  <span className="text-sm">{client.phone}</span>
-                                </div>
-                              ) : (
-                                <span className="text-muted-foreground">—</span>
-                              )}
-                            </TableCell>
-                            <TableCell>{client.industry || '—'}</TableCell>
-                            <TableCell>
-                              <Badge variant={
-                                client.status === 'active' ? 'default' :
-                                client.status === 'inactive' ? 'secondary' :
-                                'outline'
-                              }>
-                                {client.status}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Link href={`/dashboard/clients/${client.id}`}>
-                                <Button variant="ghost" size="sm">
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                              </Link>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
 
-                  {/* Pagination */}
-                  <div className="flex items-center justify-end space-x-2 py-4">
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between border-t border-muted/30 pt-6 mt-6">
+                  <p className="text-xs text-muted-foreground">
+                    Showing {currentPage * pageSize + 1}–{Math.min((currentPage + 1) * pageSize, filteredClients.length)} of {filteredClients.length} clients
+                  </p>
+                  <div className="flex space-x-2">
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+                      onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
                       disabled={currentPage === 0}
+                      className="rounded-lg"
                     >
                       Previous
                     </Button>
-                    <div className="text-sm font-medium">Page {currentPage + 1}</div>
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setCurrentPage(p => p + 1)}
-                      disabled={(currentPage + 1) * pageSize >= filteredClients.length}
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
+                      disabled={currentPage >= totalPages - 1}
+                      className="rounded-lg"
                     >
                       Next
                     </Button>
                   </div>
-                </>
+                </div>
               )}
-            </CardContent>
+            </>
+          )}
+        </CardContent>
       </Card>
 
       <ClientFormDialog

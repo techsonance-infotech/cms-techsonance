@@ -1,363 +1,178 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
-import { invoiceItems, invoices } from '@/db/schema';
-import { eq, like, and, or, desc, asc, sql } from 'drizzle-orm';
-import { safeErrorMessage } from '@/lib/constants';
+import { NextResponse } from 'next/server';
+import { withApiHandler } from '@/server/http/handler';
+import { BadRequestError, NotFoundError, UnprocessableEntityError } from '@/server/http/errors';
+import { createInvoiceItemSchema, updateInvoiceItemSchema } from '@/server/validation/invoice-items';
+import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
 
-export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-    const invoiceId = searchParams.get('invoiceId');
-    const limit = Math.min(parseInt(searchParams.get('limit') ?? '10'), 100);
-    const offset = parseInt(searchParams.get('offset') ?? '0');
-    const search = searchParams.get('search');
-    const sort = searchParams.get('sort') ?? 'id';
-    const order = searchParams.get('order') ?? 'desc';
-
-    // Single record fetch
-    if (id) {
-      if (!id || isNaN(parseInt(id))) {
-        return NextResponse.json({ 
-          error: "Valid ID is required",
-          code: "INVALID_ID" 
-        }, { status: 400 });
-      }
-
-      const record = await db.select()
-        .from(invoiceItems)
-        .where(eq(invoiceItems.id, parseInt(id)))
-        .limit(1);
-
-      if (record.length === 0) {
-        return NextResponse.json({ 
-          error: 'Invoice item not found',
-          code: 'NOT_FOUND' 
-        }, { status: 404 });
-      }
-
-      return NextResponse.json(record[0], { status: 200 });
-    }
-
-    // List with filtering
-    let query = db.select().from(invoiceItems);
-    const conditions = [];
-
-    // Filter by invoiceId
-    if (invoiceId) {
-      if (isNaN(parseInt(invoiceId))) {
-        return NextResponse.json({ 
-          error: "Valid invoice ID is required",
-          code: "INVALID_INVOICE_ID" 
-        }, { status: 400 });
-      }
-      conditions.push(eq(invoiceItems.invoiceId, parseInt(invoiceId)));
-    }
-
-    // Search across text fields
-    if (search) {
-      conditions.push(like(invoiceItems.description, `%${search}%`));
-    }
-
-    // Apply conditions
-    if (conditions.length > 0) {
-      query = query.where(and(...conditions));
-    }
-
-    // Sorting
-    const sortColumn = invoiceItems[sort as keyof typeof invoiceItems] || invoiceItems.id;
-    query = order === 'asc' 
-      ? query.orderBy(asc(sortColumn))
-      : query.orderBy(desc(sortColumn));
-
-    // Pagination
-    const results = await query.limit(limit).offset(offset);
-
-    // Calculate total amount per invoice if filtering by invoiceId
-    let totalAmount = null;
-    if (invoiceId) {
-      const aggregation = await db.select({
-        total: sql<number>`sum(${invoiceItems.amount})`.as('total')
-      })
-      .from(invoiceItems)
-      .where(eq(invoiceItems.invoiceId, parseInt(invoiceId)));
-      
-      totalAmount = aggregation[0]?.total || 0;
-    }
-
-    return NextResponse.json({
-      items: results,
-      ...(totalAmount !== null && { totalAmount }),
-      pagination: {
-        limit,
-        offset,
-        total: results.length
-      }
-    }, { status: 200 });
-
-  } catch (error) {
-    console.error('GET error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
-  }
+function normalizeSupabaseInvoiceItemRow(row: Record<string, unknown>) {
+  return {
+    id: Number(row.id),
+    invoiceId: Number(row.invoice_id),
+    description: row.description,
+    quantity: Number(row.quantity),
+    unitPrice: row.unit_price,
+    amount: row.amount,
+  };
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { invoiceId, description, quantity, unitPrice, amount } = body;
+export const GET = withApiHandler(async (request, context) => {
+  const searchParams = new URL(request.url).searchParams;
+  const id = searchParams.get('id');
+  const invoiceId = searchParams.get('invoiceId');
+  const limit = Math.min(Number(searchParams.get('limit') ?? '10'), 100);
+  const offset = Math.max(Number(searchParams.get('offset') ?? '0'), 0);
+  const search = searchParams.get('search');
+  const sort = searchParams.get('sort') ?? 'id';
+  const ascending = searchParams.get('order') === 'asc';
 
-    // Validate required fields
-    if (!invoiceId) {
-      return NextResponse.json({ 
-        error: "Invoice ID is required",
-        code: "MISSING_INVOICE_ID" 
-      }, { status: 400 });
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const supabase = getAdminRouteSupabase();
+
+  if (id) {
+    const itemId = Number(id);
+    if (!Number.isInteger(itemId) || itemId <= 0) {
+      throw new BadRequestError('Valid invoice item id is required');
     }
-
-    if (!description || description.trim() === '') {
-      return NextResponse.json({ 
-        error: "Description is required",
-        code: "MISSING_DESCRIPTION" 
-      }, { status: 400 });
-    }
-
-    if (quantity === undefined || quantity === null) {
-      return NextResponse.json({ 
-        error: "Quantity is required",
-        code: "MISSING_QUANTITY" 
-      }, { status: 400 });
-    }
-
-    if (unitPrice === undefined || unitPrice === null) {
-      return NextResponse.json({ 
-        error: "Unit price is required",
-        code: "MISSING_UNIT_PRICE" 
-      }, { status: 400 });
-    }
-
-    // Validate data types and values
-    if (isNaN(parseInt(invoiceId.toString()))) {
-      return NextResponse.json({ 
-        error: "Invoice ID must be a valid integer",
-        code: "INVALID_INVOICE_ID" 
-      }, { status: 400 });
-    }
-
-    if (isNaN(parseInt(quantity.toString())) || parseInt(quantity.toString()) <= 0) {
-      return NextResponse.json({ 
-        error: "Quantity must be a positive integer",
-        code: "INVALID_QUANTITY" 
-      }, { status: 400 });
-    }
-
-    if (isNaN(parseInt(unitPrice.toString())) || parseInt(unitPrice.toString()) <= 0) {
-      return NextResponse.json({ 
-        error: "Unit price must be a positive integer",
-        code: "INVALID_UNIT_PRICE" 
-      }, { status: 400 });
-    }
-
-    // Validate invoiceId exists
-    const invoice = await db.select()
-      .from(invoices)
-      .where(eq(invoices.id, parseInt(invoiceId.toString())))
-      .limit(1);
-
-    if (invoice.length === 0) {
-      return NextResponse.json({ 
-        error: "Invoice not found",
-        code: "INVOICE_NOT_FOUND" 
-      }, { status: 400 });
-    }
-
-    // Calculate amount
-    const calculatedAmount = parseInt(quantity.toString()) * parseInt(unitPrice.toString());
-
-    // Validate amount if provided
-    if (amount !== undefined && amount !== null && parseInt(amount.toString()) !== calculatedAmount) {
-      return NextResponse.json({ 
-        error: "Amount must equal quantity multiplied by unit price",
-        code: "INVALID_AMOUNT" 
-      }, { status: 400 });
-    }
-
-    // Insert invoice item
-    const newInvoiceItem = await db.insert(invoiceItems)
-      .values({
-        invoiceId: parseInt(invoiceId.toString()),
-        description: description.trim(),
-        quantity: parseInt(quantity.toString()),
-        unitPrice: parseInt(unitPrice.toString()),
-        amount: calculatedAmount
-      })
-      .returning();
-
-    return NextResponse.json(newInvoiceItem[0], { status: 201 });
-
-  } catch (error) {
-    console.error('POST error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
+    const { data: record, error } = await supabase
+      .from('invoice_items')
+      .select('*')
+      .eq('id', itemId)
+      .eq('tenant_id', tenantId)
+      .single();
+    if (error || !record) throw new NotFoundError('Invoice item not found');
+    return NextResponse.json(normalizeSupabaseInvoiceItemRow(record));
   }
-}
 
-export async function PUT(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+  let query = supabase
+    .from('invoice_items')
+    .select('*', { count: 'exact' })
+    .eq('tenant_id', tenantId);
+    
+  if (invoiceId) query = query.eq('invoice_id', Number(invoiceId));
+  if (search) query = query.ilike('description', `%${search}%`);
 
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json({ 
-        error: "Valid ID is required",
-        code: "INVALID_ID" 
-      }, { status: 400 });
-    }
+  const sortColumn = sort === 'amount' ? 'amount' : sort === 'quantity' ? 'quantity' : 'id';
+  const { data, count, error } = await query
+    .order(sortColumn, { ascending })
+    .range(offset, offset + limit - 1);
+  if (error) throw error;
 
-    // Check if record exists
-    const existing = await db.select()
-      .from(invoiceItems)
-      .where(eq(invoiceItems.id, parseInt(id)))
-      .limit(1);
-
-    if (existing.length === 0) {
-      return NextResponse.json({ 
-        error: 'Invoice item not found',
-        code: 'NOT_FOUND' 
-      }, { status: 404 });
-    }
-
-    const body = await request.json();
-    const { invoiceId, description, quantity, unitPrice, amount } = body;
-    const updates: any = {};
-
-    // Validate and prepare updates
-    if (invoiceId !== undefined) {
-      if (isNaN(parseInt(invoiceId.toString()))) {
-        return NextResponse.json({ 
-          error: "Invoice ID must be a valid integer",
-          code: "INVALID_INVOICE_ID" 
-        }, { status: 400 });
-      }
-
-      // Validate invoiceId exists
-      const invoice = await db.select()
-        .from(invoices)
-        .where(eq(invoices.id, parseInt(invoiceId.toString())))
-        .limit(1);
-
-      if (invoice.length === 0) {
-        return NextResponse.json({ 
-          error: "Invoice not found",
-          code: "INVOICE_NOT_FOUND" 
-        }, { status: 400 });
-      }
-
-      updates.invoiceId = parseInt(invoiceId.toString());
-    }
-
-    if (description !== undefined) {
-      if (description.trim() === '') {
-        return NextResponse.json({ 
-          error: "Description cannot be empty",
-          code: "INVALID_DESCRIPTION" 
-        }, { status: 400 });
-      }
-      updates.description = description.trim();
-    }
-
-    if (quantity !== undefined) {
-      if (isNaN(parseInt(quantity.toString())) || parseInt(quantity.toString()) <= 0) {
-        return NextResponse.json({ 
-          error: "Quantity must be a positive integer",
-          code: "INVALID_QUANTITY" 
-        }, { status: 400 });
-      }
-      updates.quantity = parseInt(quantity.toString());
-    }
-
-    if (unitPrice !== undefined) {
-      if (isNaN(parseInt(unitPrice.toString())) || parseInt(unitPrice.toString()) <= 0) {
-        return NextResponse.json({ 
-          error: "Unit price must be a positive integer",
-          code: "INVALID_UNIT_PRICE" 
-        }, { status: 400 });
-      }
-      updates.unitPrice = parseInt(unitPrice.toString());
-    }
-
-    // Recalculate amount if quantity or unitPrice changed
-    const currentQuantity = updates.quantity ?? existing[0].quantity;
-    const currentUnitPrice = updates.unitPrice ?? existing[0].unitPrice;
-    const calculatedAmount = currentQuantity * currentUnitPrice;
-
-    // Validate amount if provided
-    if (amount !== undefined && amount !== null && parseInt(amount.toString()) !== calculatedAmount) {
-      return NextResponse.json({ 
-        error: "Amount must equal quantity multiplied by unit price",
-        code: "INVALID_AMOUNT" 
-      }, { status: 400 });
-    }
-
-    updates.amount = calculatedAmount;
-
-    // Update record
-    const updated = await db.update(invoiceItems)
-      .set(updates)
-      .where(eq(invoiceItems.id, parseInt(id)))
-      .returning();
-
-    return NextResponse.json(updated[0], { status: 200 });
-
-  } catch (error) {
-    console.error('PUT error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
+  let totalAmount = 0;
+  if (invoiceId) {
+    const invoiceIdNumber = Number(invoiceId);
+    const rowsForInvoice = ((data as Record<string, unknown>[] | null) ?? []).filter((row) => Number(row.invoice_id) === invoiceIdNumber);
+    totalAmount = rowsForInvoice.reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
   }
-}
 
-export async function DELETE(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+  return NextResponse.json({
+    success: true,
+    data: ((data as Record<string, unknown>[] | null) ?? []).map(normalizeSupabaseInvoiceItemRow),
+    message: 'Invoice items fetched successfully',
+    errors: null,
+    meta: { page: Math.floor(offset / limit) + 1, limit, total: Number(count ?? 0) },
+    ...(invoiceId ? { totalAmount } : {}),
+  });
+}, { requireAuth: true, roles: ['Employee'] });
 
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json({ 
-        error: "Valid ID is required",
-        code: "INVALID_ID" 
-      }, { status: 400 });
-    }
+export const POST = withApiHandler(async (request, context) => {
+  const payload = createInvoiceItemSchema.parse(await request.json());
 
-    // Check if record exists
-    const existing = await db.select()
-      .from(invoiceItems)
-      .where(eq(invoiceItems.id, parseInt(id)))
-      .limit(1);
-
-    if (existing.length === 0) {
-      return NextResponse.json({ 
-        error: 'Invoice item not found',
-        code: 'NOT_FOUND' 
-      }, { status: 404 });
-    }
-
-    // Delete record
-    const deleted = await db.delete(invoiceItems)
-      .where(eq(invoiceItems.id, parseInt(id)))
-      .returning();
-
-    return NextResponse.json({
-      message: 'Invoice item deleted successfully',
-      deleted: deleted[0]
-    }, { status: 200 });
-
-  } catch (error) {
-    console.error('DELETE error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const supabase = getAdminRouteSupabase();
+  const { data: invoice } = await supabase
+    .from('invoices')
+    .select('id')
+    .eq('id', payload.invoiceId)
+    .eq('tenant_id', tenantId)
+    .single();
+    
+  if (!invoice) throw new NotFoundError('Invoice not found');
+  const calculatedAmount = payload.quantity * payload.unitPrice;
+  if (payload.amount !== undefined && payload.amount !== calculatedAmount) {
+    throw new UnprocessableEntityError('Amount must equal quantity multiplied by unit price');
   }
-}
+  const { data: created, error } = await supabase.from('invoice_items').insert({
+    invoice_id: payload.invoiceId,
+    description: payload.description.trim(),
+    quantity: payload.quantity,
+    unit_price: payload.unitPrice,
+    amount: calculatedAmount,
+    tenant_id: tenantId,
+  }).select('*').single();
+  if (error || !created) throw error ?? new Error('Failed to create invoice item');
+  return NextResponse.json(normalizeSupabaseInvoiceItemRow(created), { status: 201 });
+}, { requireAuth: true, roles: ['Manager'] });
+
+export const PUT = withApiHandler(async (request, context) => {
+  const id = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('Valid invoice item id is required');
+  const payload = updateInvoiceItemSchema.parse(await request.json());
+
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const supabase = getAdminRouteSupabase();
+  const { data: existing } = await supabase
+    .from('invoice_items')
+    .select('*')
+    .eq('id', id)
+    .eq('tenant_id', tenantId)
+    .single();
+    
+  if (!existing) throw new NotFoundError('Invoice item not found');
+  if (payload.invoiceId !== undefined) {
+    const { data: invoice } = await supabase
+      .from('invoices')
+      .select('id')
+      .eq('id', payload.invoiceId)
+      .eq('tenant_id', tenantId)
+      .single();
+    if (!invoice) throw new NotFoundError('Invoice not found');
+  }
+  const quantity = payload.quantity ?? Number(existing.quantity);
+  const unitPrice = payload.unitPrice ?? Number(existing.unit_price);
+  const calculatedAmount = quantity * unitPrice;
+  if (payload.amount !== undefined && payload.amount !== calculatedAmount) {
+    throw new UnprocessableEntityError('Amount must equal quantity multiplied by unit price');
+  }
+  const { data: updated, error } = await supabase.from('invoice_items').update({
+    ...(payload.invoiceId !== undefined ? { invoice_id: payload.invoiceId } : {}),
+    ...(payload.description !== undefined ? { description: payload.description.trim() } : {}),
+    ...(payload.quantity !== undefined ? { quantity: payload.quantity } : {}),
+    ...(payload.unitPrice !== undefined ? { unit_price: payload.unitPrice } : {}),
+    amount: calculatedAmount,
+  })
+  .eq('id', id)
+  .eq('tenant_id', tenantId)
+  .select('*')
+  .single();
+  if (error || !updated) throw error ?? new Error('Failed to update invoice item');
+  return NextResponse.json(normalizeSupabaseInvoiceItemRow(updated));
+}, { requireAuth: true, roles: ['Manager'] });
+
+export const DELETE = withApiHandler(async (request, context) => {
+  const id = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('Valid invoice item id is required');
+
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const supabase = getAdminRouteSupabase();
+  const { data: deleted, error } = await supabase
+    .from('invoice_items')
+    .delete()
+    .eq('id', id)
+    .eq('tenant_id', tenantId)
+    .select('*')
+    .single();
+  if (error || !deleted) throw new NotFoundError('Invoice item not found');
+  return NextResponse.json({ message: 'Invoice item deleted successfully', item: normalizeSupabaseInvoiceItemRow(deleted) });
+}, { requireAuth: true, roles: ['Manager'] });

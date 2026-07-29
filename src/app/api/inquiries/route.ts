@@ -1,381 +1,172 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
-import { inquiries } from '@/db/schema';
-import { eq, like, and, or, desc, gte, lte } from 'drizzle-orm';
-import { getCurrentUser } from '@/lib/auth';
-import { safeErrorMessage } from '@/lib/constants';
+import { withApiHandler } from '@/server/http/handler';
+import { BadRequestError, NotFoundError } from '@/server/http/errors';
+import { apiSuccess } from '@/server/http/response';
+import { createInquirySchema, updateInquirySchema } from '@/server/validation/crm';
+import {
+  buildLegacyUserIdMap,
+  getCurrentSupabaseActor,
+  getAdminRouteSupabase,
+} from '@/server/supabase/route-helpers';
 
-const TAG_ENUM = [
-  'need_estimation',
-  'rough_estimation',
-  'scheduling_meeting',
-  'need_schedule_meeting',
-  'hired_someone_else',
-  'hired'
-] as const;
-
-const STATUS_ENUM = [
-  'lead',
-  'no_reply',
-  'follow_up',
-  'hired',
-  'rejected_client',
-  'rejected_us',
-  'invite_lead',
-  'invite_hire',
-  'not_good_client',
-  'budget_low',
-  'cant_work',
-  'hired_someone_else'
-] as const;
-
-const APP_STATUS_ENUM = ['open', 'close'] as const;
-
-export async function GET(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
-
-    const searchParams = request.nextUrl.searchParams;
-    const id = searchParams.get('id');
-
-    if (id) {
-      if (!id || isNaN(parseInt(id))) {
-        return NextResponse.json(
-          { error: 'Valid ID is required', code: 'INVALID_ID' },
-          { status: 400 }
-        );
-      }
-
-      const inquiry = await db
-        .select()
-        .from(inquiries)
-        .where(eq(inquiries.id, parseInt(id)))
-        .limit(1);
-
-      if (inquiry.length === 0) {
-        return NextResponse.json({ error: 'Inquiry not found' }, { status: 404 });
-      }
-
-      return NextResponse.json(inquiry[0], { status: 200 });
-    }
-
-    const limit = Math.min(parseInt(searchParams.get('limit') ?? '10'), 100);
-    const offset = parseInt(searchParams.get('offset') ?? '0');
-    const search = searchParams.get('search');
-    const tag = searchParams.get('tag');
-    const status = searchParams.get('status');
-    const appStatus = searchParams.get('appStatus');
-    const isFavourite = searchParams.get('isFavourite');
-    const startDate = searchParams.get('startDate');
-    const endDate = searchParams.get('endDate');
-
-    const conditions = [];
-
-    if (search) {
-      conditions.push(like(inquiries.aliasName, `%${search}%`));
-    }
-
-    if (tag) {
-      conditions.push(eq(inquiries.tag, tag));
-    }
-
-    if (status) {
-      conditions.push(eq(inquiries.status, status));
-    }
-
-    if (appStatus) {
-      conditions.push(eq(inquiries.appStatus, appStatus));
-    }
-
-    if (isFavourite !== null && isFavourite !== undefined) {
-      const favValue = isFavourite === 'true' || isFavourite === '1';
-      conditions.push(eq(inquiries.isFavourite, favValue));
-    }
-
-    if (startDate) {
-      conditions.push(gte(inquiries.createdAt, startDate));
-    }
-
-    if (endDate) {
-      conditions.push(lte(inquiries.createdAt, endDate));
-    }
-
-    let query = db.select().from(inquiries);
-
-    if (conditions.length > 0) {
-      query = query.where(and(...conditions));
-    }
-
-    const results = await query
-      .orderBy(desc(inquiries.createdAt))
-      .limit(limit)
-      .offset(offset);
-
-    return NextResponse.json(results, { status: 200 });
-  } catch (error) {
-    console.error('GET error:', error);
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 }
-    );
-  }
+function normalizeSupabaseInquiryRow(row: Record<string, unknown>, userMap: Map<string, number | null>) {
+  const createdBy = typeof row.created_by === 'string' ? userMap.get(row.created_by) ?? null : null;
+  return {
+    id: Number(row.id),
+    aliasName: row.alias_name,
+    tag: row.tag,
+    status: row.status,
+    dueDate: row.due_date ?? null,
+    appStatus: row.app_status ?? null,
+    isFavourite: Boolean(row.is_favourite ?? false),
+    createdBy,
+    createdAt: row.created_at ?? null,
+    updatedAt: row.updated_at ?? null,
+  };
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+export const GET = withApiHandler(async (request, context) => {
+  const searchParams = new URL(request.url).searchParams;
+  const id = searchParams.get('id');
+
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  const supabase = getAdminRouteSupabase();
+
+  if (id) {
+    const inquiryId = Number(id);
+    if (!Number.isInteger(inquiryId) || inquiryId <= 0) {
+      throw new BadRequestError('Valid inquiry id is required');
     }
-
-    const body = await request.json();
-
-    if ('createdBy' in body || 'created_by' in body) {
-      return NextResponse.json(
-        {
-          error: 'User ID cannot be provided in request body',
-          code: 'USER_ID_NOT_ALLOWED'
-        },
-        { status: 400 }
-      );
-    }
-
-    const { aliasName, tag, status, dueDate, appStatus, isFavourite } = body;
-
-    if (!aliasName || typeof aliasName !== 'string' || aliasName.trim() === '') {
-      return NextResponse.json(
-        { error: 'aliasName is required and must be a non-empty string', code: 'MISSING_ALIAS_NAME' },
-        { status: 400 }
-      );
-    }
-
-    if (!tag || !TAG_ENUM.includes(tag)) {
-      return NextResponse.json(
-        {
-          error: `tag is required and must be one of: ${TAG_ENUM.join(', ')}`,
-          code: 'INVALID_TAG',
-          validValues: TAG_ENUM
-        },
-        { status: 400 }
-      );
-    }
-
-    if (!status || !STATUS_ENUM.includes(status)) {
-      return NextResponse.json(
-        {
-          error: `status is required and must be one of: ${STATUS_ENUM.join(', ')}`,
-          code: 'INVALID_STATUS',
-          validValues: STATUS_ENUM
-        },
-        { status: 400 }
-      );
-    }
-
-    if (appStatus && !APP_STATUS_ENUM.includes(appStatus)) {
-      return NextResponse.json(
-        {
-          error: `appStatus must be one of: ${APP_STATUS_ENUM.join(', ')}`,
-          code: 'INVALID_APP_STATUS',
-          validValues: APP_STATUS_ENUM
-        },
-        { status: 400 }
-      );
-    }
-
-    const timestamp = new Date().toISOString();
-
-    const newInquiry = await db
-      .insert(inquiries)
-      .values({
-        aliasName: aliasName.trim(),
-        tag,
-        status,
-        dueDate: dueDate || null,
-        appStatus: appStatus || null,
-        isFavourite: isFavourite !== undefined ? Boolean(isFavourite) : false,
-        createdBy: user.id,
-        createdAt: timestamp,
-        updatedAt: timestamp
-      })
-      .returning();
-
-    return NextResponse.json(newInquiry[0], { status: 201 });
-  } catch (error) {
-    console.error('POST error:', error);
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 }
-    );
+    const { data, error } = await supabase
+      .from('inquiries')
+      .select('*')
+      .eq('id', inquiryId)
+      .eq('tenant_id', tenantId)
+      .single();
+    if (error || !data) throw new NotFoundError('Inquiry not found');
+    const userMap = await buildLegacyUserIdMap(accessToken, [String(data.created_by)].filter(Boolean), tenantId);
+    return apiSuccess(normalizeSupabaseInquiryRow(data, userMap), 'Inquiry fetched successfully');
   }
-}
 
-export async function PUT(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
+  const limit = Math.min(Math.max(Number(searchParams.get('limit') ?? '10'), 1), 100);
+  const offset = Math.max(Number(searchParams.get('offset') ?? '0'), 0);
+  const search = searchParams.get('search');
+  const tag = searchParams.get('tag');
+  const status = searchParams.get('status');
+  const appStatus = searchParams.get('appStatus');
+  const isFavourite = searchParams.get('isFavourite');
+  const startDate = searchParams.get('startDate');
+  const endDate = searchParams.get('endDate');
+  let query = supabase
+    .from('inquiries')
+    .select('*', { count: 'exact' })
+    .eq('tenant_id', tenantId);
 
-    const searchParams = request.nextUrl.searchParams;
-    const id = searchParams.get('id');
+  if (search) query = query.ilike('alias_name', `%${search}%`);
+  if (tag) query = query.eq('tag', tag);
+  if (status) query = query.eq('status', status);
+  if (appStatus) query = query.eq('app_status', appStatus);
+  if (isFavourite !== null) query = query.eq('is_favourite', isFavourite === 'true' || isFavourite === '1');
+  if (startDate) query = query.gte('created_at', startDate);
+  if (endDate) query = query.lte('created_at', endDate);
 
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json(
-        { error: 'Valid ID is required', code: 'INVALID_ID' },
-        { status: 400 }
-      );
-    }
+  const { data, count, error } = await query.order('created_at', { ascending: false }).range(offset, offset + limit - 1);
+  if (error) throw error;
+  const rows = (data as Record<string, unknown>[] | null) ?? [];
+  const userMap = await buildLegacyUserIdMap(accessToken, rows.map((row) => String(row.created_by)).filter(Boolean), tenantId);
+  return apiSuccess(rows.map((row) => normalizeSupabaseInquiryRow(row, userMap)), 'Inquiries fetched successfully', {
+    meta: { page: Math.floor(offset / limit) + 1, limit, total: Number(count ?? 0) },
+  });
+}, { requireAuth: true, roles: ['Employee'] });
 
-    const body = await request.json();
+export const POST = withApiHandler(async (request, context) => {
+  const payload = createInquirySchema.parse(await request.json());
 
-    if ('createdBy' in body || 'created_by' in body) {
-      return NextResponse.json(
-        {
-          error: 'User ID cannot be provided in request body',
-          code: 'USER_ID_NOT_ALLOWED'
-        },
-        { status: 400 }
-      );
-    }
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  const actor = await getCurrentSupabaseActor(accessToken);
+  const supabase = getAdminRouteSupabase();
+  const now = new Date().toISOString();
+  const { data, error } = await supabase.from('inquiries').insert({
+    alias_name: payload.aliasName,
+    tag: payload.tag,
+    status: payload.status,
+    due_date: payload.dueDate ?? null,
+    app_status: payload.appStatus ?? 'open',
+    is_favourite: payload.isFavourite ?? false,
+    created_by: actor.authUserId,
+    tenant_id: tenantId,
+    created_at: now,
+    updated_at: now,
+  }).select('*').single();
+  if (error || !data) throw error ?? new Error('Failed to create inquiry');
+  const userMap = await buildLegacyUserIdMap(accessToken, [actor.authUserId], tenantId);
+  return apiSuccess(normalizeSupabaseInquiryRow(data, userMap), 'Inquiry created successfully', { status: 201 });
+}, { requireAuth: true, roles: ['Employee'] });
 
-    const existing = await db
-      .select()
-      .from(inquiries)
-      .where(eq(inquiries.id, parseInt(id)))
-      .limit(1);
-
-    if (existing.length === 0) {
-      return NextResponse.json({ error: 'Inquiry not found' }, { status: 404 });
-    }
-
-    const { aliasName, tag, status, dueDate, appStatus, isFavourite } = body;
-
-    if (aliasName !== undefined && (typeof aliasName !== 'string' || aliasName.trim() === '')) {
-      return NextResponse.json(
-        { error: 'aliasName must be a non-empty string', code: 'INVALID_ALIAS_NAME' },
-        { status: 400 }
-      );
-    }
-
-    if (tag !== undefined && !TAG_ENUM.includes(tag)) {
-      return NextResponse.json(
-        {
-          error: `tag must be one of: ${TAG_ENUM.join(', ')}`,
-          code: 'INVALID_TAG',
-          validValues: TAG_ENUM
-        },
-        { status: 400 }
-      );
-    }
-
-    if (status !== undefined && !STATUS_ENUM.includes(status)) {
-      return NextResponse.json(
-        {
-          error: `status must be one of: ${STATUS_ENUM.join(', ')}`,
-          code: 'INVALID_STATUS',
-          validValues: STATUS_ENUM
-        },
-        { status: 400 }
-      );
-    }
-
-    if (appStatus !== undefined && appStatus !== null && !APP_STATUS_ENUM.includes(appStatus)) {
-      return NextResponse.json(
-        {
-          error: `appStatus must be one of: ${APP_STATUS_ENUM.join(', ')}`,
-          code: 'INVALID_APP_STATUS',
-          validValues: APP_STATUS_ENUM
-        },
-        { status: 400 }
-      );
-    }
-
-    const updates: any = {
-      updatedAt: new Date().toISOString()
-    };
-
-    if (aliasName !== undefined) updates.aliasName = aliasName.trim();
-    if (tag !== undefined) updates.tag = tag;
-    if (status !== undefined) updates.status = status;
-    if (dueDate !== undefined) updates.dueDate = dueDate;
-    if (appStatus !== undefined) updates.appStatus = appStatus;
-    if (isFavourite !== undefined) updates.isFavourite = Boolean(isFavourite);
-
-    const updated = await db
-      .update(inquiries)
-      .set(updates)
-      .where(eq(inquiries.id, parseInt(id)))
-      .returning();
-
-    if (updated.length === 0) {
-      return NextResponse.json({ error: 'Inquiry not found' }, { status: 404 });
-    }
-
-    return NextResponse.json(updated[0], { status: 200 });
-  } catch (error) {
-    console.error('PUT error:', error);
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 }
-    );
+export const PUT = withApiHandler(async (request, context) => {
+  const inquiryId = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(inquiryId) || inquiryId <= 0) {
+    throw new BadRequestError('Valid inquiry id is required');
   }
-}
 
-export async function DELETE(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
-
-    const searchParams = request.nextUrl.searchParams;
-    const id = searchParams.get('id');
-
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json(
-        { error: 'Valid ID is required', code: 'INVALID_ID' },
-        { status: 400 }
-      );
-    }
-
-    const existing = await db
-      .select()
-      .from(inquiries)
-      .where(eq(inquiries.id, parseInt(id)))
-      .limit(1);
-
-    if (existing.length === 0) {
-      return NextResponse.json({ error: 'Inquiry not found' }, { status: 404 });
-    }
-
-    const deleted = await db
-      .update(inquiries)
-      .set({
-        appStatus: 'close',
-        updatedAt: new Date().toISOString()
-      })
-      .where(eq(inquiries.id, parseInt(id)))
-      .returning();
-
-    if (deleted.length === 0) {
-      return NextResponse.json({ error: 'Inquiry not found' }, { status: 404 });
-    }
-
-    return NextResponse.json(
-      {
-        message: 'Inquiry soft deleted successfully',
-        inquiry: deleted[0]
-      },
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error('DELETE error:', error);
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 }
-    );
+  const payload = updateInquirySchema.parse(await request.json());
+  if (Object.keys(payload).length === 0) {
+    throw new BadRequestError('At least one field is required to update an inquiry');
   }
-}
+
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  const supabase = getAdminRouteSupabase();
+  const { data: existing } = await supabase.from('inquiries').select('*').eq('id', inquiryId).eq('tenant_id', tenantId).single();
+  if (!existing) throw new NotFoundError('Inquiry not found');
+  const { data, error } = await supabase.from('inquiries').update({
+    ...(payload.aliasName !== undefined ? { alias_name: payload.aliasName } : {}),
+    ...(payload.tag !== undefined ? { tag: payload.tag } : {}),
+    ...(payload.status !== undefined ? { status: payload.status } : {}),
+    ...(payload.dueDate !== undefined ? { due_date: payload.dueDate } : {}),
+    ...(payload.appStatus !== undefined ? { app_status: payload.appStatus } : {}),
+    ...(payload.isFavourite !== undefined ? { is_favourite: payload.isFavourite } : {}),
+    updated_at: new Date().toISOString(),
+  })
+  .eq('id', inquiryId)
+  .eq('tenant_id', tenantId)
+  .select('*')
+  .single();
+  if (error || !data) throw error ?? new Error('Failed to update inquiry');
+  const userMap = await buildLegacyUserIdMap(accessToken, [String(data.created_by)].filter(Boolean), tenantId);
+  return apiSuccess(normalizeSupabaseInquiryRow(data, userMap), 'Inquiry updated successfully');
+}, { requireAuth: true, roles: ['Employee'] });
+
+export const DELETE = withApiHandler(async (request, context) => {
+  const inquiryId = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(inquiryId) || inquiryId <= 0) {
+    throw new BadRequestError('Valid inquiry id is required');
+  }
+
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  const supabase = getAdminRouteSupabase();
+  const { data: existing } = await supabase
+    .from('inquiries')
+    .select('*')
+    .eq('id', inquiryId)
+    .eq('tenant_id', tenantId)
+    .single();
+  if (!existing) throw new NotFoundError('Inquiry not found');
+  const { data, error } = await supabase.from('inquiries').update({
+    app_status: 'close',
+    updated_at: new Date().toISOString(),
+  })
+  .eq('id', inquiryId)
+  .eq('tenant_id', tenantId)
+  .select('*')
+  .single();
+  if (error || !data) throw error ?? new Error('Failed to close inquiry');
+  const userMap = await buildLegacyUserIdMap(accessToken, [String(data.created_by)].filter(Boolean), tenantId);
+  return apiSuccess(normalizeSupabaseInquiryRow(data, userMap), 'Inquiry closed successfully');
+}, { requireAuth: true, roles: ['Employee'] });

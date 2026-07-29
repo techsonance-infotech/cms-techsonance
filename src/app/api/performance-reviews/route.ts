@@ -1,321 +1,159 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
-import { performanceReviews, employees, users } from '@/db/schema';
-import { eq, and, desc } from 'drizzle-orm';
-import { safeErrorMessage } from '@/lib/constants';
+import { NextResponse } from 'next/server';
+import { withApiHandler } from '@/server/http/handler';
+import { BadRequestError, NotFoundError } from '@/server/http/errors';
+import { createPerformanceReviewSchema, updatePerformanceReviewSchema } from '@/server/validation/hr';
+import {
+  buildLegacyUserIdMap,
+  getCurrentSupabaseActor,
+  getAdminRouteSupabase,
+  resolveAuthUserIdFromLegacyUserId,
+} from '@/server/supabase/route-helpers';
 
-export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-
-    // Single performance review by ID
-    if (id) {
-      if (!id || isNaN(parseInt(id))) {
-        return NextResponse.json(
-          { error: 'Valid ID is required', code: 'INVALID_ID' },
-          { status: 400 }
-        );
-      }
-
-      const review = await db
-        .select()
-        .from(performanceReviews)
-        .where(eq(performanceReviews.id, parseInt(id)))
-        .limit(1);
-
-      if (review.length === 0) {
-        return NextResponse.json(
-          { error: 'Performance review not found', code: 'NOT_FOUND' },
-          { status: 404 }
-        );
-      }
-
-      return NextResponse.json(review[0], { status: 200 });
-    }
-
-    // List with pagination and filtering
-    const limit = Math.min(parseInt(searchParams.get('limit') ?? '10'), 100);
-    const offset = parseInt(searchParams.get('offset') ?? '0');
-    const employeeId = searchParams.get('employeeId');
-    const reviewerId = searchParams.get('reviewerId');
-    const rating = searchParams.get('rating');
-    const reviewPeriod = searchParams.get('reviewPeriod');
-
-    let query = db.select().from(performanceReviews);
-
-    // Build filter conditions
-    const conditions = [];
-
-    if (employeeId) {
-      const empId = parseInt(employeeId);
-      if (!isNaN(empId)) {
-        conditions.push(eq(performanceReviews.employeeId, empId));
-      }
-    }
-
-    if (reviewerId) {
-      const revId = parseInt(reviewerId);
-      if (!isNaN(revId)) {
-        conditions.push(eq(performanceReviews.reviewerId, revId));
-      }
-    }
-
-    if (rating) {
-      const ratingNum = parseInt(rating);
-      if (!isNaN(ratingNum) && ratingNum >= 1 && ratingNum <= 5) {
-        conditions.push(eq(performanceReviews.rating, ratingNum));
-      }
-    }
-
-    if (reviewPeriod) {
-      conditions.push(eq(performanceReviews.reviewPeriod, reviewPeriod));
-    }
-
-    if (conditions.length > 0) {
-      query = query.where(and(...conditions));
-    }
-
-    const results = await query
-      .orderBy(desc(performanceReviews.createdAt))
-      .limit(limit)
-      .offset(offset);
-
-    return NextResponse.json(results, { status: 200 });
-  } catch (error) {
-    console.error('GET error:', error);
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 }
-    );
-  }
+function normalizeSupabasePerformanceReviewRow(
+  row: Record<string, unknown>,
+  userMap: Map<string, number | null>
+) {
+  const reviewerId = typeof row.reviewer_id === 'string' ? userMap.get(row.reviewer_id) ?? null : null;
+  return {
+    id: Number(row.id),
+    employeeId: Number(row.employee_id),
+    reviewerId,
+    rating: Number(row.rating),
+    reviewPeriod: row.review_period,
+    comments: row.comments ?? null,
+    createdAt: row.created_at ?? null,
+  };
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { employeeId, reviewerId, rating, reviewPeriod, comments } = body;
+export const GET = withApiHandler(async (request, context) => {
+  const searchParams = new URL(request.url).searchParams;
+  const id = searchParams.get('id');
 
-    // Validate required fields
-    if (!employeeId) {
-      return NextResponse.json(
-        { error: 'Employee ID is required', code: 'MISSING_EMPLOYEE_ID' },
-        { status: 400 }
-      );
-    }
-
-    if (!reviewerId) {
-      return NextResponse.json(
-        { error: 'Reviewer ID is required', code: 'MISSING_REVIEWER_ID' },
-        { status: 400 }
-      );
-    }
-
-    if (!rating) {
-      return NextResponse.json(
-        { error: 'Rating is required', code: 'MISSING_RATING' },
-        { status: 400 }
-      );
-    }
-
-    if (!reviewPeriod || reviewPeriod.trim() === '') {
-      return NextResponse.json(
-        { error: 'Review period is required', code: 'MISSING_REVIEW_PERIOD' },
-        { status: 400 }
-      );
-    }
-
-    // Validate rating range
-    const ratingNum = parseInt(rating);
-    if (isNaN(ratingNum) || ratingNum < 1 || ratingNum > 5) {
-      return NextResponse.json(
-        { error: 'Rating must be between 1 and 5', code: 'INVALID_RATING' },
-        { status: 400 }
-      );
-    }
-
-    // Validate employeeId exists
-    const employee = await db
-      .select()
-      .from(employees)
-      .where(eq(employees.id, parseInt(employeeId)))
-      .limit(1);
-
-    if (employee.length === 0) {
-      return NextResponse.json(
-        { error: 'Employee not found', code: 'EMPLOYEE_NOT_FOUND' },
-        { status: 400 }
-      );
-    }
-
-    // Validate reviewerId exists
-    const reviewer = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, parseInt(reviewerId)))
-      .limit(1);
-
-    if (reviewer.length === 0) {
-      return NextResponse.json(
-        { error: 'Reviewer not found', code: 'REVIEWER_NOT_FOUND' },
-        { status: 400 }
-      );
-    }
-
-    // Create new performance review
-    const newReview = await db
-      .insert(performanceReviews)
-      .values({
-        employeeId: parseInt(employeeId),
-        reviewerId: parseInt(reviewerId),
-        rating: ratingNum,
-        reviewPeriod: reviewPeriod.trim(),
-        comments: comments?.trim() || null,
-        createdAt: new Date().toISOString(),
-      })
-      .returning();
-
-    return NextResponse.json(newReview[0], { status: 201 });
-  } catch (error) {
-    console.error('POST error:', error);
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 }
-    );
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const supabase = getAdminRouteSupabase();
+  if (id) {
+    const reviewId = Number(id);
+    if (!Number.isInteger(reviewId) || reviewId <= 0) throw new BadRequestError('Valid performance review id is required');
+    const { data: review, error } = await supabase
+      .from('performance_reviews')
+      .select('*')
+      .eq('id', reviewId)
+      .eq('tenant_id', tenantId)
+      .single();
+    if (error || !review) throw new NotFoundError('Performance review not found');
+    const userMap = await buildLegacyUserIdMap(accessToken, [String(review.reviewer_id)].filter(Boolean));
+    return NextResponse.json(normalizeSupabasePerformanceReviewRow(review, userMap));
   }
-}
+  const limit = Math.min(Number(searchParams.get('limit') ?? '10'), 100);
+  const offset = Math.max(Number(searchParams.get('offset') ?? '0'), 0);
+  const employeeId = searchParams.get('employeeId');
+  const reviewerId = searchParams.get('reviewerId');
+  const rating = searchParams.get('rating');
+  const reviewPeriod = searchParams.get('reviewPeriod');
+  
+  let query = supabase
+    .from('performance_reviews')
+    .select('*', { count: 'exact' })
+    .eq('tenant_id', tenantId);
+  if (employeeId) query = query.eq('employee_id', Number(employeeId));
+  if (reviewerId) query = query.eq('reviewer_id', await resolveAuthUserIdFromLegacyUserId(accessToken, Number(reviewerId)));
+  if (rating) query = query.eq('rating', Number(rating));
+  if (reviewPeriod) query = query.eq('review_period', reviewPeriod);
+  const { data, count, error } = await query.order('created_at', { ascending: false }).range(offset, offset + limit - 1);
+  if (error) throw error;
+  const rows = (data as Record<string, unknown>[] | null) ?? [];
+  const userMap = await buildLegacyUserIdMap(accessToken, rows.map((row) => String(row.reviewer_id)).filter(Boolean));
+  return NextResponse.json({
+    success: true,
+    data: rows.map((row) => normalizeSupabasePerformanceReviewRow(row, userMap)),
+    message: 'Performance reviews fetched successfully',
+    errors: null,
+    meta: { page: Math.floor(offset / limit) + 1, limit, total: Number(count ?? 0) },
+  });
+}, { requireAuth: true, roles: ['Manager'] });
 
-export async function PUT(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+export const POST = withApiHandler(async (request, context) => {
+  const payload = createPerformanceReviewSchema.parse(await request.json());
 
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json(
-        { error: 'Valid ID is required', code: 'INVALID_ID' },
-        { status: 400 }
-      );
-    }
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const actor = await getCurrentSupabaseActor(accessToken);
+  const supabase = getAdminRouteSupabase();
+  const { data: employee } = await supabase
+    .from('employees')
+    .select('id')
+    .eq('id', payload.employeeId)
+    .eq('tenant_id', tenantId)
+    .single();
+  if (!employee) throw new NotFoundError('Employee not found');
+  const reviewerId = payload.reviewerId ? await resolveAuthUserIdFromLegacyUserId(accessToken, payload.reviewerId) : actor.authUserId;
+  const { data: reviewer } = await supabase
+    .from('users')
+    .select('id')
+    .eq('id', reviewerId)
+    .eq('tenant_id', tenantId)
+    .single();
+  if (!reviewer) throw new NotFoundError('Reviewer not found');
+  const { data: created, error } = await supabase.from('performance_reviews').insert({
+    employee_id: payload.employeeId,
+    reviewer_id: reviewerId,
+    rating: payload.rating,
+    review_period: payload.reviewPeriod.trim(),
+    comments: payload.comments?.trim() || null,
+    tenant_id: tenantId,
+    created_at: new Date().toISOString(),
+  }).select('*').single();
+  if (error || !created) throw error ?? new Error('Failed to create performance review');
+  const userMap = await buildLegacyUserIdMap(accessToken, [reviewerId]);
+  return NextResponse.json(normalizeSupabasePerformanceReviewRow(created, userMap), { status: 201 });
+}, { requireAuth: true, roles: ['Manager'] });
 
-    // Check if performance review exists
-    const existing = await db
-      .select()
-      .from(performanceReviews)
-      .where(eq(performanceReviews.id, parseInt(id)))
-      .limit(1);
+export const PUT = withApiHandler(async (request, context) => {
+  const id = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('Valid performance review id is required');
+  const payload = updatePerformanceReviewSchema.parse(await request.json());
 
-    if (existing.length === 0) {
-      return NextResponse.json(
-        { error: 'Performance review not found', code: 'NOT_FOUND' },
-        { status: 404 }
-      );
-    }
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const supabase = getAdminRouteSupabase();
+  const { data: updated, error } = await supabase.from('performance_reviews').update({
+    ...(payload.rating !== undefined ? { rating: payload.rating } : {}),
+    ...(payload.reviewPeriod !== undefined ? { review_period: payload.reviewPeriod.trim() } : {}),
+    ...(payload.comments !== undefined ? { comments: payload.comments?.trim() || null } : {}),
+  })
+  .eq('id', id)
+  .eq('tenant_id', tenantId)
+  .select('*')
+  .single();
+  if (error || !updated) throw new NotFoundError('Performance review not found');
+  const userMap = await buildLegacyUserIdMap(accessToken, [String(updated.reviewer_id)].filter(Boolean));
+  return NextResponse.json(normalizeSupabasePerformanceReviewRow(updated, userMap));
+}, { requireAuth: true, roles: ['Manager'] });
 
-    const body = await request.json();
-    const { rating, reviewPeriod, comments } = body;
+export const DELETE = withApiHandler(async (request, context) => {
+  const id = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('Valid performance review id is required');
 
-    const updates: any = {};
-
-    // Validate and add rating if provided
-    if (rating !== undefined) {
-      const ratingNum = parseInt(rating);
-      if (isNaN(ratingNum) || ratingNum < 1 || ratingNum > 5) {
-        return NextResponse.json(
-          { error: 'Rating must be between 1 and 5', code: 'INVALID_RATING' },
-          { status: 400 }
-        );
-      }
-      updates.rating = ratingNum;
-    }
-
-    // Validate and add reviewPeriod if provided
-    if (reviewPeriod !== undefined) {
-      if (reviewPeriod.trim() === '') {
-        return NextResponse.json(
-          {
-            error: 'Review period cannot be empty',
-            code: 'INVALID_REVIEW_PERIOD',
-          },
-          { status: 400 }
-        );
-      }
-      updates.reviewPeriod = reviewPeriod.trim();
-    }
-
-    // Add comments if provided
-    if (comments !== undefined) {
-      updates.comments = comments?.trim() || null;
-    }
-
-    // If no valid updates, return error
-    if (Object.keys(updates).length === 0) {
-      return NextResponse.json(
-        { error: 'No valid fields to update', code: 'NO_UPDATES' },
-        { status: 400 }
-      );
-    }
-
-    // Perform update
-    const updated = await db
-      .update(performanceReviews)
-      .set(updates)
-      .where(eq(performanceReviews.id, parseInt(id)))
-      .returning();
-
-    return NextResponse.json(updated[0], { status: 200 });
-  } catch (error) {
-    console.error('PUT error:', error);
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 }
-    );
-  }
-}
-
-export async function DELETE(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json(
-        { error: 'Valid ID is required', code: 'INVALID_ID' },
-        { status: 400 }
-      );
-    }
-
-    // Check if performance review exists
-    const existing = await db
-      .select()
-      .from(performanceReviews)
-      .where(eq(performanceReviews.id, parseInt(id)))
-      .limit(1);
-
-    if (existing.length === 0) {
-      return NextResponse.json(
-        { error: 'Performance review not found', code: 'NOT_FOUND' },
-        { status: 404 }
-      );
-    }
-
-    // Delete the performance review
-    const deleted = await db
-      .delete(performanceReviews)
-      .where(eq(performanceReviews.id, parseInt(id)))
-      .returning();
-
-    return NextResponse.json(
-      {
-        message: 'Performance review deleted successfully',
-        review: deleted[0],
-      },
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error('DELETE error:', error);
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 }
-    );
-  }
-}
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const supabase = getAdminRouteSupabase();
+  const { data: deleted, error } = await supabase
+    .from('performance_reviews')
+    .delete()
+    .eq('id', id)
+    .eq('tenant_id', tenantId)
+    .select('*')
+    .single();
+  if (error || !deleted) throw new NotFoundError('Performance review not found');
+  const userMap = await buildLegacyUserIdMap(accessToken, [String(deleted.reviewer_id)].filter(Boolean));
+  return NextResponse.json({ message: 'Performance review deleted successfully', review: normalizeSupabasePerformanceReviewRow(deleted, userMap) });
+}, { requireAuth: true, roles: ['Manager'] });

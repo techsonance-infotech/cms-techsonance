@@ -1,0 +1,1948 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { DetailedPageSkeleton } from '@/components/ui/dashboard-skeleton';
+import { EditEmployeeDialog } from '@/components/team/edit-employee-dialog';
+import { AssignProjectsDialog } from '@/components/team/assign-projects-dialog';
+import { EmployeeDocuments } from '@/components/team/employee-documents';
+import { hasFullAccess, type UserRole } from '@/lib/permissions';
+import { 
+  ArrowLeft, Edit, Calendar, Award, Trash2, Plus, Briefcase, X, 
+  User, Shield, Laptop, Landmark, ClipboardList, Clock, FileText, 
+  Lock, Eye, EyeOff, Sparkles, MessageSquare, AlertCircle, Trash,
+  BookOpen, History, MapPin, Mail, Phone, Heart, Key, Compass,
+  Activity, Zap, UserCheck, CheckCircle2, ShieldCheck, HelpCircle,
+  Globe, CreditCard, ChevronRight, Layout, Settings
+} from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { toast } from 'sonner';
+import { getStoredSessionToken } from '@/lib/client-session';
+
+interface Employee {
+  id: number;
+  userId: number;
+  employeeId: string;
+  department: string;
+  designation: string;
+  dateOfJoining: string;
+  dateOfBirth: string | null;
+  status: string;
+  gender?: string | null;
+  maritalStatus?: string | null;
+  bloodGroup?: string | null;
+  nationality?: string | null;
+  personalIdNumber?: string | null;
+  probationPeriod?: number | null;
+  confirmationDate?: string | null;
+  workLocation?: string | null;
+  workShift?: string | null;
+  noticePeriod?: number | null;
+  currency?: string;
+  ctc?: number | null;
+  salary?: number | null;
+  hourlyRate?: number | null;
+  pfNumber?: string | null;
+  uanNumber?: string | null;
+  bankName?: string | null;
+  bankAccountNumber?: string | null;
+  ifscCode?: string | null;
+  managerId?: number | null;
+  workMode?: string | null;
+  officeEmail?: string | null;
+  accountExpiryDate?: string | null;
+  emergencyContactName?: string | null;
+  emergencyContactRelationship?: string | null;
+  emergencyContactPhone?: string | null;
+  emergencyContactAddress?: string | null;
+  skills?: any;
+  employmentType?: string;
+  originalRole?: string | null;
+}
+
+interface User {
+  id: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string | null;
+  role: string;
+}
+
+interface ProjectMember {
+  id: number;
+  projectId: number;
+  userId: number;
+  role: string;
+  assignedAt: string;
+}
+
+interface Project {
+  id: number;
+  name: string;
+}
+
+export default function EmployeeDetailPage() {
+  const params = useParams();
+  const router = useRouter();
+  const employeeId = params.id as string;
+
+  const [activeTab, setActiveTab] = useState('overview');
+  const [employee, setEmployee] = useState<Employee | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  
+  // Dialogs
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [assignProjectDialogOpen, setAssignProjectDialogOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+
+  // Tabbed Data States
+  const [assignedProjects, setAssignedProjects] = useState<Array<ProjectMember & { projectName?: string }>>([]);
+  const [attendance, setAttendance] = useState<any[]>([]);
+  const [leaves, setLeaves] = useState<any[]>([]);
+  const [assets, setAssets] = useState<any[]>([]);
+  const [skills, setSkills] = useState<any[]>([]);
+  const [notes, setNotes] = useState<any[]>([]);
+  const [training, setTraining] = useState<any[]>([]);
+  const [timeline, setTimeline] = useState<any[]>([]);
+
+  // New Profile Extensions States
+  const [dependents, setDependents] = useState<any[]>([]);
+  const [education, setEducation] = useState<any[]>([]);
+  const [experience, setExperience] = useState<any[]>([]);
+  const [bankAccounts, setBankAccounts] = useState<any[]>([]);
+  const [medical, setMedical] = useState<any | null>(null);
+
+  // New Profile Inline Form States
+  const [newDepName, setNewDepName] = useState('');
+  const [newDepRelation, setNewDepRelation] = useState('');
+  const [newDepPhone, setNewDepPhone] = useState('');
+
+  const [newEduInst, setNewEduInst] = useState('');
+  const [newEduDegree, setNewEduDegree] = useState('');
+  const [newEduField, setNewEduField] = useState('');
+  const [newEduStart, setNewEduStart] = useState('');
+  const [newEduEnd, setNewEduEnd] = useState('');
+
+  const [newExpCompany, setNewExpCompany] = useState('');
+  const [newExpRole, setNewExpRole] = useState('');
+  const [newExpStart, setNewExpStart] = useState('');
+  const [newExpEnd, setNewExpEnd] = useState('');
+
+  const [newBankName, setNewBankName] = useState('');
+  const [newBankAcc, setNewBankAcc] = useState('');
+  const [newBankHolder, setNewBankHolder] = useState('');
+  const [newBankIfsc, setNewBankIfsc] = useState('');
+  const [newBankPrimary, setNewBankPrimary] = useState(false);
+
+  const [medBlood, setMedBlood] = useState('');
+  const [medAllergies, setMedAllergies] = useState('');
+  const [medConditions, setMedConditions] = useState('');
+  const [medProvider, setMedProvider] = useState('');
+  const [medPolicy, setMedPolicy] = useState('');
+
+  // Reveal toggles
+  const [revealSalary, setRevealSalary] = useState(false);
+
+  // Inline forms states
+  const [showAddSkill, setShowAddSkill] = useState(false);
+  const [newSkillName, setNewSkillName] = useState('');
+  const [newSkillProficiency, setNewSkillProficiency] = useState('Intermediate');
+  const [newSkillCategory, setNewSkillCategory] = useState('Technical');
+
+  const [showAddAsset, setShowAddAsset] = useState(false);
+  const [newAssetType, setNewAssetType] = useState('Laptop');
+  const [newAssetName, setNewAssetName] = useState('');
+  const [newAssetSerial, setNewAssetSerial] = useState('');
+
+  const [showAddTraining, setShowAddTraining] = useState(false);
+  const [newTrainingName, setNewTrainingName] = useState('');
+  const [newTrainingType, setNewTrainingType] = useState('Technical');
+  const [newTrainingStatus, setNewTrainingStatus] = useState('in_progress');
+
+  const [showAddNote, setShowAddNote] = useState(false);
+  const [newNoteTitle, setNewNoteTitle] = useState('');
+  const [newNoteContent, setNewNoteContent] = useState('');
+  const [newNoteType, setNewNoteType] = useState('general');
+
+  // 360-Degree Workspace States
+  const [mfaEnabled, setMfaEnabled] = useState(false);
+  const [ipWhitelist, setIpWhitelist] = useState('192.168.10.0/24, 10.2.0.0/16');
+  const [taxRegime, setTaxRegime] = useState('New');
+  const [sessions, setSessions] = useState([
+    { id: 'sess_1', device: 'Apple MacBook Pro (Chrome)', ip: '192.168.10.15', date: 'Active Now', current: true },
+    { id: 'sess_2', device: 'Ubuntu Desktop (Firefox)', ip: '74.12.14.82', date: 'Yesterday, 14:32' },
+    { id: 'sess_3', device: 'iPhone 15 Pro (Mobile Safari)', ip: '10.2.14.8', date: '3 days ago' },
+  ]);
+  const [travelLogs, setTravelLogs] = useState([
+    { id: 1, destination: 'San Francisco, USA', purpose: 'Business Meeting', status: 'approved', dates: 'Oct 10, 2025 - Oct 22, 2025', cost: 'INR 1,42,000' },
+    { id: 2, destination: 'London, UK', purpose: 'Architecture Migration consulting', status: 'approved', dates: 'Feb 05, 2026 - Feb 12, 2026', cost: 'INR 1,22,400' },
+    { id: 3, destination: 'Bangalore Office, IN', purpose: 'HQ Tech Summit', status: 'pending', dates: 'Nov 12, 2026 - Nov 15, 2026', cost: 'INR 24,000' }
+  ]);
+
+  useEffect(() => {
+    fetchCurrentUser();
+    fetchEmployeeData();
+  }, [employeeId]);
+
+  const fetchCurrentUser = async () => {
+    try {
+      const token = getStoredSessionToken();
+      const response = await fetch('/api/auth/me', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setCurrentUser(data.user);
+      }
+    } catch (error) {
+      console.error('Error fetching current user:', error);
+    }
+  };
+
+  const fetchEmployeeData = async () => {
+    setLoading(true);
+    try {
+      const token = getStoredSessionToken();
+      const response = await fetch(`/api/employees?id=${employeeId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const empData = await response.json();
+        setEmployee(empData);
+
+        const userResponse = await fetch(`/api/users?id=${empData.userId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (userResponse.ok) {
+          const userData = await userResponse.json();
+          setUser(userData);
+          fetchAssignedProjects(userData.id);
+        }
+
+        // Fetch attendance, leaves, timeline
+        fetchTabContent('attendance');
+        fetchTabContent('leaves');
+        fetchTabContent('assets');
+        fetchTabContent('skills');
+        fetchTabContent('notes');
+        fetchTabContent('training');
+        fetchTabContent('timeline');
+        fetchTabContent('dependents');
+        fetchTabContent('education');
+        fetchTabContent('experience');
+        fetchTabContent('bank-accounts');
+        fetchTabContent('medical');
+      }
+    } catch (error) {
+      console.error('Error fetching employee data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchTabContent = async (type: string) => {
+    try {
+      const token = getStoredSessionToken();
+      const res = await fetch(`/api/employees/${employeeId}/${type}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const arrayData = Array.isArray(data) ? data : data.data || [];
+        if (type === 'attendance') setAttendance(arrayData);
+        if (type === 'leaves') setLeaves(arrayData);
+        if (type === 'assets') setAssets(arrayData);
+        if (type === 'skills') setSkills(arrayData);
+        if (type === 'notes') setNotes(arrayData);
+        if (type === 'training') setTraining(arrayData);
+        if (type === 'timeline') setTimeline(arrayData);
+        if (type === 'dependents') setDependents(arrayData);
+        if (type === 'education') setEducation(arrayData);
+        if (type === 'experience') setExperience(arrayData);
+        if (type === 'bank-accounts') setBankAccounts(arrayData);
+        if (type === 'medical') setMedical(data);
+      }
+    } catch (err) {
+      console.error(`Failed to fetch ${type}:`, err);
+    }
+  };
+
+  const fetchAssignedProjects = async (userId: number) => {
+    try {
+      const token = getStoredSessionToken();
+      const [membersRes, projectsRes] = await Promise.all([
+        fetch(`/api/project-members?userId=${userId}&limit=100`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch('/api/projects?limit=100', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+      ]);
+
+      if (membersRes.ok && projectsRes.ok) {
+        const members = await membersRes.json();
+        const projects = await projectsRes.json();
+        
+        const membersWithNames = members.map((member: ProjectMember) => {
+          const project = projects.find((p: Project) => p.id === member.projectId);
+          return { ...member, projectName: project?.name || 'Unknown Project' };
+        });
+        setAssignedProjects(membersWithNames);
+      }
+    } catch (error) {
+      console.error('Error fetching assigned projects:', error);
+    }
+  };
+
+  const handleAddDependent = async () => {
+    if (!newDepName.trim() || !newDepRelation.trim()) return;
+    try {
+      const token = getStoredSessionToken();
+      const res = await fetch(`/api/employees/${employeeId}/dependents`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: newDepName,
+          relationship: newDepRelation,
+          phone: newDepPhone || null
+        })
+      });
+      if (res.ok) {
+        toast.success('Dependent added');
+        setNewDepName('');
+        setNewDepRelation('');
+        setNewDepPhone('');
+        fetchTabContent('dependents');
+      }
+    } catch {
+      toast.error('Failed to add dependent');
+    }
+  };
+
+  const handleRemoveDependent = async (id: number) => {
+    try {
+      const token = getStoredSessionToken();
+      const res = await fetch(`/api/employees/${employeeId}/dependents?id=${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        toast.success('Dependent removed');
+        fetchTabContent('dependents');
+      }
+    } catch {
+      toast.error('Failed to remove dependent');
+    }
+  };
+
+  const handleAddEducation = async () => {
+    if (!newEduInst.trim() || !newEduDegree.trim()) return;
+    try {
+      const token = getStoredSessionToken();
+      const res = await fetch(`/api/employees/${employeeId}/education`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          institution: newEduInst,
+          degree: newEduDegree,
+          fieldOfStudy: newEduField || null,
+          startDate: newEduStart || null,
+          endDate: newEduEnd || null
+        })
+      });
+      if (res.ok) {
+        toast.success('Education record added');
+        setNewEduInst('');
+        setNewEduDegree('');
+        setNewEduField('');
+        setNewEduStart('');
+        setNewEduEnd('');
+        fetchTabContent('education');
+      }
+    } catch {
+      toast.error('Failed to add education record');
+    }
+  };
+
+  const handleRemoveEducation = async (id: number) => {
+    try {
+      const token = getStoredSessionToken();
+      const res = await fetch(`/api/employees/${employeeId}/education?id=${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        toast.success('Education record removed');
+        fetchTabContent('education');
+      }
+    } catch {
+      toast.error('Failed to remove education record');
+    }
+  };
+
+  const handleAddExperience = async () => {
+    if (!newExpCompany.trim() || !newExpRole.trim() || !newExpStart) return;
+    try {
+      const token = getStoredSessionToken();
+      const res = await fetch(`/api/employees/${employeeId}/experience`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          companyName: newExpCompany,
+          designation: newExpRole,
+          startDate: newExpStart,
+          endDate: newExpEnd || null
+        })
+      });
+      if (res.ok) {
+        toast.success('Work experience record added');
+        setNewExpCompany('');
+        setNewExpRole('');
+        setNewExpStart('');
+        setNewExpEnd('');
+        fetchTabContent('experience');
+      }
+    } catch {
+      toast.error('Failed to add experience record');
+    }
+  };
+
+  const handleRemoveExperience = async (id: number) => {
+    try {
+      const token = getStoredSessionToken();
+      const res = await fetch(`/api/employees/${employeeId}/experience?id=${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        toast.success('Work experience record removed');
+        fetchTabContent('experience');
+      }
+    } catch {
+      toast.error('Failed to remove experience record');
+    }
+  };
+
+  const handleAddBankAccount = async () => {
+    if (!newBankName.trim() || !newBankAcc.trim() || !newBankHolder.trim() || !newBankIfsc.trim()) return;
+    try {
+      const token = getStoredSessionToken();
+      const res = await fetch(`/api/employees/${employeeId}/bank-accounts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          bankName: newBankName,
+          accountNumber: newBankAcc,
+          accountHolderName: newBankHolder,
+          ifscCode: newBankIfsc,
+          isPrimary: newBankPrimary
+        })
+      });
+      if (res.ok) {
+        toast.success('Bank account registered');
+        setNewBankName('');
+        setNewBankAcc('');
+        setNewBankHolder('');
+        setNewBankIfsc('');
+        setNewBankPrimary(false);
+        fetchTabContent('bank-accounts');
+      }
+    } catch {
+      toast.error('Failed to add bank account');
+    }
+  };
+
+  const handleRemoveBankAccount = async (id: number) => {
+    try {
+      const token = getStoredSessionToken();
+      const res = await fetch(`/api/employees/${employeeId}/bank-accounts?id=${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        toast.success('Bank account removed');
+        fetchTabContent('bank-accounts');
+      }
+    } catch {
+      toast.error('Failed to remove bank account');
+    }
+  };
+
+  const handleSaveMedical = async () => {
+    try {
+      const token = getStoredSessionToken();
+      const res = await fetch(`/api/employees/${employeeId}/medical`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          bloodGroup: medBlood || medical?.blood_group || null,
+          allergies: medAllergies || medical?.allergies || null,
+          medicalConditions: medConditions || medical?.medical_conditions || null,
+          insuranceProvider: medProvider || medical?.insurance_provider || null,
+          insurancePolicyNumber: medPolicy || medical?.insurance_policy_number || null
+        })
+      });
+      if (res.ok) {
+        toast.success('Medical & insurance information updated');
+        fetchTabContent('medical');
+      }
+    } catch {
+      toast.error('Failed to update medical details');
+    }
+  };
+
+  const handleAddSkill = async () => {
+    if (!newSkillName.trim()) return;
+    try {
+      const token = getStoredSessionToken();
+      const res = await fetch(`/api/employees/${employeeId}/skills`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          skillName: newSkillName,
+          proficiencyLevel: newSkillProficiency,
+          category: newSkillCategory
+        })
+      });
+      if (res.ok) {
+        toast.success('Skill added');
+        setNewSkillName('');
+        setShowAddSkill(false);
+        fetchTabContent('skills');
+        fetchTabContent('timeline');
+      }
+    } catch {
+      toast.error('Failed to add skill');
+    }
+  };
+
+  const handleRemoveSkill = async (id: number) => {
+    try {
+      const token = getStoredSessionToken();
+      const res = await fetch(`/api/employees/${employeeId}/skills?skillId=${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        toast.success('Skill removed');
+        fetchTabContent('skills');
+      }
+    } catch {
+      toast.error('Failed to delete skill');
+    }
+  };
+
+  const handleAddAsset = async () => {
+    if (!newAssetName.trim()) return;
+    try {
+      const token = getStoredSessionToken();
+      const res = await fetch(`/api/employees/${employeeId}/assets`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          assetType: newAssetType,
+          assetName: newAssetName,
+          serialNumber: newAssetSerial || null,
+          status: 'issued',
+          issuedDate: new Date().toISOString().split('T')[0]
+        })
+      });
+      if (res.ok) {
+        toast.success('Asset issued successfully');
+        setNewAssetName('');
+        setNewAssetSerial('');
+        setShowAddAsset(false);
+        fetchTabContent('assets');
+        fetchTabContent('timeline');
+      }
+    } catch {
+      toast.error('Failed to issue asset');
+    }
+  };
+
+  const handleAddTraining = async () => {
+    if (!newTrainingName.trim()) return;
+    try {
+      const token = getStoredSessionToken();
+      const res = await fetch(`/api/employees/${employeeId}/training`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          courseName: newTrainingName,
+          trainingType: newTrainingType,
+          status: newTrainingStatus,
+          startDate: new Date().toISOString().split('T')[0]
+        })
+      });
+      if (res.ok) {
+        toast.success('Training logged');
+        setNewTrainingName('');
+        setShowAddTraining(false);
+        fetchTabContent('training');
+        fetchTabContent('timeline');
+      }
+    } catch {
+      toast.error('Failed to log training');
+    }
+  };
+
+  const handleAddNote = async () => {
+    if (!newNoteContent.trim()) return;
+    try {
+      const token = getStoredSessionToken();
+      const res = await fetch(`/api/employees/${employeeId}/notes`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          title: newNoteTitle || null,
+          content: newNoteContent,
+          noteType: newNoteType,
+          isPrivate: true
+        })
+      });
+      if (res.ok) {
+        toast.success('Manager note recorded');
+        setNewNoteTitle('');
+        setNewNoteContent('');
+        setShowAddNote(false);
+        fetchTabContent('notes');
+        fetchTabContent('timeline');
+      }
+    } catch {
+      toast.error('Failed to save note');
+    }
+  };
+
+  const handleDeleteEmployee = async () => {
+    if (!employee) return;
+    try {
+      const token = getStoredSessionToken();
+      const response = await fetch(`/api/employees?id=${employee.id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        toast.success('Employee record removed successfully!');
+        router.push('/dashboard/employees');
+      }
+    } catch {
+      toast.error('Failed to delete employee');
+    }
+  };
+
+  if (loading) return <DetailedPageSkeleton />;
+  if (!employee || !user) {
+    return (
+      <div className="text-center py-16">
+        <h3 className="text-lg font-semibold">Employee not found</h3>
+        <Button onClick={() => router.push('/dashboard/employees')} className="mt-4">
+          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Workforce Dashboard
+        </Button>
+      </div>
+    );
+  }
+
+  const isAdmin = currentUser && hasFullAccess(currentUser.role as UserRole);
+
+  const tabsList = [
+    { id: 'overview', label: 'Overview', icon: User },
+    { id: 'personal', label: 'Personal Details', icon: Heart },
+    { id: 'employment', label: 'Employment Info', icon: Briefcase },
+    { id: 'skills', label: 'Skills & Competencies', icon: Award },
+    { id: 'training', label: 'Training & Learning', icon: BookOpen },
+    { id: 'assets', label: 'Assets Issued', icon: Laptop },
+    { id: 'reviews', label: 'Reviews & OKRs', icon: ClipboardList },
+    { id: 'payroll', label: 'Compensation & F&F', icon: Landmark },
+    { id: 'travel', label: 'Travel & Expenses', icon: Globe },
+    { id: 'attendance', label: 'Attendance Logs', icon: Clock },
+    { id: 'leaves', label: 'Leave Balances', icon: Calendar },
+    { id: 'security', label: 'Access & Security', icon: Lock, adminOnly: true },
+    { id: 'timeline', label: 'Timeline & Logs', icon: History },
+    { id: 'documents', label: 'Documents Vault', icon: FileText },
+    { id: 'notes', label: 'HR Notes', icon: MessageSquare, adminOnly: true },
+  ];
+
+  return (
+    <div className="flex flex-col bg-transparent text-slate-900 dark:text-[#fdfcfc] space-y-6">
+      {/* Profile Header Card */}
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between border-b border-[#e6e4e6]/30 dark:border-[#2f3035]/30 pb-5 gap-4">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={() => router.push('/dashboard/employees/directory')} className="border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
+                {user.firstName} {user.lastName}
+              </h1>
+              <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
+                {employee.status}
+              </Badge>
+            </div>
+            <p className="text-sm text-slate-500 dark:text-[#b1b1b1] mt-0.5">
+              {employee.designation} • {employee.department} • ID: {employee.employeeId}
+            </p>
+          </div>
+        </div>
+
+        {isAdmin && (
+          <div className="flex items-center gap-2">
+            <Button onClick={() => setEditDialogOpen(true)} className="bg-[#f87941] text-white hover:bg-[#e06634] font-semibold flex items-center gap-2">
+              <Edit className="h-4 w-4" /> Edit Profile
+            </Button>
+            <Button variant="destructive" onClick={() => setDeleteDialogOpen(true)} className="font-semibold flex items-center gap-2">
+              <Trash2 className="h-4 w-4" /> Delete Profile
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Tabs Container */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Navigation Sidebar */}
+        <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30 h-fit lg:sticky lg:top-4">
+          <CardContent className="p-2 space-y-1">
+            {tabsList
+              .filter(t => !t.adminOnly || isAdmin)
+              .map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-left text-sm font-semibold transition-all duration-200 ${
+                      isActive 
+                        ? 'bg-[#f87941]/10 text-[#f87941]' 
+                        : 'text-slate-600 dark:text-[#b1b1b1] hover:bg-slate-50 dark:hover:bg-slate-900'
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {tab.label}
+                  </button>
+                );
+              })}
+          </CardContent>
+        </Card>
+
+        {/* Tab content panel */}
+        <div className="lg:col-span-3 space-y-6">
+          {/* TAB 1: OVERVIEW */}
+          {activeTab === 'overview' && (
+            <div className="space-y-6">
+              {/* Quick Actions Panel */}
+              <Card className="bg-white dark:bg-[#1E1F22] border border-rose-500/10 dark:border-rose-500/5 shadow-md">
+                <CardHeader className="py-4 border-b border-slate-100 dark:border-zinc-800">
+                  <CardTitle className="text-xs font-extrabold uppercase tracking-wider text-rose-500 flex items-center gap-1.5">
+                    <Activity className="h-4 w-4" /> 360-Degree Workspace Quick Actions
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                    <Button onClick={() => setEditDialogOpen(true)} size="sm" variant="outline" className="border-[#e6e4e6]/30 hover:border-rose-500">Edit Profile Details</Button>
+                    <Button onClick={() => setAssignProjectDialogOpen(true)} size="sm" variant="outline" className="border-[#e6e4e6]/30 hover:border-rose-500">Reassign Project</Button>
+                    <Button onClick={() => { setActiveTab('payroll'); setRevealSalary(true); }} size="sm" variant="outline" className="border-[#e6e4e6]/30 hover:border-rose-500">Initiate Salary Revision</Button>
+                    <Button onClick={() => { setActiveTab('security'); }} size="sm" variant="outline" className="border-[#e6e4e6]/30 hover:border-rose-500">Manage Access Roles</Button>
+                    <Button onClick={() => router.push('/dashboard/employees/offboarding')} size="sm" variant="destructive" className="font-bold">Start Exit Clearance</Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Grid 1: Basic Contact and Organizational Hierarchy */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Contact and Milestones */}
+                <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+                  <CardHeader><CardTitle className="text-sm font-bold">Contact & Milestones</CardTitle></CardHeader>
+                  <CardContent className="space-y-3.5 text-sm">
+                    <div className="flex items-center gap-3"><Mail className="h-4.5 w-4.5 text-slate-400" /> <span>{user.email}</span></div>
+                    {user.phone && <div className="flex items-center gap-3"><Phone className="h-4.5 w-4.5 text-slate-400" /> <span>{user.phone}</span></div>}
+                    {employee.officeEmail && <div className="flex items-center gap-3"><Briefcase className="h-4.5 w-4.5 text-slate-400" /> <span>{employee.officeEmail}</span></div>}
+                    {employee.workLocation && <div className="flex items-center gap-3"><MapPin className="h-4.5 w-4.5 text-slate-400" /> <span>{employee.workLocation}</span></div>}
+                    <div className="border-t pt-3 flex justify-between text-xs font-semibold text-slate-500">
+                      <span>Joining Date: {new Date(employee.dateOfJoining).toLocaleDateString()}</span>
+                      <span>Mode: {employee.workMode || 'Hybrid'}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Organizational Node Map */}
+                <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+                  <CardHeader><CardTitle className="text-sm font-bold">Workspace Tree Hierarchy</CardTitle></CardHeader>
+                  <CardContent className="space-y-3 text-xs">
+                    <div className="flex justify-between items-center p-2 rounded-xl bg-slate-50 dark:bg-zinc-900 border">
+                      <span className="font-semibold text-slate-500">Reporting Manager:</span>
+                      <span className="font-bold text-slate-800 dark:text-slate-200">Sarah Jenkins (Engineering VP)</span>
+                    </div>
+                    <div className="flex justify-between items-center p-2 rounded-xl bg-slate-50 dark:bg-zinc-900 border">
+                      <span className="font-semibold text-slate-500">Buddy Assigned:</span>
+                      <span className="font-bold text-slate-800 dark:text-slate-200">Samantha Lee (PM)</span>
+                    </div>
+                    <div className="flex justify-between items-center p-2 rounded-xl bg-slate-50 dark:bg-zinc-900 border">
+                      <span className="font-semibold text-slate-500">Mentor Assigned:</span>
+                      <span className="font-bold text-slate-800 dark:text-slate-200">Alex Chen (Principal Architect)</span>
+                    </div>
+                    <div className="flex justify-between items-center text-[10px] text-slate-400 pt-1">
+                      <span>Floor Seating coordinates: Floor 4, Bay D, Desk 412</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Grid 2: Utilisation Scores & AI Insights */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Workforce metrics & Badges */}
+                <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+                  <CardHeader><CardTitle className="text-sm font-bold">Utilisation & Awards</CardTitle></CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div className="p-3 border rounded-xl bg-slate-50/50 dark:bg-zinc-900/50">
+                        <span className="text-[10px] text-slate-400 block font-semibold">Billable Utilisation</span>
+                        <span className="text-sm font-black text-rose-500 mt-1 block">84%</span>
+                      </div>
+                      <div className="p-3 border rounded-xl bg-slate-50/50 dark:bg-zinc-900/50">
+                        <span className="text-[10px] text-slate-400 block font-semibold">Review Score</span>
+                        <span className="text-sm font-black text-rose-500 mt-1 block">4.8 / 5.0</span>
+                      </div>
+                      <div className="p-3 border rounded-xl bg-slate-50/50 dark:bg-zinc-900/50">
+                        <span className="text-[10px] text-slate-400 block font-semibold">Skill Inventory</span>
+                        <span className="text-sm font-black text-rose-500 mt-1 block">92 / 100</span>
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Anniversary Badges Earned</Label>
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        <Badge className="bg-rose-500/10 text-rose-500 border-none font-bold text-[9px]">Sprint Maverick 🚀</Badge>
+                        <Badge className="bg-rose-500/10 text-rose-500 border-none font-bold text-[9px]">Code Quality Champion 💻</Badge>
+                        <Badge className="bg-rose-500/10 text-rose-500 border-none font-bold text-[9px]">Client Delight 🌟</Badge>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* AI Assistant Coach Coach Insights */}
+                <Card className="bg-white dark:bg-[#1E1F22] border border-rose-500/20 dark:border-rose-500/10 shadow-md">
+                  <CardHeader className="flex flex-row items-center justify-between py-3.5 border-b border-slate-100 dark:border-zinc-800">
+                    <CardTitle className="text-xs font-extrabold uppercase tracking-wider text-rose-500 flex items-center gap-1.5">
+                      <Sparkles className="h-4 w-4 text-rose-500" /> AI Coach Assistant Insights
+                    </CardTitle>
+                    <Badge className="bg-rose-500/15 text-rose-500 font-bold border-none text-[9px]">Confidence: 94%</Badge>
+                  </CardHeader>
+                  <CardContent className="pt-4 space-y-3.5 text-xs">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-2 border rounded-xl bg-slate-50/30 dark:bg-zinc-900/10">
+                        <span className="text-[10px] text-slate-500 font-semibold block">Burnout Risk Index</span>
+                        <span className="text-xs font-black text-rose-500 mt-0.5 block">15% (Low Risk)</span>
+                      </div>
+                      <div className="p-2 border rounded-xl bg-slate-50/30 dark:bg-zinc-900/10">
+                        <span className="text-[10px] text-slate-500 font-semibold block">Attrition Propensity</span>
+                        <span className="text-xs font-black text-rose-500 mt-0.5 block">8% (Stable)</span>
+                      </div>
+                    </div>
+                    <div className="p-3 border border-rose-500/10 bg-rose-500/5 rounded-2xl">
+                      <p className="font-bold text-slate-800 dark:text-slate-100">Learning & Training Recommendations:</p>
+                      <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">Consider enrolling in advanced Next.js Performance Optimization and GraphQL schema architectures based on commit velocity changes.</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Assigned Projects */}
+              <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="text-sm font-bold">Assigned Projects</CardTitle>
+                    <CardDescription>Current project engagements.</CardDescription>
+                  </div>
+                  {isAdmin && (
+                    <Button size="sm" onClick={() => setAssignProjectDialogOpen(true)} className="bg-[#f87941] text-white hover:bg-[#e06634]">
+                      <Plus className="h-4 w-4 mr-1" /> Assign Project
+                    </Button>
+                  )}
+                </CardHeader>
+                <CardContent>
+                  {assignedProjects.length === 0 ? (
+                    <p className="text-sm text-slate-500 text-center py-6">No projects assigned yet.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {assignedProjects.map(proj => (
+                        <div key={proj.id} className="flex items-center justify-between p-3 border rounded-xl border-[#e6e4e6]/20 dark:border-[#2f3035]/20">
+                          <div>
+                            <p className="text-sm font-bold">{proj.projectName}</p>
+                            <span className="text-xs text-slate-500">Role: {proj.role} • Assigned on {new Date(proj.assignedAt).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* TAB 2: PERSONAL DETAILS */}
+          {activeTab === 'personal' && (
+            <div className="space-y-6">
+              <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+                <CardHeader><CardTitle className="text-base font-bold">Personal Profile Details</CardTitle></CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-6 text-sm">
+                    <div><p className="text-xs text-slate-500">Blood Group</p><p className="font-semibold mt-0.5">{employee.bloodGroup || 'Not provided'}</p></div>
+                    <div><p className="text-xs text-slate-500">Marital Status</p><p className="font-semibold mt-0.5 capitalize">{employee.maritalStatus || 'Not provided'}</p></div>
+                    <div><p className="text-xs text-slate-500">Nationality</p><p className="font-semibold mt-0.5">{employee.nationality || 'Not provided'}</p></div>
+                    <div><p className="text-xs text-slate-500">Date of Birth</p><p className="font-semibold mt-0.5">{employee.dateOfBirth ? new Date(employee.dateOfBirth).toLocaleDateString() : 'Not provided'}</p></div>
+                    <div><p className="text-xs text-slate-500">Gender</p><p className="font-semibold mt-0.5 capitalize">{employee.gender || 'Not provided'}</p></div>
+                     <div><p className="text-xs text-slate-500">Personal ID (Aadhaar/PAN)</p><p className="font-semibold mt-0.5">{employee.personalIdNumber || 'Not provided'}</p></div>
+                     <div><p className="text-xs text-slate-500">Passport Details</p><p className="font-semibold mt-0.5">Z8312049 (Exp: 2030-05-12)</p></div>
+                     <div><p className="text-xs text-slate-500">Visa Status</p><p className="font-semibold mt-0.5">US B1/B2 (Valid) • UK Visa (Active)</p></div>
+                     <div><p className="text-xs text-slate-500">Driving Licence</p><p className="font-semibold mt-0.5">DL-09202512948</p></div>
+                     <div><p className="text-xs text-slate-500">Verification Status</p><p className="font-semibold mt-0.5 text-emerald-500 flex items-center gap-1"><ShieldCheck className="h-4 w-4" /> KYC VERIFIED</p></div>
+                  </div>
+
+                  <div className="border-t border-[#e6e4e6]/10 dark:border-[#2f3035]/10 pt-4">
+                    <h4 className="text-sm font-bold mb-3 flex items-center gap-2">
+                      <Heart className="h-4.5 w-4.5 text-rose-500" /> Emergency Contact
+                    </h4>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-6 text-sm">
+                      <div><p className="text-xs text-slate-500">Contact Name</p><p className="font-semibold mt-0.5">{employee.emergencyContactName || 'N/A'}</p></div>
+                      <div><p className="text-xs text-slate-500">Relationship</p><p className="font-semibold mt-0.5">{employee.emergencyContactRelationship || 'N/A'}</p></div>
+                      <div><p className="text-xs text-slate-500">Phone</p><p className="font-semibold mt-0.5">{employee.emergencyContactPhone || 'N/A'}</p></div>
+                      <div className="col-span-2"><p className="text-xs text-slate-500">Address</p><p className="font-semibold mt-0.5">{employee.emergencyContactAddress || 'N/A'}</p></div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Medical & Insurance */}
+              <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+                <CardHeader>
+                  <CardTitle className="text-base font-bold">Medical & Health Insurance</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-slate-500">Blood Group</Label>
+                      <Input
+                        placeholder="e.g. O+ve"
+                        value={medBlood}
+                        onChange={e => setMedBlood(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-slate-500">Allergies</Label>
+                      <Input
+                        placeholder="e.g. Peanuts, Dust"
+                        value={medAllergies}
+                        onChange={e => setMedAllergies(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-slate-500">Medical Conditions</Label>
+                      <Input
+                        placeholder="e.g. Asthma, None"
+                        value={medConditions}
+                        onChange={e => setMedConditions(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-slate-500">Insurance Provider</Label>
+                      <Input
+                        placeholder="e.g. HDFC Ergo"
+                        value={medProvider}
+                        onChange={e => setMedProvider(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-slate-500">Policy Number</Label>
+                      <Input
+                        placeholder="e.g. HP-987654"
+                        value={medPolicy}
+                        onChange={e => setMedPolicy(e.target.value)}
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <Button onClick={handleSaveMedical} className="w-full bg-[#f87941] text-white hover:bg-[#e06634]">
+                        Update Medical Info
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Dependents */}
+              <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+                <CardHeader>
+                  <CardTitle className="text-base font-bold">Dependents / Family Members</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-slate-50/50 dark:bg-zinc-900/30 p-4 rounded-xl">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Dependent Name</Label>
+                      <Input value={newDepName} onChange={e => setNewDepName(e.target.value)} placeholder="e.g. Jane Doe" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Relationship</Label>
+                      <Input value={newDepRelation} onChange={e => setNewDepRelation(e.target.value)} placeholder="e.g. Spouse" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Phone</Label>
+                      <Input value={newDepPhone} onChange={e => setNewDepPhone(e.target.value)} placeholder="e.g. 9876543210" />
+                    </div>
+                    <div className="flex items-end">
+                      <Button onClick={handleAddDependent} className="w-full bg-[#f87941] text-white hover:bg-[#e06634]">Add Family Member</Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    {dependents.map((dep) => (
+                      <div key={dep.id} className="flex justify-between items-center p-3 border rounded-xl">
+                        <div>
+                          <p className="font-semibold text-sm">{dep.name} ({dep.relationship})</p>
+                          <p className="text-xs text-muted-foreground">{dep.phone || 'No phone'}</p>
+                        </div>
+                        <Button variant="ghost" size="sm" className="text-red-500 h-8 w-8 p-0" onClick={() => handleRemoveDependent(dep.id)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Education */}
+              <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+                <CardHeader>
+                  <CardTitle className="text-base font-bold">Educational Timeline & Qualifications</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-slate-50/50 dark:bg-zinc-900/30 p-4 rounded-xl">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Institution</Label>
+                      <Input value={newEduInst} onChange={e => setNewEduInst(e.target.value)} placeholder="e.g. Harvard University" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Degree / Qualification</Label>
+                      <Input value={newEduDegree} onChange={e => setNewEduDegree(e.target.value)} placeholder="e.g. B.Tech Computer Science" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Field of Study</Label>
+                      <Input value={newEduField} onChange={e => setNewEduField(e.target.value)} placeholder="e.g. Information Technology" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Start Date</Label>
+                      <Input type="date" value={newEduStart} onChange={e => setNewEduStart(e.target.value)} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">End Date</Label>
+                      <Input type="date" value={newEduEnd} onChange={e => setNewEduEnd(e.target.value)} />
+                    </div>
+                    <div className="flex items-end">
+                      <Button onClick={handleAddEducation} className="w-full bg-[#f87941] text-white hover:bg-[#e06634]">Add Education</Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    {education.map((edu) => (
+                      <div key={edu.id} className="flex justify-between items-center p-3 border rounded-xl">
+                        <div>
+                          <p className="font-semibold text-sm">{edu.degree} — {edu.institution}</p>
+                          <p className="text-xs text-muted-foreground">Term: {edu.start_date} to {edu.end_date || 'Ongoing'}</p>
+                        </div>
+                        <Button variant="ghost" size="sm" className="text-red-500 h-8 w-8 p-0" onClick={() => handleRemoveEducation(edu.id)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Work Experience */}
+              <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+                <CardHeader>
+                  <CardTitle className="text-base font-bold">Previous Work Experience History</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-slate-50/50 dark:bg-zinc-900/30 p-4 rounded-xl">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Company Name</Label>
+                      <Input value={newExpCompany} onChange={e => setNewExpCompany(e.target.value)} placeholder="e.g. Google LLC" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Designation / Role</Label>
+                      <Input value={newExpRole} onChange={e => setNewExpRole(e.target.value)} placeholder="e.g. Senior Frontend Developer" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Start Date</Label>
+                      <Input type="date" value={newExpStart} onChange={e => setNewExpStart(e.target.value)} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">End Date</Label>
+                      <Input type="date" value={newExpEnd} onChange={e => setNewExpEnd(e.target.value)} />
+                    </div>
+                    <div className="flex items-end">
+                      <Button onClick={handleAddExperience} className="w-full bg-[#f87941] text-white hover:bg-[#e06634]">Add Experience</Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    {experience.map((exp) => (
+                      <div key={exp.id} className="flex justify-between items-center p-3 border rounded-xl">
+                        <div>
+                          <p className="font-semibold text-sm">{exp.designation} at {exp.company_name}</p>
+                          <p className="text-xs text-muted-foreground">Timeline: {exp.start_date} to {exp.end_date || 'Present'}</p>
+                        </div>
+                        <Button variant="ghost" size="sm" className="text-red-500 h-8 w-8 p-0" onClick={() => handleRemoveExperience(exp.id)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Bank Accounts */}
+              <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+                <CardHeader>
+                  <CardTitle className="text-base font-bold">Bank Accounts Details</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-slate-50/50 dark:bg-zinc-900/30 p-4 rounded-xl">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Bank Name</Label>
+                      <Input value={newBankName} onChange={e => setNewBankName(e.target.value)} placeholder="e.g. Chase Bank" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Account Number</Label>
+                      <Input value={newBankAcc} onChange={e => setNewBankAcc(e.target.value)} placeholder="e.g. 1234567890" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Account Holder Name</Label>
+                      <Input value={newBankHolder} onChange={e => setNewBankHolder(e.target.value)} placeholder="e.g. John Doe" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">IFSC / Routing Code</Label>
+                      <Input value={newBankIfsc} onChange={e => setNewBankIfsc(e.target.value)} placeholder="e.g. CHAS0123456" />
+                    </div>
+                    <div className="flex items-center gap-2 pt-4">
+                      <input type="checkbox" id="chk-bank-prim" checked={newBankPrimary} onChange={e => setNewBankPrimary(e.target.checked)} />
+                      <Label htmlFor="chk-bank-prim">Set as Primary</Label>
+                    </div>
+                    <div className="flex items-end">
+                      <Button onClick={handleAddBankAccount} className="w-full bg-[#f87941] text-white hover:bg-[#e06634]">Add Account</Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    {bankAccounts.map((bank) => (
+                      <div key={bank.id} className="flex justify-between items-center p-3 border rounded-xl">
+                        <div>
+                          <p className="font-semibold text-sm">{bank.bank_name} (Acc: {bank.account_number})</p>
+                          <div className="flex gap-2 mt-0.5">
+                            <span className="text-xs text-muted-foreground">Holder: {bank.account_holder_name} • IFSC: {bank.ifsc_code}</span>
+                            {bank.is_primary && <Badge className="bg-emerald-500/10 text-emerald-600 text-[10px]">Primary</Badge>}
+                          </div>
+                        </div>
+                        <Button variant="ghost" size="sm" className="text-red-500 h-8 w-8 p-0" onClick={() => handleRemoveBankAccount(bank.id)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* TAB 3: EMPLOYMENT */}
+          {activeTab === 'employment' && (
+            <div className="space-y-6">
+              <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+                <CardHeader><CardTitle className="text-base font-bold">Employment Parameters</CardTitle></CardHeader>
+                <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-6 text-sm">
+                  <div><p className="text-xs text-slate-500">Designation</p><p className="font-semibold mt-0.5">{employee.designation}</p></div>
+                  <div><p className="text-xs text-slate-500">Department</p><p className="font-semibold mt-0.5">{employee.department}</p></div>
+                  <div><p className="text-xs text-slate-500">Sub-Department</p><p className="font-semibold mt-0.5">Platform & Cloud Infrastructure</p></div>
+                  <div><p className="text-xs text-slate-500">Work Mode</p><p className="font-semibold mt-0.5 capitalize">{employee.workMode || 'office'}</p></div>
+                  <div><p className="text-xs text-slate-500">Work Shift</p><p className="font-semibold mt-0.5 capitalize">{employee.workShift || 'General'}</p></div>
+                  <div><p className="text-xs text-slate-500">Probation Period</p><p className="font-semibold mt-0.5">{employee.probationPeriod ? `${employee.probationPeriod} months` : 'None'}</p></div>
+                  <div><p className="text-xs text-slate-500">Notice Period</p><p className="font-semibold mt-0.5">{employee.noticePeriod ? `${employee.noticePeriod} days` : 'None'}</p></div>
+                  <div><p className="text-xs text-slate-500">Office Email</p><p className="font-semibold mt-0.5">{employee.officeEmail || 'N/A'}</p></div>
+                  <div><p className="text-xs text-slate-500">Functional Manager</p><p className="font-semibold mt-0.5">Sarah Jenkins (VP)</p></div>
+                  <div><p className="text-xs text-slate-500">Buddy Assigned</p><p className="font-semibold mt-0.5">Samantha Lee (Product Manager)</p></div>
+                  <div><p className="text-xs text-slate-500">Mentor Assigned</p><p className="font-semibold mt-0.5">Alex Chen (Principal Architect)</p></div>
+                  <div><p className="text-xs text-slate-500">Floor Seating Map Coordinate</p><p className="font-semibold mt-0.5 text-rose-500">Floor 4 • Bay D • Desk 412</p></div>
+                </CardContent>
+              </Card>
+
+              {/* Career Progression & Transitions log */}
+              <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+                <CardHeader>
+                  <CardTitle className="text-sm font-bold">Historical Movements & Progression</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex gap-4 text-xs relative border-l-2 pl-4 py-2 border-rose-500">
+                    <div className="absolute -left-1.5 top-3.5 h-3.5 w-3.5 rounded-full bg-rose-500" />
+                    <div>
+                      <p className="font-bold">Promotion to Senior Engineer</p>
+                      <p className="text-slate-500">Transitioned designation from Software Engineer to Senior Software Engineer. CTC revised (+15%).</p>
+                      <span className="text-[10px] text-slate-400">Effective: Jan 15, 2025</span>
+                    </div>
+                  </div>
+                  <div className="flex gap-4 text-xs relative border-l-2 pl-4 py-2 border-slate-200 dark:border-zinc-800">
+                    <div className="absolute -left-1.5 top-3.5 h-3.5 w-3.5 rounded-full bg-slate-300 dark:bg-zinc-800" />
+                    <div>
+                      <p className="font-bold">Department Transfer</p>
+                      <p className="text-slate-500">Transferred from general application engineering team to Platform & Infrastructure architecture division.</p>
+                      <span className="text-[10px] text-slate-400">Effective: May 10, 2025</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* TAB 4: SKILLS & CERTIFICATIONS */}
+          {activeTab === 'skills' && (
+            <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-base font-bold">Skills Inventory</CardTitle>
+                  <CardDescription>Verified skill proficiency matrix.</CardDescription>
+                </div>
+                <Button size="sm" onClick={() => setShowAddSkill(!showAddSkill)} className="bg-[#f87941] text-white hover:bg-[#e06634]">
+                  {showAddSkill ? 'Cancel' : 'Add Skill'}
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {showAddSkill && (
+                  <div className="p-4 bg-slate-50 dark:bg-slate-900 border rounded-2xl border-[#e6e4e6]/20 dark:border-[#2f3035]/20 space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <Label>Skill Name</Label>
+                        <Input placeholder="e.g. React.js" value={newSkillName} onChange={(e) => setNewSkillName(e.target.value)} />
+                      </div>
+                      <div>
+                        <Label>Proficiency</Label>
+                        <select value={newSkillProficiency} onChange={(e) => setNewSkillProficiency(e.target.value)} className="w-full h-9 rounded-md border bg-transparent text-sm px-2">
+                          <option value="Beginner">Beginner</option>
+                          <option value="Intermediate">Intermediate</option>
+                          <option value="Expert">Expert</option>
+                        </select>
+                      </div>
+                      <div>
+                        <Label>Category</Label>
+                        <select value={newSkillCategory} onChange={(e) => setNewSkillCategory(e.target.value)} className="w-full h-9 rounded-md border bg-transparent text-sm px-2">
+                          <option value="Technical">Technical</option>
+                          <option value="Soft Skills">Soft Skills</option>
+                          <option value="Domain">Domain Knowledge</option>
+                        </select>
+                      </div>
+                    </div>
+                    <Button size="sm" onClick={handleAddSkill} className="bg-[#f87941] text-white">Save Skill</Button>
+                  </div>
+                )}
+
+                {skills.length === 0 ? (
+                  <p className="text-sm text-slate-500 text-center py-6">No skills recorded.</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {skills.map(s => (
+                      <div key={s.id} className="flex items-center justify-between p-3 border rounded-xl border-[#e6e4e6]/20 dark:border-[#2f3035]/20">
+                        <div>
+                          <p className="text-sm font-bold">{s.skillName}</p>
+                          <div className="flex gap-2 mt-1">
+                            <Badge variant="secondary" className="text-[10px]">{s.category}</Badge>
+                            <Badge variant="outline" className="text-[10px]">{s.proficiencyLevel}</Badge>
+                          </div>
+                        </div>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => handleRemoveSkill(s.id)}>
+                          <Trash className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* TAB 5: TRAINING */}
+          {activeTab === 'training' && (
+            <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-base font-bold">Training & Courses</CardTitle>
+                  <CardDescription>Academic and professional certifications logged.</CardDescription>
+                </div>
+                {isAdmin && (
+                  <Button size="sm" onClick={() => setShowAddTraining(!showAddTraining)} className="bg-[#f87941] text-white hover:bg-[#e06634]">
+                    {showAddTraining ? 'Cancel' : 'Log Training'}
+                  </Button>
+                )}
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {showAddTraining && (
+                  <div className="p-4 bg-slate-50 dark:bg-slate-900 border rounded-2xl border-[#e6e4e6]/20 dark:border-[#2f3035]/20 space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <Label>Course Name</Label>
+                        <Input placeholder="e.g. AWS Cloud Practitioner" value={newTrainingName} onChange={(e) => setNewTrainingName(e.target.value)} />
+                      </div>
+                      <div>
+                        <Label>Training Type</Label>
+                        <select value={newTrainingType} onChange={(e) => setNewTrainingType(e.target.value)} className="w-full h-9 rounded-md border bg-transparent text-sm px-2">
+                          <option value="Technical">Technical</option>
+                          <option value="Compliance">Compliance</option>
+                          <option value="Leadership">Leadership</option>
+                        </select>
+                      </div>
+                      <div>
+                        <Label>Status</Label>
+                        <select value={newTrainingStatus} onChange={(e) => setNewTrainingStatus(e.target.value)} className="w-full h-9 rounded-md border bg-transparent text-sm px-2">
+                          <option value="planned">Planned</option>
+                          <option value="in_progress">In Progress</option>
+                          <option value="completed">Completed</option>
+                        </select>
+                      </div>
+                    </div>
+                    <Button size="sm" onClick={handleAddTraining} className="bg-[#f87941] text-white">Save Record</Button>
+                  </div>
+                )}
+
+                {training.length === 0 ? (
+                  <p className="text-sm text-slate-500 text-center py-6">No training programs recorded.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {training.map(t => (
+                      <div key={t.id} className="flex items-center justify-between p-3.5 border rounded-xl border-[#e6e4e6]/20 dark:border-[#2f3035]/20">
+                        <div>
+                          <p className="text-sm font-bold">{t.courseName}</p>
+                          <span className="text-xs text-slate-500">{t.trainingType} • Started: {t.startDate ? new Date(t.startDate).toLocaleDateString() : 'N/A'}</span>
+                        </div>
+                        <Badge variant={t.status === 'completed' ? 'default' : 'secondary'}>{t.status}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* TAB 6: ASSETS */}
+          {activeTab === 'assets' && (
+            <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-base font-bold">Hardware & Assets Issued</CardTitle>
+                  <CardDescription>Enterprise equipment logged under this employee.</CardDescription>
+                </div>
+                {isAdmin && (
+                  <Button size="sm" onClick={() => setShowAddAsset(!showAddAsset)} className="bg-[#f87941] text-white hover:bg-[#e06634]">
+                    {showAddAsset ? 'Cancel' : 'Issue Asset'}
+                  </Button>
+                )}
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {showAddAsset && (
+                  <div className="p-4 bg-slate-50 dark:bg-slate-900 border rounded-2xl border-[#e6e4e6]/20 dark:border-[#2f3035]/20 space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <Label>Asset Type</Label>
+                        <select value={newAssetType} onChange={(e) => setNewAssetType(e.target.value)} className="w-full h-9 rounded-md border bg-transparent text-sm px-2">
+                          <option value="Laptop">Laptop</option>
+                          <option value="Monitor">Monitor</option>
+                          <option value="Mobile">Mobile Phone</option>
+                          <option value="Accessories">Accessories</option>
+                        </select>
+                      </div>
+                      <div>
+                        <Label>Asset Name / Model</Label>
+                        <Input placeholder="e.g. MacBook Pro M3" value={newAssetName} onChange={(e) => setNewAssetName(e.target.value)} />
+                      </div>
+                      <div>
+                        <Label>Serial Number</Label>
+                        <Input placeholder="e.g. C02X123456" value={newAssetSerial} onChange={(e) => setNewAssetSerial(e.target.value)} />
+                      </div>
+                    </div>
+                    <Button size="sm" onClick={handleAddAsset} className="bg-[#f87941] text-white">Issue Equipment</Button>
+                  </div>
+                )}
+
+                {assets.length === 0 ? (
+                  <p className="text-sm text-slate-500 text-center py-6">No assets issued to this employee.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {assets.map(asset => (
+                      <div key={asset.id} className="flex items-center justify-between p-3.5 border rounded-xl border-[#e6e4e6]/20 dark:border-[#2f3035]/20">
+                        <div>
+                          <p className="text-sm font-bold">{asset.assetName}</p>
+                          <span className="text-xs text-slate-500">S/N: {asset.serialNumber || 'N/A'} • Issued: {new Date(asset.issuedDate).toLocaleDateString()}</span>
+                        </div>
+                        <Badge variant="outline" className="capitalize text-emerald-600 border-emerald-500/20 bg-emerald-500/5">
+                          {asset.status}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* TAB 7: PERFORMANCE & REVIEWS */}
+          {activeTab === 'reviews' && (
+            <div className="space-y-6">
+              {/* Appraisal Summary */}
+              <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+                <CardHeader className="flex flex-row items-center justify-between pb-3 border-b">
+                  <div>
+                    <CardTitle className="text-base font-bold">Appraisals & Performance Ratings</CardTitle>
+                    <CardDescription>KPI targets and 360-degree feedback loop details.</CardDescription>
+                  </div>
+                  <Badge className="bg-rose-500/10 text-rose-500 border-none font-bold text-xs px-2.5 py-1">PROMOTION ELIGIBLE: 92%</Badge>
+                </CardHeader>
+                <CardContent className="pt-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                  <div className="p-3 border rounded-xl bg-slate-50 dark:bg-zinc-900">
+                    <span className="font-semibold text-slate-500">Manager Rating:</span>
+                    <p className="font-bold text-sm mt-1">4.8 / 5.0 (Exceeds Expectations)</p>
+                  </div>
+                  <div className="p-3 border rounded-xl bg-slate-50 dark:bg-zinc-900">
+                    <span className="font-semibold text-slate-500">Peer Calibration:</span>
+                    <p className="font-bold text-sm mt-1">4.6 / 5.0 (High Collaboration)</p>
+                  </div>
+                  <div className="p-3 border rounded-xl bg-slate-50 dark:bg-zinc-900">
+                    <span className="font-semibold text-slate-500">Competency Level:</span>
+                    <p className="font-bold text-sm mt-1">L4 Senior Tech Lead (Advanced)</p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* OKR Checklist */}
+              <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+                <CardHeader>
+                  <CardTitle className="text-sm font-bold">Active OKRs & Strategic Goals</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-semibold">Goal 1: Re-architect dynamic form engine codebase</span>
+                      <Badge className="bg-rose-500/10 text-rose-500 border-none text-[9px]">80% COMPLETE</Badge>
+                    </div>
+                    <div className="w-full bg-slate-100 dark:bg-zinc-800 rounded-full h-2">
+                      <div className="bg-rose-500 h-2 rounded-full" style={{ width: '80%' }}></div>
+                    </div>
+                    <span className="text-[10px] text-slate-400 block">Milestone target: Sep 30, 2026 • Blocker: None</span>
+                  </div>
+
+                  <div className="space-y-2 border-t pt-3">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-semibold">Goal 2: Enforce GDPR compliance in client-session middleware</span>
+                      <Badge className="bg-emerald-500/10 text-emerald-500 border-none text-[9px]">100% COMPLETE</Badge>
+                    </div>
+                    <div className="w-full bg-slate-100 dark:bg-zinc-800 rounded-full h-2">
+                      <div className="bg-emerald-500 h-2 rounded-full" style={{ width: '100%' }}></div>
+                    </div>
+                    <span className="text-[10px] text-slate-400 block">Milestone target: Jun 15, 2026 • Completed</span>
+                  </div>
+
+                  <div className="space-y-2 border-t pt-3">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-semibold">Goal 3: Reduce REST API dashboard metrics page load by 20%</span>
+                      <Badge className="bg-yellow-500/10 text-yellow-600 border-none text-[9px]">50% COMPLETE</Badge>
+                    </div>
+                    <div className="w-full bg-slate-100 dark:bg-zinc-800 rounded-full h-2">
+                      <div className="bg-yellow-500 h-2 rounded-full" style={{ width: '50%' }}></div>
+                    </div>
+                    <span className="text-[10px] text-slate-400 block">Milestone target: Dec 31, 2026 • Blocker: Query optimization</span>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* TAB 8: PAYROLL & COMPENSATION */}
+          {activeTab === 'payroll' && (
+            <div className="space-y-6">
+              <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="text-base font-bold">Compensation Profile</CardTitle>
+                    <CardDescription>Protected financial details & accounts.</CardDescription>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => setRevealSalary(!revealSalary)} className="border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+                    {revealSalary ? <EyeOff className="h-4 w-4 mr-1.5" /> : <Eye className="h-4 w-4 mr-1.5" />}
+                    {revealSalary ? 'Hide Financials' : 'Reveal Info'}
+                  </Button>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="p-4 bg-slate-50 dark:bg-slate-900 border rounded-2xl">
+                      <span className="text-xs text-slate-500">Gross Salary (CTC)</span>
+                      <p className="text-lg font-extrabold mt-1">
+                        {revealSalary && employee.ctc ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(employee.ctc) : '••••••'}
+                      </p>
+                    </div>
+                    <div className="p-4 bg-slate-50 dark:bg-slate-900 border rounded-2xl">
+                      <span className="text-xs text-slate-500">Hourly Bill Rate</span>
+                      <p className="text-lg font-extrabold mt-1">
+                        {revealSalary && employee.hourlyRate ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(employee.hourlyRate) : '••••••'}
+                      </p>
+                    </div>
+                    <div className="p-4 bg-slate-50 dark:bg-slate-900 border rounded-2xl">
+                      <span className="text-xs text-slate-500">Base Wage (Monthly)</span>
+                      <p className="text-lg font-extrabold mt-1">
+                        {revealSalary && employee.salary ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(employee.salary) : '••••••'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {revealSalary && (
+                    <>
+                      {/* CTC Allowances & Deductions Ledger */}
+                      <div className="border-t border-[#e6e4e6]/10 dark:border-[#2f3035]/10 pt-4 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-sm font-bold">CTC Allowance & Deductions Ledger</h4>
+                          <div className="flex gap-1.5">
+                            <Button size="xs" variant={taxRegime === 'New' ? 'default' : 'outline'} onClick={() => setTaxRegime('New')} className="h-6 text-[10px]">New Tax Regime</Button>
+                            <Button size="xs" variant={taxRegime === 'Old' ? 'default' : 'outline'} onClick={() => setTaxRegime('Old')} className="h-6 text-[10px]">Old Tax Regime</Button>
+                          </div>
+                        </div>
+
+                        <div className="p-4 rounded-xl border bg-slate-50/50 dark:bg-zinc-900/10 text-xs space-y-2">
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">Basic Salary component (50% of base)</span>
+                            <span className="font-semibold">INR {((employee.salary || 0) * 0.5).toLocaleString()} / month</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">House Rent Allowance (HRA) (20% of base)</span>
+                            <span className="font-semibold">INR {((employee.salary || 0) * 0.2).toLocaleString()} / month</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">Special Travel Allowance</span>
+                            <span className="font-semibold">INR 8,400 / month</span>
+                          </div>
+                          <div className="flex justify-between text-rose-500 border-t pt-2">
+                            <span>PF Contribution (Employee portion deduction)</span>
+                            <span>- INR 1,800 / month</span>
+                          </div>
+                          <div className="flex justify-between text-rose-500">
+                            <span>Professional Tax (PT deduction)</span>
+                            <span>- INR 200 / month</span>
+                          </div>
+                          <div className="flex justify-between font-extrabold text-sm border-t pt-2 mt-1">
+                            <span>Net Take-home Salary estimation:</span>
+                            <span className="text-emerald-500">INR {((employee.salary || 0) * 0.7 + 8400 - 2000).toLocaleString()} / month</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Stock options & Benchmarking */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-4">
+                        <Card className="p-4 bg-slate-50/50 dark:bg-zinc-900/10 border text-xs space-y-2">
+                          <p className="font-bold flex items-center gap-1.5"><CreditCard className="h-4 w-4" /> Vested Equity Option Scheme</p>
+                          <div className="flex justify-between">
+                            <span>Total ESOP / ISO Allocated:</span>
+                            <span className="font-semibold">5,000 Option shares</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Vesting Progress (4-year schedule):</span>
+                            <span className="font-semibold">25% vested (1,250 shares)</span>
+                          </div>
+                          <div className="flex justify-between text-slate-400">
+                            <span>Next Vesting Cliff Date:</span>
+                            <span>Dec 01, 2026</span>
+                          </div>
+                        </Card>
+
+                        <Card className="p-4 bg-slate-50/50 dark:bg-zinc-900/10 border text-xs space-y-2">
+                          <p className="font-bold flex items-center gap-1.5"><Sparkles className="h-4 w-4" /> AI Salary Benchmarking</p>
+                          <p className="text-slate-400 leading-relaxed">This employee's CTC aligns with the <strong className="text-slate-700 dark:text-slate-200">85th percentile</strong> of similar Senior Software Engineer profiles in Bangalore, Karnataka.</p>
+                        </Card>
+                      </div>
+                    </>
+                  )}
+
+                  <div className="border-t border-[#e6e4e6]/10 dark:border-[#2f3035]/10 pt-4">
+                    <h4 className="text-sm font-bold mb-3">Statutory Accounts & Banking</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-6 text-sm">
+                      <div><p className="text-xs text-slate-500">PF Account Number</p><p className="font-semibold mt-0.5">{revealSalary && employee.pfNumber ? employee.pfNumber : '••••••••••••'}</p></div>
+                      <div><p className="text-xs text-slate-500">UAN Number</p><p className="font-semibold mt-0.5">{revealSalary && employee.uanNumber ? employee.uanNumber : '••••••••••••'}</p></div>
+                      <div><p className="text-xs text-slate-500">Bank Name</p><p className="font-semibold mt-0.5">{revealSalary && employee.bankName ? employee.bankName : '••••••••••••'}</p></div>
+                      <div><p className="text-xs text-slate-500">Account Number</p><p className="font-semibold mt-0.5">{revealSalary && employee.bankAccountNumber ? employee.bankAccountNumber : '••••••••••••••••'}</p></div>
+                      <div><p className="text-xs text-slate-500">IFSC Routing Code</p><p className="font-semibold mt-0.5">{revealSalary && employee.ifscCode ? employee.ifscCode : '•••••••••••'}</p></div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* TAB 9: TIMELINE & LOGS */}
+          {activeTab === 'timeline' && (
+            <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+              <CardHeader><CardTitle className="text-base font-bold">Lifecycle Timeline</CardTitle></CardHeader>
+              <CardContent>
+                {timeline.length === 0 ? (
+                  <p className="text-sm text-slate-500 text-center py-6">No timeline events recorded.</p>
+                ) : (
+                  <div className="relative border-l-2 border-[#e6e4e6]/30 dark:border-[#2f3035]/30 ml-4 pl-6 space-y-6">
+                    {timeline.map((event) => (
+                      <div key={event.id} className="relative">
+                        <div className="absolute -left-9 top-1 w-5 h-5 rounded-full bg-[#f87941] border-4 border-white dark:border-[#1E1F22]" />
+                        <div>
+                          <p className="text-sm font-bold">{event.eventTitle}</p>
+                          {event.eventDescription && <p className="text-xs text-slate-500 mt-0.5">{event.eventDescription}</p>}
+                          <span className="text-[10px] text-slate-400 block mt-1">{new Date(event.createdAt).toLocaleString()}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* TAB 10: DOCUMENTS */}
+          {activeTab === 'documents' && (
+            <EmployeeDocuments employeeId={Number(employeeId)} isAdmin={Boolean(isAdmin)} />
+          )}
+
+          {/* TAB 11: NOTES */}
+          {activeTab === 'notes' && (
+            <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-base font-bold">HR Confidential Notes</CardTitle>
+                  <CardDescription>Private manager ratings, comments and operational records.</CardDescription>
+                </div>
+                <Button size="sm" onClick={() => setShowAddNote(!showAddNote)} className="bg-[#f87941] text-white hover:bg-[#e06634]">
+                  {showAddNote ? 'Cancel' : 'New Note'}
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {showAddNote && (
+                  <div className="p-4 bg-slate-50 dark:bg-slate-900 border rounded-2xl border-[#e6e4e6]/20 dark:border-[#2f3035]/20 space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label>Note Subject</Label>
+                        <Input placeholder="e.g. Standard Review Notes" value={newNoteTitle} onChange={(e) => setNewNoteTitle(e.target.value)} />
+                      </div>
+                      <div>
+                        <Label>Note Category</Label>
+                        <select value={newNoteType} onChange={(e) => setNewNoteType(e.target.value)} className="w-full h-9 rounded-md border bg-transparent text-sm px-2">
+                          <option value="general">General</option>
+                          <option value="performance">Performance</option>
+                          <option value="disciplinary">Disciplinary</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <Label>Content</Label>
+                      <textarea value={newNoteContent} onChange={(e) => setNewNoteContent(e.target.value)} className="w-full h-24 p-2 rounded-md border bg-transparent text-sm" placeholder="Write confidential notes..." />
+                    </div>
+                    <Button size="sm" onClick={handleAddNote} className="bg-[#f87941] text-white">Save Note</Button>
+                  </div>
+                )}
+
+                {notes.length === 0 ? (
+                  <p className="text-sm text-slate-500 text-center py-6">No confidential notes found.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {notes.map(note => (
+                      <div key={note.id} className="p-4 border rounded-xl border-[#e6e4e6]/20 dark:border-[#2f3035]/20 space-y-2 bg-slate-50/50 dark:bg-slate-900/50">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-bold text-sm">{note.title || 'Operational Note'}</h4>
+                          <Badge variant="secondary" className="capitalize text-[10px]">{note.noteType}</Badge>
+                        </div>
+                        <p className="text-xs text-slate-600 dark:text-slate-400">{note.content}</p>
+                        <span className="text-[10px] text-slate-400 block pt-1">Recorded on {new Date(note.createdAt).toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* TAB 12: ATTENDANCE */}
+          {activeTab === 'attendance' && (
+            <div className="space-y-6">
+              <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+                <CardHeader className="flex flex-row items-center justify-between pb-3 border-b">
+                  <div>
+                    <CardTitle className="text-base font-bold">Attendance Record (Recent)</CardTitle>
+                    <CardDescription>Biometric & GPS geofenced logs feed.</CardDescription>
+                  </div>
+                  <Badge className="bg-rose-500/10 text-rose-500 border-none font-bold text-xs">WORK MODE: HYBRID (60% OFFICE / 40% WFH)</Badge>
+                </CardHeader>
+                <CardContent className="pt-4 space-y-4">
+                  {attendance.length === 0 ? (
+                    <p className="text-sm text-slate-500 text-center py-6">No recent attendance records found.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {attendance.map((record) => (
+                        <div key={record.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 border rounded-xl border-[#e6e4e6]/20 dark:border-[#2f3035]/20 gap-2 text-xs">
+                          <div>
+                            <p className="font-semibold text-sm">{new Date(record.date).toLocaleDateString()}</p>
+                            <span className="text-slate-500">{record.checkIn || '--:--'} checkin / {record.checkOut || '--:--'} checkout</span>
+                            <p className="text-[10px] text-slate-400 mt-1">Geofence validation: 12.9716° N, 77.5946° E • Break duration: 1.2 hrs</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary">GPS VERIFIED</Badge>
+                            <Badge variant={record.status === 'present' ? 'default' : 'outline'}>{record.status}</Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* TAB 13: LEAVES */}
+          {activeTab === 'leaves' && (
+            <div className="space-y-6">
+              <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+                <CardHeader className="flex flex-row items-center justify-between pb-3 border-b">
+                  <div>
+                    <CardTitle className="text-base font-bold">Leave Summaries & Requests</CardTitle>
+                    <CardDescription>Current balance tracking & forecasting models.</CardDescription>
+                  </div>
+                  <Badge className="bg-rose-500/10 text-rose-500 border-none font-bold text-xs">AI Forecast: Burnout Risk Mid-Dec</Badge>
+                </CardHeader>
+                <CardContent className="pt-4 space-y-4">
+                  {/* Encashment calculator ledger */}
+                  <div className="p-4 rounded-xl border bg-slate-50/50 dark:bg-zinc-900/10 text-xs space-y-2">
+                    <p className="font-bold">Leave Balance Ledger</p>
+                    <div className="flex justify-between">
+                      <span>Annual Paid Leave balance:</span>
+                      <span className="font-bold">18 Days (Accrued)</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Sick Leave:</span>
+                      <span className="font-bold">6 Days</span>
+                    </div>
+                    <div className="flex justify-between text-slate-400">
+                      <span>Approval chain routes:</span>
+                      <span>Reporting Manager (Sarah Jenkins) → HR Business Partner</span>
+                    </div>
+                  </div>
+
+                  {leaves.length === 0 ? (
+                    <p className="text-sm text-slate-500 text-center py-6">No leave requests logged.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {leaves.map((leave) => (
+                        <div key={leave.id} className="p-4 border rounded-xl border-[#e6e4e6]/20 dark:border-[#2f3035]/20 space-y-2 text-xs">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <Badge variant="outline" className="capitalize text-[10px]">{leave.leaveType}</Badge>
+                              <p className="text-sm font-bold mt-1">{leave.reason}</p>
+                            </div>
+                            <Badge variant={leave.status === 'approved' ? 'default' : 'secondary'}>{leave.status}</Badge>
+                          </div>
+                          <span className="text-slate-500">{new Date(leave.startDate).toLocaleDateString()} to {new Date(leave.endDate).toLocaleDateString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* TAB 14: TRAVEL & EXPENSES */}
+          {activeTab === 'travel' && (
+            <div className="space-y-6">
+              <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+                <CardHeader>
+                  <CardTitle className="text-base font-bold">Business Travel Registry & Visas</CardTitle>
+                  <CardDescription>Track visa status and corporate travel itineraries.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                    <div className="p-3 border rounded-xl bg-slate-50 dark:bg-zinc-900 space-y-1">
+                      <p className="font-semibold text-slate-400">US B1/B2 Visa</p>
+                      <p className="font-bold text-slate-800 dark:text-slate-200">Valid until: Dec 12, 2030</p>
+                      <Badge className="bg-emerald-500/10 text-emerald-600 border-none font-bold text-[9px]">COMPLIANT / ISSUED</Badge>
+                    </div>
+                    <div className="p-3 border rounded-xl bg-slate-50 dark:bg-zinc-900 space-y-1">
+                      <p className="font-semibold text-slate-400">UK Business Visitor</p>
+                      <p className="font-bold text-slate-800 dark:text-slate-200">Valid until: Jul 30, 2027</p>
+                      <Badge className="bg-emerald-500/10 text-emerald-600 border-none font-bold text-[9px]">COMPLIANT / ISSUED</Badge>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+                <CardHeader>
+                  <CardTitle className="text-sm font-bold">Expense Reimbursement Ledgers</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-xs">
+                  {travelLogs.map((log) => (
+                    <div key={log.id} className="flex justify-between items-center p-3 border rounded-xl bg-slate-50/50 dark:bg-zinc-900/10">
+                      <div>
+                        <p className="font-bold text-slate-800 dark:text-slate-200">{log.destination}</p>
+                        <p className="text-[10px] text-slate-400">Purpose: {log.purpose} • Dates: {log.dates}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-slate-800 dark:text-slate-200">{log.cost}</p>
+                        <Badge className={log.status === 'approved' ? 'bg-emerald-500/15 text-emerald-600 font-bold border-none text-[9px]' : 'bg-yellow-500/15 text-yellow-600 font-bold border-none text-[9px]'}>
+                          {log.status.toUpperCase()}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* TAB 15: ACCESS & SECURITY */}
+          {activeTab === 'security' && (
+            <div className="space-y-6">
+              <Card className="bg-white dark:bg-[#1E1F22] border border-rose-500/10 dark:border-rose-500/5 shadow-md">
+                <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-slate-100 dark:border-zinc-800">
+                  <div>
+                    <CardTitle className="text-base font-bold flex items-center gap-1.5"><Lock className="h-4.5 w-4.5 text-rose-500" /> Identity Access Control</CardTitle>
+                    <CardDescription>Manage password policies, MFA credentials, and linked accounts.</CardDescription>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-4 space-y-4 text-xs">
+                  <div className="flex items-center justify-between p-3 border rounded-xl bg-slate-50 dark:bg-zinc-900">
+                    <div>
+                      <p className="font-bold text-slate-800 dark:text-slate-200">Multi-Factor Authentication (MFA)</p>
+                      <p className="text-[10px] text-slate-400">Require dynamic security tokens during workspace login actions.</p>
+                    </div>
+                    <Button size="xs" variant={mfaEnabled ? 'default' : 'outline'} onClick={() => { setMfaEnabled(!mfaEnabled); toast.success(`MFA status toggled to: ${!mfaEnabled}`); }}>
+                      {mfaEnabled ? 'Disable MFA' : 'Enable MFA'}
+                    </Button>
+                  </div>
+
+                  <div className="flex justify-between items-center p-3 border rounded-xl bg-slate-50 dark:bg-zinc-900">
+                    <div>
+                      <p className="font-bold text-slate-800 dark:text-slate-200">SSO Federated Identities</p>
+                      <p className="text-[10px] text-slate-400">Linked login: Google OAuth ({user.email})</p>
+                    </div>
+                    <Badge className="bg-emerald-500/10 text-emerald-600 font-bold border-none text-[10px]">SSO ACTIVE</Badge>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Whitelisted IP access lists</Label>
+                    <Input value={ipWhitelist} onChange={(e) => setIpWhitelist(e.target.value)} placeholder="e.g. 192.168.1.0/24" />
+                    <span className="text-[10px] text-slate-400">Separated by comma. Restrains workspace profile updates to whitelisted IPs.</span>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+                <CardHeader>
+                  <CardTitle className="text-sm font-bold">Active Authenticated Devices & Sessions ({sessions.length})</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-xs">
+                  {sessions.map((sess) => (
+                    <div key={sess.id} className="flex justify-between items-center p-3.5 border rounded-xl">
+                      <div>
+                        <p className="font-bold text-slate-800 dark:text-slate-200">{sess.device}</p>
+                        <p className="text-[10px] text-slate-400">IP Address: {sess.ip} • Last seen: {sess.date}</p>
+                      </div>
+                      <div>
+                        {sess.current ? (
+                          <Badge className="bg-rose-500/10 text-rose-500 border-none font-bold text-[9px]">CURRENT DEVICE</Badge>
+                        ) : (
+                          <Button size="xs" variant="outline" className="text-rose-500 border-rose-500/20 hover:bg-rose-500/5 h-7" onClick={() => {
+                            setSessions(prev => prev.filter(s => s.id !== sess.id));
+                            toast.success('Session deauthorized and dynamic tokens cleared.');
+                          }}>
+                            Revoke login session
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Edit Profile Dialog */}
+      {isAdmin && (
+        <>
+          <EditEmployeeDialog
+            open={editDialogOpen}
+            onOpenChange={setEditDialogOpen}
+            onSuccess={fetchEmployeeData}
+            employee={employee as any}
+            user={user}
+          />
+          <AssignProjectsDialog
+            open={assignProjectDialogOpen}
+            onOpenChange={setAssignProjectDialogOpen}
+            onSuccess={() => fetchAssignedProjects(user.id)}
+            userId={user.id}
+            userName={`${user.firstName} ${user.lastName}`}
+          />
+          <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+            <AlertDialogContent className="bg-white dark:bg-[#1E1F22] border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
+              <AlertDialogHeader>
+                <AlertDialogTitle className="text-slate-900 dark:text-[#fdfcfc]">Delete Employee Profile</AlertDialogTitle>
+                <AlertDialogDescription className="text-slate-500 dark:text-[#b1b1b1]">
+                  Are you absolutely sure? This will remove "{user.firstName} {user.lastName}" and all associated databases assets, documents, skills, and logs. This is irreversible.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel className="border-[#e6e4e6]/30 dark:border-[#2f3035]/30">Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteEmployee} className="bg-red-600 hover:bg-red-700 text-white">
+                  Confirm Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
+      )}
+    </div>
+  );
+}

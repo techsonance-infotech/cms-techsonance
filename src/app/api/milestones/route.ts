@@ -1,360 +1,157 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
-import { milestones, projects } from '@/db/schema';
-import { eq, like, and, or, desc, asc } from 'drizzle-orm';
-import { getCurrentUser } from '@/lib/auth';
-import { safeErrorMessage } from '@/lib/constants';
+import { NextResponse } from 'next/server';
+import { withApiHandler } from '@/server/http/handler';
+import { BadRequestError, NotFoundError } from '@/server/http/errors';
+import { createMilestoneSchema, milestoneStatusSchema, updateMilestoneSchema } from '@/server/validation/milestones';
+import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
 
-const VALID_STATUSES = ['pending', 'in_progress', 'completed'] as const;
-
-function isValidStatus(status: string): status is typeof VALID_STATUSES[number] {
-  return VALID_STATUSES.includes(status as any);
+function normalizeSupabaseMilestoneRow(row: Record<string, unknown>) {
+  return {
+    id: Number(row.id),
+    projectId: Number(row.project_id),
+    title: row.title,
+    description: row.description ?? null,
+    dueDate: row.due_date,
+    status: row.status,
+    createdAt: row.created_at ?? null,
+    updatedAt: row.updated_at ?? null,
+  };
 }
 
-function isValidDate(dateString: string): boolean {
-  const date = new Date(dateString);
-  return !isNaN(date.getTime());
-}
+export const GET = withApiHandler(async (request, context) => {
+  const searchParams = new URL(request.url).searchParams;
+  const id = searchParams.get('id');
 
-export async function GET(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const supabase = getAdminRouteSupabase();
+
+  if (id) {
+    const milestoneId = Number(id);
+    if (!Number.isInteger(milestoneId) || milestoneId <= 0) {
+      throw new BadRequestError('Valid milestone id is required');
     }
-
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-
-    if (id) {
-      if (!id || isNaN(parseInt(id))) {
-        return NextResponse.json({ 
-          error: "Valid ID is required",
-          code: "INVALID_ID" 
-        }, { status: 400 });
-      }
-
-      const milestone = await db.select()
-        .from(milestones)
-        .where(eq(milestones.id, parseInt(id)))
-        .limit(1);
-
-      if (milestone.length === 0) {
-        return NextResponse.json({ 
-          error: 'Milestone not found',
-          code: 'MILESTONE_NOT_FOUND' 
-        }, { status: 404 });
-      }
-
-      return NextResponse.json(milestone[0], { status: 200 });
-    }
-
-    const limit = Math.min(parseInt(searchParams.get('limit') ?? '10'), 100);
-    const offset = parseInt(searchParams.get('offset') ?? '0');
-    const projectId = searchParams.get('projectId');
-    const status = searchParams.get('status');
-    const sortField = searchParams.get('sort') ?? 'dueDate';
-    const sortOrder = searchParams.get('order') ?? 'asc';
-
-    let query = db.select().from(milestones);
-
-    const conditions = [];
-
-    if (projectId) {
-      if (isNaN(parseInt(projectId))) {
-        return NextResponse.json({ 
-          error: "Valid project ID is required",
-          code: "INVALID_PROJECT_ID" 
-        }, { status: 400 });
-      }
-      conditions.push(eq(milestones.projectId, parseInt(projectId)));
-    }
-
-    if (status) {
-      if (!isValidStatus(status)) {
-        return NextResponse.json({ 
-          error: `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}`,
-          code: "INVALID_STATUS" 
-        }, { status: 400 });
-      }
-      conditions.push(eq(milestones.status, status));
-    }
-
-    if (conditions.length > 0) {
-      query = query.where(and(...conditions));
-    }
-
-    if (sortField === 'dueDate') {
-      query = sortOrder === 'desc' 
-        ? query.orderBy(desc(milestones.dueDate))
-        : query.orderBy(asc(milestones.dueDate));
-    } else if (sortField === 'createdAt') {
-      query = sortOrder === 'desc' 
-        ? query.orderBy(desc(milestones.createdAt))
-        : query.orderBy(asc(milestones.createdAt));
-    } else if (sortField === 'status') {
-      query = sortOrder === 'desc' 
-        ? query.orderBy(desc(milestones.status))
-        : query.orderBy(asc(milestones.status));
-    }
-
-    const results = await query.limit(limit).offset(offset);
-
-    return NextResponse.json(results, { status: 200 });
-
-  } catch (error) {
-    console.error('GET error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
+    const { data: milestone, error } = await supabase
+      .from('milestones')
+      .select('*')
+      .eq('id', milestoneId)
+      .eq('tenant_id', tenantId)
+      .single();
+    if (error || !milestone) throw new NotFoundError('Milestone not found');
+    return NextResponse.json(normalizeSupabaseMilestoneRow(milestone));
   }
-}
 
-export async function POST(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
+  const limit = Math.min(Number(searchParams.get('limit') ?? '10'), 100);
+  const offset = Math.max(Number(searchParams.get('offset') ?? '0'), 0);
+  const projectId = searchParams.get('projectId');
+  const status = searchParams.get('status');
+  const sortField = searchParams.get('sort') ?? 'dueDate';
+  const ascending = searchParams.get('order') !== 'desc';
+  
+  let query = supabase
+    .from('milestones')
+    .select('*', { count: 'exact' })
+    .eq('tenant_id', tenantId);
+  if (projectId) query = query.eq('project_id', Number(projectId));
+  if (status) query = query.eq('status', milestoneStatusSchema.parse(status));
 
-    const body = await request.json();
+  const sortColumn = sortField === 'createdAt' ? 'created_at' : sortField === 'status' ? 'status' : 'due_date';
+  const { data, count, error } = await query.order(sortColumn, { ascending }).range(offset, offset + limit - 1);
+  if (error) throw error;
 
-    if ('userId' in body || 'user_id' in body) {
-      return NextResponse.json({ 
-        error: "User ID cannot be provided in request body",
-        code: "USER_ID_NOT_ALLOWED" 
-      }, { status: 400 });
-    }
+  return NextResponse.json({
+    success: true,
+    data: ((data as Record<string, unknown>[] | null) ?? []).map(normalizeSupabaseMilestoneRow),
+    message: 'Milestones fetched successfully',
+    errors: null,
+    meta: { page: Math.floor(offset / limit) + 1, limit, total: Number(count ?? 0) },
+  });
+}, { requireAuth: true, roles: ['Employee'] });
 
-    const { projectId, title, dueDate, description, status } = body;
+export const POST = withApiHandler(async (request, context) => {
+  const payload = createMilestoneSchema.parse(await request.json());
 
-    if (!projectId) {
-      return NextResponse.json({ 
-        error: "Project ID is required",
-        code: "MISSING_PROJECT_ID" 
-      }, { status: 400 });
-    }
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const supabase = getAdminRouteSupabase();
+  const { data: project } = await supabase
+    .from('projects')
+    .select('id')
+    .eq('id', payload.projectId)
+    .eq('tenant_id', tenantId)
+    .single();
+    
+  if (!project) throw new NotFoundError('Project not found');
 
-    if (isNaN(parseInt(projectId))) {
-      return NextResponse.json({ 
-        error: "Valid project ID is required",
-        code: "INVALID_PROJECT_ID" 
-      }, { status: 400 });
-    }
+  const dueDateISO = new Date(payload.dueDate).toISOString().slice(0, 10);
+  const now = new Date().toISOString();
+  const { data: created, error } = await supabase.from('milestones').insert({
+    project_id: payload.projectId,
+    title: payload.title.trim(),
+    description: payload.description?.trim() || null,
+    due_date: dueDateISO,
+    status: payload.status ?? 'pending',
+    tenant_id: tenantId,
+    created_at: now,
+    updated_at: now,
+  }).select('*').single();
+  if (error || !created) throw error ?? new Error('Failed to create milestone');
+  return NextResponse.json(normalizeSupabaseMilestoneRow(created), { status: 201 });
+}, { requireAuth: true, roles: ['Manager'] });
 
-    const project = await db.select()
-      .from(projects)
-      .where(eq(projects.id, parseInt(projectId)))
-      .limit(1);
+export const PUT = withApiHandler(async (request, context) => {
+  const id = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('Valid milestone id is required');
+  const payload = updateMilestoneSchema.parse(await request.json());
 
-    if (project.length === 0) {
-      return NextResponse.json({ 
-        error: "Project not found",
-        code: "PROJECT_NOT_FOUND" 
-      }, { status: 400 });
-    }
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const supabase = getAdminRouteSupabase();
+  const { data: existing } = await supabase
+    .from('milestones')
+    .select('*')
+    .eq('id', id)
+    .eq('tenant_id', tenantId)
+    .single();
+    
+  if (!existing) throw new NotFoundError('Milestone not found');
 
-    if (!title || typeof title !== 'string' || title.trim() === '') {
-      return NextResponse.json({ 
-        error: "Title is required",
-        code: "MISSING_TITLE" 
-      }, { status: 400 });
-    }
+  const { data: updated, error } = await supabase.from('milestones').update({
+    ...(payload.title !== undefined ? { title: payload.title.trim() } : {}),
+    ...(payload.description !== undefined ? { description: payload.description?.trim() || null } : {}),
+    ...(payload.dueDate !== undefined ? { due_date: new Date(payload.dueDate).toISOString().slice(0, 10) } : {}),
+    ...(payload.status !== undefined ? { status: payload.status } : {}),
+    updated_at: new Date().toISOString(),
+  })
+  .eq('id', id)
+  .eq('tenant_id', tenantId)
+  .select('*')
+  .single();
+  if (error || !updated) throw error ?? new Error('Failed to update milestone');
+  return NextResponse.json(normalizeSupabaseMilestoneRow(updated));
+}, { requireAuth: true, roles: ['Manager'] });
 
-    if (!dueDate) {
-      return NextResponse.json({ 
-        error: "Due date is required",
-        code: "MISSING_DUE_DATE" 
-      }, { status: 400 });
-    }
+export const DELETE = withApiHandler(async (request, context) => {
+  const id = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('Valid milestone id is required');
 
-    if (!isValidDate(dueDate)) {
-      return NextResponse.json({ 
-        error: "Valid due date is required",
-        code: "INVALID_DUE_DATE" 
-      }, { status: 400 });
-    }
-
-    if (status && !isValidStatus(status)) {
-      return NextResponse.json({ 
-        error: `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}`,
-        code: "INVALID_STATUS" 
-      }, { status: 400 });
-    }
-
-    const now = new Date().toISOString();
-    const dueDateISO = new Date(dueDate).toISOString();
-
-    const newMilestone = await db.insert(milestones)
-      .values({
-        projectId: parseInt(projectId),
-        title: title.trim(),
-        description: description ? description.trim() : null,
-        dueDate: dueDateISO,
-        status: status && isValidStatus(status) ? status : 'pending',
-        createdAt: now,
-        updatedAt: now
-      })
-      .returning();
-
-    return NextResponse.json(newMilestone[0], { status: 201 });
-
-  } catch (error) {
-    console.error('POST error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
-  }
-}
-
-export async function PUT(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
-
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json({ 
-        error: "Valid ID is required",
-        code: "INVALID_ID" 
-      }, { status: 400 });
-    }
-
-    const body = await request.json();
-
-    if ('userId' in body || 'user_id' in body) {
-      return NextResponse.json({ 
-        error: "User ID cannot be provided in request body",
-        code: "USER_ID_NOT_ALLOWED" 
-      }, { status: 400 });
-    }
-
-    if ('id' in body) {
-      return NextResponse.json({ 
-        error: "ID cannot be updated",
-        code: "ID_NOT_ALLOWED" 
-      }, { status: 400 });
-    }
-
-    if ('projectId' in body) {
-      return NextResponse.json({ 
-        error: "Project ID cannot be updated",
-        code: "PROJECT_ID_NOT_ALLOWED" 
-      }, { status: 400 });
-    }
-
-    const existing = await db.select()
-      .from(milestones)
-      .where(eq(milestones.id, parseInt(id)))
-      .limit(1);
-
-    if (existing.length === 0) {
-      return NextResponse.json({ 
-        error: 'Milestone not found',
-        code: 'MILESTONE_NOT_FOUND' 
-      }, { status: 404 });
-    }
-
-    const { title, description, dueDate, status } = body;
-    const updates: any = {
-      updatedAt: new Date().toISOString()
-    };
-
-    if (title !== undefined) {
-      if (typeof title !== 'string' || title.trim() === '') {
-        return NextResponse.json({ 
-          error: "Title cannot be empty",
-          code: "INVALID_TITLE" 
-        }, { status: 400 });
-      }
-      updates.title = title.trim();
-    }
-
-    if (description !== undefined) {
-      updates.description = description ? description.trim() : null;
-    }
-
-    if (dueDate !== undefined) {
-      if (!isValidDate(dueDate)) {
-        return NextResponse.json({ 
-          error: "Valid due date is required",
-          code: "INVALID_DUE_DATE" 
-        }, { status: 400 });
-      }
-      updates.dueDate = new Date(dueDate).toISOString();
-    }
-
-    if (status !== undefined) {
-      if (!isValidStatus(status)) {
-        return NextResponse.json({ 
-          error: `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}`,
-          code: "INVALID_STATUS" 
-        }, { status: 400 });
-      }
-      updates.status = status;
-    }
-
-    const updated = await db.update(milestones)
-      .set(updates)
-      .where(eq(milestones.id, parseInt(id)))
-      .returning();
-
-    return NextResponse.json(updated[0], { status: 200 });
-
-  } catch (error) {
-    console.error('PUT error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
-  }
-}
-
-export async function DELETE(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
-
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json({ 
-        error: "Valid ID is required",
-        code: "INVALID_ID" 
-      }, { status: 400 });
-    }
-
-    const existing = await db.select()
-      .from(milestones)
-      .where(eq(milestones.id, parseInt(id)))
-      .limit(1);
-
-    if (existing.length === 0) {
-      return NextResponse.json({ 
-        error: 'Milestone not found',
-        code: 'MILESTONE_NOT_FOUND' 
-      }, { status: 404 });
-    }
-
-    const deleted = await db.delete(milestones)
-      .where(eq(milestones.id, parseInt(id)))
-      .returning();
-
-    return NextResponse.json({ 
-      message: 'Milestone deleted successfully',
-      milestone: deleted[0]
-    }, { status: 200 });
-
-  } catch (error) {
-    console.error('DELETE error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
-  }
-}
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const supabase = getAdminRouteSupabase();
+  const { data: deleted, error } = await supabase
+    .from('milestones')
+    .delete()
+    .eq('id', id)
+    .eq('tenant_id', tenantId)
+    .select('*')
+    .single();
+  if (error || !deleted) throw new NotFoundError('Milestone not found');
+  return NextResponse.json({ message: 'Milestone deleted successfully', milestone: normalizeSupabaseMilestoneRow(deleted) });
+}, { requireAuth: true, roles: ['Manager'] });

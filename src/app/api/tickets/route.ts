@@ -1,472 +1,216 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
-import { tickets, clients, users } from '@/db/schema';
-import { eq, like, and, or, desc, asc, gte, lte } from 'drizzle-orm';
-import { getCurrentUser } from '@/lib/auth';
-import { hasFullAccess, type UserRole } from '@/lib/permissions';
+import { NextResponse } from 'next/server';
+import { withApiHandler } from '@/server/http/handler';
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '@/server/http/errors';
+import { createTicketSchema, ticketPrioritySchema, ticketStatusSchema, updateTicketSchema } from '@/server/validation/helpdesk';
 import {
-  TICKET_PRIORITIES,
-  TICKET_STATUSES,
-  DEFAULT_PAGE_SIZE,
-  MAX_PAGE_SIZE,
-  isValidEnum,
-  safeErrorMessage,
-} from '@/lib/constants';
+  buildLegacyUserIdMap,
+  getCurrentSupabaseActor,
+  getAdminRouteSupabase,
+  resolveAuthUserIdFromLegacyUserId,
+} from '@/server/supabase/route-helpers';
 
-export async function GET(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
-
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-    const ticketNumber = searchParams.get('ticketNumber');
-
-    const isAdmin = hasFullAccess(user.role as UserRole);
-
-    // Get single ticket by ID or ticketNumber
-    if (id || ticketNumber) {
-      let whereCondition;
-
-      if (id) {
-        if (isNaN(parseInt(id))) {
-          return NextResponse.json({
-            error: "Valid ID is required",
-            code: "INVALID_ID"
-          }, { status: 400 });
-        }
-        whereCondition = eq(tickets.id, parseInt(id));
-      } else if (ticketNumber) {
-        whereCondition = eq(tickets.ticketNumber, ticketNumber);
-      }
-
-      const ticket = await db.select()
-        .from(tickets)
-        .where(whereCondition)
-        .limit(1);
-
-      if (ticket.length === 0) {
-        return NextResponse.json({
-          error: 'Ticket not found',
-          code: 'TICKET_NOT_FOUND'
-        }, { status: 404 });
-      }
-
-      // Authorization: if not admin, current user must be creator or assigned (if implemented)
-      if (!isAdmin) {
-        if (ticket[0].createdBy !== user.id) {
-          return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-        }
-      }
-
-      return NextResponse.json(ticket[0]);
-    }
-
-    // List tickets with pagination, search, and filtering
-    const limit = Math.min(parseInt(searchParams.get('limit') ?? String(DEFAULT_PAGE_SIZE)), MAX_PAGE_SIZE);
-    const offset = parseInt(searchParams.get('offset') ?? '0');
-    const search = searchParams.get('search');
-    const clientId = searchParams.get('clientId');
-    const status = searchParams.get('status');
-    const priority = searchParams.get('priority');
-    const assignedTo = searchParams.get('assignedTo');
-    const startDate = searchParams.get('startDate');
-    const endDate = searchParams.get('endDate');
-    const sort = searchParams.get('sort') ?? 'createdAt';
-    const order = searchParams.get('order') ?? 'desc';
-
-    // Build where conditions
-    const conditions = [];
-
-    // Enforce access control for list
-    if (!isAdmin) {
-      conditions.push(eq(tickets.createdBy, user.id));
-    }
-
-    if (search) {
-      conditions.push(
-        or(
-          like(tickets.ticketNumber, `%${search}%`),
-          like(tickets.subject, `%${search}%`),
-          like(tickets.description, `%${search}%`)
-        )
-      );
-    }
-
-    if (clientId) {
-      const clientIdInt = parseInt(clientId);
-      if (!isNaN(clientIdInt)) {
-        conditions.push(eq(tickets.clientId, clientIdInt));
-      }
-    }
-
-    if (status) {
-      if (TICKET_STATUSES.includes(status as any)) {
-        conditions.push(eq(tickets.status, status));
-      }
-    }
-
-    if (priority) {
-      if (TICKET_PRIORITIES.includes(priority as any)) {
-        conditions.push(eq(tickets.priority, priority));
-      }
-    }
-
-    if (assignedTo) {
-      const assignedToInt = parseInt(assignedTo);
-      if (!isNaN(assignedToInt)) {
-        conditions.push(eq(tickets.assignedTo, assignedToInt));
-      }
-    }
-
-    if (startDate) {
-      conditions.push(gte(tickets.createdAt, startDate));
-    }
-
-    if (endDate) {
-      // Add one day or set to end of day to include the end date inclusive
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
-      conditions.push(lte(tickets.createdAt, end.toISOString()));
-    }
-
-    let finalQuery = db.select().from(tickets);
-
-    if (conditions.length > 0) {
-      finalQuery = finalQuery.where(and(...conditions)) as any;
-    }
-
-    // Apply sorting
-    if (sort === 'priority') {
-      // Custom priority order: urgent > high > medium > low
-      const priorityOrder = { urgent: 1, high: 2, medium: 3, low: 4 };
-      const results = await finalQuery.limit(limit).offset(offset);
-      results.sort((a, b) => {
-        const orderMultiplier = order === 'asc' ? 1 : -1;
-        return (priorityOrder[a.priority as keyof typeof priorityOrder] - priorityOrder[b.priority as keyof typeof priorityOrder]) * orderMultiplier;
-      });
-      return NextResponse.json(results);
-    } else {
-      // Default sort by createdAt
-      finalQuery = finalQuery.orderBy(order === 'asc' ? asc(tickets.createdAt) : desc(tickets.createdAt)) as any;
-    }
-
-    const results = await finalQuery.limit(limit).offset(offset);
-    return NextResponse.json(results);
-
-  } catch (error) {
-    console.error('GET error:', error);
-    return NextResponse.json({
-      error: safeErrorMessage(error)
-    }, { status: 500 });
-  }
+function normalizeSupabaseTicketRow(row: Record<string, unknown>, userMap: Map<string, number | null>) {
+  const assignedTo = typeof row.assigned_to === 'string' ? userMap.get(row.assigned_to) ?? null : null;
+  const createdBy = typeof row.created_by === 'string' ? userMap.get(row.created_by) ?? null : null;
+  return {
+    id: Number(row.id),
+    ticketNumber: row.ticket_number,
+    clientId: Number(row.client_id),
+    subject: row.subject,
+    description: row.description,
+    priority: row.priority,
+    status: row.status,
+    attachmentUrl: row.attachment_url ?? null,
+    assignedTo,
+    createdBy,
+    createdAt: row.created_at ?? null,
+    updatedAt: row.updated_at ?? null,
+  };
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
+export const GET = withApiHandler(async (request, context) => {
+  const user = context.auth!.user;
+  const isAdminLike = user.role === 'Admin' || user.role === 'SuperAdmin';
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get('id');
+  const ticketNumber = searchParams.get('ticketNumber');
 
-    const body = await request.json();
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const supabase = getAdminRouteSupabase();
+  const actor = await getCurrentSupabaseActor(accessToken);
 
-    // Security check: reject if userId provided in body (though we use currentUser now)
-    if ('userId' in body || 'user_id' in body) {
-      return NextResponse.json({
-        error: "User ID cannot be provided in request body",
-        code: "USER_ID_NOT_ALLOWED"
-      }, { status: 400 });
-    }
-
-    const { ticketNumber, clientId, subject, description, assignedTo, priority, status } = body;
-
-    // Validate required fields
-    if (!ticketNumber || !ticketNumber.trim()) {
-      return NextResponse.json({
-        error: "Ticket number is required",
-        code: "MISSING_TICKET_NUMBER"
-      }, { status: 400 });
-    }
-
-    if (!clientId) {
-      return NextResponse.json({
-        error: "Client ID is required",
-        code: "MISSING_CLIENT_ID"
-      }, { status: 400 });
-    }
-
-    if (!subject || !subject.trim()) {
-      return NextResponse.json({
-        error: "Subject is required",
-        code: "MISSING_SUBJECT"
-      }, { status: 400 });
-    }
-
-    if (!description || !description.trim()) {
-      return NextResponse.json({
-        error: "Description is required",
-        code: "MISSING_DESCRIPTION"
-      }, { status: 400 });
-    }
-
-    // Validate clientId is a valid integer
-    const clientIdInt = parseInt(clientId);
-    if (isNaN(clientIdInt)) {
-      return NextResponse.json({
-        error: "Valid client ID is required",
-        code: "INVALID_CLIENT_ID"
-      }, { status: 400 });
-    }
-
-    // Validate ticketNumber is unique
-    const existingTicket = await db.select()
-      .from(tickets)
-      .where(eq(tickets.ticketNumber, ticketNumber.trim()))
-      .limit(1);
-
-    if (existingTicket.length > 0) {
-      return NextResponse.json({
-        error: "Ticket number already exists",
-        code: "DUPLICATE_TICKET_NUMBER"
-      }, { status: 400 });
-    }
-
-    // Validate client exists
-    const client = await db.select()
-      .from(clients)
-      .where(eq(clients.id, clientIdInt))
-      .limit(1);
-
-    if (client.length === 0) {
-      return NextResponse.json({
-        error: "Client not found",
-        code: "CLIENT_NOT_FOUND"
-      }, { status: 400 });
-    }
-
-    // Validate assignedTo if provided
-    if (assignedTo !== undefined && assignedTo !== null) {
-      const assignedToInt = parseInt(assignedTo);
-      if (isNaN(assignedToInt)) {
-        return NextResponse.json({
-          error: "Valid assigned user ID is required",
-          code: "INVALID_ASSIGNED_TO"
-        }, { status: 400 });
-      }
-
-      const assignedUser = await db.select()
-        .from(users)
-        .where(eq(users.id, assignedToInt))
-        .limit(1);
-
-      if (assignedUser.length === 0) {
-        return NextResponse.json({
-          error: "Assigned user not found",
-          code: "ASSIGNED_USER_NOT_FOUND"
-        }, { status: 400 });
-      }
-    }
-
-    // Validate priority if provided
-    const ticketPriority = priority && isValidEnum(priority, TICKET_PRIORITIES) ? priority : 'medium';
-
-    // Validate status if provided
-    const ticketStatus = status && isValidEnum(status, TICKET_STATUSES) ? status : 'open';
-
-    // Create ticket
-    const now = new Date().toISOString();
-    const newTicket = await db.insert(tickets)
-      .values({
-        ticketNumber: ticketNumber.trim(),
-        clientId: clientIdInt,
-        subject: subject.trim(),
-        description: description.trim(),
-        priority: ticketPriority,
-        status: ticketStatus,
-        assignedTo: assignedTo ? parseInt(assignedTo) : null,
-        createdBy: user.id, // Set creator
-        createdAt: now,
-        updatedAt: now
-      })
-      .returning();
-
-    return NextResponse.json(newTicket[0], { status: 201 });
-
-  } catch (error) {
-    console.error('POST error:', error);
-    return NextResponse.json({
-      error: safeErrorMessage(error)
-    }, { status: 500 });
+  if (id || ticketNumber) {
+    let query = supabase
+      .from('tickets')
+      .select('*')
+      .eq('tenant_id', tenantId);
+    query = id ? query.eq('id', Number(id)) : query.eq('ticket_number', String(ticketNumber));
+    const { data: ticket, error } = await query.single();
+    if (error || !ticket) throw new NotFoundError('Ticket not found');
+    if (!isAdminLike && ticket.created_by !== actor.authUserId) throw new ForbiddenError('Unauthorized');
+    const userMap = await buildLegacyUserIdMap(accessToken, [String(ticket.assigned_to), String(ticket.created_by)].filter(Boolean));
+    return NextResponse.json(normalizeSupabaseTicketRow(ticket, userMap));
   }
-}
 
-export async function PUT(request: NextRequest) {
+  const limit = Math.min(Number(searchParams.get('limit') ?? '10'), 100);
+  const offset = Math.max(Number(searchParams.get('offset') ?? '0'), 0);
+  const search = searchParams.get('search');
+  const clientId = searchParams.get('clientId');
+  const status = searchParams.get('status');
+  const priority = searchParams.get('priority');
+  const assignedTo = searchParams.get('assignedTo');
+  const startDate = searchParams.get('startDate');
+  const endDate = searchParams.get('endDate');
+  
+  let query = supabase
+    .from('tickets')
+    .select('*', { count: 'exact' })
+    .eq('tenant_id', tenantId);
+    
+  if (!isAdminLike) query = query.eq('created_by', actor.authUserId);
+  if (search) query = query.or(`ticket_number.ilike.%${search}%,subject.ilike.%${search}%,description.ilike.%${search}%`);
+  if (clientId) query = query.eq('client_id', Number(clientId));
+  if (status) query = query.eq('status', ticketStatusSchema.parse(status));
+  if (priority) query = query.eq('priority', ticketPrioritySchema.parse(priority));
+  if (assignedTo) query = query.eq('assigned_to', await resolveAuthUserIdFromLegacyUserId(accessToken, Number(assignedTo)));
+  if (startDate) query = query.gte('created_at', startDate);
+  if (endDate) { const end = new Date(endDate); end.setHours(23, 59, 59, 999); query = query.lte('created_at', end.toISOString()); }
+  const { data, count, error } = await query.order('created_at', { ascending: false }).range(offset, offset + limit - 1);
+  if (error) throw error;
+  const rows = (data as Record<string, unknown>[] | null) ?? [];
+  const userMap = await buildLegacyUserIdMap(accessToken, rows.flatMap((row) => [String(row.assigned_to), String(row.created_by)]).filter(Boolean));
+  return NextResponse.json({ success: true, data: rows.map((row) => normalizeSupabaseTicketRow(row, userMap)), message: 'Tickets fetched successfully', errors: null, meta: { page: Math.floor(offset / limit) + 1, limit, total: Number(count ?? 0) } });
+}, { requireAuth: true, roles: ['Employee'] });
+
+export const POST = withApiHandler(async (request, context) => {
+  const payload = createTicketSchema.parse(await request.json());
+  
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const supabase = getAdminRouteSupabase();
+  const actor = await getCurrentSupabaseActor(accessToken);
+  const { data: existingTicket } = await supabase
+    .from('tickets')
+    .select('id')
+    .eq('ticket_number', payload.ticketNumber)
+    .eq('tenant_id', tenantId)
+    .maybeSingle();
+    
+  if (existingTicket) throw new ConflictError('Ticket number already exists');
+  const { data: client } = await supabase
+    .from('clients')
+    .select('id')
+    .eq('id', payload.clientId)
+    .eq('tenant_id', tenantId)
+    .single();
+  if (!client) throw new NotFoundError('Client not found');
+  const assignedToAuthUserId = payload.assignedTo ? await resolveAuthUserIdFromLegacyUserId(accessToken, payload.assignedTo) : null;
+  const now = new Date().toISOString();
+  const { data, error } = await supabase.from('tickets').insert({
+    ticket_number: payload.ticketNumber,
+    client_id: payload.clientId,
+    subject: payload.subject,
+    description: payload.description,
+    priority: payload.priority ?? 'medium',
+    status: payload.status ?? 'open',
+    attachment_url: payload.attachmentUrl ?? null,
+    assigned_to: assignedToAuthUserId,
+    created_by: actor.authUserId,
+    tenant_id: tenantId,
+    created_at: now,
+    updated_at: now,
+  }).select('*').single();
+  if (error || !data) throw error ?? new Error('Failed to create ticket');
+
+  // Trigger Email API
   try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
-
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json({
-        error: "Valid ID is required",
-        code: "INVALID_ID"
-      }, { status: 400 });
-    }
-
-    const body = await request.json();
-
-    // Security check: reject if userId provided in body
-    if ('userId' in body || 'user_id' in body) {
-      return NextResponse.json({
-        error: "User ID cannot be provided in request body",
-        code: "USER_ID_NOT_ALLOWED"
-      }, { status: 400 });
-    }
-
-    const ticketId = parseInt(id);
-
-    // Check if ticket exists
-    const existingTicket = await db.select()
-      .from(tickets)
-      .where(eq(tickets.id, ticketId))
-      .limit(1);
-
-    if (existingTicket.length === 0) {
-      return NextResponse.json({
-        error: 'Ticket not found',
-        code: 'TICKET_NOT_FOUND'
-      }, { status: 404 });
-    }
-
-    const { status, priority, assignedTo } = body;
-    const updates: Record<string, any> = {};
-
-    // Validate and update status
-    if (status !== undefined) {
-      if (!isValidEnum(status, TICKET_STATUSES)) {
-        return NextResponse.json({
-          error: `Invalid status. Must be one of: ${TICKET_STATUSES.join(', ')}`,
-          code: "INVALID_STATUS"
-        }, { status: 400 });
-      }
-      updates.status = status;
-    }
-
-    // Validate and update priority
-    if (priority !== undefined) {
-      if (!isValidEnum(priority, TICKET_PRIORITIES)) {
-        return NextResponse.json({
-          error: `Invalid priority. Must be one of: ${TICKET_PRIORITIES.join(', ')}`,
-          code: "INVALID_PRIORITY"
-        }, { status: 400 });
-      }
-      updates.priority = priority;
-    }
-
-    // Validate and update assignedTo
-    if (assignedTo !== undefined) {
-      if (assignedTo === null) {
-        updates.assignedTo = null;
-      } else {
-        const assignedToInt = parseInt(assignedTo);
-        if (isNaN(assignedToInt)) {
-          return NextResponse.json({
-            error: "Valid assigned user ID is required",
-            code: "INVALID_ASSIGNED_TO"
-          }, { status: 400 });
-        }
-
-        const assignedUser = await db.select()
-          .from(users)
-          .where(eq(users.id, assignedToInt))
-          .limit(1);
-
-        if (assignedUser.length === 0) {
-          return NextResponse.json({
-            error: "Assigned user not found",
-            code: "ASSIGNED_USER_NOT_FOUND"
-          }, { status: 400 });
-        }
-
-        updates.assignedTo = assignedToInt;
-      }
-    }
-
-    // Always update timestamp
-    updates.updatedAt = new Date().toISOString();
-
-    const updated = await db.update(tickets)
-      .set(updates)
-      .where(eq(tickets.id, ticketId))
-      .returning();
-
-    return NextResponse.json(updated[0]);
-
-  } catch (error) {
-    console.error('PUT error:', error);
-    return NextResponse.json({
-      error: safeErrorMessage(error)
-    }, { status: 500 });
+     const { data: settings } = await supabase.from('helpdesk_settings').select('*').eq('tenant_id', tenantId).maybeSingle();
+     if (settings) {
+         const isIT = payload.subject.includes('[IT SUPPORT]');
+         const targetEmail = isIT ? settings.it_support_email : settings.hr_support_email;
+         if (targetEmail) {
+             // Example dispatch (Integrate with SendGrid/AWS SES here)
+             console.log(`[EMAIL DISPATCH] -> To: ${targetEmail} | Subject: New Ticket ${payload.ticketNumber} | Priority: ${payload.priority}`);
+         }
+     }
+  } catch (e) {
+      console.warn('Failed to route email notification for ticket', e);
   }
-}
 
-export async function DELETE(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
+  const userMap = await buildLegacyUserIdMap(accessToken, [String(assignedToAuthUserId), actor.authUserId].filter(Boolean));
+  return NextResponse.json(normalizeSupabaseTicketRow(data, userMap), { status: 201 });
+}, { requireAuth: true, roles: ['Employee'] });
 
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+export const PUT = withApiHandler(async (request, context) => {
+  const id = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('Valid ticket id is required');
+  const payload = updateTicketSchema.parse(await request.json());
+  const user = context.auth!.user;
+  const isAdminLike = user.role === 'Admin' || user.role === 'SuperAdmin';
 
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json({
-        error: "Valid ID is required",
-        code: "INVALID_ID"
-      }, { status: 400 });
-    }
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const supabase = getAdminRouteSupabase();
+  const actor = await getCurrentSupabaseActor(accessToken);
+  const { data: existing } = await supabase
+    .from('tickets')
+    .select('*')
+    .eq('id', id)
+    .eq('tenant_id', tenantId)
+    .single();
+  if (!existing) throw new NotFoundError('Ticket not found');
+  if (!isAdminLike && existing.created_by !== actor.authUserId) throw new ForbiddenError('Unauthorized');
+  const assignedToAuthUserId = payload.assignedTo ? await resolveAuthUserIdFromLegacyUserId(accessToken, payload.assignedTo) : payload.assignedTo === null ? null : undefined;
+  const { data, error } = await supabase.from('tickets').update({
+    ...(payload.status !== undefined ? { status: payload.status } : {}),
+    ...(payload.priority !== undefined ? { priority: payload.priority } : {}),
+    ...(assignedToAuthUserId !== undefined ? { assigned_to: assignedToAuthUserId } : {}),
+    updated_at: new Date().toISOString(),
+  })
+  .eq('id', id)
+  .eq('tenant_id', tenantId)
+  .select('*')
+  .single();
+  if (error || !data) throw error ?? new Error('Failed to update ticket');
+  const userMap = await buildLegacyUserIdMap(accessToken, [String(data.assigned_to), String(data.created_by)].filter(Boolean));
+  return NextResponse.json(normalizeSupabaseTicketRow(data, userMap));
+}, { requireAuth: true, roles: ['Employee'] });
 
-    const ticketId = parseInt(id);
+export const DELETE = withApiHandler(async (request, context) => {
+  const id = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('Valid ticket id is required');
+  const user = context.auth!.user;
+  const isAdminLike = user.role === 'Admin' || user.role === 'SuperAdmin';
 
-    // Check if ticket exists
-    const existingTicket = await db.select()
-      .from(tickets)
-      .where(eq(tickets.id, ticketId))
-      .limit(1);
-
-    if (existingTicket.length === 0) {
-      return NextResponse.json({
-        error: 'Ticket not found',
-        code: 'TICKET_NOT_FOUND'
-      }, { status: 404 });
-    }
-
-    // Soft delete by setting status to 'closed'
-    const deleted = await db.update(tickets)
-      .set({
-        status: 'closed',
-        updatedAt: new Date().toISOString()
-      })
-      .where(eq(tickets.id, ticketId))
-      .returning();
-
-    return NextResponse.json({
-      message: 'Ticket successfully closed',
-      ticket: deleted[0]
-    });
-
-  } catch (error) {
-    console.error('DELETE error:', error);
-    return NextResponse.json({
-      error: safeErrorMessage(error)
-    }, { status: 500 });
-  }
-}
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const supabase = getAdminRouteSupabase();
+  const actor = await getCurrentSupabaseActor(accessToken);
+  const { data: existing } = await supabase
+    .from('tickets')
+    .select('*')
+    .eq('id', id)
+    .eq('tenant_id', tenantId)
+    .single();
+  if (!existing) throw new NotFoundError('Ticket not found');
+  if (!isAdminLike && existing.created_by !== actor.authUserId) throw new ForbiddenError('Unauthorized');
+  const { data, error } = await supabase
+    .from('tickets')
+    .delete()
+    .eq('id', id)
+    .eq('tenant_id', tenantId)
+    .select('*')
+    .single();
+  if (error || !data) throw error ?? new Error('Failed to delete ticket');
+  const userMap = await buildLegacyUserIdMap(accessToken, [String(data.assigned_to), String(data.created_by)].filter(Boolean));
+  return NextResponse.json({ message: 'Ticket deleted successfully', ticket: normalizeSupabaseTicketRow(data, userMap) });
+}, { requireAuth: true, roles: ['Employee'] });

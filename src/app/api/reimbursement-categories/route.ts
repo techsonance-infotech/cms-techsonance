@@ -1,162 +1,74 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
-import { reimbursementCategories, sessions, users } from '@/db/schema';
-import { eq } from 'drizzle-orm';
-import { getCurrentUser } from '@/lib/auth';
-import { hasFullAccess, type UserRole } from '@/lib/permissions';
-import { DEFAULT_REIMBURSEMENT_CATEGORIES, safeErrorMessage } from '@/lib/constants';
+import { NextResponse } from 'next/server';
+import { withApiHandler } from '@/server/http/handler';
+import { BadRequestError, ConflictError } from '@/server/http/errors';
+import { reimbursementCategorySchema } from '@/server/validation/reimbursements';
+import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
 
-
-// GET - Fetch all active categories
-export async function GET(request: NextRequest) {
-    try {
-        const currentUser = await getCurrentUser(request);
-
-        if (!currentUser) {
-            return NextResponse.json(
-                { error: 'Unauthorized' },
-                { status: 401 }
-            );
-        }
-
-        let categories = await db.select()
-            .from(reimbursementCategories)
-            .where(eq(reimbursementCategories.isActive, true))
-            .orderBy(reimbursementCategories.name);
-
-        // Auto-seed if no categories exist
-        if (categories.length === 0) {
-            const now = new Date().toISOString();
-            const defaultCategories = DEFAULT_REIMBURSEMENT_CATEGORIES.map(cat => ({
-                ...cat,
-                isActive: true,
-                createdAt: now,
-                updatedAt: now,
-            }));
-
-            await db.insert(reimbursementCategories).values(defaultCategories);
-
-            // Re-fetch to get IDs
-            categories = await db.select()
-                .from(reimbursementCategories)
-                .where(eq(reimbursementCategories.isActive, true))
-                .orderBy(reimbursementCategories.name);
-        }
-
-        return NextResponse.json(categories);
-    } catch (error) {
-        console.error('Error fetching categories:', error);
-        return NextResponse.json(
-            { error: 'Failed to fetch categories' },
-            { status: 500 }
-        );
-    }
+function normalizeSupabaseReimbursementCategory(row: Record<string, unknown>) {
+  return {
+    id: Number(row.id),
+    name: row.name,
+    description: row.description ?? null,
+    maxAmount: row.max_amount ?? null,
+    isActive: Boolean(row.is_active ?? true),
+    createdAt: row.created_at ?? null,
+    updatedAt: row.updated_at ?? null,
+  };
 }
 
-// POST - Create new category (admin only)
-export async function POST(request: NextRequest) {
-    try {
-        const currentUser = await getCurrentUser(request);
+export const GET = withApiHandler(async (request, context) => {
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  const supabase = getAdminRouteSupabase();
+  const { data, error } = await supabase
+    .from('reimbursement_categories')
+    .select('*')
+    .eq('is_active', true)
+    .eq('tenant_id', tenantId)
+    .order('name', { ascending: true });
+  if (error) throw error;
+  return NextResponse.json(((data as Record<string, unknown>[] | null) ?? []).map(normalizeSupabaseReimbursementCategory));
+}, { requireAuth: true, roles: ['Employee'] });
 
-        if (!currentUser) {
-            return NextResponse.json(
-                { error: 'Unauthorized' },
-                { status: 401 }
-            );
-        }
+export const POST = withApiHandler(async (request, context) => {
+  const payload = reimbursementCategorySchema.parse(await request.json());
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  const supabase = getAdminRouteSupabase();
+  const { data: existing } = await supabase
+    .from('reimbursement_categories')
+    .select('id')
+    .eq('name', payload.name)
+    .eq('tenant_id', tenantId)
+    .maybeSingle();
+  if (existing) throw new ConflictError('Category with this name already exists');
+  const now = new Date().toISOString();
+  const { data, error } = await supabase.from('reimbursement_categories').insert({
+    name: payload.name,
+    description: payload.description ?? null,
+    max_amount: payload.maxAmount ?? null,
+    is_active: true,
+    tenant_id: tenantId,
+    created_at: now,
+    updated_at: now,
+  }).select('*').single();
+  if (error || !data) throw error ?? new Error('Failed to create reimbursement category');
+  return NextResponse.json(normalizeSupabaseReimbursementCategory(data), { status: 201 });
+}, { requireAuth: true, roles: ['Admin'] });
 
-        // Check if user is admin
-        if (!hasFullAccess(currentUser.role as UserRole)) {
-            return NextResponse.json(
-                { error: 'Only admins can create categories' },
-                { status: 403 }
-            );
-        }
-
-        const body = await request.json();
-        const { name, description, maxAmount } = body;
-
-        if (!name) {
-            return NextResponse.json(
-                { error: 'Category name is required' },
-                { status: 400 }
-            );
-        }
-
-        const now = new Date().toISOString();
-
-        const [category] = await db.insert(reimbursementCategories).values({
-            name,
-            description: description || null,
-            maxAmount: maxAmount || null,
-            isActive: true,
-            createdAt: now,
-            updatedAt: now,
-        }).returning();
-
-        return NextResponse.json(category, { status: 201 });
-    } catch (error: any) {
-        console.error('Error creating category:', error);
-
-        if (error.message?.includes('UNIQUE constraint failed')) {
-            return NextResponse.json(
-                { error: 'Category with this name already exists' },
-                { status: 400 }
-            );
-        }
-
-        return NextResponse.json(
-            { error: 'Failed to create category' },
-            { status: 500 }
-        );
-    }
-}
-
-// DELETE - Deactivate category (admin only)
-export async function DELETE(request: NextRequest) {
-    try {
-        const currentUser = await getCurrentUser(request);
-
-        if (!currentUser) {
-            return NextResponse.json(
-                { error: 'Unauthorized' },
-                { status: 401 }
-            );
-        }
-
-        // Check if user is admin
-        if (!hasFullAccess(currentUser.role as UserRole)) {
-            return NextResponse.json(
-                { error: 'Only admins can delete categories' },
-                { status: 403 }
-            );
-        }
-
-        const { searchParams } = new URL(request.url);
-        const id = searchParams.get('id');
-
-        if (!id) {
-            return NextResponse.json(
-                { error: 'Category ID is required' },
-                { status: 400 }
-            );
-        }
-
-        const now = new Date().toISOString();
-
-        await db.update(reimbursementCategories)
-            .set({
-                isActive: false,
-                updatedAt: now
-            })
-            .where(eq(reimbursementCategories.id, parseInt(id)));
-
-        return NextResponse.json({ message: 'Category deactivated successfully' });
-    } catch (error) {
-        console.error('Error deleting category:', error);
-        return NextResponse.json(
-            { error: 'Failed to delete category' },
-            { status: 500 }
-        );
-    }
-}
+export const DELETE = withApiHandler(async (request, context) => {
+  const id = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('Category ID is required');
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  const supabase = getAdminRouteSupabase();
+  await supabase
+    .from('reimbursement_categories')
+    .update({ is_active: false, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('tenant_id', tenantId);
+  return NextResponse.json({ message: 'Category deactivated successfully' });
+}, { requireAuth: true, roles: ['Admin'] });

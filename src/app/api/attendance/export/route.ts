@@ -1,174 +1,138 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
-import { attendance, attendanceRecords, employees, users } from '@/db/schema';
-import { eq, and, gte, lte, desc } from 'drizzle-orm';
-import { getCurrentUser } from '@/lib/auth';
+import { withApiHandler } from '@/server/http/handler';
+import { apiSuccess } from '@/server/http/response';
+import { attendanceExportQuerySchema } from '@/server/validation/attendance-admin';
+import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
+import { listSupabaseProfilesByAuthIds } from '@/server/supabase/users';
 
-export async function GET(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
+export const GET = withApiHandler(async (request, context) => {
+  const searchParams = new URL(request.url).searchParams;
+  const query = attendanceExportQuerySchema.parse({
+    startDate: searchParams.get('start_date'),
+    endDate: searchParams.get('end_date'),
+    employeeId: searchParams.get('employee_id'),
+    readerId: searchParams.get('reader_id'),
+    status: searchParams.get('status'),
+    source: searchParams.get('source'),
+  });
 
-    const searchParams = request.nextUrl.searchParams;
-    const startDate = searchParams.get('start_date');
-    const endDate = searchParams.get('end_date');
-    const employeeId = searchParams.get('employee_id');
-    const readerId = searchParams.get('reader_id');
-    const status = searchParams.get('status');
-    const source = searchParams.get('source');
+  const LIMIT = 5000;
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new Error('Authorization and tenant info required');
+  const supabase = getAdminRouteSupabase();
+  const { data: employeeRows } = await supabase
+    .from('employees')
+    .select('id,department,user_id')
+    .eq('tenant_id', tenantId);
+  const employeeList = (employeeRows as { id: number; department: string; user_id: string }[] | null) ?? [];
+  const employeesById = new Map<number, { department: string; user_id: string }>(
+    employeeList.map((row) => [Number(row.id), { department: row.department, user_id: row.user_id }])
+  );
+  const profiles = await listSupabaseProfilesByAuthIds(employeeList.map((row) => row.user_id), { 
+    useAdmin: true, 
+    tenantId 
+  });
 
-    let parsedEmployeeId: number | null = null;
-    if (employeeId) {
-      parsedEmployeeId = parseInt(employeeId);
-    }
+  let nfcResults: any[] = [];
+  if (query.source !== 'legacy') {
+    let statement = supabase.from('attendance_records').select('*').eq('tenant_id', tenantId);
+    if (query.startDate) statement = statement.gte('date', query.startDate);
+    if (query.endDate) statement = statement.lte('date', query.endDate);
+    if (query.employeeId) statement = statement.eq('employee_id', query.employeeId);
+    if (query.readerId) statement = statement.eq('reader_id', query.readerId);
+    if (query.status) statement = statement.eq('status', query.status);
+    const { data: rows } = await statement.order('date', { ascending: false }).order('time_in', { ascending: false }).limit(LIMIT);
+    nfcResults = (((rows as Record<string, any>[] | null) ?? [])).map((row) => {
+      const employee = employeesById.get(Number(row.employee_id));
+      const profile = employee ? profiles.get(employee.user_id) : null;
+      return {
+        id: Number(row.id),
+        employeeId: Number(row.employee_id),
+        date: row.date,
+        timeIn: row.time_in,
+        timeOut: row.time_out,
+        duration: row.duration ?? null,
+        status: row.status,
+        checkInMethod: row.check_in_method,
+        employee: {
+          firstName: profile?.first_name ?? '',
+          lastName: profile?.last_name ?? '',
+          email: profile?.email ?? null,
+          department: employee?.department ?? null,
+        },
+        _source: 'nfc',
+      };
+    });
+  }
 
-    // Export function shouldn't paginate heavily, let's just pull max 5000 records
-    const LIMIT = 5000;
-
-    let nfcResults: any[] = [];
-    if (source !== 'legacy') {
-      const nfcConditions = [];
-      if (startDate) nfcConditions.push(gte(attendanceRecords.date, startDate));
-      if (endDate) nfcConditions.push(lte(attendanceRecords.date, endDate));
-      if (parsedEmployeeId !== null) nfcConditions.push(eq(attendanceRecords.employeeId, parsedEmployeeId));
-      if (readerId) nfcConditions.push(eq(attendanceRecords.readerId, readerId));
-      if (status) nfcConditions.push(eq(attendanceRecords.status, status));
-
-      let nfcQuery = db
-        .select({
-          id: attendanceRecords.id,
-          employeeId: attendanceRecords.employeeId,
-          date: attendanceRecords.date,
-          timeIn: attendanceRecords.timeIn,
-          timeOut: attendanceRecords.timeOut,
-          duration: attendanceRecords.duration,
-          status: attendanceRecords.status,
-          checkInMethod: attendanceRecords.checkInMethod,
-          employee: {
-            firstName: users.firstName,
-            lastName: users.lastName,
-            email: users.email,
-            department: employees.department,
-          }
-        })
-        .from(attendanceRecords)
-        .leftJoin(employees, eq(attendanceRecords.employeeId, employees.id))
-        .leftJoin(users, eq(employees.userId, users.id))
-        .orderBy(desc(attendanceRecords.date), desc(attendanceRecords.timeIn))
-        .limit(LIMIT);
-
-      if (nfcConditions.length > 0) {
-        nfcQuery = nfcQuery.where(and(...nfcConditions)) as any;
-      }
-
-      nfcResults = (await nfcQuery).map(r => ({ ...r, _source: 'nfc' }));
-    }
-
-    let legacyResults: any[] = [];
-    if (source !== 'nfc' && !readerId) {
-      const legacyConditions = [];
-      if (startDate) legacyConditions.push(gte(attendance.date, startDate));
-      if (endDate) legacyConditions.push(lte(attendance.date, endDate));
-      if (parsedEmployeeId !== null) legacyConditions.push(eq(attendance.employeeId, parsedEmployeeId));
-      if (status) legacyConditions.push(eq(attendance.status, status));
-
-      let legacyQuery = db
-        .select({
-          id: attendance.id,
-          employeeId: attendance.employeeId,
-          date: attendance.date,
-          checkIn: attendance.checkIn,
-          checkOut: attendance.checkOut,
-          status: attendance.status,
-          notes: attendance.notes,
-          firstName: users.firstName,
-          lastName: users.lastName,
-          email: users.email,
-          department: employees.department,
-        })
-        .from(attendance)
-        .leftJoin(employees, eq(attendance.employeeId, employees.id))
-        .leftJoin(users, eq(employees.userId, users.id))
-        .orderBy(desc(attendance.date))
-        .limit(LIMIT);
-
-      if (legacyConditions.length > 0) {
-        legacyQuery = legacyQuery.where(and(...legacyConditions)) as any;
-      }
-
-      const rawLegacy = await legacyQuery;
-
-      legacyResults = rawLegacy.map(r => ({
-        id: r.id,
-        employeeId: r.employeeId,
-        date: r.date,
-        timeIn: r.checkIn,
-        timeOut: r.checkOut,
-        duration: (r.checkIn && r.checkOut)
-          ? Math.floor((new Date(r.checkOut).getTime() - new Date(r.checkIn).getTime()) / 60000)
-          : null,
-        status: r.status,
+  let legacyResults: any[] = [];
+  if (query.source !== 'nfc' && !query.readerId) {
+    let statement = supabase.from('attendance').select('*').eq('tenant_id', tenantId);
+    if (query.startDate) statement = statement.gte('date', query.startDate);
+    if (query.endDate) statement = statement.lte('date', query.endDate);
+    if (query.employeeId) statement = statement.eq('employee_id', query.employeeId);
+    if (query.status) statement = statement.eq('status', query.status);
+    const { data: rows } = await statement.order('date', { ascending: false }).limit(LIMIT);
+    legacyResults = (((rows as Record<string, any>[] | null) ?? [])).map((row) => {
+      const employee = employeesById.get(Number(row.employee_id));
+      const profile = employee ? profiles.get(employee.user_id) : null;
+      return {
+        id: Number(row.id),
+        employeeId: Number(row.employee_id),
+        date: row.date,
+        timeIn: row.check_in,
+        timeOut: row.check_out,
+        duration: row.check_in && row.check_out ? Math.floor((new Date(row.check_out).getTime() - new Date(row.check_in).getTime()) / 60000) : null,
+        status: row.status,
         checkInMethod: 'legacy',
         employee: {
-          firstName: r.firstName,
-          lastName: r.lastName,
-          email: r.email,
-          department: r.department,
+          firstName: profile?.first_name ?? '',
+          lastName: profile?.last_name ?? '',
+          email: profile?.email ?? null,
+          department: employee?.department ?? null,
         },
         _source: 'legacy',
-      }));
-    }
-
-    const merged = [...nfcResults, ...legacyResults]
-      .sort((a, b) => {
-        const dateCompare = (b.date || '').localeCompare(a.date || '');
-        if (dateCompare !== 0) return dateCompare;
-        return (b.timeIn || '').localeCompare(a.timeIn || '');
-      });
-
-    // Generate CSV
-    const headers = [
-      'Employee Name', 'Email', 'Department', 'Date', 'Time In', 'Time Out', 'Duration (mins)', 'Status', 'Check-in Method'
-    ];
-    
-    // Proper CSV escaping
-    const escapeCsv = (str: any) => {
-        if (str === null || str === undefined) return '';
-        const s = String(str);
-        if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-            return `"${s.replace(/"/g, '""')}"`;
-        }
-        return s;
-    };
-
-    let csvContent = headers.map(escapeCsv).join(',') + '\n';
-
-    merged.forEach(record => {
-      const row = [
-        `${record.employee?.firstName} ${record.employee?.lastName}`,
-        record.employee?.email,
-        record.employee?.department,
-        record.date,
-        record.timeIn || '',
-        record.timeOut || '',
-        record.duration || '0',
-        record.status,
-        record.checkInMethod,
-      ];
-      csvContent += row.map(escapeCsv).join(',') + '\n';
+      };
     });
-
-    const response = new NextResponse(csvContent);
-    response.headers.set('Content-Type', 'text/csv');
-    response.headers.set('Content-Disposition', `attachment; filename="attendance_export_${new Date().toISOString().split('T')[0]}.csv"`);
-
-    return response;
-  } catch (error: any) {
-    console.error('GET attendance export error:', error);
-    return NextResponse.json({ 
-      error: 'Internal server error: ' + error.message 
-    }, { status: 500 });
   }
-}
+
+  const merged = [...nfcResults, ...legacyResults].sort((a, b) => {
+    const dateCompare = (b.date || '').localeCompare(a.date || '');
+    if (dateCompare !== 0) return dateCompare;
+    return (b.timeIn || '').localeCompare(a.timeIn || '');
+  });
+
+  const escapeCsv = (value: unknown) => {
+    if (value === null || value === undefined) return '';
+    const stringValue = String(value);
+    if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+      return `"${stringValue.replace(/"/g, '""')}"`;
+    }
+    return stringValue;
+  };
+
+  const headers = ['Employee Name', 'Email', 'Department', 'Date', 'Time In', 'Time Out', 'Duration (mins)', 'Status', 'Check-in Method'];
+  let csvContent = `${headers.map(escapeCsv).join(',')}\n`;
+  for (const record of merged) {
+    const row = [
+      `${record.employee?.firstName || ''} ${record.employee?.lastName || ''}`.trim(),
+      record.employee?.email,
+      record.employee?.department,
+      record.date,
+      record.timeIn || '',
+      record.timeOut || '',
+      record.duration ?? 0,
+      record.status,
+      record.checkInMethod,
+    ];
+    csvContent += `${row.map(escapeCsv).join(',')}\n`;
+  }
+
+  return new Response(csvContent, {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/csv',
+      'Content-Disposition': `attachment; filename="attendance_export_${new Date().toISOString().slice(0, 10)}.csv"`,
+    },
+  });
+}, { requireAuth: true, roles: ['Admin'] });

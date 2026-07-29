@@ -1,166 +1,75 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
-import { readerDevices } from '@/db/schema';
-import { eq, like, and, or, asc } from 'drizzle-orm';
-import { getCurrentUser } from '@/lib/auth';
+import { withApiHandler } from '@/server/http/handler';
+import { BadRequestError, ConflictError } from '@/server/http/errors';
+import { apiSuccess } from '@/server/http/response';
+import { createReaderSchema, readerStatusSchema, readerTypeSchema } from '@/server/validation/devices';
+import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
 
-const VALID_TYPES = ['usb', 'ethernet', 'mobile'];
-const VALID_STATUSES = ['online', 'offline', 'maintenance'];
-
-export async function GET(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
-
-    // Role check: Admin, CMS Admin, or HR
-    if (user.role !== 'admin' && user.role !== 'cms_administrator' && user.role !== 'hr_manager') {
-      return NextResponse.json({ 
-        error: 'Insufficient permissions. Admin or HR role required.',
-        code: 'INSUFFICIENT_PERMISSIONS' 
-      }, { status: 403 });
-    }
-
-    const searchParams = request.nextUrl.searchParams;
-    const limit = Math.min(parseInt(searchParams.get('limit') ?? '10'), 100);
-    const offset = parseInt(searchParams.get('offset') ?? '0');
-    const statusFilter = searchParams.get('status');
-    const typeFilter = searchParams.get('type');
-    const locationFilter = searchParams.get('location');
-
-    const conditions = [];
-
-    if (statusFilter) {
-      if (!VALID_STATUSES.includes(statusFilter)) {
-        return NextResponse.json({ 
-          error: `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}`,
-          code: 'INVALID_STATUS' 
-        }, { status: 400 });
-      }
-      conditions.push(eq(readerDevices.status, statusFilter));
-    }
-
-    if (typeFilter) {
-      if (!VALID_TYPES.includes(typeFilter)) {
-        return NextResponse.json({ 
-          error: `Invalid type. Must be one of: ${VALID_TYPES.join(', ')}`,
-          code: 'INVALID_TYPE' 
-        }, { status: 400 });
-      }
-      conditions.push(eq(readerDevices.type, typeFilter));
-    }
-
-    if (locationFilter) {
-      conditions.push(like(readerDevices.location, `%${locationFilter}%`));
-    }
-
-    const results = await db.select()
-      .from(readerDevices)
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(asc(readerDevices.name))
-      .limit(limit)
-      .offset(offset);
-
-    return NextResponse.json(results, { status: 200 });
-  } catch (error) {
-    console.error('GET error:', error);
-    return NextResponse.json({ 
-      error: 'Internal server error: ' + (error instanceof Error ? error.message : 'Unknown error')
-    }, { status: 500 });
-  }
+function normalizeSupabaseReaderRow(row: Record<string, unknown>) {
+  return {
+    id: Number(row.id),
+    readerId: row.reader_id,
+    name: row.name,
+    location: row.location,
+    type: row.type,
+    status: row.status,
+    ipAddress: row.ip_address ?? null,
+    config: row.config ?? null,
+    lastHeartbeat: row.last_heartbeat ?? null,
+    createdAt: row.created_at ?? null,
+    updatedAt: row.updated_at ?? null,
+  };
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
+export const GET = withApiHandler(async (request, context) => {
+  const searchParams = new URL(request.url).searchParams;
+  const limit = Math.min(Math.max(Number(searchParams.get('limit') ?? '10'), 1), 100);
+  const offset = Math.max(Number(searchParams.get('offset') ?? '0'), 0);
+  const status = searchParams.get('status');
+  const type = searchParams.get('type');
+  const location = searchParams.get('location');
 
-    // Role check: Admin or CMS Admin
-    if (user.role !== 'admin' && user.role !== 'cms_administrator') {
-      return NextResponse.json({ 
-        error: 'Insufficient permissions. Admin role required.',
-        code: 'INSUFFICIENT_PERMISSIONS' 
-      }, { status: 403 });
-    }
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  let query = getAdminRouteSupabase().from('reader_devices').select('*', { count: 'exact' }).eq('tenant_id', tenantId);
+  if (status) query = query.eq('status', readerStatusSchema.parse(status));
+  if (type) query = query.eq('type', readerTypeSchema.parse(type));
+  if (location) query = query.ilike('location', `%${location}%`);
+  const { data, count, error } = await query.order('name', { ascending: true }).range(offset, offset + limit - 1);
+  if (error) throw error;
+  return apiSuccess(((data as Record<string, unknown>[] | null) ?? []).map(normalizeSupabaseReaderRow), 'Reader devices fetched successfully', {
+    meta: { page: Math.floor(offset / limit) + 1, limit, total: Number(count ?? 0) },
+  });
+}, { requireAuth: true, roles: ['Admin'] });
 
-    const body = await request.json();
-    const { readerId, name, location, type, ipAddress, config } = body;
+export const POST = withApiHandler(async (request, context) => {
+  const payload = createReaderSchema.parse(await request.json());
 
-    if (!readerId || typeof readerId !== 'string' || readerId.trim() === '') {
-      return NextResponse.json({ 
-        error: 'readerId is required and must be a non-empty string',
-        code: 'MISSING_READER_ID' 
-      }, { status: 400 });
-    }
-
-    if (!name || typeof name !== 'string' || name.trim() === '') {
-      return NextResponse.json({ 
-        error: 'name is required and must be a non-empty string',
-        code: 'MISSING_NAME' 
-      }, { status: 400 });
-    }
-
-    if (!location || typeof location !== 'string' || location.trim() === '') {
-      return NextResponse.json({ 
-        error: 'location is required and must be a non-empty string',
-        code: 'MISSING_LOCATION' 
-      }, { status: 400 });
-    }
-
-    if (!type || !VALID_TYPES.includes(type)) {
-      return NextResponse.json({ 
-        error: `type is required and must be one of: ${VALID_TYPES.join(', ')}`,
-        code: 'INVALID_TYPE' 
-      }, { status: 400 });
-    }
-
-    if (config && typeof config === 'string') {
-      try {
-        JSON.parse(config);
-      } catch {
-        return NextResponse.json({ 
-          error: 'config must be a valid JSON string',
-          code: 'INVALID_CONFIG_JSON' 
-        }, { status: 400 });
-      }
-    }
-
-    const existingReader = await db.select()
-      .from(readerDevices)
-      .where(eq(readerDevices.readerId, readerId.trim()))
-      .limit(1);
-
-    if (existingReader.length > 0) {
-      return NextResponse.json({ 
-        error: 'A reader device with this readerId already exists',
-        code: 'READER_ID_EXISTS' 
-      }, { status: 400 });
-    }
-
-    const now = new Date().toISOString();
-    const newReader = await db.insert(readerDevices)
-      .values({
-        readerId: readerId.trim(),
-        name: name.trim(),
-        location: location.trim(),
-        type,
-        status: 'offline',
-        ipAddress: ipAddress?.trim() || null,
-        config: config || null,
-        lastHeartbeat: null,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .returning();
-
-    return NextResponse.json(newReader[0], { status: 201 });
-  } catch (error) {
-    console.error('POST error:', error);
-    return NextResponse.json({ 
-      error: 'Internal server error: ' + (error instanceof Error ? error.message : 'Unknown error')
-    }, { status: 500 });
-  }
-}
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  const supabase = getAdminRouteSupabase();
+  const { data: existing } = await supabase
+    .from('reader_devices')
+    .select('id')
+    .eq('reader_id', payload.readerId)
+    .eq('tenant_id', tenantId)
+    .single();
+  if (existing) throw new ConflictError('A reader device with this readerId already exists');
+  const now = new Date().toISOString();
+  const { data: created, error } = await supabase.from('reader_devices').insert({
+    reader_id: payload.readerId.trim(),
+    name: payload.name.trim(),
+    location: payload.location.trim(),
+    type: payload.type,
+    status: 'offline',
+    ip_address: payload.ipAddress?.trim() || null,
+    config: payload.config ?? null,
+    tenant_id: tenantId,
+    last_heartbeat: null,
+    created_at: now,
+    updated_at: now,
+  }).select('*').single();
+  if (error || !created) throw error ?? new Error('Failed to create reader device');
+  return apiSuccess(normalizeSupabaseReaderRow(created), 'Reader device created successfully', { status: 201 });
+}, { requireAuth: true, roles: ['Admin'] });

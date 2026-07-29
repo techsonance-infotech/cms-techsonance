@@ -1,614 +1,215 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
-import { expenses, projects, employees } from '@/db/schema';
-import { eq, like, and, or, desc, asc, gte, lte, sql } from 'drizzle-orm';
-import { safeErrorMessage } from '@/lib/constants';
+import { NextResponse } from 'next/server';
+import { withApiHandler } from '@/server/http/handler';
+import { BadRequestError, NotFoundError } from '@/server/http/errors';
+import { createExpenseSchema, expenseStatusSchema, updateExpenseSchema } from '@/server/validation/expenses';
+import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
+import { safeInsert } from '@/server/supabase/safe-insert';
 
-export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-    const search = searchParams.get('search');
-    const projectId = searchParams.get('projectId');
-    const employeeId = searchParams.get('employeeId');
-    const status = searchParams.get('status');
-    const startDate = searchParams.get('startDate');
-    const endDate = searchParams.get('endDate');
-    const aggregateBy = searchParams.get('aggregateBy'); // 'category' or 'project'
-    const limit = Math.min(parseInt(searchParams.get('limit') ?? '10'), 100);
-    const offset = parseInt(searchParams.get('offset') ?? '0');
-    const sortField = searchParams.get('sort') ?? 'createdAt';
-    const sortOrder = searchParams.get('order') ?? 'desc';
+async function assertSupabaseExpenseRelations(tenantId: string, input: { projectId?: number | null; employeeId?: number | null }) {
+  const supabase = getAdminRouteSupabase();
+  if (input.projectId) {
+    const { data } = await supabase
+      .from('projects')
+      .select('id')
+      .eq('id', input.projectId)
+      .eq('tenant_id', tenantId)
+      .single();
+    if (!data) throw new NotFoundError('Project not found');
+  }
+  if (input.employeeId) {
+    const { data } = await supabase
+      .from('employees')
+      .select('id')
+      .eq('id', input.employeeId)
+      .eq('tenant_id', tenantId)
+      .single();
+    if (!data) throw new NotFoundError('Employee not found');
+  }
+}
 
-    // Get single expense by ID
-    if (id) {
-      if (!id || isNaN(parseInt(id))) {
-        return NextResponse.json({ 
-          error: "Valid ID is required",
-          code: "INVALID_ID" 
-        }, { status: 400 });
-      }
+function normalizeSupabaseExpenseRow(row: Record<string, unknown>) {
+  return {
+    id: Number(row.id),
+    category: row.category,
+    description: row.description,
+    amount: row.amount,
+    date: row.date,
+    projectId: row.project_id === null ? null : Number(row.project_id),
+    employeeId: row.employee_id === null ? null : Number(row.employee_id),
+    receiptUrl: row.receipt_url ?? null,
+    status: row.status,
+    createdAt: row.created_at ?? null,
+  };
+}
 
-      const expense = await db.select()
-        .from(expenses)
-        .where(eq(expenses.id, parseInt(id)))
-        .limit(1);
+export const GET = withApiHandler(async (request, context) => {
+  const searchParams = new URL(request.url).searchParams;
+  const id = searchParams.get('id');
 
-      if (expense.length === 0) {
-        return NextResponse.json({ 
-          error: 'Expense not found',
-          code: "EXPENSE_NOT_FOUND" 
-        }, { status: 404 });
-      }
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const supabase = getAdminRouteSupabase();
 
-      return NextResponse.json(expense[0], { status: 200 });
-    }
+  if (id) {
+    const { data, error } = await supabase
+      .from('expenses')
+      .select('*')
+      .eq('id', Number(id))
+      .eq('tenant_id', tenantId)
+      .single();
+    if (error || !data) throw new NotFoundError('Expense not found');
+    return NextResponse.json(normalizeSupabaseExpenseRow(data));
+  }
 
-    // Handle aggregation requests
-    if (aggregateBy === 'category') {
-      const conditions = [];
+  const limit = Math.min(Number(searchParams.get('limit') ?? '10'), 100);
+  const offset = Math.max(Number(searchParams.get('offset') ?? '0'), 0);
+  const search = searchParams.get('search');
+  const projectId = searchParams.get('projectId');
+  const employeeId = searchParams.get('employeeId');
+  const status = searchParams.get('status');
+  const startDate = searchParams.get('startDate');
+  const endDate = searchParams.get('endDate');
+  const aggregateBy = searchParams.get('aggregateBy');
+  const sortField = searchParams.get('sort') ?? 'createdAt';
+  const ascending = searchParams.get('order') === 'asc';
+  
+  let query = supabase
+    .from('expenses')
+    .select('*', { count: 'exact' })
+    .eq('tenant_id', tenantId);
 
-      if (projectId) {
-        if (isNaN(parseInt(projectId))) {
-          return NextResponse.json({ 
-            error: "Valid project ID is required",
-            code: "INVALID_PROJECT_ID" 
-          }, { status: 400 });
-        }
-        conditions.push(eq(expenses.projectId, parseInt(projectId)));
-      }
+  if (search) query = query.or(`category.ilike.%${search}%,description.ilike.%${search}%`);
+  if (projectId) query = query.eq('project_id', Number(projectId));
+  if (employeeId) query = query.eq('employee_id', Number(employeeId));
+  if (status) query = query.eq('status', expenseStatusSchema.parse(status));
+  if (startDate) query = query.gte('date', startDate);
+  if (endDate) query = query.lte('date', endDate);
 
-      if (employeeId) {
-        if (isNaN(parseInt(employeeId))) {
-          return NextResponse.json({ 
-            error: "Valid employee ID is required",
-            code: "INVALID_EMPLOYEE_ID" 
-          }, { status: 400 });
-        }
-        conditions.push(eq(expenses.employeeId, parseInt(employeeId)));
-      }
+  const { data, count, error } = await query
+    .order(sortField === 'date' ? 'date' : sortField === 'amount' ? 'amount' : sortField === 'category' ? 'category' : 'created_at', { ascending })
+    .range(offset, offset + limit - 1);
 
-      if (status) {
-        if (!['pending', 'approved', 'rejected'].includes(status)) {
-          return NextResponse.json({ 
-            error: "Invalid status. Must be one of: pending, approved, rejected",
-            code: "INVALID_STATUS" 
-          }, { status: 400 });
-        }
-        conditions.push(eq(expenses.status, status));
-      }
+  if (error) throw error;
+  const rows = ((data as Record<string, unknown>[] | null) ?? []).map(normalizeSupabaseExpenseRow);
 
-      if (startDate) {
-        conditions.push(gte(expenses.date, startDate));
-      }
+  if (aggregateBy === 'category') {
+    const grouped = Object.values(rows.reduce<Record<string, { category: string; totalAmount: number; count: number }>>((acc, row) => {
+      const key = String(row.category);
+      acc[key] ??= { category: key, totalAmount: 0, count: 0 };
+      acc[key].totalAmount += Number(row.amount ?? 0);
+      acc[key].count += 1;
+      return acc;
+    }, {}));
+    return NextResponse.json(grouped);
+  }
 
-      if (endDate) {
-        conditions.push(lte(expenses.date, endDate));
-      }
+  if (aggregateBy === 'project') {
+    const grouped = Object.values(rows.reduce<Record<string, { projectId: number | null; totalAmount: number; count: number }>>((acc, row) => {
+      const key = String(row.projectId ?? 'null');
+      acc[key] ??= { projectId: row.projectId, totalAmount: 0, count: 0 };
+      acc[key].totalAmount += Number(row.amount ?? 0);
+      acc[key].count += 1;
+      return acc;
+    }, {}));
+    return NextResponse.json(grouped);
+  }
 
-      const whereCondition = conditions.length > 0 ? and(...conditions) : undefined;
+  return NextResponse.json({
+    success: true,
+    data: rows,
+    message: 'Expenses fetched successfully',
+    errors: null,
+    meta: {
+      page: Math.floor(offset / limit) + 1,
+      limit,
+      total: Number(count ?? 0),
+    },
+  });
+}, { requireAuth: true, roles: ['Employee'] });
 
-      const aggregated = await db.select({
-        category: expenses.category,
-        totalAmount: sql<number>`SUM(${expenses.amount})`,
-        count: sql<number>`COUNT(*)`,
-      })
-        .from(expenses)
-        .where(whereCondition)
-        .groupBy(expenses.category);
+export const POST = withApiHandler(async (request, context) => {
+  const payload = createExpenseSchema.parse(await request.json());
 
-      return NextResponse.json(aggregated, { status: 200 });
-    }
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  await assertSupabaseExpenseRelations(tenantId, payload);
+  const supabase = getAdminRouteSupabase();
+  const { data, error } = await safeInsert('expenses', {
+    category: payload.category.trim(),
+    description: payload.description.trim(),
+    amount: payload.amount,
+    date: payload.date,
+    project_id: payload.projectId ?? null,
+    employee_id: payload.employeeId ?? null,
+    receipt_url: payload.receiptUrl?.trim() || null,
+    status: payload.status ?? 'pending',
+    tenant_id: tenantId,
+    created_at: new Date().toISOString(),
+  }, supabase);
 
-    if (aggregateBy === 'project') {
-      const conditions = [];
+  if (error || !data) throw error ?? new Error('Failed to create expense');
+  return NextResponse.json(normalizeSupabaseExpenseRow(data as Record<string, unknown>), { status: 201 });
+}, { requireAuth: true, roles: ['Manager'] });
 
-      if (projectId) {
-        if (isNaN(parseInt(projectId))) {
-          return NextResponse.json({ 
-            error: "Valid project ID is required",
-            code: "INVALID_PROJECT_ID" 
-          }, { status: 400 });
-        }
-        conditions.push(eq(expenses.projectId, parseInt(projectId)));
-      }
+export const PUT = withApiHandler(async (request, context) => {
+  const id = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('Valid expense id is required');
+  const payload = updateExpenseSchema.parse(await request.json());
 
-      if (employeeId) {
-        if (isNaN(parseInt(employeeId))) {
-          return NextResponse.json({ 
-            error: "Valid employee ID is required",
-            code: "INVALID_EMPLOYEE_ID" 
-          }, { status: 400 });
-        }
-        conditions.push(eq(expenses.employeeId, parseInt(employeeId)));
-      }
-
-      if (status) {
-        if (!['pending', 'approved', 'rejected'].includes(status)) {
-          return NextResponse.json({ 
-            error: "Invalid status. Must be one of: pending, approved, rejected",
-            code: "INVALID_STATUS" 
-          }, { status: 400 });
-        }
-        conditions.push(eq(expenses.status, status));
-      }
-
-      if (startDate) {
-        conditions.push(gte(expenses.date, startDate));
-      }
-
-      if (endDate) {
-        conditions.push(lte(expenses.date, endDate));
-      }
-
-      const whereCondition = conditions.length > 0 ? and(...conditions) : undefined;
-
-      const aggregated = await db.select({
-        projectId: expenses.projectId,
-        totalAmount: sql<number>`SUM(${expenses.amount})`,
-        count: sql<number>`COUNT(*)`,
-      })
-        .from(expenses)
-        .where(whereCondition)
-        .groupBy(expenses.projectId);
-
-      return NextResponse.json(aggregated, { status: 200 });
-    }
-
-    // Build query with filters
-    const conditions = [];
-
-    if (search) {
-      conditions.push(
-        or(
-          like(expenses.category, `%${search}%`),
-          like(expenses.description, `%${search}%`)
-        )
-      );
-    }
-
-    if (projectId) {
-      if (isNaN(parseInt(projectId))) {
-        return NextResponse.json({ 
-          error: "Valid project ID is required",
-          code: "INVALID_PROJECT_ID" 
-        }, { status: 400 });
-      }
-      conditions.push(eq(expenses.projectId, parseInt(projectId)));
-    }
-
-    if (employeeId) {
-      if (isNaN(parseInt(employeeId))) {
-        return NextResponse.json({ 
-          error: "Valid employee ID is required",
-          code: "INVALID_EMPLOYEE_ID" 
-        }, { status: 400 });
-      }
-      conditions.push(eq(expenses.employeeId, parseInt(employeeId)));
-    }
-
-    if (status) {
-      if (!['pending', 'approved', 'rejected'].includes(status)) {
-        return NextResponse.json({ 
-          error: "Invalid status. Must be one of: pending, approved, rejected",
-          code: "INVALID_STATUS" 
-        }, { status: 400 });
-      }
-      conditions.push(eq(expenses.status, status));
-    }
-
-    if (startDate) {
-      conditions.push(gte(expenses.date, startDate));
-    }
-
-    if (endDate) {
-      conditions.push(lte(expenses.date, endDate));
-    }
-
-    const whereCondition = conditions.length > 0 ? and(...conditions) : undefined;
-
-    let query = db.select().from(expenses);
-
-    if (whereCondition) {
-      query = query.where(whereCondition);
-    }
-
-    // Apply sorting
-    const orderByColumn = sortField === 'date' ? expenses.date 
-      : sortField === 'amount' ? expenses.amount 
-      : sortField === 'category' ? expenses.category
-      : expenses.createdAt;
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const supabase = getAdminRouteSupabase();
+  const { data: existing } = await supabase
+    .from('expenses')
+    .select('*')
+    .eq('id', id)
+    .eq('tenant_id', tenantId)
+    .single();
     
-    query = query.orderBy(sortOrder === 'asc' ? asc(orderByColumn) : desc(orderByColumn));
+  if (!existing) throw new NotFoundError('Expense not found');
+  await assertSupabaseExpenseRelations(tenantId, { projectId: payload.projectId, employeeId: payload.employeeId });
 
-    const results = await query.limit(limit).offset(offset);
+  const { data, error } = await supabase.from('expenses').update({
+    ...(payload.category !== undefined ? { category: payload.category.trim() } : {}),
+    ...(payload.description !== undefined ? { description: payload.description.trim() } : {}),
+    ...(payload.amount !== undefined ? { amount: payload.amount } : {}),
+    ...(payload.date !== undefined ? { date: payload.date } : {}),
+    ...(payload.projectId !== undefined ? { project_id: payload.projectId ?? null } : {}),
+    ...(payload.employeeId !== undefined ? { employee_id: payload.employeeId ?? null } : {}),
+    ...(payload.receiptUrl !== undefined ? { receipt_url: payload.receiptUrl?.trim() || null } : {}),
+    ...(payload.status !== undefined ? { status: payload.status } : {}),
+  })
+  .eq('id', id)
+  .eq('tenant_id', tenantId)
+  .select('*')
+  .single();
 
-    return NextResponse.json(results, { status: 200 });
-  } catch (error) {
-    console.error('GET expenses error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
-  }
-}
+  if (error || !data) throw error ?? new Error('Failed to update expense');
+  return NextResponse.json(normalizeSupabaseExpenseRow(data));
+}, { requireAuth: true, roles: ['Manager'] });
 
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { 
-      category, 
-      description, 
-      amount, 
-      date, 
-      projectId, 
-      employeeId, 
-      receiptUrl, 
-      status 
-    } = body;
+export const DELETE = withApiHandler(async (request, context) => {
+  const id = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('Valid expense id is required');
 
-    // Validate required fields
-    if (!category || !category.trim()) {
-      return NextResponse.json({ 
-        error: "Category is required",
-        code: "MISSING_CATEGORY" 
-      }, { status: 400 });
-    }
-
-    if (!description || !description.trim()) {
-      return NextResponse.json({ 
-        error: "Description is required",
-        code: "MISSING_DESCRIPTION" 
-      }, { status: 400 });
-    }
-
-    if (!amount && amount !== 0) {
-      return NextResponse.json({ 
-        error: "Amount is required",
-        code: "MISSING_AMOUNT" 
-      }, { status: 400 });
-    }
-
-    if (!date || !date.trim()) {
-      return NextResponse.json({ 
-        error: "Date is required",
-        code: "MISSING_DATE" 
-      }, { status: 400 });
-    }
-
-    // Validate amount is positive integer
-    const parsedAmount = parseInt(amount);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      return NextResponse.json({ 
-        error: "Amount must be a positive integer",
-        code: "INVALID_AMOUNT" 
-      }, { status: 400 });
-    }
-
-    // Validate date format
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!dateRegex.test(date)) {
-      return NextResponse.json({ 
-        error: "Date must be in YYYY-MM-DD format",
-        code: "INVALID_DATE_FORMAT" 
-      }, { status: 400 });
-    }
-
-    const parsedDate = new Date(date);
-    if (isNaN(parsedDate.getTime())) {
-      return NextResponse.json({ 
-        error: "Invalid date provided",
-        code: "INVALID_DATE" 
-      }, { status: 400 });
-    }
-
-    // Validate status if provided
-    if (status && !['pending', 'approved', 'rejected'].includes(status)) {
-      return NextResponse.json({ 
-        error: "Invalid status. Must be one of: pending, approved, rejected",
-        code: "INVALID_STATUS" 
-      }, { status: 400 });
-    }
-
-    // Validate projectId if provided
-    if (projectId) {
-      const parsedProjectId = parseInt(projectId);
-      if (isNaN(parsedProjectId)) {
-        return NextResponse.json({ 
-          error: "Invalid project ID",
-          code: "INVALID_PROJECT_ID" 
-        }, { status: 400 });
-      }
-
-      const projectExists = await db.select()
-        .from(projects)
-        .where(eq(projects.id, parsedProjectId))
-        .limit(1);
-
-      if (projectExists.length === 0) {
-        return NextResponse.json({ 
-          error: "Project not found",
-          code: "PROJECT_NOT_FOUND" 
-        }, { status: 400 });
-      }
-    }
-
-    // Validate employeeId if provided
-    if (employeeId) {
-      const parsedEmployeeId = parseInt(employeeId);
-      if (isNaN(parsedEmployeeId)) {
-        return NextResponse.json({ 
-          error: "Invalid employee ID",
-          code: "INVALID_EMPLOYEE_ID" 
-        }, { status: 400 });
-      }
-
-      const employeeExists = await db.select()
-        .from(employees)
-        .where(eq(employees.id, parsedEmployeeId))
-        .limit(1);
-
-      if (employeeExists.length === 0) {
-        return NextResponse.json({ 
-          error: "Employee not found",
-          code: "EMPLOYEE_NOT_FOUND" 
-        }, { status: 400 });
-      }
-    }
-
-    // Create expense with validated data
-    const newExpense = await db.insert(expenses)
-      .values({
-        category: category.trim(),
-        description: description.trim(),
-        amount: parsedAmount,
-        date: date,
-        projectId: projectId ? parseInt(projectId) : null,
-        employeeId: employeeId ? parseInt(employeeId) : null,
-        receiptUrl: receiptUrl?.trim() || null,
-        status: status || 'pending',
-        createdAt: new Date().toISOString(),
-      })
-      .returning();
-
-    return NextResponse.json(newExpense[0], { status: 201 });
-  } catch (error) {
-    console.error('POST expenses error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
-  }
-}
-
-export async function PUT(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json({ 
-        error: "Valid ID is required",
-        code: "INVALID_ID" 
-      }, { status: 400 });
-    }
-
-    const expenseId = parseInt(id);
-
-    // Check if expense exists
-    const existingExpense = await db.select()
-      .from(expenses)
-      .where(eq(expenses.id, expenseId))
-      .limit(1);
-
-    if (existingExpense.length === 0) {
-      return NextResponse.json({ 
-        error: 'Expense not found',
-        code: "EXPENSE_NOT_FOUND" 
-      }, { status: 404 });
-    }
-
-    const body = await request.json();
-    const { 
-      category, 
-      description, 
-      amount, 
-      date, 
-      projectId, 
-      employeeId, 
-      receiptUrl, 
-      status 
-    } = body;
-
-    const updates: any = {};
-
-    // Validate and add category if provided
-    if (category !== undefined) {
-      if (!category.trim()) {
-        return NextResponse.json({ 
-          error: "Category cannot be empty",
-          code: "EMPTY_CATEGORY" 
-        }, { status: 400 });
-      }
-      updates.category = category.trim();
-    }
-
-    // Validate and add description if provided
-    if (description !== undefined) {
-      if (!description.trim()) {
-        return NextResponse.json({ 
-          error: "Description cannot be empty",
-          code: "EMPTY_DESCRIPTION" 
-        }, { status: 400 });
-      }
-      updates.description = description.trim();
-    }
-
-    // Validate and add amount if provided
-    if (amount !== undefined) {
-      const parsedAmount = parseInt(amount);
-      if (isNaN(parsedAmount) || parsedAmount <= 0) {
-        return NextResponse.json({ 
-          error: "Amount must be a positive integer",
-          code: "INVALID_AMOUNT" 
-        }, { status: 400 });
-      }
-      updates.amount = parsedAmount;
-    }
-
-    // Validate and add date if provided
-    if (date !== undefined) {
-      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-      if (!dateRegex.test(date)) {
-        return NextResponse.json({ 
-          error: "Date must be in YYYY-MM-DD format",
-          code: "INVALID_DATE_FORMAT" 
-        }, { status: 400 });
-      }
-
-      const parsedDate = new Date(date);
-      if (isNaN(parsedDate.getTime())) {
-        return NextResponse.json({ 
-          error: "Invalid date provided",
-          code: "INVALID_DATE" 
-        }, { status: 400 });
-      }
-      updates.date = date;
-    }
-
-    // Validate and add status if provided
-    if (status !== undefined) {
-      if (!['pending', 'approved', 'rejected'].includes(status)) {
-        return NextResponse.json({ 
-          error: "Invalid status. Must be one of: pending, approved, rejected",
-          code: "INVALID_STATUS" 
-        }, { status: 400 });
-      }
-      updates.status = status;
-    }
-
-    // Validate and add projectId if provided
-    if (projectId !== undefined) {
-      if (projectId === null) {
-        updates.projectId = null;
-      } else {
-        const parsedProjectId = parseInt(projectId);
-        if (isNaN(parsedProjectId)) {
-          return NextResponse.json({ 
-            error: "Invalid project ID",
-            code: "INVALID_PROJECT_ID" 
-          }, { status: 400 });
-        }
-
-        const projectExists = await db.select()
-          .from(projects)
-          .where(eq(projects.id, parsedProjectId))
-          .limit(1);
-
-        if (projectExists.length === 0) {
-          return NextResponse.json({ 
-            error: "Project not found",
-            code: "PROJECT_NOT_FOUND" 
-          }, { status: 400 });
-        }
-        updates.projectId = parsedProjectId;
-      }
-    }
-
-    // Validate and add employeeId if provided
-    if (employeeId !== undefined) {
-      if (employeeId === null) {
-        updates.employeeId = null;
-      } else {
-        const parsedEmployeeId = parseInt(employeeId);
-        if (isNaN(parsedEmployeeId)) {
-          return NextResponse.json({ 
-            error: "Invalid employee ID",
-            code: "INVALID_EMPLOYEE_ID" 
-          }, { status: 400 });
-        }
-
-        const employeeExists = await db.select()
-          .from(employees)
-          .where(eq(employees.id, parsedEmployeeId))
-          .limit(1);
-
-        if (employeeExists.length === 0) {
-          return NextResponse.json({ 
-            error: "Employee not found",
-            code: "EMPLOYEE_NOT_FOUND" 
-          }, { status: 400 });
-        }
-        updates.employeeId = parsedEmployeeId;
-      }
-    }
-
-    // Add receiptUrl if provided
-    if (receiptUrl !== undefined) {
-      updates.receiptUrl = receiptUrl ? receiptUrl.trim() : null;
-    }
-
-    // If no updates provided, return error
-    if (Object.keys(updates).length === 0) {
-      return NextResponse.json({ 
-        error: "No valid fields to update",
-        code: "NO_UPDATES" 
-      }, { status: 400 });
-    }
-
-    // Update expense
-    const updatedExpense = await db.update(expenses)
-      .set(updates)
-      .where(eq(expenses.id, expenseId))
-      .returning();
-
-    return NextResponse.json(updatedExpense[0], { status: 200 });
-  } catch (error) {
-    console.error('PUT expenses error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
-  }
-}
-
-export async function DELETE(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json({ 
-        error: "Valid ID is required",
-        code: "INVALID_ID" 
-      }, { status: 400 });
-    }
-
-    const expenseId = parseInt(id);
-
-    // Check if expense exists
-    const existingExpense = await db.select()
-      .from(expenses)
-      .where(eq(expenses.id, expenseId))
-      .limit(1);
-
-    if (existingExpense.length === 0) {
-      return NextResponse.json({ 
-        error: 'Expense not found',
-        code: "EXPENSE_NOT_FOUND" 
-      }, { status: 404 });
-    }
-
-    // Delete expense
-    const deletedExpense = await db.delete(expenses)
-      .where(eq(expenses.id, expenseId))
-      .returning();
-
-    return NextResponse.json({
-      message: 'Expense deleted successfully',
-      expense: deletedExpense[0]
-    }, { status: 200 });
-  } catch (error) {
-    console.error('DELETE expenses error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
-  }
-}
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const supabase = getAdminRouteSupabase();
+  const { data, error } = await supabase
+    .from('expenses')
+    .delete()
+    .eq('id', id)
+    .eq('tenant_id', tenantId)
+    .select('*')
+    .single();
+  if (error || !data) throw new NotFoundError('Expense not found');
+  return NextResponse.json({ message: 'Expense deleted successfully', expense: normalizeSupabaseExpenseRow(data) });
+}, { requireAuth: true, roles: ['Manager'] });

@@ -1,263 +1,142 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
-import { activityLogs, users } from '@/db/schema';
-import { eq, like, and, or, desc, gte, lte } from 'drizzle-orm';
-import { safeErrorMessage } from '@/lib/constants';
+import { NextResponse } from 'next/server';
+import { withApiHandler } from '@/server/http/handler';
+import { BadRequestError, NotFoundError } from '@/server/http/errors';
+import { createActivityLogSchema } from '@/server/validation/admin-logs';
+import {
+  buildLegacyUserIdMap,
+  getAdminRouteSupabase,
+  resolveAuthUserIdFromLegacyUserId,
+} from '@/server/supabase/route-helpers';
 
-export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+function normalizeSupabaseActivityLogRow(
+  row: Record<string, unknown>,
+  userMap: Map<string, number | null>
+) {
+  const userId = typeof row.user_id === 'string' ? userMap.get(row.user_id) ?? null : null;
 
-    // Single record fetch
-    if (id) {
-      if (!id || isNaN(parseInt(id))) {
-        return NextResponse.json({ 
-          error: "Valid ID is required",
-          code: "INVALID_ID" 
-        }, { status: 400 });
-      }
-
-      const record = await db.select()
-        .from(activityLogs)
-        .where(eq(activityLogs.id, parseInt(id)))
-        .limit(1);
-
-      if (record.length === 0) {
-        return NextResponse.json({ 
-          error: 'Activity log not found',
-          code: 'NOT_FOUND' 
-        }, { status: 404 });
-      }
-
-      return NextResponse.json(record[0], { status: 200 });
-    }
-
-    // List with pagination, filtering, and search
-    const limit = Math.min(parseInt(searchParams.get('limit') ?? '10'), 100);
-    const offset = parseInt(searchParams.get('offset') ?? '0');
-    const search = searchParams.get('search');
-    const userId = searchParams.get('userId');
-    const action = searchParams.get('action');
-    const module = searchParams.get('module');
-    const startDate = searchParams.get('startDate');
-    const endDate = searchParams.get('endDate');
-    const sort = searchParams.get('sort') ?? 'createdAt';
-    const order = searchParams.get('order') ?? 'desc';
-
-    let query = db.select().from(activityLogs);
-
-    // Build filter conditions
-    const conditions = [];
-
-    // Filter by userId
-    if (userId) {
-      if (isNaN(parseInt(userId))) {
-        return NextResponse.json({ 
-          error: "Valid userId is required for filtering",
-          code: "INVALID_USER_ID" 
-        }, { status: 400 });
-      }
-      conditions.push(eq(activityLogs.userId, parseInt(userId)));
-    }
-
-    // Filter by action
-    if (action) {
-      conditions.push(eq(activityLogs.action, action));
-    }
-
-    // Filter by module
-    if (module) {
-      conditions.push(eq(activityLogs.module, module));
-    }
-
-    // Filter by date range
-    if (startDate) {
-      conditions.push(gte(activityLogs.createdAt, startDate));
-    }
-    if (endDate) {
-      conditions.push(lte(activityLogs.createdAt, endDate));
-    }
-
-    // Search across action and module fields
-    if (search) {
-      const searchCondition = or(
-        like(activityLogs.action, `%${search}%`),
-        like(activityLogs.module, `%${search}%`)
-      );
-      conditions.push(searchCondition);
-    }
-
-    // Apply all conditions
-    if (conditions.length > 0) {
-      query = query.where(and(...conditions));
-    }
-
-    // Apply sorting
-    if (sort === 'createdAt') {
-      query = order === 'asc' 
-        ? query.orderBy(activityLogs.createdAt)
-        : query.orderBy(desc(activityLogs.createdAt));
-    } else if (sort === 'action') {
-      query = order === 'asc'
-        ? query.orderBy(activityLogs.action)
-        : query.orderBy(desc(activityLogs.action));
-    } else if (sort === 'module') {
-      query = order === 'asc'
-        ? query.orderBy(activityLogs.module)
-        : query.orderBy(desc(activityLogs.module));
-    } else {
-      // Default to createdAt DESC
-      query = query.orderBy(desc(activityLogs.createdAt));
-    }
-
-    const results = await query.limit(limit).offset(offset);
-
-    return NextResponse.json(results, { status: 200 });
-  } catch (error) {
-    console.error('GET error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
-  }
+  return {
+    id: Number(row.id),
+    userId,
+    action: row.action,
+    module: row.module,
+    details: row.details ?? null,
+    ipAddress: row.ip_address ?? null,
+    createdAt: row.created_at ?? null,
+  };
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { userId, action, module, details, ipAddress } = body;
+export const GET = withApiHandler(async (request, context) => {
+  const searchParams = new URL(request.url).searchParams;
+  const id = searchParams.get('id');
 
-    // Validate required fields
-    if (!userId) {
-      return NextResponse.json({ 
-        error: "userId is required",
-        code: "MISSING_USER_ID" 
-      }, { status: 400 });
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const supabase = getAdminRouteSupabase();
+
+  if (id) {
+    const recordId = Number(id);
+    if (!Number.isInteger(recordId) || recordId <= 0) {
+      throw new BadRequestError('Valid activity log id is required');
     }
 
-    if (!action || typeof action !== 'string' || action.trim() === '') {
-      return NextResponse.json({ 
-        error: "action is required and must be a non-empty string",
-        code: "INVALID_ACTION" 
-      }, { status: 400 });
-    }
-
-    if (!module || typeof module !== 'string' || module.trim() === '') {
-      return NextResponse.json({ 
-        error: "module is required and must be a non-empty string",
-        code: "INVALID_MODULE" 
-      }, { status: 400 });
-    }
-
-    // Validate userId is a valid integer
-    if (isNaN(parseInt(userId))) {
-      return NextResponse.json({ 
-        error: "userId must be a valid integer",
-        code: "INVALID_USER_ID" 
-      }, { status: 400 });
-    }
-
-    // Check if user exists
-    const userExists = await db.select()
-      .from(users)
-      .where(eq(users.id, parseInt(userId)))
-      .limit(1);
-
-    if (userExists.length === 0) {
-      return NextResponse.json({ 
-        error: "User with specified userId does not exist",
-        code: "USER_NOT_FOUND" 
-      }, { status: 400 });
-    }
-
-    // Validate details is valid JSON if provided
-    if (details !== undefined && details !== null) {
-      if (typeof details !== 'object') {
-        return NextResponse.json({ 
-          error: "details must be a valid JSON object",
-          code: "INVALID_DETAILS" 
-        }, { status: 400 });
-      }
-    }
-
-    // Validate ipAddress format if provided
-    if (ipAddress !== undefined && ipAddress !== null) {
-      if (typeof ipAddress !== 'string') {
-        return NextResponse.json({ 
-          error: "ipAddress must be a string",
-          code: "INVALID_IP_ADDRESS" 
-        }, { status: 400 });
-      }
-    }
-
-    // Prepare insert data
-    const insertData: any = {
-      userId: parseInt(userId),
-      action: action.trim(),
-      module: module.trim(),
-      createdAt: new Date().toISOString(),
-    };
-
-    if (details !== undefined && details !== null) {
-      insertData.details = details;
-    }
-
-    if (ipAddress !== undefined && ipAddress !== null) {
-      insertData.ipAddress = ipAddress.trim();
-    }
-
-    // Insert the new activity log
-    const newLog = await db.insert(activityLogs)
-      .values(insertData)
-      .returning();
-
-    return NextResponse.json(newLog[0], { status: 201 });
-  } catch (error) {
-    console.error('POST error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
+    const { data: record, error } = await supabase
+      .from('activity_logs')
+      .select('*')
+      .eq('id', recordId)
+      .eq('tenant_id', tenantId)
+      .single();
+    if (error || !record) throw new NotFoundError('Activity log not found');
+    const userMap = await buildLegacyUserIdMap(accessToken, [String(record.user_id)].filter(Boolean), tenantId);
+    return NextResponse.json(normalizeSupabaseActivityLogRow(record, userMap));
   }
-}
 
-export async function DELETE(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+  const limit = Math.min(Number(searchParams.get('limit') ?? '10'), 100);
+  const offset = Math.max(Number(searchParams.get('offset') ?? '0'), 0);
+  const search = searchParams.get('search');
+  const userId = searchParams.get('userId');
+  const action = searchParams.get('action');
+  const module = searchParams.get('module');
+  const startDate = searchParams.get('startDate');
+  const endDate = searchParams.get('endDate');
+  let query = supabase
+    .from('activity_logs')
+    .select('*', { count: 'exact' })
+    .eq('tenant_id', tenantId);
 
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json({ 
-        error: "Valid ID is required",
-        code: "INVALID_ID" 
-      }, { status: 400 });
+  if (userId) {
+    const numericUserId = Number(userId);
+    if (!Number.isInteger(numericUserId) || numericUserId <= 0) {
+      throw new BadRequestError('Valid user id is required');
     }
-
-    // Check if record exists
-    const existing = await db.select()
-      .from(activityLogs)
-      .where(eq(activityLogs.id, parseInt(id)))
-      .limit(1);
-
-    if (existing.length === 0) {
-      return NextResponse.json({ 
-        error: 'Activity log not found',
-        code: 'NOT_FOUND' 
-      }, { status: 404 });
-    }
-
-    // Delete the activity log
-    const deleted = await db.delete(activityLogs)
-      .where(eq(activityLogs.id, parseInt(id)))
-      .returning();
-
-    return NextResponse.json({
-      message: 'Activity log deleted successfully',
-      deletedRecord: deleted[0]
-    }, { status: 200 });
-  } catch (error) {
-    console.error('DELETE error:', error);
-    return NextResponse.json({ 
-      error: safeErrorMessage(error) 
-    }, { status: 500 });
+    query = query.eq('user_id', await resolveAuthUserIdFromLegacyUserId(accessToken, numericUserId, tenantId));
   }
-}
+  if (action) query = query.eq('action', action);
+  if (module) query = query.eq('module', module);
+  if (startDate) query = query.gte('created_at', startDate);
+  if (endDate) query = query.lte('created_at', endDate);
+  if (search) query = query.or(`action.ilike.%${search}%,module.ilike.%${search}%`);
+
+  const { data, count, error } = await query
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+  if (error) throw error;
+  const rows = (data as Record<string, unknown>[] | null) ?? [];
+  const userMap = await buildLegacyUserIdMap(accessToken, rows.map((row) => String(row.user_id)).filter(Boolean), tenantId);
+  return NextResponse.json({
+    success: true,
+    data: rows.map((row) => normalizeSupabaseActivityLogRow(row, userMap)),
+    message: 'Activity logs fetched successfully',
+    errors: null,
+    meta: { page: Math.floor(offset / limit) + 1, limit, total: Number(count ?? 0) },
+  });
+}, { requireAuth: true, roles: ['Admin'] });
+
+export const POST = withApiHandler(async (request, context) => {
+  const payload = createActivityLogSchema.parse(await request.json());
+
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const supabase = getAdminRouteSupabase();
+  const authUserId = await resolveAuthUserIdFromLegacyUserId(accessToken, payload.userId, tenantId);
+  const { data: created, error } = await supabase.from('activity_logs').insert({
+    user_id: authUserId,
+    action: payload.action.trim(),
+    module: payload.module.trim(),
+    details: payload.details ?? null,
+    ip_address: payload.ipAddress ?? null,
+    tenant_id: tenantId,
+    created_at: new Date().toISOString(),
+  }).select('*').single();
+  if (error || !created) throw error ?? new Error('Failed to create activity log');
+  const userMap = await buildLegacyUserIdMap(accessToken, [authUserId], tenantId);
+  return NextResponse.json(normalizeSupabaseActivityLogRow(created, userMap), { status: 201 });
+}, { requireAuth: true, roles: ['Admin'] });
+
+export const DELETE = withApiHandler(async (request, context) => {
+  const id = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('Valid activity log id is required');
+
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const supabase = getAdminRouteSupabase();
+  const { data: deleted, error } = await supabase
+    .from('activity_logs')
+    .delete()
+    .eq('id', id)
+    .eq('tenant_id', tenantId)
+    .select('*')
+    .single();
+    
+  if (error || !deleted) throw new NotFoundError('Activity log not found');
+  const userMap = await buildLegacyUserIdMap(accessToken, [String(deleted.user_id)].filter(Boolean), tenantId);
+  return NextResponse.json({
+    message: 'Activity log deleted successfully',
+    deletedRecord: normalizeSupabaseActivityLogRow(deleted, userMap),
+  });
+}, { requireAuth: true, roles: ['Admin'] });

@@ -1,362 +1,207 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
-import { clientCommunications, clients, users } from '@/db/schema';
-import { eq, and, desc } from 'drizzle-orm';
-import { safeErrorMessage } from '@/lib/constants';
+import { withApiHandler } from '@/server/http/handler';
+import { BadRequestError, ForbiddenError, NotFoundError } from '@/server/http/errors';
+import { apiSuccess } from '@/server/http/response';
+import { createClientCommunicationSchema, updateClientCommunicationSchema } from '@/server/validation/crm';
+import {
+  buildLegacyUserIdMap,
+  getCurrentSupabaseActor,
+  getAdminRouteSupabase,
+  resolveAuthUserIdFromLegacyUserId,
+} from '@/server/supabase/route-helpers';
 
-export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-
-    // Single communication by ID
-    if (id) {
-      if (!id || isNaN(parseInt(id))) {
-        return NextResponse.json(
-          { 
-            error: 'Valid ID is required',
-            code: 'INVALID_ID' 
-          },
-          { status: 400 }
-        );
-      }
-
-      const communication = await db.select()
-        .from(clientCommunications)
-        .where(eq(clientCommunications.id, parseInt(id)))
-        .limit(1);
-
-      if (communication.length === 0) {
-        return NextResponse.json(
-          { error: 'Communication not found' },
-          { status: 404 }
-        );
-      }
-
-      return NextResponse.json(communication[0], { status: 200 });
-    }
-
-    // List communications with filters
-    const limit = Math.min(parseInt(searchParams.get('limit') ?? '10'), 100);
-    const offset = parseInt(searchParams.get('offset') ?? '0');
-    const clientId = searchParams.get('clientId');
-    const userId = searchParams.get('userId');
-    const isRead = searchParams.get('isRead');
-
-    let query = db.select().from(clientCommunications);
-
-    // Build filter conditions
-    const conditions = [];
-    
-    if (clientId) {
-      if (isNaN(parseInt(clientId))) {
-        return NextResponse.json(
-          { 
-            error: 'Valid clientId is required',
-            code: 'INVALID_CLIENT_ID' 
-          },
-          { status: 400 }
-        );
-      }
-      conditions.push(eq(clientCommunications.clientId, parseInt(clientId)));
-    }
-
-    if (userId) {
-      if (isNaN(parseInt(userId))) {
-        return NextResponse.json(
-          { 
-            error: 'Valid userId is required',
-            code: 'INVALID_USER_ID' 
-          },
-          { status: 400 }
-        );
-      }
-      conditions.push(eq(clientCommunications.userId, parseInt(userId)));
-    }
-
-    if (isRead !== null && isRead !== undefined) {
-      const isReadBool = isRead === 'true';
-      conditions.push(eq(clientCommunications.isRead, isReadBool));
-    }
-
-    if (conditions.length > 0) {
-      query = query.where(and(...conditions));
-    }
-
-    const results = await query
-      .orderBy(desc(clientCommunications.createdAt))
-      .limit(limit)
-      .offset(offset);
-
-    return NextResponse.json(results, { status: 200 });
-  } catch (error) {
-    console.error('GET error:', error);
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 }
-    );
-  }
+function normalizeSupabaseClientCommunicationRow(row: Record<string, unknown>, userMap: Map<string, number | null>) {
+  const userId = typeof row.user_id === 'string' ? userMap.get(row.user_id) ?? null : null;
+  return {
+    id: Number(row.id),
+    clientId: Number(row.client_id),
+    userId,
+    message: row.message,
+    attachments: row.attachments ?? null,
+    createdAt: row.created_at ?? null,
+    isRead: Boolean(row.is_read ?? false),
+  };
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { clientId, userId, message, attachments } = body;
+export const GET = withApiHandler(async (request, context) => {
+  const searchParams = new URL(request.url).searchParams;
+  const id = searchParams.get('id');
+  const user = context.auth!.user;
+  const isAdminLike = user.role === 'Admin' || user.role === 'SuperAdmin' || user.role === 'Manager';
 
-    // Validation: Required fields
-    if (!clientId) {
-      return NextResponse.json(
-        { 
-          error: 'clientId is required',
-          code: 'MISSING_CLIENT_ID' 
-        },
-        { status: 400 }
-      );
-    }
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  const actor = await getCurrentSupabaseActor(accessToken);
+  const supabase = getAdminRouteSupabase();
 
-    if (!userId) {
-      return NextResponse.json(
-        { 
-          error: 'userId is required',
-          code: 'MISSING_USER_ID' 
-        },
-        { status: 400 }
-      );
-    }
-
-    if (!message || message.trim().length === 0) {
-      return NextResponse.json(
-        { 
-          error: 'message is required and cannot be empty',
-          code: 'MISSING_MESSAGE' 
-        },
-        { status: 400 }
-      );
-    }
-
-    // Validate clientId is a valid integer
-    if (isNaN(parseInt(clientId))) {
-      return NextResponse.json(
-        { 
-          error: 'clientId must be a valid integer',
-          code: 'INVALID_CLIENT_ID' 
-        },
-        { status: 400 }
-      );
-    }
-
-    // Validate userId is a valid integer
-    if (isNaN(parseInt(userId))) {
-      return NextResponse.json(
-        { 
-          error: 'userId must be a valid integer',
-          code: 'INVALID_USER_ID' 
-        },
-        { status: 400 }
-      );
-    }
-
-    // Verify client exists
-    const client = await db.select()
-      .from(clients)
-      .where(eq(clients.id, parseInt(clientId)))
-      .limit(1);
-
-    if (client.length === 0) {
-      return NextResponse.json(
-        { 
-          error: 'Client not found',
-          code: 'CLIENT_NOT_FOUND' 
-        },
-        { status: 400 }
-      );
-    }
-
-    // Verify user exists
-    const user = await db.select()
-      .from(users)
-      .where(eq(users.id, parseInt(userId)))
-      .limit(1);
-
-    if (user.length === 0) {
-      return NextResponse.json(
-        { 
-          error: 'User not found',
-          code: 'USER_NOT_FOUND' 
-        },
-        { status: 400 }
-      );
-    }
-
-    // Validate attachments if provided
-    if (attachments !== undefined && attachments !== null) {
-      if (!Array.isArray(attachments)) {
-        return NextResponse.json(
-          { 
-            error: 'attachments must be an array',
-            code: 'INVALID_ATTACHMENTS' 
-          },
-          { status: 400 }
-        );
-      }
-    }
-
-    // Create communication
-    const newCommunication = await db.insert(clientCommunications)
-      .values({
-        clientId: parseInt(clientId),
-        userId: parseInt(userId),
-        message: message.trim(),
-        attachments: attachments || null,
-        createdAt: new Date().toISOString(),
-        isRead: false
-      })
-      .returning();
-
-    return NextResponse.json(newCommunication[0], { status: 201 });
-  } catch (error) {
-    console.error('POST error:', error);
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 }
-    );
+  if (id) {
+    const communicationId = Number(id);
+    if (!Number.isInteger(communicationId) || communicationId <= 0) throw new BadRequestError('Valid communication id is required');
+    const { data: communication, error } = await supabase
+      .from('client_communications')
+      .select('*')
+      .eq('id', communicationId)
+      .eq('tenant_id', tenantId)
+      .single();
+    if (error || !communication) throw new NotFoundError('Client communication not found');
+    if (!isAdminLike && communication.user_id !== actor.authUserId) throw new ForbiddenError('You do not have permission to view this communication');
+    const userMap = await buildLegacyUserIdMap(accessToken, [String(communication.user_id)].filter(Boolean), tenantId);
+    return apiSuccess(normalizeSupabaseClientCommunicationRow(communication, userMap), 'Client communication fetched successfully');
   }
-}
 
-export async function PUT(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+  const limit = Math.min(Math.max(Number(searchParams.get('limit') ?? '10'), 1), 100);
+  const offset = Math.max(Number(searchParams.get('offset') ?? '0'), 0);
+  const clientIdParam = searchParams.get('clientId');
+  const userIdParam = searchParams.get('userId');
+  const isRead = searchParams.get('isRead');
+  let query = supabase
+    .from('client_communications')
+    .select('*', { count: 'exact' })
+    .eq('tenant_id', tenantId);
 
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json(
-        { 
-          error: 'Valid ID is required',
-          code: 'INVALID_ID' 
-        },
-        { status: 400 }
-      );
-    }
-
-    // Check if communication exists
-    const existing = await db.select()
-      .from(clientCommunications)
-      .where(eq(clientCommunications.id, parseInt(id)))
-      .limit(1);
-
-    if (existing.length === 0) {
-      return NextResponse.json(
-        { error: 'Communication not found' },
-        { status: 404 }
-      );
-    }
-
-    const body = await request.json();
-    const { message, attachments, isRead } = body;
-
-    // Build update object
-    const updates: any = {};
-
-    if (message !== undefined) {
-      if (typeof message !== 'string' || message.trim().length === 0) {
-        return NextResponse.json(
-          { 
-            error: 'message must be a non-empty string',
-            code: 'INVALID_MESSAGE' 
-          },
-          { status: 400 }
-        );
-      }
-      updates.message = message.trim();
-    }
-
-    if (attachments !== undefined) {
-      if (attachments !== null && !Array.isArray(attachments)) {
-        return NextResponse.json(
-          { 
-            error: 'attachments must be an array or null',
-            code: 'INVALID_ATTACHMENTS' 
-          },
-          { status: 400 }
-        );
-      }
-      updates.attachments = attachments;
-    }
-
-    if (isRead !== undefined) {
-      if (typeof isRead !== 'boolean') {
-        return NextResponse.json(
-          { 
-            error: 'isRead must be a boolean',
-            code: 'INVALID_IS_READ' 
-          },
-          { status: 400 }
-        );
-      }
-      updates.isRead = isRead;
-    }
-
-    // Perform update
-    const updated = await db.update(clientCommunications)
-      .set(updates)
-      .where(eq(clientCommunications.id, parseInt(id)))
-      .returning();
-
-    return NextResponse.json(updated[0], { status: 200 });
-  } catch (error) {
-    console.error('PUT error:', error);
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 }
-    );
+  if (clientIdParam) {
+    const clientId = Number(clientIdParam);
+    if (!Number.isInteger(clientId) || clientId <= 0) throw new BadRequestError('Valid client id is required');
+    query = query.eq('client_id', clientId);
   }
-}
 
-export async function DELETE(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json(
-        { 
-          error: 'Valid ID is required',
-          code: 'INVALID_ID' 
-        },
-        { status: 400 }
-      );
-    }
-
-    // Check if communication exists
-    const existing = await db.select()
-      .from(clientCommunications)
-      .where(eq(clientCommunications.id, parseInt(id)))
-      .limit(1);
-
-    if (existing.length === 0) {
-      return NextResponse.json(
-        { error: 'Communication not found' },
-        { status: 404 }
-      );
-    }
-
-    // Delete communication
-    const deleted = await db.delete(clientCommunications)
-      .where(eq(clientCommunications.id, parseInt(id)))
-      .returning();
-
-    return NextResponse.json(
-      {
-        message: 'Communication deleted successfully',
-        communication: deleted[0]
-      },
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error('DELETE error:', error);
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 }
-    );
+  if (isAdminLike && userIdParam) {
+    const requestedUserId = Number(userIdParam);
+    if (!Number.isInteger(requestedUserId) || requestedUserId <= 0) throw new BadRequestError('Valid user id is required');
+    query = query.eq('user_id', await resolveAuthUserIdFromLegacyUserId(accessToken, requestedUserId, tenantId));
+  } else if (!isAdminLike) {
+    query = query.eq('user_id', actor.authUserId);
   }
-}
+
+  if (isRead !== null) query = query.eq('is_read', isRead === 'true' || isRead === '1');
+
+  const { data, count, error } = await query.order('created_at', { ascending: false }).range(offset, offset + limit - 1);
+  if (error) throw error;
+  const rows = (data as Record<string, unknown>[] | null) ?? [];
+  const userMap = await buildLegacyUserIdMap(accessToken, rows.map((row) => String(row.user_id)).filter(Boolean), tenantId);
+  return apiSuccess(rows.map((row) => normalizeSupabaseClientCommunicationRow(row, userMap)), 'Client communications fetched successfully', {
+    meta: { page: Math.floor(offset / limit) + 1, limit, total: Number(count ?? 0) },
+  });
+}, { requireAuth: true, roles: ['Employee'] });
+
+export const POST = withApiHandler(async (request, context) => {
+  const payload = createClientCommunicationSchema.parse(await request.json());
+  const user = context.auth!.user;
+  const isAdminLike = user.role === 'Admin' || user.role === 'SuperAdmin' || user.role === 'Manager';
+
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  
+  const actor = await getCurrentSupabaseActor(accessToken);
+  const supabase = getAdminRouteSupabase();
+  const targetAuthUserId = isAdminLike && payload.userId
+    ? await resolveAuthUserIdFromLegacyUserId(accessToken, payload.userId, tenantId)
+    : actor.authUserId;
+  if (!isAdminLike && targetAuthUserId !== actor.authUserId) {
+    throw new ForbiddenError('You can only create communications for your own user');
+  }
+  const [{ data: client }, { data: communicationUser }] = await Promise.all([
+    supabase
+      .from('clients')
+      .select('id')
+      .eq('id', payload.clientId)
+      .eq('tenant_id', tenantId)
+      .single(),
+    supabase
+      .from('users')
+      .select('id')
+      .eq('id', targetAuthUserId)
+      .eq('tenant_id', tenantId)
+      .single(),
+  ]);
+  if (!client) throw new NotFoundError('Client not found');
+  if (!communicationUser) throw new NotFoundError('User not found');
+  const { data, error } = await supabase.from('client_communications').insert({
+    client_id: payload.clientId,
+    user_id: targetAuthUserId,
+    message: payload.message,
+    attachments: payload.attachments ?? null,
+    tenant_id: tenantId,
+    created_at: new Date().toISOString(),
+    is_read: false,
+  }).select('*').single();
+  if (error || !data) throw error ?? new Error('Failed to create client communication');
+  const userMap = await buildLegacyUserIdMap(accessToken, [targetAuthUserId], tenantId);
+  return apiSuccess(normalizeSupabaseClientCommunicationRow(data, userMap), 'Client communication created successfully', { status: 201 });
+}, { requireAuth: true, roles: ['Employee'] });
+
+export const PUT = withApiHandler(async (request, context) => {
+  const communicationId = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(communicationId) || communicationId <= 0) {
+    throw new BadRequestError('Valid communication id is required');
+  }
+
+  const payload = updateClientCommunicationSchema.parse(await request.json());
+  if (Object.keys(payload).length === 0) {
+    throw new BadRequestError('At least one field is required to update a client communication');
+  }
+
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  const actor = await getCurrentSupabaseActor(accessToken);
+  const supabase = getAdminRouteSupabase();
+  const { data: existing } = await supabase
+    .from('client_communications')
+    .select('*')
+    .eq('id', communicationId)
+    .eq('tenant_id', tenantId)
+    .single();
+  if (!existing) throw new NotFoundError('Client communication not found');
+  const user = context.auth!.user;
+  const isAdminLike = user.role === 'Admin' || user.role === 'SuperAdmin' || user.role === 'Manager';
+  if (!isAdminLike && existing.user_id !== actor.authUserId) throw new ForbiddenError('You do not have permission to update this communication');
+  const { data, error } = await supabase
+    .from('client_communications')
+    .update({
+      ...(payload.message !== undefined ? { message: payload.message } : {}),
+      ...(payload.attachments !== undefined ? { attachments: payload.attachments } : {}),
+      ...(payload.isRead !== undefined ? { is_read: payload.isRead } : {}),
+    })
+    .eq('id', communicationId)
+    .eq('tenant_id', tenantId)
+    .select('*')
+    .single();
+  if (error || !data) throw error ?? new Error('Failed to update client communication');
+  const userMap = await buildLegacyUserIdMap(accessToken, [String(data.user_id)].filter(Boolean), tenantId);
+  return apiSuccess(normalizeSupabaseClientCommunicationRow(data, userMap), 'Client communication updated successfully');
+}, { requireAuth: true, roles: ['Employee'] });
+
+export const DELETE = withApiHandler(async (request, context) => {
+  const communicationId = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isInteger(communicationId) || communicationId <= 0) {
+    throw new BadRequestError('Valid communication id is required');
+  }
+
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  const actor = await getCurrentSupabaseActor(accessToken);
+  const supabase = getAdminRouteSupabase();
+  const { data: existing } = await supabase
+    .from('client_communications')
+    .select('*')
+    .eq('id', communicationId)
+    .eq('tenant_id', tenantId)
+    .single();
+  if (!existing) throw new NotFoundError('Client communication not found');
+  const user = context.auth!.user;
+  const isAdminLike = user.role === 'Admin' || user.role === 'SuperAdmin' || user.role === 'Manager';
+  if (!isAdminLike && existing.user_id !== actor.authUserId) throw new ForbiddenError('You do not have permission to delete this communication');
+  const { data, error } = await supabase
+    .from('client_communications')
+    .delete()
+    .eq('id', communicationId)
+    .eq('tenant_id', tenantId)
+    .select('*')
+    .single();
+  if (error || !data) throw error ?? new Error('Failed to delete client communication');
+  const userMap = await buildLegacyUserIdMap(accessToken, [String(data.user_id)].filter(Boolean), tenantId);
+  return apiSuccess(normalizeSupabaseClientCommunicationRow(data, userMap), 'Client communication deleted successfully');
+}, { requireAuth: true, roles: ['Employee'] });

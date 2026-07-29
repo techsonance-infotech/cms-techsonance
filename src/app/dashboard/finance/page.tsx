@@ -1,13 +1,17 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Loader2, DollarSign, TrendingUp, CreditCard, Eye, Download, Send, FileText, Users, ShoppingCart, Receipt, CheckCircle, Clock, AlertCircle, Trash2, Pencil, Printer } from 'lucide-react';
+import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
+import { Plus, Loader2, DollarSign, TrendingUp, CreditCard, Eye, Download, Send, FileText, Users, ShoppingCart, Receipt, CheckCircle, Clock, AlertCircle, Trash2, Pencil, Printer, ShieldAlert } from 'lucide-react';
 import { InlineTableSkeleton } from '@/components/ui/dashboard-skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { hasPermission, hasFullAccess, type UserRole } from '@/lib/permissions';
 import {
   Table,
   TableBody,
@@ -25,6 +29,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  financeCategorySchema,
+  financeExpenseSchema,
+  financeInvoiceSchema,
+  financePurchaseSchema,
+  financeVendorSchema,
+  type FinanceCategoryFormValues,
+  type FinanceInvoiceFormValues,
+  type FinancePurchaseFormValues,
+  type FinanceVendorFormValues,
+} from '@/lib/forms/schemas';
+import { toast } from 'sonner';
 
 interface Invoice {
   id: number;
@@ -116,28 +132,38 @@ export default function FinancePage() {
   const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState<{ id: number; role: string } | null>(null);
 
   // Form States
   const [isAddVendorOpen, setIsAddVendorOpen] = useState(false);
-  const [newVendor, setNewVendor] = useState({ name: '', contactPerson: '', email: '', phone: '' });
+  const vendorForm = useForm<FinanceVendorFormValues>({
+    resolver: zodResolver(financeVendorSchema),
+    defaultValues: { name: '', contactPerson: '', email: '', phone: '' },
+  });
 
   const [isAddPurchaseOpen, setIsAddPurchaseOpen] = useState(false);
-  const [newPurchase, setNewPurchase] = useState({ vendorId: '', date: '', amount: '', description: '' });
+  const purchaseForm = useForm<FinancePurchaseFormValues>({
+    resolver: zodResolver(financePurchaseSchema),
+    defaultValues: { vendorId: '', date: '', amount: '', description: '' },
+  });
 
   const [newExpense, setNewExpense] = useState({ category: '', description: '', amount: '', date: new Date().toISOString().split('T')[0] });
 
   // Invoice State
   const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
-  const [newInvoice, setNewInvoice] = useState({
-    clientId: '',
-    invoiceNumber: '',
-    amount: '',
-    tax: '0',
-    dueDate: '',
-    termsAndConditions: '',
-    notes: '',
-    paymentTerms: ''
+  const invoiceForm = useForm<FinanceInvoiceFormValues>({
+    resolver: zodResolver(financeInvoiceSchema),
+    defaultValues: {
+      clientId: '',
+      invoiceNumber: '',
+      amount: '',
+      tax: '0',
+      dueDate: '',
+      termsAndConditions: '',
+      notes: '',
+      paymentTerms: '',
+    },
   });
 
   // Edit States
@@ -149,7 +175,10 @@ export default function FinancePage() {
 
   // Category State
   const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
-  const [newCategory, setNewCategory] = useState({ name: '', description: '' });
+  const categoryForm = useForm<FinanceCategoryFormValues>({
+    resolver: zodResolver(financeCategorySchema),
+    defaultValues: { name: '', description: '' },
+  });
   const [categoryError, setCategoryError] = useState('');
   const [editingCategory, setEditingCategory] = useState<ExpenseCategory | null>(null);
   const [isEditCategoryOpen, setIsEditCategoryOpen] = useState(false);
@@ -184,9 +213,174 @@ export default function FinancePage() {
   const [invoicePage, setInvoicePage] = useState(0);
   const pageSize = 10;
 
+  // Income tab pagination states (must be at top level – not inside JSX)
+  const [paidInvoicePage, setPaidInvoicePage] = useState(0);
+  const [pendingInvoicePage, setPendingInvoicePage] = useState(0);
+  const [monthlyReportPage, setMonthlyReportPage] = useState(0);
+  const incomePageSize = 5;
+
+  // Finance Control States
+  const [coaList, setCoaList] = useState<any[]>([]);
+  const [costCenterList, setCostCenterList] = useState<any[]>([]);
+  const [ledgerList, setLedgerList] = useState<any[]>([]);
+  const [journalList, setJournalList] = useState<any[]>([]);
+
+  // Finance Control creation forms
+  const [showAddCoa, setShowAddCoa] = useState(false);
+  const [coaCode, setCoaCode] = useState('');
+  const [coaName, setCoaName] = useState('');
+  const [coaType, setCoaType] = useState('Asset');
+
+  const [showAddCostCenter, setShowAddCostCenter] = useState(false);
+  const [ccCode, setCcCode] = useState('');
+  const [ccName, setCcName] = useState('');
+  const [ccBudget, setCcBudget] = useState('');
+
+  const [showAddJournal, setShowAddJournal] = useState(false);
+  const [jNumber, setJNumber] = useState('');
+  const [jDebitAcc, setJDebitAcc] = useState('');
+  const [jCreditAcc, setJCreditAcc] = useState('');
+  const [jAmount, setJAmount] = useState('');
+  const [jNotes, setJNotes] = useState('');
+
+  const fetchControlData = async () => {
+    try {
+      const token = localStorage.getItem('session_token');
+      const res = await fetch('/api/finance/control', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setCoaList(json.data.coa || []);
+        setCostCenterList(json.data.costCenters || []);
+        setLedgerList(json.data.ledger || []);
+        setJournalList(json.data.journalEntries || []);
+      }
+    } catch (err) {
+      console.error('Error fetching control data:', err);
+    }
+  };
+
   useEffect(() => {
+    fetchCurrentUser();
     fetchFinanceData();
+    fetchControlData();
   }, []);
+
+  const handleCreateCoa = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!coaCode || !coaName || !coaType) {
+      toast.error('Code, name, and account type are required');
+      return;
+    }
+    try {
+      const res = await fetch('/api/finance/control', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          action: 'create_coa',
+          code: coaCode,
+          name: coaName,
+          type: coaType
+        })
+      });
+      if (res.ok) {
+        toast.success('Chart of Account created successfully!');
+        setCoaCode('');
+        setCoaName('');
+        setShowAddCoa(false);
+        fetchControlData();
+      } else {
+        toast.error('Failed to create Chart of Account');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleCreateCostCenter = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ccCode || !ccName) {
+      toast.error('Code and name are required');
+      return;
+    }
+    try {
+      const res = await fetch('/api/finance/control', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          action: 'create_cost_center',
+          code: ccCode,
+          name: ccName,
+          budgetLimit: ccBudget
+        })
+      });
+      if (res.ok) {
+        toast.success('Cost Center created successfully!');
+        setCcCode('');
+        setCcName('');
+        setCcBudget('');
+        setShowAddCostCenter(false);
+        fetchControlData();
+      } else {
+        toast.error('Failed to create Cost Center');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handlePostJournal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!jNumber || !jDebitAcc || !jCreditAcc || !jAmount) {
+      toast.error('All journal fields are required');
+      return;
+    }
+    try {
+      const res = await fetch('/api/finance/control', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          action: 'post_journal',
+          entryNumber: jNumber,
+          debitAccount: jDebitAcc,
+          creditAccount: jCreditAcc,
+          amount: jAmount,
+          notes: jNotes
+        })
+      });
+      if (res.ok) {
+        toast.success('Journal entry posted to general ledger!');
+        setJNumber('');
+        setJDebitAcc('');
+        setJCreditAcc('');
+        setJAmount('');
+        setJNotes('');
+        setShowAddJournal(false);
+        fetchControlData();
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Failed to post journal entry');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchCurrentUser = async () => {
+    try {
+      const token = localStorage.getItem('session_token');
+      const response = await fetch('/api/auth/me', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setCurrentUser(data.user);
+      }
+    } catch (error) {
+      console.error('Error fetching current user:', error);
+    }
+  };
 
   const fetchFinanceData = async () => {
     setLoading(true);
@@ -227,58 +421,71 @@ export default function FinancePage() {
       if (settingsRes.ok) {
         const settings = await settingsRes.json();
         setBusinessSettings(settings);
-        // Pre-fill invoice settings if empty
-        if (!newInvoice.termsAndConditions) {
-          setNewInvoice(prev => ({
-            ...prev,
+        const currentInvoiceValues = invoiceForm.getValues();
+        if (!currentInvoiceValues.termsAndConditions && !editingInvoice) {
+          invoiceForm.reset({
+            ...currentInvoiceValues,
             termsAndConditions: settings.termsAndConditions || '',
             notes: settings.notes || '',
-            paymentTerms: settings.paymentTerms || ''
-          }));
+            paymentTerms: settings.paymentTerms || '',
+          });
         }
       }
-    } catch (error) {
-      console.error('Error fetching finance data:', error);
+    } catch {
+      toast.error('Failed to load finance data');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAddVendor = async () => {
+  const handleAddVendor = async (values: FinanceVendorFormValues) => {
     try {
       const res = await fetch('/api/vendors', {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify(newVendor)
+        body: JSON.stringify(values)
       });
       if (res.ok) {
         setIsAddVendorOpen(false);
-        setNewVendor({ name: '', contactPerson: '', email: '', phone: '' });
+        vendorForm.reset({ name: '', contactPerson: '', email: '', phone: '' });
         fetchFinanceData();
+        toast.success('Vendor added successfully');
+      } else {
+        const error = await res.json();
+        toast.error(error.error || 'Failed to add vendor');
       }
-    } catch (error) {
-      console.error(error);
+    } catch {
+      toast.error('An error occurred while adding vendor');
     }
   };
 
-  const handleAddPurchase = async () => {
+  const handleAddPurchase = async (values: FinancePurchaseFormValues) => {
     try {
       const res = await fetch('/api/purchases', {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify(newPurchase)
+        body: JSON.stringify(values)
       });
       if (res.ok) {
         setIsAddPurchaseOpen(false);
-        setNewPurchase({ vendorId: '', date: '', amount: '', description: '' });
+        purchaseForm.reset({ vendorId: '', date: '', amount: '', description: '' });
         fetchFinanceData();
+        toast.success('Purchase added successfully');
+      } else {
+        const error = await res.json();
+        toast.error(error.error || 'Failed to add purchase');
       }
-    } catch (error) {
-      console.error(error);
+    } catch {
+      toast.error('An error occurred while adding purchase');
     }
   };
 
   const handleAddExpense = async () => {
+    const validation = financeExpenseSchema.safeParse(newExpense);
+    if (!validation.success) {
+      toast.error(validation.error.issues[0]?.message || 'Please fix the expense form');
+      return;
+    }
     try {
       let uploadedUrl = null;
       if (receiptFile) {
@@ -294,12 +501,10 @@ export default function FinancePage() {
             const data = await uploadRes.json();
             uploadedUrl = data.url;
           } else {
-            console.error('File upload failed');
-            alert('Failed to upload receipt, but continuing with expense creation.');
+            toast.error('Failed to upload receipt, but continuing with expense creation.');
           }
-        } catch (uploadError) {
-          console.error('Upload error:', uploadError);
-          alert('Error uploading receipt.');
+        } catch {
+          toast.error('Error uploading receipt.');
         }
       }
 
@@ -312,28 +517,32 @@ export default function FinancePage() {
         setNewExpense({ category: '', description: '', amount: '', date: new Date().toISOString().split('T')[0] });
         setReceiptFile(null);
         fetchFinanceData();
+        toast.success('Expense added successfully');
+      } else {
+        const error = await res.json();
+        toast.error(error.error || 'Failed to add expense');
       }
-    } catch (error) {
-      console.error(error);
+    } catch {
+      toast.error('An error occurred while adding expense');
     }
   };
 
-  const handleCreateInvoice = async () => {
+  const handleCreateInvoice = async (values: FinanceInvoiceFormValues) => {
     try {
-      const totalAmount = parseInt(newInvoice.amount) + parseInt(newInvoice.tax);
+      const totalAmount = parseInt(values.amount, 10) + parseInt(values.tax, 10);
       const url = editingInvoice ? `/api/invoices?id=${editingInvoice.id}` : '/api/invoices';
       const method = editingInvoice ? 'PUT' : 'POST';
 
       const res = await fetch(url, {
         method,
         headers: getAuthHeaders(),
-        body: JSON.stringify({ ...newInvoice, totalAmount })
+        body: JSON.stringify({ ...values, totalAmount })
       });
 
       if (res.ok) {
         setIsInvoiceDialogOpen(false);
         setEditingInvoice(null);
-        setNewInvoice({
+        invoiceForm.reset({
           clientId: '',
           invoiceNumber: '',
           amount: '',
@@ -344,26 +553,25 @@ export default function FinancePage() {
           paymentTerms: businessSettings.paymentTerms || ''
         });
         fetchFinanceData();
+        toast.success(editingInvoice ? 'Invoice updated successfully' : 'Invoice created successfully');
+      } else {
+        const error = await res.json();
+        toast.error(error.error || 'Failed to save invoice');
       }
-    } catch (error) {
-      console.error(error);
+    } catch {
+      toast.error('An error occurred while saving invoice');
     }
   };
 
   const handleEditInvoice = (invoice: Invoice) => {
     setEditingInvoice(invoice);
-    // Find client details if needed, or simply populate form
-    // Note: Invoice amount in db is totalAmount (with tax).
-    // Simplified: we assume 'amount' is totalAmount for now or need to calculate base.
-    // Assuming edit is not fully supported for fields not in DB like 'base amount vs tax' split 
-    // unless we persist tax separately. For now, we will just use totalAmount as amount.
-    setNewInvoice({
+    invoiceForm.reset({
       clientId: invoice.clientId.toString(),
       invoiceNumber: invoice.invoiceNumber,
       amount: invoice.totalAmount.toString(),
-      tax: '0', // Tax split logic might be lost if not stored
+      tax: '0',
       dueDate: invoice.dueDate,
-      termsAndConditions: businessSettings.termsAndConditions || '', // Use current or stored? Ideal: stored in invoice
+      termsAndConditions: businessSettings.termsAndConditions || '',
       notes: businessSettings.notes || '',
       paymentTerms: businessSettings.paymentTerms || ''
     });
@@ -383,8 +591,8 @@ export default function FinancePage() {
         setEditingVendor(null);
         fetchFinanceData();
       }
-    } catch (error) {
-      console.error(error);
+    } catch {
+      toast.error('An error occurred while updating vendor');
     }
   };
 
@@ -401,29 +609,37 @@ export default function FinancePage() {
         setEditingPurchase(null);
         fetchFinanceData();
       }
-    } catch (error) {
-      console.error(error);
+    } catch {
+      toast.error('An error occurred while updating purchase');
     }
   };
 
   const handleAddCategory = async () => {
     setCategoryError('');
+    const values = categoryForm.getValues();
+    const validation = financeCategorySchema.safeParse(values);
+    if (!validation.success) {
+      const message = validation.error.issues[0]?.message || 'Please fix the category form';
+      setCategoryError(message);
+      categoryForm.setError('name', { message });
+      return;
+    }
     try {
       const res = await fetch('/api/expense-categories', {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify(newCategory)
+        body: JSON.stringify(values)
       });
       if (res.ok) {
         setIsAddCategoryOpen(false);
-        setNewCategory({ name: '', description: '' });
+        categoryForm.reset({ name: '', description: '' });
         fetchFinanceData();
+        toast.success('Category added successfully');
       } else {
         const errorData = await res.json();
         setCategoryError(errorData.error || 'Failed to add category');
       }
-    } catch (error) {
-      console.error(error);
+    } catch {
       setCategoryError('An unexpected error occurred');
     }
   };
@@ -441,35 +657,55 @@ export default function FinancePage() {
         setEditingCategory(null);
         fetchFinanceData();
       }
-    } catch (error) {
-      console.error(error);
+    } catch {
+      toast.error('An error occurred while updating category');
     }
   };
 
   const handleDeleteCategory = async (id: number) => {
     if (!confirm('Are you sure you want to delete this category?')) return;
-    await fetch(`/api/expense-categories?id=${id}`, { method: 'DELETE', headers: getAuthHeaders() });
-    fetchFinanceData();
+    const response = await fetch(`/api/expense-categories?id=${id}`, { method: 'DELETE', headers: getAuthHeaders() });
+    if (response.ok) {
+      toast.success('Category deleted successfully');
+      fetchFinanceData();
+      return;
+    }
+    toast.error('Failed to delete category');
   };
 
 
 
   const handleDeleteVendor = async (id: number) => {
     if (!confirm('Are you sure you want to delete this vendor?')) return;
-    await fetch(`/api/vendors?id=${id}`, { method: 'DELETE', headers: getAuthHeaders() });
-    fetchFinanceData();
+    const response = await fetch(`/api/vendors?id=${id}`, { method: 'DELETE', headers: getAuthHeaders() });
+    if (response.ok) {
+      toast.success('Vendor deleted successfully');
+      fetchFinanceData();
+      return;
+    }
+    toast.error('Failed to delete vendor');
   };
 
   const handleDeletePurchase = async (id: number) => {
     if (!confirm('Are you sure you want to delete this purchase?')) return;
-    await fetch(`/api/purchases?id=${id}`, { method: 'DELETE', headers: getAuthHeaders() });
-    fetchFinanceData();
+    const response = await fetch(`/api/purchases?id=${id}`, { method: 'DELETE', headers: getAuthHeaders() });
+    if (response.ok) {
+      toast.success('Purchase deleted successfully');
+      fetchFinanceData();
+      return;
+    }
+    toast.error('Failed to delete purchase');
   };
 
   const handleDeleteExpense = async (id: number) => {
     if (!confirm('Are you sure?')) return;
-    await fetch(`/api/expenses?id=${id}`, { method: 'DELETE', headers: getAuthHeaders() });
-    fetchFinanceData();
+    const response = await fetch(`/api/expenses?id=${id}`, { method: 'DELETE', headers: getAuthHeaders() });
+    if (response.ok) {
+      toast.success('Expense deleted successfully');
+      fetchFinanceData();
+      return;
+    }
+    toast.error('Failed to delete expense');
   }
 
   const handleUpdateExpenseStatus = async (id: number, status: 'approved' | 'rejected') => {
@@ -482,8 +718,8 @@ export default function FinancePage() {
       if (res.ok) {
         fetchFinanceData();
       }
-    } catch (error) {
-      console.error(error);
+    } catch {
+      toast.error('An error occurred while updating expense status');
     }
   };
 
@@ -497,8 +733,8 @@ export default function FinancePage() {
       if (res.ok) {
         fetchFinanceData();
       }
-    } catch (error) {
-      console.error(error);
+    } catch {
+      toast.error('An error occurred while updating invoice status');
     }
   };
 
@@ -686,8 +922,13 @@ export default function FinancePage() {
 
   const handleDeleteInvoice = async (id: number) => {
     if (!confirm('Are you sure?')) return;
-    await fetch(`/api/invoices?id=${id}`, { method: 'DELETE', headers: getAuthHeaders() });
-    fetchFinanceData();
+    const response = await fetch(`/api/invoices?id=${id}`, { method: 'DELETE', headers: getAuthHeaders() });
+    if (response.ok) {
+      toast.success('Invoice deleted successfully');
+      fetchFinanceData();
+      return;
+    }
+    toast.error('Failed to delete invoice');
   }
 
   const totalRevenue = invoices.reduce((sum, inv) => sum + inv.totalAmount, 0);
@@ -697,139 +938,184 @@ export default function FinancePage() {
   const totalExpenses = expenses.filter(exp => exp.status === 'approved').reduce((sum, exp) => sum + exp.amount, 0);
   const netProfit = totalPaid - totalExpenses;
 
+  // Role-based access check
+  const canViewFinance = currentUser && hasPermission(currentUser.role as UserRole, 'finance', 'canView');
+  
+  if (loading && !currentUser) {
+    return <InlineTableSkeleton rows={10} columns={7} />;
+  }
+
+  if (currentUser && !canViewFinance) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] space-y-4">
+        <ShieldAlert className="h-16 w-16 text-destructive animate-pulse" />
+        <h2 className="text-2xl font-bold">Access Restricted</h2>
+        <p className="text-muted-foreground">You do not have permission to view the Finance module.</p>
+        <Button onClick={() => window.history.back()}>Go Back</Button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Business Module - Finance</h2>
-          <p className="text-muted-foreground">
+          <h2 className="text-3xl font-bold tracking-tight flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-primary/10 ring-1 ring-primary/20">
+              <CreditCard className="h-6 w-6 text-primary" />
+            </div>
+            Finance & Accounting
+          </h2>
+          <p className="text-muted-foreground mt-2">
             Purchase Management, Expenses, Invoicing & Income Tracking
           </p>
         </div>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <DollarSign className="h-4 w-4 text-green-600" />
-              Total Revenue
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">₹{(totalRevenue / 1000).toFixed(1)}K</div>
-            <p className="text-xs text-muted-foreground">All invoices</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-600" />
-              Paid
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">₹{(totalPaid / 1000).toFixed(1)}K</div>
-            <p className="text-xs text-muted-foreground">Received payments</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-red-600" />
-              Expenses
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">₹{(totalExpenses / 1000).toFixed(1)}K</div>
-            <p className="text-xs text-muted-foreground">Total spent</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <DollarSign className="h-4 w-4" />
-              Net Profit
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              ₹{(netProfit / 1000).toFixed(1)}K
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card className="bg-gradient-to-br from-card to-emerald-500/5 hover:border-emerald-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-emerald-500/5">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+            <div className="p-2 rounded-lg bg-emerald-500/10">
+              <DollarSign className="h-4 w-4 text-emerald-500" />
             </div>
-            <p className="text-xs text-muted-foreground">Revenue - Expenses</p>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">₹{totalRevenue.toLocaleString('en-IN')}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              <span className="text-emerald-500 font-medium">{invoices.length}</span> total invoices
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-card to-green-500/5 hover:border-green-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-green-500/5">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium">Collected</CardTitle>
+            <div className="p-2 rounded-lg bg-green-500/10">
+              <CheckCircle className="h-4 w-4 text-green-500" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">₹{totalPaid.toLocaleString('en-IN')}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              <span className="text-green-500 font-medium">{invoices.filter(i => i.status === 'paid').length}</span> paid invoices
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-card to-rose-500/5 hover:border-rose-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-rose-500/5">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium">Expenses</CardTitle>
+            <div className="p-2 rounded-lg bg-rose-500/10">
+              <TrendingUp className="h-4 w-4 text-rose-500" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-rose-600">₹{totalExpenses.toLocaleString('en-IN')}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              <span className="text-rose-500 font-medium">{expenses.filter(e => e.status === 'approved').length}</span> approved entries
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className={`bg-gradient-to-br from-card ${netProfit >= 0 ? 'to-teal-500/5 hover:border-teal-500/50 hover:shadow-teal-500/5' : 'to-red-500/5 hover:border-red-500/50 hover:shadow-red-500/5'} transition-all duration-300 hover:shadow-lg`}>
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium">Net Profit</CardTitle>
+            <div className={`p-2 rounded-lg ${netProfit >= 0 ? 'bg-teal-500/10' : 'bg-red-500/10'}`}>
+              <DollarSign className={`h-4 w-4 ${netProfit >= 0 ? 'text-teal-500' : 'text-red-500'}`} />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${netProfit >= 0 ? 'text-teal-600' : 'text-red-600'}`}>
+              ₹{netProfit.toLocaleString('en-IN')}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Revenue − Expenses</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Main Tabs */}
       <Tabs defaultValue="purchase" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="purchase">Purchase Management</TabsTrigger>
-          <TabsTrigger value="expenses">Business Expenses</TabsTrigger>
-          <TabsTrigger value="invoices">Invoice Generation</TabsTrigger>
-          <TabsTrigger value="income">Income Tracking</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-5 h-12 p-1 bg-muted/50 rounded-xl">
+          <TabsTrigger value="purchase" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2 text-xs sm:text-sm">
+            <ShoppingCart className="h-4 w-4 hidden sm:block" />
+            Purchases
+          </TabsTrigger>
+          <TabsTrigger value="expenses" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2 text-xs sm:text-sm">
+            <Receipt className="h-4 w-4 hidden sm:block" />
+            Expenses
+          </TabsTrigger>
+          <TabsTrigger value="invoices" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2 text-xs sm:text-sm">
+            <FileText className="h-4 w-4 hidden sm:block" />
+            Invoices
+          </TabsTrigger>
+          <TabsTrigger value="income" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2 text-xs sm:text-sm">
+            <TrendingUp className="h-4 w-4 hidden sm:block" />
+            Income
+          </TabsTrigger>
+          <TabsTrigger value="finance_control" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2 text-xs sm:text-sm">
+            <ShieldAlert className="h-4 w-4 hidden sm:block" />
+            Finance Control
+          </TabsTrigger>
         </TabsList>
 
         {/* PURCHASE MANAGEMENT */}
-        <TabsContent value="purchase" className="space-y-4">
+        <TabsContent value="purchase" className="space-y-6">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  Vendors
-                </CardTitle>
+            <Card className="bg-gradient-to-br from-card to-indigo-500/5 hover:border-indigo-500/50 transition-all duration-300">
+              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardTitle className="text-sm font-medium">Vendors</CardTitle>
+                <div className="p-2 rounded-lg bg-indigo-500/10">
+                  <Users className="h-4 w-4 text-indigo-500" />
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{vendors.length}</div>
-                <p className="text-xs text-muted-foreground">Active vendors</p>
+                <p className="text-xs text-muted-foreground mt-1">Active vendors</p>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <ShoppingCart className="h-4 w-4" />
-                  Purchases
-                </CardTitle>
+            <Card className="bg-gradient-to-br from-card to-violet-500/5 hover:border-violet-500/50 transition-all duration-300">
+              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardTitle className="text-sm font-medium">Purchases</CardTitle>
+                <div className="p-2 rounded-lg bg-violet-500/10">
+                  <ShoppingCart className="h-4 w-4 text-violet-500" />
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{purchases.length}</div>
-                <p className="text-xs text-muted-foreground">Total entries</p>
+                <p className="text-xs text-muted-foreground mt-1">Total entries</p>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <Receipt className="h-4 w-4" />
-                  Pending Bills
-                </CardTitle>
+            <Card className="bg-gradient-to-br from-card to-amber-500/5 hover:border-amber-500/50 transition-all duration-300">
+              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardTitle className="text-sm font-medium">Pending Bills</CardTitle>
+                <div className="p-2 rounded-lg bg-amber-500/10">
+                  <Receipt className="h-4 w-4 text-amber-500" />
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-orange-600">
+                <div className="text-2xl font-bold text-amber-600">
                   {purchases.filter(p => p.status === 'pending').length}
                 </div>
-                <p className="text-xs text-muted-foreground">Awaiting payment</p>
+                <p className="text-xs text-muted-foreground mt-1">Awaiting payment</p>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <CreditCard className="h-4 w-4" />
-                  Paid This Month
-                </CardTitle>
+            <Card className="bg-gradient-to-br from-card to-sky-500/5 hover:border-sky-500/50 transition-all duration-300">
+              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardTitle className="text-sm font-medium">Paid This Month</CardTitle>
+                <div className="p-2 rounded-lg bg-sky-500/10">
+                  <CreditCard className="h-4 w-4 text-sky-500" />
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  ₹{(purchases.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0) / 1000).toFixed(1)}K
+                  ₹{purchases.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0).toLocaleString('en-IN')}
                 </div>
-                <p className="text-xs text-muted-foreground">Payment tracking</p>
+                <p className="text-xs text-muted-foreground mt-1">Payment tracking</p>
               </CardContent>
             </Card>
           </div>
@@ -839,10 +1125,16 @@ export default function FinancePage() {
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle>Vendor List</CardTitle>
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Users className="h-5 w-5 text-indigo-500" />
+                      Vendor Directory
+                    </CardTitle>
+                    <CardDescription>{vendors.length} registered vendors</CardDescription>
+                  </div>
                   <Dialog open={isAddVendorOpen} onOpenChange={setIsAddVendorOpen}>
                     <DialogTrigger asChild>
-                      <Button size="sm">
+                      <Button size="sm" onClick={() => vendorForm.reset({ name: '', contactPerson: '', email: '', phone: '' })}>
                         <Plus className="mr-2 h-4 w-4" />
                         Add Vendor
                       </Button>
@@ -852,27 +1144,41 @@ export default function FinancePage() {
                         <DialogTitle>Add New Vendor</DialogTitle>
                         <DialogDescription>Enter vendor details below.</DialogDescription>
                       </DialogHeader>
+                      <Form {...vendorForm}>
                       <div className="grid gap-4 py-4">
-                        <div className="grid grid-cols-4 items-center gap-4">
+                        <FormField control={vendorForm.control} name="name" render={({ field }) => (
+                        <FormItem className="grid grid-cols-4 items-center gap-4">
                           <Label htmlFor="v-name" className="text-right">Name</Label>
-                          <Input id="v-name" value={newVendor.name} onChange={(e) => setNewVendor({ ...newVendor, name: e.target.value })} className="col-span-3" />
-                        </div>
-                        <div className="grid grid-cols-4 items-center gap-4">
+                          <FormControl><Input id="v-name" {...field} className="col-span-3" /></FormControl>
+                          <FormMessage className="col-span-4 text-right text-xs" />
+                        </FormItem>
+                        )} />
+                        <FormField control={vendorForm.control} name="contactPerson" render={({ field }) => (
+                        <FormItem className="grid grid-cols-4 items-center gap-4">
                           <Label htmlFor="v-contact" className="text-right">Contact</Label>
-                          <Input id="v-contact" value={newVendor.contactPerson} onChange={(e) => setNewVendor({ ...newVendor, contactPerson: e.target.value })} className="col-span-3" />
-                        </div>
-                        <div className="grid grid-cols-4 items-center gap-4">
+                          <FormControl><Input id="v-contact" {...field} className="col-span-3" /></FormControl>
+                          <FormMessage className="col-span-4 text-right text-xs" />
+                        </FormItem>
+                        )} />
+                        <FormField control={vendorForm.control} name="email" render={({ field }) => (
+                        <FormItem className="grid grid-cols-4 items-center gap-4">
                           <Label htmlFor="v-email" className="text-right">Email</Label>
-                          <Input id="v-email" value={newVendor.email} onChange={(e) => setNewVendor({ ...newVendor, email: e.target.value })} className="col-span-3" />
-                        </div>
-                        <div className="grid grid-cols-4 items-center gap-4">
+                          <FormControl><Input id="v-email" {...field} className="col-span-3" /></FormControl>
+                          <FormMessage className="col-span-4 text-right text-xs" />
+                        </FormItem>
+                        )} />
+                        <FormField control={vendorForm.control} name="phone" render={({ field }) => (
+                        <FormItem className="grid grid-cols-4 items-center gap-4">
                           <Label htmlFor="v-phone" className="text-right">Phone</Label>
-                          <Input id="v-phone" value={newVendor.phone} onChange={(e) => setNewVendor({ ...newVendor, phone: e.target.value })} className="col-span-3" />
-                        </div>
+                          <FormControl><Input id="v-phone" {...field} className="col-span-3" /></FormControl>
+                          <FormMessage className="col-span-4 text-right text-xs" />
+                        </FormItem>
+                        )} />
                       </div>
                       <DialogFooter>
-                        <Button onClick={handleAddVendor}>Save Vendor</Button>
+                        <Button onClick={() => void vendorForm.handleSubmit(handleAddVendor, () => toast.error('Please fix the vendor form'))()}>Save Vendor</Button>
                       </DialogFooter>
+                      </Form>
                     </DialogContent>
                   </Dialog>
                 </div>
@@ -941,7 +1247,7 @@ export default function FinancePage() {
                   <CardTitle>Recent Purchase Entries</CardTitle>
                   <Dialog open={isAddPurchaseOpen} onOpenChange={setIsAddPurchaseOpen}>
                     <DialogTrigger asChild>
-                      <Button size="sm">
+                      <Button size="sm" onClick={() => purchaseForm.reset({ vendorId: '', date: '', amount: '', description: '' })}>
                         <Plus className="mr-2 h-4 w-4" />
                         New Purchase
                       </Button>
@@ -950,36 +1256,52 @@ export default function FinancePage() {
                       <DialogHeader>
                         <DialogTitle>New Purchase</DialogTitle>
                       </DialogHeader>
+                      <Form {...purchaseForm}>
                       <div className="grid gap-4 py-4">
-                        <div className="grid grid-cols-4 items-center gap-4">
+                        <FormField control={purchaseForm.control} name="vendorId" render={({ field }) => (
+                        <FormItem className="grid grid-cols-4 items-center gap-4">
                           <Label className="text-right">Vendor</Label>
-                          <Select onValueChange={(v) => setNewPurchase({ ...newPurchase, vendorId: v })}>
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <FormControl>
                             <SelectTrigger className="col-span-3">
                               <SelectValue placeholder="Select Vendor" />
                             </SelectTrigger>
+                            </FormControl>
                             <SelectContent>
                               {vendors.map(v => (
                                 <SelectItem key={v.id} value={v.id.toString()}>{v.name}</SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
-                        </div>
-                        <div className="grid grid-cols-4 items-center gap-4">
+                          <FormMessage className="col-span-4 text-right text-xs" />
+                        </FormItem>
+                        )} />
+                        <FormField control={purchaseForm.control} name="amount" render={({ field }) => (
+                        <FormItem className="grid grid-cols-4 items-center gap-4">
                           <Label className="text-right">Amount</Label>
-                          <Input type="number" value={newPurchase.amount} onChange={(e) => setNewPurchase({ ...newPurchase, amount: e.target.value })} className="col-span-3" />
-                        </div>
-                        <div className="grid grid-cols-4 items-center gap-4">
+                          <FormControl><Input type="number" {...field} className="col-span-3" /></FormControl>
+                          <FormMessage className="col-span-4 text-right text-xs" />
+                        </FormItem>
+                        )} />
+                        <FormField control={purchaseForm.control} name="date" render={({ field }) => (
+                        <FormItem className="grid grid-cols-4 items-center gap-4">
                           <Label className="text-right">Date</Label>
-                          <Input type="date" value={newPurchase.date} onChange={(e) => setNewPurchase({ ...newPurchase, date: e.target.value })} className="col-span-3" />
-                        </div>
-                        <div className="grid grid-cols-4 items-center gap-4">
+                          <FormControl><Input type="date" {...field} className="col-span-3" /></FormControl>
+                          <FormMessage className="col-span-4 text-right text-xs" />
+                        </FormItem>
+                        )} />
+                        <FormField control={purchaseForm.control} name="description" render={({ field }) => (
+                        <FormItem className="grid grid-cols-4 items-center gap-4">
                           <Label className="text-right">Desc</Label>
-                          <Input value={newPurchase.description} onChange={(e) => setNewPurchase({ ...newPurchase, description: e.target.value })} className="col-span-3" />
-                        </div>
+                          <FormControl><Input {...field} className="col-span-3" /></FormControl>
+                          <FormMessage className="col-span-4 text-right text-xs" />
+                        </FormItem>
+                        )} />
                       </div>
                       <DialogFooter>
-                        <Button onClick={handleAddPurchase}>Save Purchase</Button>
+                        <Button onClick={() => void purchaseForm.handleSubmit(handleAddPurchase, () => toast.error('Please fix the purchase form'))()}>Save Purchase</Button>
                       </DialogFooter>
+                      </Form>
                     </DialogContent>
                   </Dialog>
                 </div>
@@ -1171,18 +1493,22 @@ export default function FinancePage() {
                       <DialogHeader>
                         <DialogTitle>Add Expense Category</DialogTitle>
                       </DialogHeader>
+                      <Form {...categoryForm}>
                       <div className="grid gap-4 py-4">
-                        <div className="grid grid-cols-4 items-center gap-4">
+                        <FormField control={categoryForm.control} name="name" render={({ field }) => (
+                        <FormItem className="grid grid-cols-4 items-center gap-4">
                           <Label className="text-right">Name</Label>
-                          <Input value={newCategory.name} onChange={(e) => {
-                            setNewCategory({ ...newCategory, name: e.target.value });
-                            setCategoryError('');
-                          }} className="col-span-3" />
-                        </div>
-                        <div className="grid grid-cols-4 items-center gap-4">
+                          <FormControl><Input {...field} onChange={(e) => { field.onChange(e); setCategoryError(''); }} className="col-span-3" /></FormControl>
+                          <FormMessage className="col-span-4 text-right text-xs" />
+                        </FormItem>
+                        )} />
+                        <FormField control={categoryForm.control} name="description" render={({ field }) => (
+                        <FormItem className="grid grid-cols-4 items-center gap-4">
                           <Label className="text-right">Desc</Label>
-                          <Input value={newCategory.description} onChange={(e) => setNewCategory({ ...newCategory, description: e.target.value })} className="col-span-3" />
-                        </div>
+                          <FormControl><Input {...field} className="col-span-3" /></FormControl>
+                          <FormMessage className="col-span-4 text-right text-xs" />
+                        </FormItem>
+                        )} />
                         {categoryError && (
                           <div className="grid grid-cols-4 items-center gap-4">
                             <div className="col-span-4 text-center text-sm text-red-500">
@@ -1194,6 +1520,7 @@ export default function FinancePage() {
                       <DialogFooter>
                         <Button onClick={handleAddCategory}>Save Category</Button>
                       </DialogFooter>
+                      </Form>
                     </DialogContent>
                   </Dialog>
                 </div>
@@ -1431,7 +1758,7 @@ export default function FinancePage() {
               <DialogTrigger asChild>
                 <Button onClick={() => {
                   setEditingInvoice(null);
-                  setNewInvoice({
+                  invoiceForm.reset({
                     clientId: '',
                     invoiceNumber: '',
                     amount: '',
@@ -1451,69 +1778,97 @@ export default function FinancePage() {
                   <DialogTitle>{editingInvoice ? 'Edit Invoice' : 'Create New Invoice'}</DialogTitle>
                   <DialogDescription>Enter invoice details below.</DialogDescription>
                 </DialogHeader>
+                <Form {...invoiceForm}>
                 <div className="space-y-4 py-4">
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
+                    <FormField control={invoiceForm.control} name="invoiceNumber" render={({ field }) => (
+                    <FormItem className="space-y-2">
                       <Label>Invoice #</Label>
-                      <Input placeholder="INV-001" value={newInvoice.invoiceNumber} onChange={(e) => setNewInvoice({ ...newInvoice, invoiceNumber: e.target.value })} />
-                    </div>
-                    <div className="space-y-2">
+                      <FormControl><Input placeholder="INV-001" {...field} /></FormControl>
+                      <FormMessage className="text-xs" />
+                    </FormItem>
+                    )} />
+                    <FormField control={invoiceForm.control} name="clientId" render={({ field }) => (
+                    <FormItem className="space-y-2">
                       <Label>Client</Label>
-                      <Select value={newInvoice.clientId} onValueChange={(v) => setNewInvoice({ ...newInvoice, clientId: v })}>
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select Client" />
                         </SelectTrigger>
+                        </FormControl>
                         <SelectContent>
                           {clients.map(client => (
                             <SelectItem key={client.id} value={client.id.toString()}>{client.companyName}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-                    </div>
+                      <FormMessage className="text-xs" />
+                    </FormItem>
+                    )} />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
+                    <FormField control={invoiceForm.control} name="amount" render={({ field }) => (
+                    <FormItem className="space-y-2">
                       <Label>Amount (₹)</Label>
-                      <Input type="number" placeholder="0.00" value={newInvoice.amount} onChange={(e) => setNewInvoice({ ...newInvoice, amount: e.target.value })} />
-                    </div>
-                    <div className="space-y-2">
+                      <FormControl><Input type="number" placeholder="0.00" {...field} /></FormControl>
+                      <FormMessage className="text-xs" />
+                    </FormItem>
+                    )} />
+                    <FormField control={invoiceForm.control} name="tax" render={({ field }) => (
+                    <FormItem className="space-y-2">
                       <Label>Tax (₹)</Label>
-                      <Input type="number" placeholder="0" value={newInvoice.tax} onChange={(e) => setNewInvoice({ ...newInvoice, tax: e.target.value })} />
-                    </div>
+                      <FormControl><Input type="number" placeholder="0" {...field} /></FormControl>
+                      <FormMessage className="text-xs" />
+                    </FormItem>
+                    )} />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
+                    <FormField control={invoiceForm.control} name="dueDate" render={({ field }) => (
+                    <FormItem className="space-y-2">
                       <Label>Due Date</Label>
-                      <Input type="date" value={newInvoice.dueDate} onChange={(e) => setNewInvoice({ ...newInvoice, dueDate: e.target.value })} />
-                    </div>
-                    <div className="space-y-2">
+                      <FormControl><Input type="date" {...field} /></FormControl>
+                      <FormMessage className="text-xs" />
+                    </FormItem>
+                    )} />
+                    <FormField control={invoiceForm.control} name="paymentTerms" render={({ field }) => (
+                    <FormItem className="space-y-2">
                       <Label>Payment Terms</Label>
-                      <Input value={newInvoice.paymentTerms} onChange={(e) => setNewInvoice({ ...newInvoice, paymentTerms: e.target.value })} />
-                    </div>
+                      <FormControl><Input {...field} /></FormControl>
+                      <FormMessage className="text-xs" />
+                    </FormItem>
+                    )} />
                   </div>
 
-                  <div className="space-y-2">
+                  <FormField control={invoiceForm.control} name="termsAndConditions" render={({ field }) => (
+                  <FormItem className="space-y-2">
                     <Label>Terms & Conditions</Label>
-                    <Input value={newInvoice.termsAndConditions} onChange={(e) => setNewInvoice({ ...newInvoice, termsAndConditions: e.target.value })} />
-                  </div>
+                    <FormControl><Input {...field} /></FormControl>
+                    <FormMessage className="text-xs" />
+                  </FormItem>
+                  )} />
 
-                  <div className="space-y-2">
+                  <FormField control={invoiceForm.control} name="notes" render={({ field }) => (
+                  <FormItem className="space-y-2">
                     <Label>Notes</Label>
-                    <Input value={newInvoice.notes} onChange={(e) => setNewInvoice({ ...newInvoice, notes: e.target.value })} />
-                  </div>
+                    <FormControl><Input {...field} /></FormControl>
+                    <FormMessage className="text-xs" />
+                  </FormItem>
+                  )} />
 
                   <div className="pt-4 border-t">
                     <div className="flex justify-between font-bold text-lg">
                       <span>Total:</span>
-                      <span>₹{(parseInt(newInvoice.amount || '0') + parseInt(newInvoice.tax || '0')).toFixed(2)}</span>
+                      <span>₹{(parseInt(invoiceForm.watch('amount') || '0', 10) + parseInt(invoiceForm.watch('tax') || '0', 10)).toFixed(2)}</span>
                     </div>
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button onClick={handleCreateInvoice}>{editingInvoice ? 'Update Invoice' : 'Create Invoice'}</Button>
+                  <Button onClick={() => void invoiceForm.handleSubmit(handleCreateInvoice, () => toast.error('Please fix the invoice form'))()}>{editingInvoice ? 'Update Invoice' : 'Create Invoice'}</Button>
                 </DialogFooter>
+                </Form>
               </DialogContent>
             </Dialog>
           </div>
@@ -1627,343 +1982,513 @@ export default function FinancePage() {
         </TabsContent>
 
         {/* INCOME TRACKING */}
-        < TabsContent value="income" className="space-y-4" >
-
-          {/* Defined Calculated Variables for Render */}
-          {(() => {
-            const [reportYear, setReportYear] = useState(new Date().getFullYear().toString());
-            const [monthSearch, setMonthSearch] = useState('');
-
-            // Pagination states for Income tab
-            const [paidInvoicePage, setPaidInvoicePage] = useState(0);
-            const [pendingInvoicePage, setPendingInvoicePage] = useState(0);
-            const [monthlyReportPage, setMonthlyReportPage] = useState(0);
-            const incomePageSize = 5; // Smaller page size for income tab cards
-
-            const totalPaid = invoices.filter(i => i.status === 'paid').reduce((acc, curr) => acc + curr.totalAmount, 0);
-            const pendingPayments = invoices.filter(i => i.status === 'sent').reduce((acc, curr) => acc + curr.totalAmount, 0);
-            const overduePayments = invoices.filter(i => i.status === 'overdue').reduce((acc, curr) => acc + curr.totalAmount, 0);
-
-            const currentMonth = new Date().getMonth();
-            const currentYear = new Date().getFullYear();
-            const thisMonthIncome = invoices.filter(i => {
-              if (i.status !== 'paid' || !i.paidDate) return false;
-              const d = new Date(i.paidDate);
-              return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-            }).reduce((acc, curr) => acc + curr.totalAmount, 0);
-
-            const getMonthlyReports = () => {
-              const reports: Record<string, { count: number, total: number, date: Date }> = {};
-              invoices.filter(i => {
-                if (i.status !== 'paid' || !i.paidDate) return false;
-                const d = new Date(i.paidDate);
-                // Filter by Year
-                if (d.getFullYear().toString() !== reportYear) return false;
-                return true;
-              }).forEach(inv => {
-                const d = new Date(inv.paidDate!);
-                const key = d.toLocaleString('default', { month: 'long', year: 'numeric' });
-
-                // Filter by Search (Month Name)
-                if (monthSearch && !key.toLowerCase().includes(monthSearch.toLowerCase())) return;
-
-                if (!reports[key]) {
-                  reports[key] = { count: 0, total: 0, date: d };
-                }
-                reports[key].count++;
-                reports[key].total += inv.totalAmount;
-              });
-              return Object.entries(reports)
-                .map(([month, data]) => ({ month, ...data }))
-                .sort((a, b) => b.date.getTime() - a.date.getTime());
-            };
-            const monthlyReports = getMonthlyReports();
-
-            return (
-              <>
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm font-medium flex items-center gap-2">
-                        <CheckCircle className="h-4 w-4 text-green-600" />
-                        Paid Invoices
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold text-green-600">
-                        {invoices.filter(i => i.status === 'paid').length}
-                      </div>
-                      <div className="text-sm font-medium mt-1">₹{(totalPaid / 1000).toFixed(1)}K</div>
-                      <p className="text-xs text-muted-foreground">Total received</p>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm font-medium flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-blue-600" />
-                        Pending Payments
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold text-blue-600">
-                        {invoices.filter(i => i.status === 'sent').length}
-                      </div>
-                      <div className="text-sm font-medium mt-1">₹{(pendingPayments / 1000).toFixed(1)}K</div>
-                      <p className="text-xs text-muted-foreground">Awaiting payment</p>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm font-medium flex items-center gap-2">
-                        <AlertCircle className="h-4 w-4 text-red-600" />
-                        Overdue Payments
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold text-red-600">
-                        {invoices.filter(i => i.status === 'overdue').length}
-                      </div>
-                      <div className="text-sm font-medium mt-1">₹{(overduePayments / 1000).toFixed(1)}K</div>
-                      <p className="text-xs text-muted-foreground">Action required</p>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm font-medium">This Month</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold">₹{(thisMonthIncome / 1000).toFixed(1)}K</div>
-                      <p className="text-xs text-muted-foreground">Income received</p>
-                    </CardContent>
-                  </Card>
+        <TabsContent value="income" className="space-y-6">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <Card className="bg-gradient-to-br from-card to-green-500/5 hover:border-green-500/50 transition-all duration-300">
+              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardTitle className="text-sm font-medium">Paid Invoices</CardTitle>
+                <div className="p-2 rounded-lg bg-green-500/10">
+                  <CheckCircle className="h-4 w-4 text-green-500" />
                 </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">
+                  {invoices.filter(i => i.status === 'paid').length}
+                </div>
+                <div className="text-sm font-medium mt-1">₹{invoices.filter(i => i.status === 'paid').reduce((acc, curr) => acc + curr.totalAmount, 0).toLocaleString('en-IN')}</div>
+                <p className="text-xs text-muted-foreground">Total received</p>
+              </CardContent>
+            </Card>
 
-                <div className="grid gap-4 lg:grid-cols-2">
-                  {/* Paid Invoices */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Paid Invoices</CardTitle>
-                      <CardDescription>Successfully collected payments</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="max-h-[300px] overflow-y-auto">
-                        <Table>
-                          <TableHeader className="sticky top-0 bg-background z-10">
-                            <TableRow>
-                              <TableHead>Invoice #</TableHead>
-                              <TableHead>Amount</TableHead>
-                              <TableHead>Paid Date</TableHead>
+            <Card className="bg-gradient-to-br from-card to-blue-500/5 hover:border-blue-500/50 transition-all duration-300">
+              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardTitle className="text-sm font-medium">Pending Payments</CardTitle>
+                <div className="p-2 rounded-lg bg-blue-500/10">
+                  <Clock className="h-4 w-4 text-blue-500" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-blue-600">
+                  {invoices.filter(i => i.status === 'sent').length}
+                </div>
+                <div className="text-sm font-medium mt-1">₹{pendingPayments.toLocaleString('en-IN')}</div>
+                <p className="text-xs text-muted-foreground">Awaiting payment</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-card to-rose-500/5 hover:border-rose-500/50 transition-all duration-300">
+              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardTitle className="text-sm font-medium">Overdue Payments</CardTitle>
+                <div className="p-2 rounded-lg bg-rose-500/10">
+                  <AlertCircle className="h-4 w-4 text-rose-500" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-rose-600">
+                  {invoices.filter(i => i.status === 'overdue').length}
+                </div>
+                <div className="text-sm font-medium mt-1">₹{overduePayments.toLocaleString('en-IN')}</div>
+                <p className="text-xs text-muted-foreground">Action required</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-card to-purple-500/5 hover:border-purple-500/50 transition-all duration-300">
+              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardTitle className="text-sm font-medium">This Month</CardTitle>
+                <div className="p-2 rounded-lg bg-purple-500/10">
+                  <TrendingUp className="h-4 w-4 text-purple-500" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  ₹{invoices.filter(i => {
+                    if (i.status !== 'paid' || !i.paidDate) return false;
+                    const d = new Date(i.paidDate);
+                    return d.getMonth() === new Date().getMonth() && d.getFullYear() === new Date().getFullYear();
+                  }).reduce((acc, curr) => acc + curr.totalAmount, 0).toLocaleString('en-IN')}
+                </div>
+                <p className="text-xs text-muted-foreground">Income received</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            {/* Paid Invoices */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Paid Invoices</CardTitle>
+                <CardDescription>Successfully collected payments</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="max-h-[300px] overflow-y-auto">
+                  <Table>
+                    <TableHeader className="sticky top-0 bg-background z-10">
+                      <TableRow>
+                        <TableHead>Invoice #</TableHead>
+                        <TableHead>Amount</TableHead>
+                        <TableHead>Paid Date</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {invoices.filter(i => i.status === 'paid').length === 0 ? (
+                        <TableRow><TableCell colSpan={3} className="text-center">No paid invoices</TableCell></TableRow>
+                      ) : (
+                        invoices.filter(i => i.status === 'paid')
+                          .sort((a, b) => new Date(b.paidDate || 0).getTime() - new Date(a.paidDate || 0).getTime())
+                          .slice(paidInvoicePage * incomePageSize, (paidInvoicePage + 1) * incomePageSize)
+                          .map((invoice) => (
+                            <TableRow key={invoice.id}>
+                              <TableCell className="font-medium">{invoice.invoiceNumber}</TableCell>
+                              <TableCell className="text-green-600">₹{(invoice.totalAmount / 1000).toFixed(2)}K</TableCell>
+                              <TableCell>{invoice.paidDate ? new Date(invoice.paidDate).toLocaleDateString() : '—'}</TableCell>
                             </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {(() => {
-                              const paidInvoices = invoices.filter(i => i.status === 'paid').sort((a, b) => new Date(b.paidDate || 0).getTime() - new Date(a.paidDate || 0).getTime());
-                              return (
-                                <>
-                                  {paidInvoices.length === 0 ? (
-                                    <TableRow><TableCell colSpan={3} className="text-center">No paid invoices</TableCell></TableRow>
-                                  ) : (
-                                    paidInvoices.slice(paidInvoicePage * incomePageSize, (paidInvoicePage + 1) * incomePageSize).map((invoice) => (
-                                      <TableRow key={invoice.id}>
-                                        <TableCell className="font-medium">{invoice.invoiceNumber}</TableCell>
-                                        <TableCell className="text-green-600">₹{(invoice.totalAmount / 1000).toFixed(2)}K</TableCell>
-                                        <TableCell>{invoice.paidDate ? new Date(invoice.paidDate).toLocaleDateString() : '—'}</TableCell>
-                                      </TableRow>
-                                    ))
-                                  )}
-                                </>
-                              );
-                            })()}
-                          </TableBody>
-                        </Table>
-                      </div>
-                      <div className="flex items-center justify-end space-x-2 py-4">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setPaidInvoicePage(Math.max(0, paidInvoicePage - 1))}
-                          disabled={paidInvoicePage === 0}
-                        >
-                          Previous
-                        </Button>
-                        <div className="text-sm font-medium">
-                          Page {paidInvoicePage + 1} of {Math.ceil(invoices.filter(i => i.status === 'paid').length / incomePageSize) || 1}
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setPaidInvoicePage(Math.min(Math.ceil(invoices.filter(i => i.status === 'paid').length / incomePageSize) - 1, paidInvoicePage + 1))}
-                          disabled={paidInvoicePage >= Math.ceil(invoices.filter(i => i.status === 'paid').length / incomePageSize) - 1}
-                        >
-                          Next
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
+                          ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+                <div className="flex items-center justify-end space-x-2 py-4">
+                  <Button variant="outline" size="sm" onClick={() => setPaidInvoicePage(Math.max(0, paidInvoicePage - 1))} disabled={paidInvoicePage === 0}>Previous</Button>
+                  <div className="text-sm font-medium">Page {paidInvoicePage + 1} of {Math.ceil(invoices.filter(i => i.status === 'paid').length / incomePageSize) || 1}</div>
+                  <Button variant="outline" size="sm" onClick={() => setPaidInvoicePage(Math.min(Math.ceil(invoices.filter(i => i.status === 'paid').length / incomePageSize) - 1, paidInvoicePage + 1))} disabled={paidInvoicePage >= Math.ceil(invoices.filter(i => i.status === 'paid').length / incomePageSize) - 1}>Next</Button>
+                </div>
+              </CardContent>
+            </Card>
 
-                  {/* Pending & Overdue */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Pending & Overdue Payments</CardTitle>
-                      <CardDescription>Follow-up required</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="max-h-[300px] overflow-y-auto">
-                        <Table>
-                          <TableHeader className="sticky top-0 bg-background z-10">
-                            <TableRow>
-                              <TableHead>Invoice #</TableHead>
-                              <TableHead>Amount</TableHead>
-                              <TableHead>Due Date</TableHead>
-                              <TableHead>Status</TableHead>
+            {/* Pending & Overdue */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Pending & Overdue Payments</CardTitle>
+                <CardDescription>Follow-up required</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="max-h-[300px] overflow-y-auto">
+                  <Table>
+                    <TableHeader className="sticky top-0 bg-background z-10">
+                      <TableRow>
+                        <TableHead>Invoice #</TableHead>
+                        <TableHead>Amount</TableHead>
+                        <TableHead>Due Date</TableHead>
+                        <TableHead>Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {invoices.filter(i => i.status === 'sent' || i.status === 'overdue').length === 0 ? (
+                        <TableRow><TableCell colSpan={4} className="text-center">No pending payments</TableCell></TableRow>
+                      ) : (
+                        invoices.filter(i => i.status === 'sent' || i.status === 'overdue')
+                          .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+                          .slice(pendingInvoicePage * incomePageSize, (pendingInvoicePage + 1) * incomePageSize)
+                          .map((invoice) => (
+                            <TableRow key={invoice.id}>
+                              <TableCell className="font-medium">{invoice.invoiceNumber}</TableCell>
+                              <TableCell>₹{(invoice.totalAmount / 1000).toFixed(2)}K</TableCell>
+                              <TableCell>{new Date(invoice.dueDate).toLocaleDateString()}</TableCell>
+                              <TableCell>
+                                <Badge variant={invoice.status === 'overdue' ? 'destructive' : 'secondary'}>{invoice.status}</Badge>
+                              </TableCell>
                             </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {(() => {
-                              const pendingInvoices = invoices.filter(i => i.status === 'sent' || i.status === 'overdue').sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-                              return (
-                                <>
-                                  {pendingInvoices.length === 0 ? (
-                                    <TableRow><TableCell colSpan={4} className="text-center">No pending payments</TableCell></TableRow>
-                                  ) : (
-                                    pendingInvoices.slice(pendingInvoicePage * incomePageSize, (pendingInvoicePage + 1) * incomePageSize).map((invoice) => (
-                                      <TableRow key={invoice.id}>
-                                        <TableCell className="font-medium">{invoice.invoiceNumber}</TableCell>
-                                        <TableCell>₹{(invoice.totalAmount / 1000).toFixed(2)}K</TableCell>
-                                        <TableCell>{new Date(invoice.dueDate).toLocaleDateString()}</TableCell>
-                                        <TableCell>
-                                          <Badge variant={invoice.status === 'overdue' ? 'destructive' : 'secondary'}>
-                                            {invoice.status}
-                                          </Badge>
-                                        </TableCell>
-                                      </TableRow>
-                                    ))
-                                  )}
-                                </>
-                              );
-                            })()}
-                          </TableBody>
-                        </Table>
-                      </div>
-                      <div className="flex items-center justify-end space-x-2 py-4">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setPendingInvoicePage(Math.max(0, pendingInvoicePage - 1))}
-                          disabled={pendingInvoicePage === 0}
-                        >
-                          Previous
-                        </Button>
-                        <div className="text-sm font-medium">
-                          Page {pendingInvoicePage + 1} of {Math.ceil(invoices.filter(i => i.status === 'sent' || i.status === 'overdue').length / incomePageSize) || 1}
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setPendingInvoicePage(Math.min(Math.ceil(invoices.filter(i => i.status === 'sent' || i.status === 'overdue').length / incomePageSize) - 1, pendingInvoicePage + 1))}
-                          disabled={pendingInvoicePage >= Math.ceil(invoices.filter(i => i.status === 'sent' || i.status === 'overdue').length / incomePageSize) - 1}
-                        >
-                          Next
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
+                          ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+                <div className="flex items-center justify-end space-x-2 py-4">
+                  <Button variant="outline" size="sm" onClick={() => setPendingInvoicePage(Math.max(0, pendingInvoicePage - 1))} disabled={pendingInvoicePage === 0}>Previous</Button>
+                  <div className="text-sm font-medium">Page {pendingInvoicePage + 1} of {Math.ceil(invoices.filter(i => i.status === 'sent' || i.status === 'overdue').length / incomePageSize) || 1}</div>
+                  <Button variant="outline" size="sm" onClick={() => setPendingInvoicePage(Math.min(Math.ceil(invoices.filter(i => i.status === 'sent' || i.status === 'overdue').length / incomePageSize) - 1, pendingInvoicePage + 1))} disabled={pendingInvoicePage >= Math.ceil(invoices.filter(i => i.status === 'sent' || i.status === 'overdue').length / incomePageSize) - 1}>Next</Button>
+                </div>
+              </CardContent>
+            </Card>
 
-                  {/* Monthly Reports */}
-                  <Card className="lg:col-span-2">
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <CardTitle>Monthly Income Reports</CardTitle>
-                          <CardDescription>Income breakdown by month</CardDescription>
-                        </div>
-                        <div className="flex gap-2">
-                          <Select value={reportYear} onValueChange={setReportYear}>
-                            <SelectTrigger className="w-[100px]">
-                              <SelectValue placeholder="Year" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {Array.from(new Set(invoices.map(i => i.paidDate ? new Date(i.paidDate).getFullYear() : new Date().getFullYear()))).sort((a, b) => b - a).map(year => (
-                                <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Button variant="outline" size="sm" onClick={() => handleExportYearReport(reportYear)}>
+            {/* Monthly Reports */}
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Monthly Income Reports</CardTitle>
+                    <CardDescription>Income breakdown by month</CardDescription>
+                  </div>
+                  <div className="flex gap-2">
+                    <Select value={reportYear} onValueChange={setReportYear}>
+                      <SelectTrigger className="w-[100px]">
+                        <SelectValue placeholder="Year" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from(new Set(invoices.map(i => i.paidDate ? new Date(i.paidDate).getFullYear() : new Date().getFullYear()))).sort((a, b) => b - a).map(year => (
+                          <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button variant="outline" size="sm" onClick={() => handleExportYearReport(reportYear)}>
+                      <Download className="mr-2 h-4 w-4" />
+                      Export Year
+                    </Button>
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <Input
+                    placeholder="Search month..."
+                    value={monthSearch}
+                    onChange={(e) => setMonthSearch(e.target.value)}
+                    className="max-w-sm"
+                  />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="max-h-[400px] overflow-y-auto space-y-4">
+                  {(() => {
+                    const reports: Record<string, { count: number; total: number; date: Date }> = {};
+                    invoices.filter(i => {
+                      if (i.status !== 'paid' || !i.paidDate) return false;
+                      return new Date(i.paidDate).getFullYear().toString() === reportYear;
+                    }).forEach(inv => {
+                      const d = new Date(inv.paidDate!);
+                      const key = d.toLocaleString('default', { month: 'long', year: 'numeric' });
+                      if (monthSearch && !key.toLowerCase().includes(monthSearch.toLowerCase())) return;
+                      if (!reports[key]) reports[key] = { count: 0, total: 0, date: d };
+                      reports[key].count++;
+                      reports[key].total += inv.totalAmount;
+                    });
+                    const monthlyReports = Object.entries(reports)
+                      .map(([month, data]) => ({ month, ...data }))
+                      .sort((a, b) => b.date.getTime() - a.date.getTime());
+
+                    if (monthlyReports.length === 0) {
+                      return <p className="text-center py-4 text-muted-foreground">No income history available.</p>;
+                    }
+
+                    return monthlyReports
+                      .slice(monthlyReportPage * incomePageSize, (monthlyReportPage + 1) * incomePageSize)
+                      .map((report) => (
+                        <div key={report.month} className="flex items-center justify-between p-4 border rounded-lg">
+                          <div>
+                            <p className="font-medium">{report.month}</p>
+                            <p className="text-sm text-muted-foreground">{report.count} invoice{report.count !== 1 ? 's' : ''} paid</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-2xl font-bold text-green-600">₹{(report.total / 1000).toFixed(1)}K</p>
+                            <p className="text-sm text-muted-foreground">Total income</p>
+                          </div>
+                          <Button variant="outline" size="sm" onClick={() => handleExportReport(report.month)}>
                             <Download className="mr-2 h-4 w-4" />
-                            Export Year
+                            Export
                           </Button>
                         </div>
-                      </div>
-                      <div className="mt-4">
-                        <Input
-                          placeholder="Search month..."
-                          value={monthSearch}
-                          onChange={(e) => setMonthSearch(e.target.value)}
-                          className="max-w-sm"
-                        />
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="max-h-[400px] overflow-y-auto space-y-4">
-                        {monthlyReports.length === 0 ? (
-                          <p className="text-center py-4 text-muted-foreground">No income history available.</p>
-                        ) : (
-                          monthlyReports.slice(monthlyReportPage * incomePageSize, (monthlyReportPage + 1) * incomePageSize).map((report) => (
-                            <div key={report.month} className="flex items-center justify-between p-4 border rounded-lg">
-                              <div>
-                                <p className="font-medium">{report.month}</p>
-                                <p className="text-sm text-muted-foreground">
-                                  {report.count} invoice{report.count !== 1 ? 's' : ''} paid
-                                </p>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-2xl font-bold text-green-600">₹{(report.total / 1000).toFixed(1)}K</p>
-                                <p className="text-sm text-muted-foreground">Total income</p>
-                              </div>
-                              <Button variant="outline" size="sm" onClick={() => handleExportReport(report.month)}>
-                                <Download className="mr-2 h-4 w-4" />
-                                Export
-                              </Button>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                      <div className="flex items-center justify-end space-x-2 py-4">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setMonthlyReportPage(Math.max(0, monthlyReportPage - 1))}
-                          disabled={monthlyReportPage === 0}
-                        >
-                          Previous
-                        </Button>
-                        <div className="text-sm font-medium">
-                          Page {monthlyReportPage + 1} of {Math.ceil(monthlyReports.length / incomePageSize) || 1}
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setMonthlyReportPage(Math.min(Math.ceil(monthlyReports.length / incomePageSize) - 1, monthlyReportPage + 1))}
-                          disabled={monthlyReportPage >= Math.ceil(monthlyReports.length / incomePageSize) - 1}
-                        >
-                          Next
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
+                      ));
+                  })()}
                 </div>
-              </>
-            );
-          })()}
-        </TabsContent >
+                <div className="flex items-center justify-end space-x-2 py-4">
+                  <Button variant="outline" size="sm" onClick={() => setMonthlyReportPage(Math.max(0, monthlyReportPage - 1))} disabled={monthlyReportPage === 0}>Previous</Button>
+                  <div className="text-sm font-medium">Page {monthlyReportPage + 1}</div>
+                  <Button variant="outline" size="sm" onClick={() => setMonthlyReportPage(monthlyReportPage + 1)}>Next</Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="finance_control" className="space-y-6">
+          
+          {/* Top Actions Grid */}
+          <div className="flex flex-wrap gap-2 justify-end mb-4">
+            <Button onClick={() => setShowAddCoa(true)} className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold h-9 text-xs">
+              <Plus className="mr-1.5 h-4 w-4" /> Add GL Account
+            </Button>
+            <Button onClick={() => setShowAddCostCenter(true)} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold h-9 text-xs">
+              <Plus className="mr-1.5 h-4 w-4" /> Create Cost Center
+            </Button>
+            <Button onClick={() => setShowAddJournal(true)} className="bg-indigo-700 hover:bg-indigo-600 text-white font-bold h-9 text-xs">
+              <Plus className="mr-1.5 h-4 w-4" /> Post Journal Entry
+            </Button>
+          </div>
+
+          {/* Dynamic Dialog: Add COA */}
+          {showAddCoa && (
+            <Card className="border border-indigo-100 dark:border-indigo-950 p-4 bg-slate-50 dark:bg-zinc-950 text-xs">
+              <CardHeader className="p-2"><CardTitle className="text-sm font-bold">Add Chart of Account</CardTitle></CardHeader>
+              <CardContent>
+                <form onSubmit={handleCreateCoa} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-slate-500">Account Code</label>
+                    <Input placeholder="e.g. 1010, 4010" value={coaCode} onChange={e => setCoaCode(e.target.value)} required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-slate-500">Account Name</label>
+                    <Input placeholder="e.g. Petty Cash, Sales Revenue" value={coaName} onChange={e => setCoaName(e.target.value)} required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-slate-500">Account Type</label>
+                    <Select value={coaType} onValueChange={setCoaType}>
+                      <SelectTrigger className="h-9">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Asset">Asset</SelectItem>
+                        <SelectItem value="Liability">Liability</SelectItem>
+                        <SelectItem value="Equity">Equity</SelectItem>
+                        <SelectItem value="Revenue">Revenue</SelectItem>
+                        <SelectItem value="Expense">Expense</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="col-span-3 text-right space-x-2 pt-2">
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setShowAddCoa(false)}>Cancel</Button>
+                    <Button type="submit" size="sm" className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold">Save Account</Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Dynamic Dialog: Add Cost Center */}
+          {showAddCostCenter && (
+            <Card className="border border-emerald-100 dark:border-zinc-800 p-4 bg-slate-50 dark:bg-zinc-950 text-xs">
+              <CardHeader className="p-2"><CardTitle className="text-sm font-bold">Create Cost Center</CardTitle></CardHeader>
+              <CardContent>
+                <form onSubmit={handleCreateCostCenter} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-slate-500">Cost Center Code</label>
+                    <Input placeholder="e.g. CC-ENG, CC-SALES" value={ccCode} onChange={e => setCcCode(e.target.value)} required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-slate-500">Cost Center Name</label>
+                    <Input placeholder="e.g. Engineering, Sales Department" value={ccName} onChange={e => setCcName(e.target.value)} required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-slate-500">Budget Limit (₹)</label>
+                    <Input type="number" placeholder="500000" value={ccBudget} onChange={e => setCcBudget(e.target.value)} />
+                  </div>
+                  <div className="col-span-3 text-right space-x-2 pt-2">
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setShowAddCostCenter(false)}>Cancel</Button>
+                    <Button type="submit" size="sm" className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold">Save Cost Center</Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Dynamic Dialog: Post Journal */}
+          {showAddJournal && (
+            <Card className="border border-indigo-200 dark:border-zinc-800 p-4 bg-slate-50 dark:bg-zinc-950 text-xs">
+              <CardHeader className="p-2"><CardTitle className="text-sm font-bold">Post Manual Journal Entry</CardTitle></CardHeader>
+              <CardContent>
+                <form onSubmit={handlePostJournal} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-slate-500">Journal Entry Number</label>
+                    <Input placeholder="e.g. JR-2026-004" value={jNumber} onChange={e => setJNumber(e.target.value)} required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-slate-500">Transfer Amount (₹)</label>
+                    <Input type="number" placeholder="10000" value={jAmount} onChange={e => setJAmount(e.target.value)} required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-slate-500">Debit GL Account Code</label>
+                    <Select value={jDebitAcc} onValueChange={setJDebitAcc}>
+                      <SelectTrigger className="h-9 bg-white dark:bg-zinc-900">
+                        <SelectValue placeholder="Select Debit Account" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {coaList.map(coa => (
+                          <SelectItem key={coa.id} value={coa.account_code}>{coa.account_code} - {coa.account_name} ({coa.account_type})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-slate-500">Credit GL Account Code</label>
+                    <Select value={jCreditAcc} onValueChange={setJCreditAcc}>
+                      <SelectTrigger className="h-9 bg-white dark:bg-zinc-900">
+                        <SelectValue placeholder="Select Credit Account" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {coaList.map(coa => (
+                          <SelectItem key={coa.id} value={coa.account_code}>{coa.account_code} - {coa.account_name} ({coa.account_type})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5 col-span-2">
+                    <label className="font-bold text-slate-500">Journal Memo Notes</label>
+                    <Input placeholder="Transferring fund reserves or reconciling travel logs" value={jNotes} onChange={e => setJNotes(e.target.value)} />
+                  </div>
+                  <div className="col-span-2 text-right space-x-2 pt-2">
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setShowAddJournal(false)}>Cancel</Button>
+                    <Button type="submit" size="sm" className="bg-indigo-700 hover:bg-indigo-600 text-white font-bold">Post Journal</Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Sub Panels Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            {/* Chart of Accounts (6 Columns) */}
+            <Card className="lg:col-span-6">
+              <CardHeader>
+                <CardTitle className="text-md">Chart of Accounts</CardTitle>
+                <CardDescription>Multi-currency corporate asset and liability registry</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0 overflow-x-auto">
+                <Table className="text-xs">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="pl-4">Code</TableHead>
+                      <TableHead>Account Name</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead className="pr-4 text-right">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {coaList.map(coa => (
+                      <TableRow key={coa.id}>
+                        <td className="pl-4 font-mono font-bold text-slate-500">{coa.account_code}</td>
+                        <td className="font-bold">{coa.account_name}</td>
+                        <td>
+                          <Badge className="bg-slate-100 text-slate-700 border-none font-bold text-[10px]">
+                            {coa.account_type}
+                          </Badge>
+                        </td>
+                        <td className="pr-4 text-right">
+                          <span className="text-emerald-500 font-bold text-[10px]">Active</span>
+                        </td>
+                      </TableRow>
+                    ))}
+                    {coaList.length === 0 && (
+                      <TableRow>
+                        <td colSpan={4} className="text-center py-6 text-slate-400 italic">No Chart of Accounts configured.</td>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            {/* Cost Centers (6 Columns) */}
+            <Card className="lg:col-span-6">
+              <CardHeader>
+                <CardTitle className="text-md">Cost Centers & Department Limits</CardTitle>
+                <CardDescription>Financial cost-limit boundaries and manager ownerships</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0 overflow-x-auto">
+                <Table className="text-xs">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="pl-4">CC Code</TableHead>
+                      <TableHead>Department Name</TableHead>
+                      <TableHead className="text-right">Budget Limit</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {costCenterList.map(cc => (
+                      <TableRow key={cc.id}>
+                        <td className="pl-4 font-mono font-bold text-emerald-600">{cc.code}</td>
+                        <td className="font-bold">{cc.name}</td>
+                        <td className="pr-4 text-right font-black">
+                          ₹{Number(cc.budget_limit || 0).toLocaleString()}
+                        </td>
+                      </TableRow>
+                    ))}
+                    {costCenterList.length === 0 && (
+                      <TableRow>
+                        <td colSpan={3} className="text-center py-6 text-slate-400 italic">No Cost Centers configured.</td>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            {/* General Ledger Postings (Full 12 columns) */}
+            <Card className="col-span-12">
+              <CardHeader>
+                <CardTitle className="text-md">General Ledger Postings</CardTitle>
+                <CardDescription>Immutable double-entry book balancing transactional records</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0 overflow-x-auto">
+                <Table className="text-xs">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="pl-6">Posting Date</TableHead>
+                      <TableHead>Account Code</TableHead>
+                      <TableHead>Ref Transaction</TableHead>
+                      <TableHead className="text-right">Debit</TableHead>
+                      <TableHead className="text-right pr-6">Credit</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {ledgerList.map(item => (
+                      <TableRow key={item.id}>
+                        <td className="pl-6 text-slate-500 font-bold">{new Date(item.posting_date).toLocaleDateString()}</td>
+                        <td className="font-mono font-bold text-indigo-600">{item.account_code}</td>
+                        <td className="capitalize font-semibold text-slate-600">{item.ref_transaction_type} #{item.ref_transaction_id?.substring(0,6)}</td>
+                        <td className="text-right font-bold text-emerald-600">
+                          {Number(item.debit) > 0 ? `₹${Number(item.debit).toLocaleString()}` : '—'}
+                        </td>
+                        <td className="text-right pr-6 font-bold text-rose-600">
+                          {Number(item.credit) > 0 ? `₹${Number(item.credit).toLocaleString()}` : '—'}
+                        </td>
+                      </TableRow>
+                    ))}
+                    {ledgerList.length === 0 && (
+                      <TableRow>
+                        <td colSpan={5} className="text-center py-6 text-slate-400 italic">No general ledger entries posted. Run billing or journal runs.</td>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+          </div>
+
+        </TabsContent>
 
         {/* BUSINESS SETTINGS */}
 
 
-      </Tabs >
-    </div >
+      </Tabs>
+    </div>
   );
 }
