@@ -35,6 +35,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
+  const [imageLoading, setImageLoading] = useState(true);
 
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
   const [resendStatus, setResendStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
@@ -198,10 +199,23 @@ export default function LoginPage() {
 
   if (checkingSession) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <div className="flex items-center gap-3 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" />
-          <span className="text-sm font-medium">Restoring your session...</span>
+      <div className="flex h-screen w-screen items-center justify-center bg-background font-sans relative overflow-hidden">
+        {/* Glow backgrounds */}
+        <div className="absolute top-0 left-0 w-96 h-96 bg-primary/10 dark:bg-primary/5 rounded-full blur-3xl -ml-48 -mt-48 pointer-events-none" />
+        <div className="absolute bottom-0 right-0 w-96 h-96 bg-blue-500/10 dark:bg-blue-500/5 rounded-full blur-3xl -mr-48 -mb-48 pointer-events-none" />
+        
+        <div className="flex flex-col items-center justify-center space-y-6 z-10">
+          <div className="relative h-16 w-16 bg-card border border-border rounded-2xl p-2.5 flex items-center justify-center shadow-xl overflow-hidden animate-pulse">
+            <Image src="/logo-icon.png" alt="TechSonance Logo" width={48} height={48} className="object-contain" />
+          </div>
+          
+          <div className="flex flex-col items-center space-y-2">
+            <div className="flex items-center gap-2">
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              <span className="text-sm font-bold text-foreground tracking-wide uppercase">Securing Session</span>
+            </div>
+            <p className="text-xs text-muted-foreground font-medium">Please wait while we verify your workspace credentials...</p>
+          </div>
         </div>
       </div>
     );
@@ -210,13 +224,29 @@ export default function LoginPage() {
   return (
     <div className="flex h-screen bg-background overflow-hidden font-sans">
       {/* Left Column: Visuals & Branding */}
-      <div className="hidden lg:block lg:w-1/2 relative h-full overflow-hidden">
+      <div className="hidden lg:block lg:w-1/2 relative h-full overflow-hidden bg-slate-900">
+        {imageLoading && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 z-10 animate-pulse">
+            <div className="relative flex items-center justify-center">
+              {/* Outer pulsing ring */}
+              <div className="absolute w-24 h-24 border border-[#F87941]/30 rounded-full animate-ping duration-1000" />
+              {/* Inner spinner */}
+              <div className="w-16 h-16 border-2 border-t-transparent border-[#F87941] rounded-full animate-spin" />
+              {/* Center icon */}
+              <div className="absolute text-2xl">🖼️</div>
+            </div>
+            <p className="mt-4 text-xs font-semibold text-slate-400 tracking-wider uppercase animate-bounce">
+              Loading workspace visuals...
+            </p>
+          </div>
+        )}
         <Image
           src="/login-left-banner.jpg"
           alt="CMS Portal Banner"
           fill
           className="object-cover"
           priority
+          onLoad={() => setImageLoading(false)}
         />
       </div>
 

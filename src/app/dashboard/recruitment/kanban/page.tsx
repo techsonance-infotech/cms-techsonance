@@ -59,6 +59,26 @@ export default function CandidateKanbanPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const fileNameLower = file.name.toLowerCase();
+    const mimeType = file.type;
+    
+    const isImage = mimeType === 'image/jpeg' || mimeType === 'image/png' || mimeType === 'image/jpg' || 
+                    fileNameLower.endsWith('.jpg') || fileNameLower.endsWith('.jpeg') || fileNameLower.endsWith('.png');
+                    
+    const isPdf = mimeType === 'application/pdf' || fileNameLower.endsWith('.pdf');
+    const isDocx = mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || fileNameLower.endsWith('.docx');
+    
+    if (!isImage && !isPdf && !isDocx) {
+      toast.error('Only PDF, DOCX, and images (JPG, JPEG, PNG) are accepted.');
+      return;
+    }
+    
+    const fileLimit = isImage ? 1 * 1024 * 1024 : 2 * 1024 * 1024;
+    if (file.size > fileLimit) {
+      toast.error(`File size exceeds the limit of ${isImage ? '1 MB' : '2 MB'}`);
+      return;
+    }
+
     setParsing(true);
     setDuplicateWarning(null);
 
@@ -483,7 +503,7 @@ export default function CandidateKanbanPage() {
                 <input 
                   id="resume-ocr-file"
                   type="file"
-                  accept=".pdf,.docx,.txt"
+                  accept=".pdf,.docx,.png,.jpg,.jpeg"
                   className="hidden"
                   onChange={handleResumeUpload}
                   disabled={parsing || submitting}

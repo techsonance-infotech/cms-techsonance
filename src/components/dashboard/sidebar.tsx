@@ -143,7 +143,9 @@ const categories: NavCategory[] = [
       { name: 'My Performance', href: '/dashboard/employees/reviews', icon: BarChart3, roles: ['developer', 'employee', 'intern'] },
       { name: 'My Requests', href: '/dashboard/employees/requests', icon: MessageSquare, roles: ['developer', 'employee', 'intern'] },
       { name: 'My Approvals', href: '/dashboard/employees/requests', icon: ShieldCheck, roles: ['developer', 'employee', 'intern'] },
-      { name: 'My Team', href: '/dashboard/employees/directory', icon: Users, roles: ['developer', 'employee', 'intern'] }
+      { name: 'My Team', href: '/dashboard/employees/directory', icon: Users, roles: ['developer', 'employee', 'intern'] },
+      { name: 'Holiday Calendar', href: '/dashboard/employees/holidays', icon: Calendar, roles: ['developer', 'employee', 'intern'] },
+      { name: 'Knowledge Base', href: '/dashboard/knowledge-base', icon: BookOpen, roles: ['developer', 'employee', 'intern'] }
     ]
   },
   {
@@ -167,26 +169,26 @@ const categories: NavCategory[] = [
     icon: Users,
     items: [
       { name: 'Workforce Overview', href: '/dashboard/employees', icon: BarChart3, roles: ['admin', 'project_manager', 'hr_manager'] },
-      { name: 'Employee Directory', href: '/dashboard/employees/directory', icon: Contact, roles: ['admin', 'project_manager', 'hr_manager', 'developer', 'employee', 'intern'] },
+      { name: 'Employee Directory', href: '/dashboard/employees/directory', icon: Contact, roles: ['admin', 'project_manager', 'hr_manager'] },
       { name: 'Add Employee', href: '/dashboard/employees/new', icon: UserPlus, roles: ['admin', 'hr_manager'] },
       { name: 'Onboarding Center', href: '/dashboard/employees/onboarding', icon: ListTodo, roles: ['admin', 'hr_manager'] },
       { name: 'Offboarding Center', href: '/dashboard/employees/offboarding', icon: Trash2, roles: ['admin', 'hr_manager'] },
-      { name: 'Org Chart', href: '/dashboard/employees/org-chart', icon: Network, roles: ['admin', 'project_manager', 'developer', 'hr_manager', 'accountant', 'business_development', 'employee', 'intern'] },
+      { name: 'Org Chart', href: '/dashboard/employees/org-chart', icon: Network, roles: ['admin', 'project_manager', 'hr_manager'] },
       { name: 'Employee Movement', href: '/dashboard/employees/movement', icon: ArrowRightLeft, roles: ['admin', 'project_manager', 'hr_manager'] },
       { name: 'Reviews & Appraisals', href: '/dashboard/employees/reviews', icon: Star, roles: ['admin', 'project_manager', 'hr_manager'] },
-      { name: 'Bulk Import', href: '/dashboard/employees/import', icon: Upload, roles: ['admin', 'hr_manager'] },
+      { name: 'Bulk Import', href: '/dashboard/employees/import', icon: Upload, roles: ['admin', 'hr_manager'] }
     ]
   },
   {
     name: 'Time & Attendance',
     icon: Clock,
     items: [
-      { name: 'Attendance Register', href: '/dashboard/attendance', icon: Clock, roles: ['admin', 'project_manager', 'developer', 'hr_manager', 'client', 'employee', 'intern'] },
+      { name: 'Attendance Register', href: '/dashboard/attendance', icon: Clock, roles: ['admin', 'project_manager', 'hr_manager'] },
       { name: 'Shift Management', href: '/dashboard/employees/shifts', icon: Clock, roles: ['admin', 'hr_manager', 'project_manager'] },
-      { name: 'Timesheet Operations', href: '/dashboard/employees/timesheets', icon: Clock, roles: ['admin', 'project_manager', 'developer', 'hr_manager', 'employee', 'intern'] },
-      { name: 'Leaves & Time Off', href: '/dashboard/leaves', icon: Calendar, roles: ['admin', 'project_manager', 'developer', 'hr_manager', 'client', 'employee', 'intern'] },
-      { name: 'Work From Home', href: '/dashboard/employees/wfh', icon: Home, roles: ['admin', 'hr_manager', 'project_manager', 'developer', 'employee', 'intern'] },
-      { name: 'Holiday Calendar', href: '/dashboard/employees/holidays', icon: Calendar, roles: ['admin', 'hr_manager', 'project_manager', 'developer', 'client', 'employee', 'intern'] },
+      { name: 'Timesheet Operations', href: '/dashboard/employees/timesheets', icon: Clock, roles: ['admin', 'project_manager', 'hr_manager'] },
+      { name: 'Leaves & Time Off', href: '/dashboard/leaves', icon: Calendar, roles: ['admin', 'project_manager', 'hr_manager'] },
+      { name: 'Work From Home', href: '/dashboard/employees/wfh', icon: Home, roles: ['admin', 'hr_manager', 'project_manager'] },
+      { name: 'Holiday Calendar', href: '/dashboard/employees/holidays', icon: Calendar, roles: ['admin', 'hr_manager', 'project_manager'] }
     ]
   },
   {
@@ -194,16 +196,16 @@ const categories: NavCategory[] = [
     icon: BadgeCheck,
     items: [
       { name: 'Operations Dashboard', href: '/dashboard/hr-operations', icon: BarChart3, roles: ['admin', 'hr_manager'] },
-      { name: 'HR Service Desk', href: '/dashboard/hr-service-desk', icon: HelpCircle, roles: ['admin', 'hr_manager', 'project_manager', 'developer', 'client', 'employee', 'intern'] },
-      { name: 'Request Center', href: '/dashboard/employees/requests', icon: MessageSquare, roles: ['admin', 'hr_manager', 'project_manager', 'developer', 'client', 'employee', 'intern'] },
+      { name: 'HR Service Desk', href: '/dashboard/hr-service-desk', icon: HelpCircle, roles: ['admin', 'hr_manager', 'project_manager'] },
+      { name: 'Request Center', href: '/dashboard/employees/requests', icon: MessageSquare, roles: ['admin', 'hr_manager', 'project_manager'] },
       { name: 'Broadcast Hub', href: '/dashboard/employees/broadcast', icon: Inbox, roles: ['admin', 'hr_manager'] },
       { name: 'Document Vault', href: '/dashboard/employees/documents', icon: FileText, roles: ['admin', 'hr_manager'] },
       { name: 'Asset Tracker', href: '/dashboard/employees/assets', icon: Laptop, roles: ['admin', 'hr_manager'] },
-      { name: 'Training & Skills', href: '/dashboard/employees/training', icon: GraduationCap, roles: ['admin', 'hr_manager', 'developer', 'employee', 'intern'] },
-      { name: 'Wellness Operations', href: '/dashboard/employees/wellness', icon: HeartHandshake, roles: ['admin', 'hr_manager', 'project_manager', 'developer', 'client', 'employee', 'intern'] },
+      { name: 'Training & Skills', href: '/dashboard/employees/training', icon: GraduationCap, roles: ['admin', 'hr_manager', 'project_manager'] },
+      { name: 'Wellness Operations', href: '/dashboard/employees/wellness', icon: HeartHandshake, roles: ['admin', 'hr_manager', 'project_manager'] },
       { name: 'Recruitment & ATS', href: '/dashboard/recruitment', icon: Briefcase, roles: ['admin', 'hr_manager', 'project_manager'] },
-      { name: 'Knowledge Base & SOPs', href: '/dashboard/knowledge-base', icon: BookOpen, roles: ['admin', 'hr_manager', 'project_manager', 'developer', 'employee', 'intern'] },
-      { name: 'Visitor Passes', href: '/dashboard/visitors', icon: QrCode, roles: ['admin', 'hr_manager', 'project_manager'] },
+      { name: 'Knowledge Base & SOPs', href: '/dashboard/knowledge-base', icon: BookOpen, roles: ['admin', 'hr_manager', 'project_manager'] },
+      { name: 'Visitor Passes', href: '/dashboard/visitors', icon: QrCode, roles: ['admin', 'hr_manager', 'project_manager'] }
     ]
   },
   {
@@ -213,35 +215,35 @@ const categories: NavCategory[] = [
       { name: 'Active Projects', href: '/dashboard/projects', icon: FolderKanban, roles: ['admin', 'project_manager', 'developer', 'employee', 'intern'] },
       { name: 'Task Board', href: '/dashboard/tasks', icon: Kanban, roles: ['admin', 'project_manager', 'developer', 'employee', 'intern'] },
       { name: 'Sprint Planner', href: '/dashboard/tasks/sprint-planning', icon: Kanban, roles: ['admin', 'project_manager', 'developer', 'employee', 'intern'] },
-      { name: 'Resource & PSA Planner', href: '/dashboard/employees/resource-allocation', icon: ClipboardList, roles: ['admin', 'project_manager', 'hr_manager', 'developer', 'employee', 'intern'] },
+      { name: 'Resource & PSA Planner', href: '/dashboard/employees/resource-allocation', icon: ClipboardList, roles: ['admin', 'project_manager', 'hr_manager'] }
     ]
   },
   {
     name: 'Finance & Claims',
     icon: IndianRupee,
     items: [
-      { name: 'Finance Control', href: '/dashboard/finance', icon: IndianRupee, roles: ['admin', 'accountant', 'project_manager', 'developer', 'hr_manager', 'employee'] },
-      { name: 'Financial Executive', href: '/dashboard/finance/executive', icon: IndianRupee, roles: ['admin', 'accountant', 'project_manager', 'developer', 'hr_manager', 'employee'] },
+      { name: 'Finance Control', href: '/dashboard/finance', icon: IndianRupee, roles: ['admin', 'accountant', 'hr_manager'] },
+      { name: 'Financial Executive', href: '/dashboard/finance/executive', icon: IndianRupee, roles: ['admin', 'accountant', 'hr_manager'] },
       { name: 'Invoices & Billing', href: '/dashboard/finance/invoices', icon: Receipt, roles: ['admin', 'accountant', 'project_manager'] },
-      { name: 'Reimbursements', href: '/dashboard/reimbursements', icon: Receipt, roles: ['admin', 'project_manager', 'developer', 'hr_manager', 'accountant', 'employee', 'intern'] },
+      { name: 'Reimbursements', href: '/dashboard/reimbursements', icon: Receipt, roles: ['admin', 'project_manager', 'hr_manager', 'accountant'] },
       { name: 'Payroll & Salary', href: '/dashboard/payroll', icon: Wallet, roles: ['admin', 'accountant', 'hr_manager'] },
       { name: 'Project Financials', href: '/dashboard/projects/financials', icon: IndianRupee, roles: ['admin', 'project_manager', 'accountant'] },
-      { name: 'Travel Management', href: '/dashboard/travel', icon: Plane, roles: ['admin', 'accountant', 'project_manager', 'developer', 'hr_manager', 'employee', 'intern'] },
+      { name: 'Travel Management', href: '/dashboard/travel', icon: Plane, roles: ['admin', 'accountant', 'hr_manager', 'project_manager'] },
       { name: 'Procurement & Purchase', href: '/dashboard/procurement', icon: ShoppingCart, roles: ['admin', 'accountant', 'hr_manager', 'project_manager'] },
-      { name: 'Vendor Directory', href: '/dashboard/procurement/vendors', icon: Users, roles: ['admin', 'accountant', 'hr_manager', 'project_manager'] },
+      { name: 'Vendor Directory', href: '/dashboard/procurement/vendors', icon: Users, roles: ['admin', 'accountant', 'hr_manager', 'project_manager'] }
     ]
   },
   {
     name: 'CRM & Pipelines',
     icon: Inbox,
     items: [
-      { name: 'CRM Dashboard', href: '/dashboard/crm', icon: BarChart3, roles: ['admin', 'project_manager', 'business_development', 'developer', 'employee'] },
+      { name: 'CRM Dashboard', href: '/dashboard/crm', icon: BarChart3, roles: ['admin', 'project_manager', 'business_development'] },
       { name: 'Client Directory', href: '/dashboard/clients', icon: Users, roles: ['admin', 'project_manager', 'business_development'] },
-      { name: 'CRM Inbox', href: '/dashboard/inbox', icon: Inbox, roles: ['admin', 'project_manager', 'developer', 'client', 'business_development', 'employee', 'intern'] },
+      { name: 'CRM Inbox', href: '/dashboard/inbox', icon: Inbox, roles: ['admin', 'project_manager', 'business_development'] },
       { name: 'AI Email Composer', href: '/dashboard/inbox/composer', icon: PenTool, roles: ['admin', 'project_manager', 'business_development'] },
       { name: 'Opportunity Forecast', href: '/dashboard/inquiry/forecast', icon: TrendingUp, roles: ['admin', 'project_manager', 'business_development'] },
-      { name: 'Inquiry Board', href: '/dashboard/inquiry', icon: Search, roles: ['admin', 'project_manager', 'business_development', 'developer', 'hr_manager', 'accountant', 'client', 'employee', 'intern'] },
-      { name: 'Content Manager', href: '/dashboard/content', icon: FileText, roles: ['admin'] },
+      { name: 'Inquiry Board', href: '/dashboard/inquiry', icon: Search, roles: ['admin', 'project_manager', 'business_development'] },
+      { name: 'Content Manager', href: '/dashboard/content', icon: FileText, roles: ['admin'] }
     ]
   },
   {
@@ -249,7 +251,7 @@ const categories: NavCategory[] = [
     icon: TrendingUp,
     isSingleton: true,
     href: '/dashboard/analytics',
-    roles: ['admin', 'hr_manager', 'project_manager', 'developer', 'client', 'employee', 'intern'],
+    roles: ['admin', 'hr_manager', 'project_manager', 'accountant'],
     items: []
   },
   {
@@ -287,12 +289,12 @@ const categories: NavCategory[] = [
     name: 'System & Audit',
     icon: Settings,
     items: [
-      { name: 'HR Automation Engine', href: '/dashboard/hr-automation', icon: Cpu, roles: ['admin', 'hr_manager', 'project_manager', 'developer', 'client'] },
-      { name: 'Compliance Operations', href: '/dashboard/employees/compliance', icon: ShieldCheck, roles: ['admin', 'hr_manager', 'project_manager', 'developer', 'client', 'employee', 'intern'] },
-      { name: 'Contract Management', href: '/dashboard/contracts', icon: FileText, roles: ['admin', 'hr_manager', 'project_manager', 'developer', 'employee', 'intern'] },
-      { name: 'Notification Center', href: '/dashboard/notifications', icon: Bell, roles: ['admin', 'hr_manager', 'project_manager', 'developer', 'employee', 'intern'] },
+      { name: 'HR Automation Engine', href: '/dashboard/hr-automation', icon: Cpu, roles: ['admin', 'hr_manager'] },
+      { name: 'Compliance Operations', href: '/dashboard/employees/compliance', icon: ShieldCheck, roles: ['admin', 'hr_manager'] },
+      { name: 'Contract Management', href: '/dashboard/contracts', icon: FileText, roles: ['admin', 'hr_manager'] },
+      { name: 'Notification Center', href: '/dashboard/notifications', icon: Bell, roles: ['admin', 'hr_manager'] },
       { name: 'Audit Logs', href: '/dashboard/employees/audit-logs', icon: ScrollText, roles: ['admin'] },
-      { name: 'Business Settings', href: '/dashboard/settings', icon: Settings, roles: ['admin'] },
+      { name: 'Business Settings', href: '/dashboard/settings', icon: Settings, roles: ['admin'] }
     ]
   }
 ];

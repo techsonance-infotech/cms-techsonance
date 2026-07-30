@@ -354,10 +354,17 @@ export const POST = withApiHandler(async (request, context) => {
 }, { requireAuth: true, roles: ['Manager'] });
 
 export const PUT = withApiHandler(async (request, context) => {
-  const id = Number(new URL(request.url).searchParams.get('id'));
+  const url = new URL(request.url);
+  let id = Number(url.searchParams.get('id'));
+
+  const body = await request.json();
+  if (!id || isNaN(id) || id <= 0) {
+    id = Number(body.id);
+  }
+
   if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('Valid employee id is required');
 
-  const payload = updateEmployeeSchema.parse(await request.json());
+  const payload = updateEmployeeSchema.parse(body);
 
   const accessToken = context.auth?.accessToken;
   const tenantId = context.auth?.user.tenantId;

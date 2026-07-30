@@ -11,9 +11,9 @@ export const metadata: Metadata = {
   title: "TechSonance InfoTech CMS",
   description: "Operations Hub for TechSonance InfoTech",
   icons: {
-    icon: '/favicon.ico',
-    shortcut: '/favicon.ico',
-    apple: '/favicon.ico',
+    icon: '/logo-icon.png',
+    shortcut: '/logo-icon.png',
+    apple: '/logo-icon.png',
   },
 };
 

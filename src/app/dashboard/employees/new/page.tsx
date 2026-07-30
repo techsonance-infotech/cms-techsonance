@@ -443,17 +443,23 @@ export default function NewEmployeePage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // 1. Validate File Type
-    const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'application/pdf'];
-    if (!validTypes.includes(file.type)) {
-      toast.error('Invalid file type. Only PNG, JPG, JPEG, and PDF files are allowed.');
+    const fileNameLower = file.name.toLowerCase();
+    const mimeType = file.type;
+    
+    const isImage = mimeType === 'image/jpeg' || mimeType === 'image/png' || mimeType === 'image/jpg' || 
+                    fileNameLower.endsWith('.jpg') || fileNameLower.endsWith('.jpeg') || fileNameLower.endsWith('.png');
+                    
+    const isPdf = mimeType === 'application/pdf' || fileNameLower.endsWith('.pdf');
+    const isDocx = mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || fileNameLower.endsWith('.docx');
+    
+    if (!isImage && !isPdf && !isDocx) {
+      toast.error('Only PDF, DOCX, and images (JPG, JPEG, PNG) are accepted.');
       return;
     }
-
-    // 2. Validate File Size (max 1 MB)
-    const maxSizeBytes = 1 * 1024 * 1024;
-    if (file.size > maxSizeBytes) {
-      toast.error('File size exceeds the 1 MB limit.');
+    
+    const fileLimit = isImage ? 1 * 1024 * 1024 : 2 * 1024 * 1024;
+    if (file.size > fileLimit) {
+      toast.error(`File size exceeds the limit of ${isImage ? '1 MB' : '2 MB'}`);
       return;
     }
 

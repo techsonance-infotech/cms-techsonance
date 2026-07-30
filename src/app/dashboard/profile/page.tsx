@@ -33,6 +33,7 @@ import { ProfileSkeleton } from '@/components/ui/dashboard-skeleton';
 import { Label } from '@/components/ui/label';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { PageHeader } from '@/components/ui/page-header';
+import { FileUploader } from '@/components/ui/file-uploader';
 import { toast } from 'sonner';
 
 interface EmployeeProfile {
@@ -78,8 +79,6 @@ export default function ProfilePage() {
   const [employee, setEmployee] = useState<EmployeeProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const getAvatarUrl = (url: string | null) => {
     if (!url) return '';
@@ -170,90 +169,7 @@ export default function ProfilePage() {
     }
   };
 
-  const handleAvatarClick = () => {
-    fileInputRef.current?.click();
-  };
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    // 1. Validate File Format (PNG, JPG, JPEG)
-    const validTypes = ['image/png', 'image/jpeg', 'image/jpg'];
-    if (!validTypes.includes(file.type)) {
-      toast.error('Invalid format! Please upload a PNG, JPG, or JPEG file.');
-      return;
-    }
-
-    // 2. Validate File Size (Maximum 500 KB)
-    const maxSizeBytes = 500 * 1024;
-    if (file.size > maxSizeBytes) {
-      toast.error(`File size exceeds limit! Maximum size allowed is 500 KB. (Your file is ${Math.round(file.size / 1024)} KB)`);
-      return;
-    }
-
-    // 3. Initiate Upload to Supabase Storage
-    setUploading(true);
-    const token = localStorage.getItem('session_token');
-    const toastId = toast.loading('Uploading your new profile picture...');
-
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('kind', 'avatar');
-
-      const headers: Record<string, string> = {};
-      if (token && token !== 'null' && token !== 'undefined') {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-
-      // POST to our unified file uploader
-      const uploadRes = await fetch('/api/upload', {
-        method: 'POST',
-        headers,
-        body: formData,
-      });
-
-      if (!uploadRes.ok) {
-        const errData = await uploadRes.json();
-        throw new Error(errData.error || 'Failed to upload profile picture file');
-      }
-
-      const uploadResult = await uploadRes.json();
-      const storageUrl = uploadResult.url || uploadResult.data?.url;
-
-      if (!storageUrl) {
-        throw new Error('Upload response did not return a valid file storage path');
-      }
-
-      // 4. Update the avatar URL inside the user's registry database record
-      const updateRes = await fetch('/api/auth/me', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ avatarUrl: storageUrl }),
-      });
-
-      if (!updateRes.ok) {
-        const errData = await updateRes.json();
-        throw new Error(errData.error || 'Failed to save updated avatar reference to your profile');
-      }
-
-      // 5. Update local state dynamically to show the new picture instantly
-      setEmployee((prev) => prev ? { ...prev, avatarUrl: storageUrl } : null);
-      
-      toast.success('Profile picture updated successfully!', { id: toastId });
-    } catch (uploadError) {
-      console.error('Profile image upload failed:', uploadError);
-      toast.error(uploadError instanceof Error ? uploadError.message : 'Failed to update profile picture', { id: toastId });
-    } finally {
-      setUploading(false);
-      // Reset input value to allow uploading the same file name if desired
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
 
   if (loading) {
     return <ProfileSkeleton />;
@@ -320,73 +236,74 @@ export default function ProfilePage() {
               </div>
             </CardHeader>
             <CardContent className="flex flex-col items-center text-center pb-6">
-              {/* Dynamic Avatar with Hover Upload Effect */}
-              <div className="relative group mb-4">
-                <div 
-                  onClick={handleAvatarClick}
-                  className="flex h-24 w-24 items-center justify-center rounded-full bg-primary/10 text-primary border-2 border-primary/20 text-3xl font-bold font-display shadow-md cursor-pointer overflow-hidden relative transition-all duration-300 hover:ring-4 hover:ring-primary/20"
-                >
+              <div className="relative">
+                <div className="h-24 w-24 rounded-full overflow-hidden border-2 border-primary bg-primary/10 flex items-center justify-center text-primary-foreground text-2xl font-bold font-mono">
                   {employee.avatarUrl ? (
                     <img 
                       src={getAvatarUrl(employee.avatarUrl)} 
                       alt={`${employee.firstName}'s Avatar`}
                       className="h-full w-full object-cover" 
                       onError={(e) => {
-                        // Fallback if image fails to load
                         (e.target as HTMLImageElement).style.display = 'none';
                       }}
                     />
                   ) : (
                     <span>{getInitials()}</span>
                   )}
-                  
-                  {/* Upload Overlay */}
-                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white transition-opacity duration-300">
-                    {uploading ? (
-                      <Loader2 className="h-5 w-5 animate-spin text-white" />
-                    ) : (
-                      <>
-                        <Camera className="h-5 w-5 text-white mb-1" />
-                        <span className="text-[9px] font-semibold uppercase tracking-wider text-white">Upload</span>
-                      </>
-                    )}
-                  </div>
                 </div>
-                
-                {/* Micro spinner if uploading */}
-                {uploading && (
-                  <span className="absolute -bottom-1 -right-1 p-1 bg-primary text-primary-foreground rounded-full border border-background shadow-md">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  </span>
-                )}
               </div>
 
-              {/* Hidden File Input */}
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                onChange={handleFileChange} 
-                accept="image/png, image/jpeg, image/jpg" 
-                className="hidden" 
-                disabled={uploading}
-              />
-
-              <h3 className="text-lg font-bold text-foreground">{employee.firstName} {employee.lastName}</h3>
+              <h3 className="text-lg font-bold text-foreground mt-3">{employee.firstName} {employee.lastName}</h3>
               <p className="text-xs text-muted-foreground font-medium capitalize mt-1">{employee.position}</p>
               <p className="text-[10px] text-primary/80 font-mono mt-0.5">{employee.department} Dept.</p>
 
-              <div className="mt-4 flex flex-col gap-2 w-full">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={handleAvatarClick} 
-                  disabled={uploading}
-                  className="rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 h-8 hover:bg-primary/5 hover:text-primary transition-colors border-dashed"
-                >
-                  <UploadCloud className="h-3.5 w-3.5" />
-                  {employee.avatarUrl ? 'Change Profile Picture' : 'Upload Profile Picture'}
-                </Button>
-                <p className="text-[9px] text-muted-foreground">Supports PNG, JPG (Max 500 KB)</p>
+              <div className="mt-4 w-full text-left">
+                <FileUploader
+                  kind="avatar"
+                  moduleName="profile"
+                  entityType="employee"
+                  entityId={employee.id.toString()}
+                  accessLevel="public"
+                  enableCrop={true}
+                  value={employee.avatarUrl || ''}
+                  onChange={async (newUrl) => {
+                    if (!newUrl) {
+                      const token = localStorage.getItem('session_token');
+                      const updateRes = await fetch('/api/auth/me', {
+                        method: 'PUT',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Authorization': `Bearer ${token}`,
+                        },
+                        body: JSON.stringify({ avatarUrl: null }),
+                      });
+                      if (updateRes.ok) {
+                        setEmployee((prev) => prev ? { ...prev, avatarUrl: null } : null);
+                        toast.success('Profile picture removed successfully');
+                      }
+                      return;
+                    }
+                    
+                    const token = localStorage.getItem('session_token');
+                    const updateRes = await fetch('/api/auth/me', {
+                      method: 'PUT',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                      },
+                      body: JSON.stringify({ avatarUrl: newUrl }),
+                    });
+
+                    if (!updateRes.ok) {
+                      const errData = await updateRes.json();
+                      toast.error(errData.error || 'Failed to save updated avatar reference');
+                      return;
+                    }
+
+                    setEmployee((prev) => prev ? { ...prev, avatarUrl: newUrl } : null);
+                    toast.success('Profile picture updated successfully!');
+                  }}
+                />
               </div>
 
               <span className="w-full h-px bg-muted my-5" />
