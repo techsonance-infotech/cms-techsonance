@@ -133,6 +133,45 @@ export function AppRuntimeProvider({ children }: Props) {
     }
 
     window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      // Direct bypass for upload API to prevent multipart boundary stripping
+      const targetUrl = typeof input === 'string' 
+        ? input 
+        : (input instanceof URL ? input.toString() : input.url);
+      
+      if (targetUrl.includes('/api/upload')) {
+        const token = getStoredSessionToken();
+        const nextInit = { ...init };
+        const headersObj: Record<string, string> = {};
+        
+        if (init?.headers) {
+          if (init.headers instanceof Headers) {
+            init.headers.forEach((val, key) => {
+              headersObj[key] = val;
+            });
+          } else if (Array.isArray(init.headers)) {
+            init.headers.forEach(([key, val]) => {
+              headersObj[key] = val;
+            });
+          } else {
+            Object.assign(headersObj, init.headers);
+          }
+        }
+        
+        // Remove any existing content-type headers so the browser generates the boundary
+        for (const key of Object.keys(headersObj)) {
+          if (key.toLowerCase() === 'content-type') {
+            delete headersObj[key];
+          }
+        }
+        
+        if (token && !headersObj['Authorization'] && !headersObj['authorization']) {
+          headersObj['Authorization'] = `Bearer ${token}`;
+        }
+        
+        nextInit.headers = headersObj;
+        return originalFetch(input, nextInit);
+      }
+
       const request = input instanceof Request ? input : new Request(input, init);
       const url = new URL(request.url, window.location.origin);
       const nextHeaders = new Headers(request.headers);

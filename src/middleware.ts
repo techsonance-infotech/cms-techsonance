@@ -82,7 +82,7 @@ function applyRateLimit(request: NextRequest) {
 
 export async function middleware(request: NextRequest) {
   // ABSOLUTE BYPASS for file uploads to prevent multipart boundary stripping
-  if (request.nextUrl.pathname === '/api/upload') {
+  if (request.nextUrl.pathname.startsWith('/api/upload')) {
     return NextResponse.next();
   }
 

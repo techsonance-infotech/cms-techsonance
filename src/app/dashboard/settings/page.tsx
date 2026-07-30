@@ -2496,23 +2496,32 @@ export default function SettingsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Strict 1MB size limit (1MB = 1 * 1024 * 1024 bytes)
-    if (file.size > 1 * 1024 * 1024) {
-      toast.error('File size exceeds the 1MB limit. Please upload a smaller file.');
-      return;
-    }
+    const isImage = ['image/png', 'image/jpeg', 'image/jpg'].includes(file.type) || 
+                    file.name.toLowerCase().endsWith('.png') || 
+                    file.name.toLowerCase().endsWith('.jpg') || 
+                    file.name.toLowerCase().endsWith('.jpeg');
 
-    // Type validation
+    const isDoc = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'].includes(file.type) ||
+                  file.name.toLowerCase().endsWith('.pdf') ||
+                  file.name.toLowerCase().endsWith('.docx');
+
     if (targetField === 'logoUrl' || targetField === 'faviconUrl') {
-      // Allow only PNG and JPG/JPEG for logos
-      if (!['image/png', 'image/jpeg', 'image/jpg'].includes(file.type)) {
-        toast.error('Invalid image type. Only PNG and JPG are allowed for branding logos.');
+      if (!isImage) {
+        toast.error('Invalid image type. Only PNG and JPG/JPEG are allowed for branding logos.');
+        return;
+      }
+      if (file.size > 1 * 1024 * 1024) {
+        toast.error('File size exceeds the 1MB limit for images.');
         return;
       }
     } else {
-      // Allow PNG, JPG, and PDF for documents
-      if (!['image/png', 'image/jpeg', 'image/jpg', 'application/pdf'].includes(file.type)) {
-        toast.error('Invalid file type. Only PNG, JPG, and PDF are allowed for corporate documents.');
+      if (!isImage && !isDoc) {
+        toast.error('Invalid file type. Only PDF, DOCX, and images (PNG, JPG) are allowed for corporate documents.');
+        return;
+      }
+      const limit = isImage ? 1 * 1024 * 1024 : 2 * 1024 * 1024;
+      if (file.size > limit) {
+        toast.error(`File size exceeds the limit of ${isImage ? '1MB' : '2MB'}.`);
         return;
       }
     }
@@ -2599,15 +2608,23 @@ export default function SettingsPage() {
       return;
     }
 
-    // 1MB size limit
-    if (docUploadFile.size > 1 * 1024 * 1024) {
-      toast.error('File size exceeds the 1MB limit. Please upload a smaller file.');
+    const fileNameLower = docUploadFile.name.toLowerCase();
+    const mimeType = docUploadFile.type;
+    
+    const isImage = mimeType === 'image/jpeg' || mimeType === 'image/png' || mimeType === 'image/jpg' || 
+                    fileNameLower.endsWith('.jpg') || fileNameLower.endsWith('.jpeg') || fileNameLower.endsWith('.png');
+                    
+    const isPdf = mimeType === 'application/pdf' || fileNameLower.endsWith('.pdf');
+    const isDocx = mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || fileNameLower.endsWith('.docx');
+    
+    if (!isImage && !isPdf && !isDocx) {
+      toast.error('Only PDF, DOCX, and images (JPG, JPEG, PNG) are accepted.');
       return;
     }
-
-    // Type validation
-    if (!['image/png', 'image/jpeg', 'image/jpg', 'application/pdf'].includes(docUploadFile.type)) {
-      toast.error('Invalid file type. Only PNG, JPG, and PDF are allowed.');
+    
+    const fileLimit = isImage ? 1 * 1024 * 1024 : 2 * 1024 * 1024;
+    if (docUploadFile.size > fileLimit) {
+      toast.error(`File size exceeds the limit of ${isImage ? '1 MB' : '2 MB'}`);
       return;
     }
 
@@ -7705,20 +7722,34 @@ export default function SettingsPage() {
                           >
                             <FileText className="h-8 w-8 mx-auto mb-2 text-muted-foreground/45" />
                             <span className="text-xs font-bold text-foreground block">Select file from system</span>
-                            <span className="text-[10px] text-muted-foreground mt-1 block">PDF, PNG, or JPG (Max 1MB)</span>
+                            <span className="text-[10px] text-muted-foreground mt-1 block">PDF, DOCX, PNG, or JPG (Images: Max 1MB, Docs: Max 2MB)</span>
                             <input 
                               type="file" 
                               id="vault-file-picker" 
                               className="hidden" 
-                              accept="application/pdf, image/png, image/jpeg"
+                              accept="application/pdf, application/vnd.openxmlformats-officedocument.wordprocessingml.document, image/png, image/jpeg"
                               onChange={e => {
                                 const file = e.target.files?.[0];
                                 if (file) {
-                                  if (file.size > 1 * 1024 * 1024) {
-                                    toast.error('File size exceeds the 1MB limit. Please upload a smaller file.');
-                                  } else {
-                                    setDocUploadFile(file);
+                                  const fileNameLower = file.name.toLowerCase();
+                                  const mimeType = file.type;
+                                  const isImage = mimeType === 'image/jpeg' || mimeType === 'image/png' || mimeType === 'image/jpg' || 
+                                                  fileNameLower.endsWith('.jpg') || fileNameLower.endsWith('.jpeg') || fileNameLower.endsWith('.png');
+                                  const isPdf = mimeType === 'application/pdf' || fileNameLower.endsWith('.pdf');
+                                  const isDocx = mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || fileNameLower.endsWith('.docx');
+                                  
+                                  if (!isImage && !isPdf && !isDocx) {
+                                    toast.error('Only PDF, DOCX, and images (JPG, JPEG, PNG) are accepted.');
+                                    e.target.value = '';
+                                    return;
                                   }
+                                  const fileLimit = isImage ? 1 * 1024 * 1024 : 2 * 1024 * 1024;
+                                  if (file.size > fileLimit) {
+                                    toast.error(`File size exceeds the limit of ${isImage ? '1 MB' : '2 MB'}`);
+                                    e.target.value = '';
+                                    return;
+                                  }
+                                  setDocUploadFile(file);
                                 }
                               }}
                             />

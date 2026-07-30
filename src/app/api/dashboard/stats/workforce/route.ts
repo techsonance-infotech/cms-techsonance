@@ -6,22 +6,7 @@ import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
 export const dynamic = 'force-dynamic';
 
 export const GET = withApiHandler(async (request, context) => {
-  const fs = require('fs');
-  const path = require('path');
-  const logPath = path.join(process.cwd(), 'api_error_log.json');
-
   try {
-    fs.writeFileSync(logPath, JSON.stringify({
-      timestamp: new Date().toISOString(),
-      auth: context.auth ? {
-        userId: context.auth.user.id,
-        email: context.auth.user.email,
-        role: context.auth.user.role,
-        tenantId: context.auth.user.tenantId,
-      } : null,
-      headers: Object.fromEntries(request.headers.entries()),
-    }, null, 2));
-
     const tenantId = context.auth?.user.tenantId;
     if (!tenantId) throw new BadRequestError('Tenant info required');
 
@@ -34,7 +19,7 @@ export const GET = withApiHandler(async (request, context) => {
       .eq('tenant_id', tenantId)
       .is('deleted_at', null);
 
-    if (error) throw new Error(error.message);
+    if (error) throw new BadRequestError(error.message);
 
 
     const searchParams = new URL(request.url).searchParams;
@@ -324,11 +309,7 @@ export const GET = withApiHandler(async (request, context) => {
       message: 'Workforce stats fetched successfully',
     });
   } catch (err: any) {
-    fs.writeFileSync(logPath, JSON.stringify({
-      timestamp: new Date().toISOString(),
-      error: err?.message || String(err),
-      stack: err?.stack,
-    }, null, 2));
+    console.error('Workforce stats API error:', err);
     throw err;
   }
 }, { requireAuth: true, roles: ['Employee'] });

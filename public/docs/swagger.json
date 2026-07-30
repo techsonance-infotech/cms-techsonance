@@ -5951,6 +5951,54 @@
         }
       }
     },
+    "/api/upload/{id}": {
+      "get": {
+        "tags": [
+          "upload"
+        ],
+        "summary": "GET handler for /api/upload/{id}",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "upload"
+        ],
+        "summary": "PUT handler for /api/upload/{id}",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "upload"
+        ],
+        "summary": "DELETE handler for /api/upload/{id}",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
+    "/api/upload/cleanup": {
+      "get": {
+        "tags": [
+          "upload"
+        ],
+        "summary": "GET handler for /api/upload/cleanup",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
     "/api/upload": {
       "get": {
         "tags": [

@@ -116,12 +116,23 @@ export default function OnboardingPage() {
   const handleActualFileUpload = async (field: 'registrationCert' | 'panCard' | 'gstCert', file: File) => {
     if (!file) return;
 
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error('File exceeds 10MB limit.');
+    const fileNameLower = file.name.toLowerCase();
+    const mimeType = file.type;
+    
+    const isImage = mimeType === 'image/jpeg' || mimeType === 'image/png' || mimeType === 'image/jpg' || 
+                    fileNameLower.endsWith('.jpg') || fileNameLower.endsWith('.jpeg') || fileNameLower.endsWith('.png');
+                    
+    const isPdf = mimeType === 'application/pdf' || fileNameLower.endsWith('.pdf');
+    const isDocx = mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || fileNameLower.endsWith('.docx');
+    
+    if (!isImage && !isPdf && !isDocx) {
+      toast.error('Only PDF, DOCX, and images (JPG, JPEG, PNG) are accepted.');
       return;
     }
-    if (!['image/png', 'image/jpeg', 'image/jpg', 'application/pdf'].includes(file.type)) {
-      toast.error('Invalid file format. Only PNG, JPEG, and PDF are supported.');
+    
+    const fileLimit = isImage ? 1 * 1024 * 1024 : 2 * 1024 * 1024;
+    if (file.size > fileLimit) {
+      toast.error(`File size exceeds the limit of ${isImage ? '1 MB' : '2 MB'}`);
       return;
     }
 
@@ -533,7 +544,7 @@ export default function OnboardingPage() {
                     >
                       <input
                         type="file"
-                        accept="application/pdf,image/*"
+                        accept=".pdf,.docx,.png,.jpg,.jpeg"
                         onChange={(e) => handleFileChange('registrationCert', e)}
                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                       />
@@ -568,7 +579,7 @@ export default function OnboardingPage() {
                     >
                       <input
                         type="file"
-                        accept="application/pdf,image/*"
+                        accept=".pdf,.docx,.png,.jpg,.jpeg"
                         onChange={(e) => handleFileChange('panCard', e)}
                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                       />
@@ -603,7 +614,7 @@ export default function OnboardingPage() {
                     >
                       <input
                         type="file"
-                        accept="application/pdf,image/*"
+                        accept=".pdf,.docx,.png,.jpg,.jpeg"
                         onChange={(e) => handleFileChange('gstCert', e)}
                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                       />

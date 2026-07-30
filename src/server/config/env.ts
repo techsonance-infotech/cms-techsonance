@@ -41,6 +41,9 @@ const envSchema = z.object({
   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: z.string().min(1).optional(),
   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: z.string().min(1).optional(),
   NEXT_PUBLIC_FIREBASE_APP_ID: z.string().min(1).optional(),
+  CLOUDINARY_CLOUD_NAME: z.string().min(1).optional(),
+  CLOUDINARY_API_KEY: z.string().min(1).optional(),
+  CLOUDINARY_API_SECRET: z.string().min(1).optional(),
 }).transform((values, ctx) => {
   const jwtAccessSecret = values.JWT_ACCESS_SECRET ?? values.BETTER_AUTH_SECRET;
 
