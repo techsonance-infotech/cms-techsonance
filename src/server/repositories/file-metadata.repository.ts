@@ -83,14 +83,27 @@ export class FileMetadataRepository {
   /**
    * Find a file by its checksum (to prevent duplicate uploads for a tenant)
    */
-  static async findByChecksum(tenantId: string, checksum: string): Promise<FileMetadata | null> {
+  static async findByChecksum(
+    tenantId: string, 
+    checksum: string,
+    scope?: { moduleName: string; entityType: string; entityId: string }
+  ): Promise<FileMetadata | null> {
     const supabase = this.getClient();
-    const { data, error } = await supabase
+    let query = supabase
       .from('file_metadata')
       .select('*')
       .eq('tenant_id', tenantId)
       .eq('checksum', checksum)
-      .is('deleted_at', null)
+      .is('deleted_at', null);
+
+    if (scope) {
+      query = query
+        .eq('module_name', scope.moduleName)
+        .eq('entity_type', scope.entityType)
+        .eq('entity_id', scope.entityId);
+    }
+
+    const { data, error } = await query
       .order('uploaded_at', { ascending: false })
       .limit(1)
       .maybeSingle();

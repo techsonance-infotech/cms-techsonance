@@ -138,7 +138,15 @@ export function AppRuntimeProvider({ children }: Props) {
         ? input 
         : (input instanceof URL ? input.toString() : input.url);
       
-      if (targetUrl.includes('/api/upload')) {
+      let isSameOriginUpload = false;
+      try {
+        const parsedUrl = new URL(targetUrl, window.location.origin);
+        isSameOriginUpload = parsedUrl.origin === window.location.origin && parsedUrl.pathname.startsWith('/api/upload');
+      } catch (err) {
+        console.warn('Failed to parse URL in fetch bypass:', err);
+      }
+      
+      if (isSameOriginUpload) {
         const token = getStoredSessionToken();
         const nextInit = { ...init };
         const headersObj: Record<string, string> = {};

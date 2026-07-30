@@ -30,6 +30,16 @@ function getUploadKind(value: FormDataEntryValue | null): StorageKind {
 
   return value as StorageKind;
 }
+function getResourceIdFromRequest(request: Request): string | undefined {
+  try {
+    const url = new URL(request.url);
+    const parts = url.pathname.split('/').filter(Boolean);
+    return parts[parts.length - 1];
+  } catch (err) {
+    console.error('Failed to parse resource ID from request URL:', err);
+    return undefined;
+  }
+}
 
 /**
  * GET /api/upload/[id]
@@ -37,9 +47,7 @@ function getUploadKind(value: FormDataEntryValue | null): StorageKind {
  */
 export const GET = withApiHandler(
   async (request, context) => {
-    const dynamicParams = (context as any).params;
-    const resolvedParams = typeof dynamicParams?.then === 'function' ? await dynamicParams : dynamicParams;
-    const id = resolvedParams?.id;
+    const id = getResourceIdFromRequest(request);
 
     if (!id) {
       throw new BadRequestError('File ID is required');
@@ -75,9 +83,7 @@ export const GET = withApiHandler(
  */
 export const PUT = withApiHandler(
   async (request, context) => {
-    const dynamicParams = (context as any).params;
-    const resolvedParams = typeof dynamicParams?.then === 'function' ? await dynamicParams : dynamicParams;
-    const id = resolvedParams?.id;
+    const id = getResourceIdFromRequest(request);
 
     if (!id) {
       throw new BadRequestError('File ID is required');
@@ -148,9 +154,7 @@ export const PUT = withApiHandler(
  */
 export const DELETE = withApiHandler(
   async (request, context) => {
-    const dynamicParams = (context as any).params;
-    const resolvedParams = typeof dynamicParams?.then === 'function' ? await dynamicParams : dynamicParams;
-    const id = resolvedParams?.id;
+    const id = getResourceIdFromRequest(request);
 
     if (!id) {
       throw new BadRequestError('File ID is required');

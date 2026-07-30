@@ -295,7 +295,11 @@ export class FileStorageService {
 
     // 4. Duplicate Check using Checksum (SHA-256)
     const checksum = crypto.createHash('sha256').update(fileBuffer).digest('hex');
-    const existingFile = await FileMetadataRepository.findByChecksum(tenantId, checksum);
+    const existingFile = await FileMetadataRepository.findByChecksum(tenantId, checksum, {
+      moduleName,
+      entityType,
+      entityId,
+    });
     
     if (existingFile) {
       // Reuse file metadata but create a reference for this entity if different
