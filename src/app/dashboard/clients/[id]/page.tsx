@@ -137,39 +137,43 @@ export default function ClientDetailPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 p-1 max-w-[1600px] mx-auto text-foreground">
       {/* Top Navigation & Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-6 border-b border-slate-100 dark:border-slate-800">
-        <div className="flex items-center gap-4">
-          <Button 
-            variant="outline" 
-            size="icon" 
-            onClick={() => router.push('/dashboard/clients')}
-            className="hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg h-9 w-9 border-slate-200 dark:border-slate-800 shrink-0"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-[10px] bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-                Enterprise Client
-              </span>
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-primary/95 to-zinc-900 p-6 text-white shadow-xl border border-primary/20">
+        <div className="absolute right-0 top-0 -mr-6 -mt-6 h-32 w-32 rounded-full bg-primary/10 blur-2xl" />
+        <div className="absolute left-1/3 bottom-0 -mb-6 h-24 w-24 rounded-full bg-primary/10 blur-xl" />
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <Button 
+              variant="outline" 
+              size="icon" 
+              onClick={() => router.push('/dashboard/clients')}
+              className="bg-white/10 hover:bg-white/20 text-white rounded-lg h-9 w-9 border-white/15 shrink-0"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <div>
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="h-2 w-2 rounded-full bg-white animate-ping" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-primary-soft">Enterprise Client</span>
+              </div>
+              <h2 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white via-primary-soft to-primary-light bg-clip-text text-transparent">
+                {client.companyName}
+              </h2>
+              <p className="text-sm text-primary-soft mt-1.5 flex items-center gap-1.5">
+                <Building2 className="h-4 w-4 text-primary-soft" />
+                <span>{client.contactPerson} • Primary Stakeholder</span>
+              </p>
             </div>
-            <h2 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">{client.companyName}</h2>
-            <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-1.5">
-              <Building2 className="h-4 w-4 text-slate-400" />
-              <span>{client.contactPerson} • Primary Stakeholder</span>
-            </p>
           </div>
+          <Button 
+            onClick={() => setShowEditDialog(true)}
+            className="bg-primary hover:bg-primary/95 text-white font-bold flex items-center gap-2 rounded-lg py-2 px-4 shadow-sm border-none self-end sm:self-center"
+          >
+            <Edit className="h-4 w-4" />
+            Edit Profile
+          </Button>
         </div>
-        <Button 
-          onClick={() => setShowEditDialog(true)}
-          className="bg-primary hover:bg-primary/95 text-white font-bold flex items-center gap-2 rounded-lg py-2 px-4 shadow-sm border-none"
-        >
-          <Edit className="h-4 w-4" />
-          Edit Profile
-        </Button>
       </div>
 
       {/* Onboarding Journey Stepper (High-Fidelity) */}

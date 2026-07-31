@@ -109,12 +109,9 @@ export const GET = withApiHandler(
  */
 export const POST = withApiHandler(
   async (request, context) => {
-    console.log("[UPLOAD_API] Received POST request to /api/upload");
     const accessToken = context.auth?.accessToken;
     if (!accessToken) throw new BadRequestError('Authorization token is required');
     const actor = await getCurrentSupabaseActor(accessToken);
-    console.log("[UPLOAD_API] Authenticated user:", actor.email, "tenant:", actor.tenantId);
-    console.log("[UPLOAD_API] Content-Type header received:", request.headers.get('content-type'));
 
     const formData = await request.formData();
     const kind = getUploadKind(formData.get('kind'));
@@ -124,15 +121,11 @@ export const POST = withApiHandler(
     const accessLevelInput = formData.get('accessLevel') as string;
     const accessLevel = accessLevelInput === 'public' || accessLevelInput === 'restricted' ? accessLevelInput : undefined;
 
-    console.log("[UPLOAD_API] Parameters parsed - kind:", kind, "moduleName:", moduleName, "entityType:", entityType, "entityId:", entityId, "accessLevel:", accessLevel);
-
     // Retrieve uploaded files
     const uploadedFiles: File[] = [];
     
-    // Check for single file
     const file = formData.get('file');
     if (file instanceof File) {
-      console.log("[UPLOAD_API] Found single file field 'file':", file.name, "size:", file.size);
       uploadedFiles.push(file);
     }
     
@@ -197,7 +190,6 @@ export const POST = withApiHandler(
 
     const results = [];
     for (const uFile of uploadedFiles) {
-      console.log(`[UPLOAD_API] Uploading file '${uFile.name}' (${uFile.type}) to Cloudinary/DB...`);
       const bytes = await uFile.arrayBuffer();
       const buffer = Buffer.from(bytes);
 
@@ -207,8 +199,6 @@ export const POST = withApiHandler(
         uFile.type,
         uploadOptions
       );
-
-      console.log(`[UPLOAD_API] Upload success! ID: ${record.id}, secureUrl: ${record.secure_url}`);
 
       results.push({
         url: `/api/upload?fileId=${record.id}`,

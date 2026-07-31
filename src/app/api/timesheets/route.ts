@@ -26,7 +26,7 @@ export const GET = withApiHandler(async (request, context) => {
       .eq('status', 'active');
 
     if (!isManagerOrAdmin) {
-      query = query.eq('user_id', user.id);
+      query = query.eq('user_id', user.providerUserId);
     }
 
     const { data } = await query;
@@ -69,7 +69,7 @@ export const GET = withApiHandler(async (request, context) => {
       .eq('tenant_id', tenantId);
 
     if (!isManagerOrAdmin) {
-      query = query.eq('user_id', user.id);
+      query = query.eq('user_id', user.providerUserId);
     }
 
     const { data } = await query.order('entry_date', { ascending: false });
@@ -167,7 +167,7 @@ export const POST = withApiHandler(async (request, context) => {
 
   // Role validation to segregate access
   const isManagerOrAdmin = ['super_admin', 'admin', 'hr_manager', 'finance', 'owner', 'manager', 'project_manager'].includes(user.role);
-  const targetUserId = isManagerOrAdmin ? (userId || user.id) : user.id;
+  const targetUserId = isManagerOrAdmin ? (userId || user.providerUserId) : user.providerUserId;
 
   if (!targetUserId || !entryDate || !taskName) {
     throw new BadRequestError('Target User ID, Entry Date, and Task Name are required');

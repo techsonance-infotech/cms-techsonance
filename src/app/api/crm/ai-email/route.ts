@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { withApiHandler } from '@/server/http/handler';
 import { BadRequestError } from '@/server/http/errors';
+import { callGroqAiEngine } from '@/server/ai/groq-client';
 
 export const POST = withApiHandler(async (request, context) => {
   const tenantId = context.auth?.user.tenantId;
@@ -13,46 +14,87 @@ export const POST = withApiHandler(async (request, context) => {
     throw new BadRequestError('Prompt and category are required');
   }
 
-  // AI Generation Simulation logic based on prompt inputs
-  let subject = `Follow-up: TechSonance CRM Solutions`;
-  let emailBody = `Dear ${recipientName || 'Client'},\n\nHope you are doing well.\n\nFollowing up on our discussions regarding the CRM deployment. We are excited to partner with you to automate your sales pipeline.\n\nBest regards,\nSales Operations`;
-  let cta = 'Schedule a brief 10-minute demo';
-  let followUpSuggestion = 'Send an SMS nudge if no reply within 48 hours';
-  let spamScore = '0.04 (Excellent - Inboxes directly)';
-
   const selectedTone = tone || 'Professional';
   const voice = brandVoice || 'TechSonance Standard';
 
-  if (category === 'Cold Outreach') {
-    subject = `Boost your sales pipeline efficiency with ${voice}`;
-    emailBody = `Hello ${recipientName || 'Partner'},\n\nI noticed your team is managing deals across multiple channels. Our unified CRM SaaS consolidates WhatsApp, Email, and Slack leads into a single panel.\n\nWould you be open to a short discovery call next Tuesday?\n\nSincerely,\nSales Development Representative`;
-    cta = 'Confirm call availability';
-  } else if (category === 'Proposal') {
-    subject = `Proposal Documents: TechSonance Enterprise CRM Integration`;
-    emailBody = `Dear ${recipientName || 'Decision Maker'},\n\nPlease find attached the comprehensive scope of work (SOW) proposal. We have included fixed pricing structures, milestone schedules, and general ledger accounting integration support.\n\nLooking forward to your review.\n\nWarm regards,\nSales Lead`;
-    cta = 'Approve proposal details';
-  } else if (category === 'Payment Reminder') {
-    subject = `Invoice Reminder: Outstanding balance for SaaS billing`;
-    emailBody = `Dear ${recipientName || 'Billing Contact'},\n\nThis is a friendly reminder that invoice payment term is approaching. Please resolve the outstanding balance via the payment link below.\n\nThank you,\nFinance Department`;
-    cta = 'Pay Outstanding Invoice';
+  const systemInstructions = `You are a professional CRM sales AI assistant. Generate a high-performing email matching the user's prompt.
+You MUST respond with a single valid JSON object containing exactly these fields (do not wrap in markdown \`\`\`json blocks):
+{
+  "subject": "Descriptive, high-open-rate subject line",
+  "body": "Complete email body using newlines (\\n) for spacing. Address the recipient as ${recipientName || 'Client'}.",
+  "cta": "Short call-to-action link text (e.g. Schedule a brief call)",
+  "followUpSuggestion": "Recommended nudge timing",
+  "spamScore": "0.01 (Excellent)"
+}
+Brand Voice to use: "${voice}".
+Tone of voice: "${selectedTone}".
+Category: "${category}".`;
+
+  const promptText = `Instructions prompt: "${prompt}"\n\nGenerate the JSON output now:`;
+
+  let jsonResult: any = null;
+
+  // Priority 1: Groq AI
+  if (process.env.GROQ_API_KEY) {
+    try {
+      const groqRes = await callGroqAiEngine({
+        prompt: `${systemInstructions}\n\n${promptText}`,
+        useCache: true,
+      });
+      if (groqRes && groqRes.answer) {
+        const rawText = groqRes.answer.trim();
+        const jsonStr = rawText.substring(rawText.indexOf('{'), rawText.lastIndexOf('}') + 1);
+        jsonResult = JSON.parse(jsonStr);
+      }
+    } catch (e) {
+      console.warn('Groq failed in email generator:', e);
+    }
   }
 
-  // Adjust style based on Tone selection
-  if (selectedTone === 'Casual') {
-    emailBody = emailBody.replace('Dear', 'Hi').replace('Warm regards,', 'Cheers,').replace('Sincerely,', 'Best,');
-  } else if (selectedTone === 'Persuasive') {
-    emailBody += '\n\nNote: We are offering an exclusive 15% discount for commitments finalized before the end of the fiscal period.';
+  // Priority 2: Gemini AI
+  const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY;
+  if (!jsonResult && geminiKey) {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [
+              { parts: [{ text: `${systemInstructions}\n\n${promptText}` }] }
+            ],
+          }),
+        }
+      );
+      if (response.ok) {
+        const data = await response.json();
+        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        const jsonStr = rawText.substring(rawText.indexOf('{'), rawText.lastIndexOf('}') + 1);
+        jsonResult = JSON.parse(jsonStr);
+      }
+    } catch (e) {
+      console.warn('Gemini failed in email generator:', e);
+    }
+  }
+
+  // Heuristic Fallback
+  if (!jsonResult) {
+    let fallbackBody = `Dear ${recipientName || 'Client'},\n\nFollowing up on our CRM roadmap discussion. We are excited to collaborate with you to build dynamic sales intelligence pipelines.\n\nPlease let me know if these terms align with your schedules.\n\nBest regards,\nSales Representative`;
+    if (selectedTone === 'Casual') {
+      fallbackBody = fallbackBody.replace('Dear', 'Hi').replace('Best regards,', 'Cheers,');
+    }
+    jsonResult = {
+      subject: `Follow-up: CRM Deployment roadmap`,
+      body: fallbackBody,
+      cta: 'Schedule a brief call',
+      followUpSuggestion: 'Nudge if no reply within 48 hours',
+      spamScore: '0.04 (Excellent)'
+    };
   }
 
   return NextResponse.json({
     success: true,
-    data: {
-      subject,
-      body: emailBody,
-      cta,
-      followUpSuggestion,
-      spamScore,
-      confidence: 0.96
-    }
+    data: jsonResult
   });
 }, { requireAuth: true, roles: ['Employee'] });

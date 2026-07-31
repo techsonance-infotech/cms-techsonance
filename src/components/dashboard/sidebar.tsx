@@ -65,6 +65,9 @@ import {
   QrCode,
   Plane,
   ShoppingCart,
+  Bot,
+  Zap,
+  RefreshCw,
 } from 'lucide-react';
 import { User } from '@/lib/auth';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
@@ -124,178 +127,172 @@ const categories: NavCategory[] = [
     icon: LayoutDashboard,
     isSingleton: true,
     href: '/dashboard',
-    roles: ['admin', 'project_manager', 'developer', 'client', 'hr_manager', 'accountant', 'business_development', 'employee', 'intern'],
+    roles: ['admin', 'project_manager', 'developer', 'client', 'hr_manager', 'accountant', 'business_development', 'employee', 'intern', 'ceo', 'cto', 'business_owner'],
     items: []
-  },
-  {
-    name: 'Employee Self Service',
-    icon: UserCircle,
-    items: [
-      { name: 'My Profile', href: '/dashboard/profile', icon: UserCircle, roles: ['developer', 'employee', 'intern'] },
-      { name: 'My Attendance', href: '/dashboard/attendance', icon: Clock, roles: ['developer', 'employee', 'intern'] },
-      { name: 'My Leave', href: '/dashboard/leaves', icon: Calendar, roles: ['developer', 'employee', 'intern'] },
-      { name: 'My Payroll', href: '/dashboard/payroll', icon: Wallet, roles: ['developer', 'employee', 'intern'] },
-      { name: 'My Documents', href: '/dashboard/employees/documents', icon: FileText, roles: ['developer', 'employee', 'intern'] },
-      { name: 'My Assets', href: '/dashboard/employees/assets', icon: Laptop, roles: ['developer', 'employee', 'intern'] },
-      { name: 'My Claims', href: '/dashboard/reimbursements', icon: Receipt, roles: ['developer', 'employee', 'intern'] },
-      { name: 'My Learning', href: '/dashboard/employees/training', icon: GraduationCap, roles: ['developer', 'employee', 'intern'] },
-      { name: 'My Goals', href: '/dashboard/employees/reviews', icon: Star, roles: ['developer', 'employee', 'intern'] },
-      { name: 'My Performance', href: '/dashboard/employees/reviews', icon: BarChart3, roles: ['developer', 'employee', 'intern'] },
-      { name: 'My Requests', href: '/dashboard/employees/requests', icon: MessageSquare, roles: ['developer', 'employee', 'intern'] },
-      { name: 'My Approvals', href: '/dashboard/employees/requests', icon: ShieldCheck, roles: ['developer', 'employee', 'intern'] },
-      { name: 'My Team', href: '/dashboard/employees/directory', icon: Users, roles: ['developer', 'employee', 'intern'] },
-      { name: 'Holiday Calendar', href: '/dashboard/employees/holidays', icon: Calendar, roles: ['developer', 'employee', 'intern'] },
-      { name: 'Knowledge Base', href: '/dashboard/knowledge-base', icon: BookOpen, roles: ['developer', 'employee', 'intern'] }
-    ]
-  },
-  {
-    name: 'Manager Self Service',
-    icon: ClipboardList,
-    items: [
-      { name: 'Manager Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['project_manager'] },
-      { name: 'Team Attendance', href: '/dashboard/attendance', icon: Clock, roles: ['project_manager'] },
-      { name: 'Team Leave', href: '/dashboard/leaves', icon: Calendar, roles: ['project_manager'] },
-      { name: 'Approvals', href: '/dashboard/employees/requests', icon: ShieldCheck, roles: ['project_manager'] },
-      { name: 'Performance', href: '/dashboard/employees/reviews', icon: Star, roles: ['project_manager'] },
-      { name: 'Timesheets', href: '/dashboard/employees/timesheets', icon: Clock, roles: ['project_manager'] },
-      { name: 'Projects', href: '/dashboard/projects', icon: FolderKanban, roles: ['project_manager'] },
-      { name: 'Team Calendar', href: '/dashboard/employees/holidays', icon: Calendar, roles: ['project_manager'] },
-      { name: 'Organization', href: '/dashboard/employees/org-chart', icon: Network, roles: ['project_manager'] },
-      { name: 'Reports', href: '/dashboard/reports', icon: TrendingUp, roles: ['project_manager'] }
-    ]
   },
   {
     name: 'Workforce Hub',
     icon: Users,
     items: [
-      { name: 'Workforce Overview', href: '/dashboard/employees', icon: BarChart3, roles: ['admin', 'project_manager', 'hr_manager'] },
-      { name: 'Employee Directory', href: '/dashboard/employees/directory', icon: Contact, roles: ['admin', 'project_manager', 'hr_manager'] },
-      { name: 'Add Employee', href: '/dashboard/employees/new', icon: UserPlus, roles: ['admin', 'hr_manager'] },
-      { name: 'Onboarding Center', href: '/dashboard/employees/onboarding', icon: ListTodo, roles: ['admin', 'hr_manager'] },
-      { name: 'Offboarding Center', href: '/dashboard/employees/offboarding', icon: Trash2, roles: ['admin', 'hr_manager'] },
-      { name: 'Org Chart', href: '/dashboard/employees/org-chart', icon: Network, roles: ['admin', 'project_manager', 'hr_manager'] },
-      { name: 'Employee Movement', href: '/dashboard/employees/movement', icon: ArrowRightLeft, roles: ['admin', 'project_manager', 'hr_manager'] },
-      { name: 'Reviews & Appraisals', href: '/dashboard/employees/reviews', icon: Star, roles: ['admin', 'project_manager', 'hr_manager'] },
-      { name: 'Bulk Import', href: '/dashboard/employees/import', icon: Upload, roles: ['admin', 'hr_manager'] }
+      { name: 'Workforce Overview', href: '/dashboard/employees', icon: BarChart3, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Organization Chart', href: '/dashboard/employees/org-chart', icon: Network, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee'] },
+      { name: 'Employee Directory', href: '/dashboard/employees/directory', icon: Contact, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] },
+      { name: 'Add Employee', href: '/dashboard/employees/new', icon: UserPlus, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Employee Movement', href: '/dashboard/employees/movement', icon: ArrowRightLeft, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Onboarding Center', href: '/dashboard/employees/onboarding', icon: ListTodo, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Offboarding Center', href: '/dashboard/employees/offboarding', icon: Trash2, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Employee Documents', href: '/dashboard/employees/documents', icon: FileText, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee'] },
+      { name: 'Employee Assets', href: '/dashboard/employees/assets', icon: Laptop, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee'] },
+      { name: 'Reviews & Appraisals', href: '/dashboard/employees/reviews', icon: Star, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Goals & OKRs', href: '/dashboard/employees/reviews?tab=goals', icon: Star, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Career & Succession', href: '/dashboard/employees/reviews?tab=career', icon: Award, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Bulk Import', href: '/dashboard/employees/import', icon: Upload, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] }
+    ]
+  },
+  {
+    name: 'Recruitment & Talent',
+    icon: Briefcase,
+    items: [
+      { name: 'Recruitment Dashboard', href: '/dashboard/recruitment', icon: BarChart3, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Job Requisitions', href: '/dashboard/recruitment/jobs', icon: Briefcase, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Career Portal', href: '/dashboard/recruitment/portal', icon: Home, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Candidate Pipeline', href: '/dashboard/recruitment/candidates', icon: Kanban, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Candidate Directory', href: '/dashboard/recruitment/candidates?tab=directory', icon: Users, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Interview Management', href: '/dashboard/recruitment/interviews', icon: Clock, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Offer Management', href: '/dashboard/recruitment/offers', icon: FileText, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Talent Pool', href: '/dashboard/recruitment/talent-pool', icon: Star, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Campus Hiring', href: '/dashboard/recruitment/campus', icon: GraduationCap, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Recruitment Analytics', href: '/dashboard/recruitment/analytics', icon: TrendingUp, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] }
     ]
   },
   {
     name: 'Time & Attendance',
     icon: Clock,
     items: [
-      { name: 'Attendance Register', href: '/dashboard/attendance', icon: Clock, roles: ['admin', 'project_manager', 'hr_manager'] },
-      { name: 'Shift Management', href: '/dashboard/employees/shifts', icon: Clock, roles: ['admin', 'hr_manager', 'project_manager'] },
-      { name: 'Timesheet Operations', href: '/dashboard/employees/timesheets', icon: Clock, roles: ['admin', 'project_manager', 'hr_manager'] },
-      { name: 'Leaves & Time Off', href: '/dashboard/leaves', icon: Calendar, roles: ['admin', 'project_manager', 'hr_manager'] },
-      { name: 'Work From Home', href: '/dashboard/employees/wfh', icon: Home, roles: ['admin', 'hr_manager', 'project_manager'] },
-      { name: 'Holiday Calendar', href: '/dashboard/employees/holidays', icon: Calendar, roles: ['admin', 'hr_manager', 'project_manager'] }
+      { name: 'Attendance Dashboard', href: '/dashboard/attendance', icon: BarChart3, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Attendance Register', href: '/dashboard/attendance/register', icon: Clock, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Shift Management', href: '/dashboard/employees/shifts', icon: Clock, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Timesheet Operations', href: '/dashboard/employees/timesheets', icon: Clock, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Leaves & Time Off', href: '/dashboard/leaves', icon: Calendar, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Work From Home', href: '/dashboard/employees/wfh', icon: Home, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Holiday Calendar', href: '/dashboard/employees/holidays', icon: CalendarDays, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] },
+      { name: 'Attendance Policies', href: '/dashboard/attendance/policies', icon: ScrollText, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] }
     ]
   },
   {
     name: 'HR Operations',
     icon: BadgeCheck,
     items: [
-      { name: 'Operations Dashboard', href: '/dashboard/hr-operations', icon: BarChart3, roles: ['admin', 'hr_manager'] },
-      { name: 'HR Service Desk', href: '/dashboard/hr-service-desk', icon: HelpCircle, roles: ['admin', 'hr_manager', 'project_manager'] },
-      { name: 'Request Center', href: '/dashboard/employees/requests', icon: MessageSquare, roles: ['admin', 'hr_manager', 'project_manager'] },
-      { name: 'Broadcast Hub', href: '/dashboard/employees/broadcast', icon: Inbox, roles: ['admin', 'hr_manager'] },
-      { name: 'Document Vault', href: '/dashboard/employees/documents', icon: FileText, roles: ['admin', 'hr_manager'] },
-      { name: 'Asset Tracker', href: '/dashboard/employees/assets', icon: Laptop, roles: ['admin', 'hr_manager'] },
-      { name: 'Training & Skills', href: '/dashboard/employees/training', icon: GraduationCap, roles: ['admin', 'hr_manager', 'project_manager'] },
-      { name: 'Wellness Operations', href: '/dashboard/employees/wellness', icon: HeartHandshake, roles: ['admin', 'hr_manager', 'project_manager'] },
-      { name: 'Recruitment & ATS', href: '/dashboard/recruitment', icon: Briefcase, roles: ['admin', 'hr_manager', 'project_manager'] },
-      { name: 'Knowledge Base & SOPs', href: '/dashboard/knowledge-base', icon: BookOpen, roles: ['admin', 'hr_manager', 'project_manager'] },
-      { name: 'Visitor Passes', href: '/dashboard/visitors', icon: QrCode, roles: ['admin', 'hr_manager', 'project_manager'] }
+      { name: 'Operations Dashboard', href: '/dashboard/hr-operations', icon: BarChart3, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'HR Service Desk', href: '/dashboard/hr-service-desk', icon: HelpCircle, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Employee Request Center', href: '/dashboard/employees/requests', icon: MessageSquare, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee'] },
+      { name: 'Broadcast Hub', href: '/dashboard/employees/broadcast', icon: Inbox, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Document Vault', href: '/dashboard/employees/documents', icon: FileText, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Asset Tracker', href: '/dashboard/employees/assets', icon: Laptop, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Training & Skills', href: '/dashboard/employees/training', icon: GraduationCap, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Wellness Operations', href: '/dashboard/employees/wellness', icon: HeartHandshake, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Visitor Passes', href: '/dashboard/visitors', icon: QrCode, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Knowledge Base & SOPs', href: '/dashboard/knowledge-base', icon: BookOpen, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] }
     ]
   },
   {
     name: 'Projects & Delivery',
     icon: FolderKanban,
     items: [
-      { name: 'Active Projects', href: '/dashboard/projects', icon: FolderKanban, roles: ['admin', 'project_manager', 'developer', 'employee', 'intern'] },
-      { name: 'Task Board', href: '/dashboard/tasks', icon: Kanban, roles: ['admin', 'project_manager', 'developer', 'employee', 'intern'] },
-      { name: 'Sprint Planner', href: '/dashboard/tasks/sprint-planning', icon: Kanban, roles: ['admin', 'project_manager', 'developer', 'employee', 'intern'] },
-      { name: 'Resource & PSA Planner', href: '/dashboard/employees/resource-allocation', icon: ClipboardList, roles: ['admin', 'project_manager', 'hr_manager'] }
+      { name: 'Project Dashboard', href: '/dashboard/projects', icon: BarChart3, roles: ['admin', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Active Projects', href: '/dashboard/projects/active', icon: FolderKanban, roles: ['admin', 'project_manager', 'developer', 'employee', 'intern', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Project Portfolio', href: '/dashboard/projects/portfolio', icon: Layers, roles: ['admin', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Task Board', href: '/dashboard/tasks', icon: Kanban, roles: ['admin', 'project_manager', 'developer', 'employee', 'intern', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Sprint Planner', href: '/dashboard/tasks/sprint-planning', icon: Kanban, roles: ['admin', 'project_manager', 'developer', 'employee', 'intern', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Resource Planner', href: '/dashboard/employees/resource-allocation', icon: ClipboardList, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Capacity Planner', href: '/dashboard/projects/capacity', icon: Activity, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'PSA Planner', href: '/dashboard/employees/resource-allocation?tab=psa', icon: ClipboardList, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Timesheets', href: '/dashboard/employees/timesheets', icon: Clock, roles: ['admin', 'project_manager', 'developer', 'employee', 'intern', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Delivery Analytics', href: '/dashboard/projects/analytics', icon: TrendingUp, roles: ['admin', 'project_manager', 'ceo', 'cto', 'business_owner'] }
     ]
   },
   {
-    name: 'Finance & Claims',
+    name: 'Finance',
     icon: IndianRupee,
     items: [
-      { name: 'Finance Control', href: '/dashboard/finance', icon: IndianRupee, roles: ['admin', 'accountant', 'hr_manager'] },
-      { name: 'Financial Executive', href: '/dashboard/finance/executive', icon: IndianRupee, roles: ['admin', 'accountant', 'hr_manager'] },
-      { name: 'Invoices & Billing', href: '/dashboard/finance/invoices', icon: Receipt, roles: ['admin', 'accountant', 'project_manager'] },
-      { name: 'Reimbursements', href: '/dashboard/reimbursements', icon: Receipt, roles: ['admin', 'project_manager', 'hr_manager', 'accountant'] },
-      { name: 'Payroll & Salary', href: '/dashboard/payroll', icon: Wallet, roles: ['admin', 'accountant', 'hr_manager'] },
-      { name: 'Project Financials', href: '/dashboard/projects/financials', icon: IndianRupee, roles: ['admin', 'project_manager', 'accountant'] },
-      { name: 'Travel Management', href: '/dashboard/travel', icon: Plane, roles: ['admin', 'accountant', 'hr_manager', 'project_manager'] },
-      { name: 'Procurement & Purchase', href: '/dashboard/procurement', icon: ShoppingCart, roles: ['admin', 'accountant', 'hr_manager', 'project_manager'] },
-      { name: 'Vendor Directory', href: '/dashboard/procurement/vendors', icon: Users, roles: ['admin', 'accountant', 'hr_manager', 'project_manager'] }
+      { name: 'Finance Dashboard', href: '/dashboard/finance', icon: BarChart3, roles: ['admin', 'accountant', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Invoices & Billing', href: '/dashboard/finance/invoices', icon: Receipt, roles: ['admin', 'accountant', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Quotations', href: '/dashboard/finance/quotations', icon: ScrollText, roles: ['admin', 'accountant', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Payroll & Salary', href: '/dashboard/payroll', icon: Wallet, roles: ['admin', 'accountant', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Reimbursements', href: '/dashboard/reimbursements', icon: Receipt, roles: ['admin', 'project_manager', 'hr_manager', 'accountant', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Expenses', href: '/dashboard/reimbursements?tab=expenses', icon: IndianRupee, roles: ['admin', 'project_manager', 'hr_manager', 'accountant', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Project Financials', href: '/dashboard/projects/financials', icon: IndianRupee, roles: ['admin', 'project_manager', 'accountant', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Procurement & Purchase', href: '/dashboard/procurement', icon: ShoppingCart, roles: ['admin', 'accountant', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Vendor Directory', href: '/dashboard/procurement/vendors', icon: Users, roles: ['admin', 'accountant', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Travel Management', href: '/dashboard/travel', icon: Plane, roles: ['admin', 'accountant', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Financial Reports', href: '/dashboard/finance/executive', icon: TrendingUp, roles: ['admin', 'accountant', 'hr_manager', 'ceo', 'cto', 'business_owner'] }
     ]
   },
   {
-    name: 'CRM & Pipelines',
+    name: 'CRM & Sales',
     icon: Inbox,
+    roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'business_development'],
     items: [
-      { name: 'CRM Dashboard', href: '/dashboard/crm', icon: BarChart3, roles: ['admin', 'project_manager', 'business_development'] },
-      { name: 'Client Directory', href: '/dashboard/clients', icon: Users, roles: ['admin', 'project_manager', 'business_development'] },
-      { name: 'CRM Inbox', href: '/dashboard/inbox', icon: Inbox, roles: ['admin', 'project_manager', 'business_development'] },
-      { name: 'AI Email Composer', href: '/dashboard/inbox/composer', icon: PenTool, roles: ['admin', 'project_manager', 'business_development'] },
-      { name: 'Opportunity Forecast', href: '/dashboard/inquiry/forecast', icon: TrendingUp, roles: ['admin', 'project_manager', 'business_development'] },
-      { name: 'Inquiry Board', href: '/dashboard/inquiry', icon: Search, roles: ['admin', 'project_manager', 'business_development'] },
-      { name: 'Content Manager', href: '/dashboard/content', icon: FileText, roles: ['admin'] }
+      { name: 'CRM Dashboard', href: '/dashboard/crm', icon: BarChart3, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'business_development'] },
+      { name: 'Client Directory', href: '/dashboard/clients', icon: Users, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'business_development'] },
+      { name: 'Client Inquiries', href: '/dashboard/inquiry', icon: Search, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'business_development'] },
+      { name: 'Contacts', href: '/dashboard/clients?tab=contacts', icon: Contact, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'business_development'] },
+      { name: 'Opportunities', href: '/dashboard/inquiry?tab=opportunities', icon: Kanban, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'business_development'] },
+      { name: 'Sales Pipeline', href: '/dashboard/crm?tab=pipeline', icon: TrendingUp, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'business_development'] },
+      { name: 'Quotations', href: '/dashboard/finance/quotations', icon: ScrollText, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'business_development'] },
+      { name: 'CRM Inbox', href: '/dashboard/inbox', icon: Inbox, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'business_development'] },
+      { name: 'AI Email Composer', href: '/dashboard/inbox/composer', icon: PenTool, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'business_development'] },
+      { name: 'Sales Forecast', href: '/dashboard/inquiry/forecast', icon: TrendingUp, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'business_development'] },
+      { name: 'CRM Analytics', href: '/dashboard/crm?tab=analytics', icon: BarChart3, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'business_development'] }
     ]
   },
   {
-    name: 'Analytics & Reports',
+    name: 'Analytics & BI',
     icon: TrendingUp,
-    isSingleton: true,
-    href: '/dashboard/analytics',
-    roles: ['admin', 'hr_manager', 'project_manager', 'accountant'],
-    items: []
+    roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'accountant'],
+    items: [
+      { name: 'Executive Analytics', href: '/dashboard/analytics', icon: BarChart3, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'accountant'] },
+      { name: 'HR Analytics', href: '/dashboard/analytics?tab=workforce', icon: Users, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Recruitment Analytics', href: '/dashboard/recruitment/analytics', icon: Briefcase, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Attendance Analytics', href: '/dashboard/attendance?tab=analytics', icon: Clock, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Finance Analytics', href: '/dashboard/analytics?tab=finance', icon: IndianRupee, roles: ['admin', 'accountant', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Project Analytics', href: '/dashboard/projects/analytics', icon: FolderKanban, roles: ['admin', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'CRM Analytics', href: '/dashboard/crm?tab=analytics', icon: TrendingUp, roles: ['admin', 'project_manager', 'ceo', 'cto', 'business_owner', 'business_development'] },
+      { name: 'Custom Reports', href: '/dashboard/analytics?tab=builder', icon: ScrollText, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] }
+    ]
   },
   {
-    name: 'AI Copilot Hub',
+    name: 'AI Hub',
     icon: Star,
+    roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'],
+    items: [
+      { name: 'AI Copilot', href: '/dashboard/ai-copilot', icon: Cpu, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'AI Assistant', href: '/dashboard/ai-copilot?tab=assistant', icon: Bot, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'AI Automations', href: '/dashboard/hr-automation', icon: Zap, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'AI Prompt Library', href: '/dashboard/ai-copilot?tab=prompts', icon: BookOpen, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'AI Usage Analytics', href: '/dashboard/ai-copilot?tab=usage', icon: TrendingUp, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] }
+    ]
+  },
+  {
+    name: 'Security & Compliance',
+    icon: ShieldCheck,
+    roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'],
+    items: [
+      { name: 'Compliance Operations', href: '/dashboard/employees/compliance', icon: ShieldCheck, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Audit Logs', href: '/dashboard/employees/audit-logs', icon: ScrollText, roles: ['admin', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Activity Monitor', href: '/dashboard/employees/audit-logs?tab=timeline', icon: Activity, roles: ['admin', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Security Center', href: '/dashboard/settings?tab=security', icon: Shield, roles: ['admin', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Data Privacy', href: '/dashboard/settings?tab=compliance', icon: ShieldCheck, roles: ['admin', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Backup & Recovery', href: '/dashboard/settings?tab=backup', icon: RefreshCw, roles: ['admin', 'ceo', 'cto', 'business_owner'] }
+    ]
+  },
+  {
+    name: 'Business Settings',
+    icon: Settings,
     isSingleton: true,
-    href: '/dashboard/ai-copilot',
-    roles: ['admin', 'project_manager', 'hr_manager', 'developer', 'employee', 'intern'],
+    href: '/dashboard/settings',
+    roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'],
     items: []
-  },
-  {
-    name: 'Administration Masters',
-    icon: Settings,
-    items: [
-      { name: 'Organization', href: '/dashboard/settings?tab=overview', icon: Building2, roles: ['admin', 'hr_manager'] },
-      { name: 'Departments', href: '/dashboard/settings?tab=structure&registry=teams', icon: Layers, roles: ['admin', 'hr_manager'] },
-      { name: 'Branches & Locations', href: '/dashboard/settings?tab=structure', icon: MapPin, roles: ['admin', 'hr_manager'] },
-      { name: 'Designations', href: '/dashboard/settings?tab=structure&registry=designations', icon: Briefcase, roles: ['admin', 'hr_manager'] },
-      { name: 'Grades & Bands', href: '/dashboard/settings?tab=structure&registry=grades', icon: Award, roles: ['admin', 'hr_manager'] },
-      { name: 'Employment Types', href: '/dashboard/settings?tab=structure&registry=employmentTypes', icon: ClipboardList, roles: ['admin', 'hr_manager'] },
-      { name: 'Legal Entities', href: '/dashboard/settings?tab=company', icon: Shield, roles: ['admin', 'hr_manager'] },
-      { name: 'Cost Centres', href: '/dashboard/settings?tab=structure&registry=costCenters', icon: IndianRupee, roles: ['admin', 'hr_manager'] },
-      { name: 'Holiday Groups', href: '/dashboard/employees/holidays', icon: Calendar, roles: ['admin', 'hr_manager'] },
-      { name: 'Policies', href: '/dashboard/leaves', icon: Calendar, roles: ['admin', 'hr_manager'] },
-      { name: 'Shifts', href: '/dashboard/settings?tab=structure&registry=shifts', icon: Clock, roles: ['admin', 'hr_manager'] },
-      { name: 'Approval Flows', href: '/dashboard/settings?tab=automation', icon: Play, roles: ['admin', 'hr_manager'] },
-      { name: 'Roles & Permissions', href: '/dashboard/settings?tab=users', icon: Users, roles: ['admin', 'hr_manager'] },
-      { name: 'Notification Templates', href: '/dashboard/settings?tab=notifications', icon: Bell, roles: ['admin', 'hr_manager'] },
-      { name: 'Email Templates', href: '/dashboard/inbox', icon: Inbox, roles: ['admin', 'hr_manager'] },
-      { name: 'Document Templates', href: '/dashboard/employees/documents', icon: FileText, roles: ['admin', 'hr_manager'] },
-      { name: 'Number Series', href: '/dashboard/settings?tab=invoice', icon: Receipt, roles: ['admin', 'hr_manager'] }
-    ]
-  },
-  {
-    name: 'System & Audit',
-    icon: Settings,
-    items: [
-      { name: 'HR Automation Engine', href: '/dashboard/hr-automation', icon: Cpu, roles: ['admin', 'hr_manager'] },
-      { name: 'Compliance Operations', href: '/dashboard/employees/compliance', icon: ShieldCheck, roles: ['admin', 'hr_manager'] },
-      { name: 'Contract Management', href: '/dashboard/contracts', icon: FileText, roles: ['admin', 'hr_manager'] },
-      { name: 'Notification Center', href: '/dashboard/notifications', icon: Bell, roles: ['admin', 'hr_manager'] },
-      { name: 'Audit Logs', href: '/dashboard/employees/audit-logs', icon: ScrollText, roles: ['admin'] },
-      { name: 'Business Settings', href: '/dashboard/settings', icon: Settings, roles: ['admin'] }
-    ]
   }
 ];
 
@@ -394,10 +391,12 @@ export function DashboardSidebar({ user, isMobile = false, onClose, companyName:
             const catRoles = cat.roles || [];
             const isSingleton = cat.isSingleton;
 
+            // Global Category-level RBAC check for both singleton and sub-menu categories
+            if (catRoles.length > 0 && !catRoles.includes(normalizedRole)) {
+              return null;
+            }
+
             if (isSingleton) {
-              if (catRoles.length > 0 && !catRoles.includes(normalizedRole)) {
-                return null;
-              }
 
               const isActive = pathname === cat.href || (cat.href !== '/dashboard' && pathname.startsWith(cat.href + '/'));
               const Icon = cat.icon;

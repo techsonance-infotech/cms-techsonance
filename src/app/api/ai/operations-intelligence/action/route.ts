@@ -16,6 +16,13 @@ export const POST = withApiHandler(async (request, context) => {
 
   const supabase = getAdminRouteSupabase();
 
+  // Update status in ai_operations_insights table
+  await supabase
+    .from('ai_operations_insights')
+    .update({ status: 'Resolved' })
+    .eq('id', insightId)
+    .eq('tenant_id', tenantId);
+
   // Log resolved operation to settings audit logs
   await supabase.from('settings_audit_logs').insert({
     tenant_id: tenantId,
