@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Bot, Brain, Sparkles, ShieldAlert, CheckCircle2,
   RefreshCw, SendHorizontal, Clock, User, FileText, DollarSign, Shield,
-  Zap, ChevronLeft, ChevronRight, Loader2, AlertCircle, Sparkle
+  Zap, ChevronLeft, ChevronRight, Loader2, AlertCircle, Sparkle, BookOpen, TrendingUp
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -188,78 +188,85 @@ export default function AiCopilotOperationsPage() {
   return (
     <div className="space-y-6 max-w-[1700px] mx-auto p-4 md:p-6 text-slate-900 dark:text-slate-100 animate-fadeIn">
 
-      {/* Hero Header Section */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-950 via-[#0f172a] to-zinc-950 p-6 md:p-8 border border-zinc-800 shadow-2xl">
-        <div className="absolute right-0 top-0 -mr-12 -mt-12 h-64 w-64 rounded-full bg-[#f87941]/10 blur-3xl animate-pulse pointer-events-none" />
+      {/* Hero Header Section (Gradient & Style Aligned to CRM & Analytics) */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-primary/95 to-zinc-900 p-6 md:p-8 border border-primary/20 shadow-xl">
+        <div className="absolute right-0 top-0 -mr-6 -mt-6 h-32 w-32 rounded-full bg-primary/10 blur-2xl pointer-events-none" />
+        <div className="absolute left-1/3 bottom-0 -mb-6 h-24 w-24 rounded-full bg-primary/10 blur-xl pointer-events-none" />
 
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-[#f87941]/15 rounded-2xl border border-[#f87941]/30">
-                <Bot className="h-7 w-7 text-[#f87941]" />
-              </div>
-              <div>
-                <h1 className="text-2xl md:text-3xl font-black tracking-tight bg-gradient-to-r from-[#f87941] via-orange-400 to-amber-400 bg-clip-text text-transparent">
-                  AI Operations Intelligence Engine
-                </h1>
-                <p className="text-slate-400 text-xs md:text-sm font-medium mt-0.5">
-                  19 Active capabilities: Attendance & Expense Fraud Shields, Attrition Radar, Shift Optimizer & NL Copilot
-                </p>
-              </div>
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-primary/15 rounded-2xl border border-primary/30">
+              <Bot className="h-7 w-7 text-white" />
             </div>
-          </div>
-
-          {/* Quick Metrics Bar */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Model Accuracy</div>
-              <div className="text-lg font-black text-emerald-400 mt-0.5">{summaryStats.modelConfidencePercent}</div>
-              <div className="text-[9px] text-emerald-400/80 flex items-center justify-center gap-0.5 mt-0.5">
-                <CheckCircle2 className="h-2.5 w-2.5" /> High Precision
-              </div>
-            </div>
-
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Active Anomalies</div>
-              <div className="text-lg font-black text-amber-400 mt-0.5">{summaryStats.activeAnomaliesCount} Flags</div>
-              <div className="text-[9px] text-amber-400/80 mt-0.5">In Review</div>
-            </div>
-
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Fraud Shield Savings</div>
-              <div className="text-lg font-black text-emerald-400 mt-0.5">{summaryStats.fraudSavingsTotal}</div>
-              <div className="text-[9px] text-emerald-400/80 mt-0.5">0 Loss Incurred</div>
-            </div>
-
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Team Sentiment</div>
-              <div className="text-lg font-black text-cyan-400 mt-0.5">{summaryStats.moraleIndexScore}</div>
-              <div className="text-[9px] text-cyan-400/80 mt-0.5">Positive Morale</div>
-            </div>
-
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">AI Engines Active</div>
-              <div className="text-lg font-black text-purple-400 mt-0.5">{summaryStats.totalCapabilities} / 19 Live</div>
-              <div className="text-[9px] text-purple-400/80 mt-0.5">Operational</div>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white via-primary-soft to-primary-light bg-clip-text text-transparent">
+                AI Operations Intelligence Engine
+              </h1>
+              <p className="text-slate-350 text-xs font-semibold mt-0.5">
+                19 Active capabilities: Attendance & Expense Fraud Shields, Attrition Radar, Shift Optimizer & NL Copilot
+              </p>
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Standalone Operations AI KPI Card Row (Aligned to Analytics & CRM) */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 md:gap-6">
+        <Card className="rounded-2xl border-slate-200 dark:border-zinc-800 shadow-sm relative overflow-hidden">
+          <CardContent className="p-4 space-y-1 text-xs font-semibold">
+            <div className="text-slate-500 uppercase text-[9px] tracking-wider font-extrabold">Model Accuracy</div>
+            <div className="text-xl md:text-2xl font-black text-emerald-500">{summaryStats.modelConfidencePercent}</div>
+            <div className="text-[10px] text-slate-400 font-medium">Avg precision rating</div>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-2xl border-slate-200 dark:border-zinc-800 shadow-sm relative overflow-hidden">
+          <CardContent className="p-4 space-y-1 text-xs font-semibold">
+            <div className="text-slate-500 uppercase text-[9px] tracking-wider font-extrabold">Active Anomalies</div>
+            <div className="text-xl md:text-2xl font-black text-amber-500">{summaryStats.activeAnomaliesCount} Flags</div>
+            <div className="text-[10px] text-slate-400 font-medium">In review queue</div>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-2xl border-slate-200 dark:border-zinc-800 shadow-sm relative overflow-hidden">
+          <CardContent className="p-4 space-y-1 text-xs font-semibold">
+            <div className="text-slate-500 uppercase text-[9px] tracking-wider font-extrabold">Fraud Shield Savings</div>
+            <div className="text-xl md:text-2xl font-black text-emerald-500">{summaryStats.fraudSavingsTotal}</div>
+            <div className="text-[10px] text-slate-400 font-medium">Loss leakage avoided</div>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-2xl border-slate-200 dark:border-zinc-800 shadow-sm relative overflow-hidden">
+          <CardContent className="p-4 space-y-1 text-xs font-semibold">
+            <div className="text-slate-500 uppercase text-[9px] tracking-wider font-extrabold">Team Sentiment</div>
+            <div className="text-xl md:text-2xl font-black text-indigo-500">{summaryStats.moraleIndexScore}</div>
+            <div className="text-[10px] text-slate-400 font-medium">Positive pulse rating</div>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-2xl border-slate-200 dark:border-zinc-800 shadow-sm relative overflow-hidden">
+          <CardContent className="p-4 space-y-1 text-xs font-semibold">
+            <div className="text-slate-500 uppercase text-[9px] tracking-wider font-extrabold">AI Engines Active</div>
+            <div className="text-xl md:text-2xl font-black text-purple-500">{summaryStats.totalCapabilities} / 19 Live</div>
+            <div className="text-[10px] text-slate-400 font-medium">Capabilities online</div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Main Tabs Navigation */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-6">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-zinc-800 pb-2">
           <TabsList className="bg-slate-100 dark:bg-zinc-900/80 p-1 rounded-2xl border border-slate-200 dark:border-zinc-800 flex flex-wrap h-auto">
-            <TabsTrigger value="insights" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-[#f87941] data-[state=active]:text-white">
+            <TabsTrigger value="insights" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-white">
               <ShieldAlert className="h-3.5 w-3.5" /> AI Anomaly Risk Radar ({insights.length})
             </TabsTrigger>
-            <TabsTrigger value="capabilities" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-[#f87941] data-[state=active]:text-white">
+            <TabsTrigger value="capabilities" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-white">
               <Brain className="h-3.5 w-3.5" /> 19 AI Operations Engines ({capabilities.length})
             </TabsTrigger>
-            <TabsTrigger value="assistant" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-[#f87941] data-[state=active]:text-white">
+            <TabsTrigger value="assistant" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-white">
               <Bot className="h-3.5 w-3.5" /> Natural Language AI Assistant
             </TabsTrigger>
-            <TabsTrigger value="digest" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-[#f87941] data-[state=active]:text-white">
+            <TabsTrigger value="digest" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-white">
               <Sparkles className="h-3.5 w-3.5" /> Daily Executive Summary
             </TabsTrigger>
           </TabsList>
@@ -277,7 +284,7 @@ export default function AiCopilotOperationsPage() {
                     <div>
                       <CardHeader className="pb-2 border-b">
                         <div className="flex items-center justify-between">
-                          <Badge className="bg-[#f87941]/10 text-[#f87941] font-mono text-[10px]">
+                          <Badge className="bg-primary/10 text-primary font-mono text-[10px]">
                             {i.category}
                           </Badge>
                           <Badge className={`border-none font-bold text-[9px] ${
@@ -349,7 +356,7 @@ export default function AiCopilotOperationsPage() {
                         onClick={() => setInsightsPage(i + 1)}
                         className={`h-8 w-8 p-0 rounded-lg text-xs font-bold ${
                           insightsPage === i + 1
-                            ? 'bg-[#f87941] hover:bg-[#e06634] text-white'
+                            ? 'bg-primary hover:bg-primary/95 text-white'
                             : 'border-slate-200 dark:border-zinc-800'
                         }`}
                       >
@@ -392,7 +399,7 @@ export default function AiCopilotOperationsPage() {
                         <Badge className="bg-slate-100 dark:bg-zinc-800 text-slate-500 font-mono text-[9px]">
                           {c.category}
                         </Badge>
-                        <Badge className="bg-[#f87941]/10 text-[#f87941] border-none font-bold text-[9px]">
+                        <Badge className="bg-primary/10 text-primary border-none font-bold text-[9px]">
                           {c.confidenceScore}% Precision
                         </Badge>
                       </div>
@@ -429,7 +436,7 @@ export default function AiCopilotOperationsPage() {
                         onClick={() => setCapabilitiesPage(i + 1)}
                         className={`h-8 w-8 p-0 rounded-lg text-xs font-bold ${
                           capabilitiesPage === i + 1
-                            ? 'bg-[#f87941] hover:bg-[#e06634] text-white'
+                            ? 'bg-primary hover:bg-primary/95 text-white'
                             : 'border-slate-200 dark:border-zinc-800'
                         }`}
                       >
@@ -463,7 +470,7 @@ export default function AiCopilotOperationsPage() {
           <Card className="rounded-3xl border-slate-200 dark:border-zinc-800 shadow-md">
             <CardHeader className="pb-3 border-b">
               <CardTitle className="text-base font-black flex items-center gap-2">
-                <Bot className="h-5 w-5 text-[#f87941]" /> Natural Language HR Operations Assistant
+                <Bot className="h-5 w-5 text-primary" /> Natural Language HR Operations Assistant
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-6 space-y-6">
@@ -478,7 +485,7 @@ export default function AiCopilotOperationsPage() {
                 <Button
                   onClick={handleSendChatPrompt}
                   disabled={chatThinking || !chatPrompt.trim()}
-                  className="bg-[#f87941] hover:bg-[#e06634] text-white font-extrabold text-xs h-11 px-6 rounded-2xl flex items-center gap-2 shadow-lg shadow-[#f87941]/20"
+                  className="bg-primary hover:bg-primary/95 text-white font-extrabold text-xs h-11 px-6 rounded-2xl flex items-center gap-2 shadow-lg shadow-primary/20"
                 >
                   {chatThinking ? <Loader2 className="h-4 w-4 animate-spin" /> : <SendHorizontal className="h-4 w-4" />}
                   Ask AI Copilot
@@ -489,8 +496,8 @@ export default function AiCopilotOperationsPage() {
                 <div className="space-y-4 pt-2">
                   {chatHistory.map((item, idx) => (
                     <div key={idx} className="space-y-3 p-5 rounded-3xl bg-slate-950 text-white border border-zinc-800 animate-fadeIn">
-                      <div className="text-xs font-bold text-[#f87941] flex items-center gap-2">
-                        <Sparkle className="h-4 w-4 text-[#f87941]" /> Prompt: "{item.prompt}"
+                      <div className="text-xs font-bold text-primary flex items-center gap-2">
+                        <Sparkle className="h-4 w-4 text-primary" /> Prompt: "{item.prompt}"
                       </div>
                       <div className="text-xs text-slate-300 whitespace-pre-line leading-relaxed font-sans pt-1">
                         {item.response ? item.response : (
@@ -515,12 +522,12 @@ export default function AiCopilotOperationsPage() {
           <Card className="rounded-3xl border-slate-200 dark:border-zinc-800 shadow-md">
             <CardHeader className="pb-3 border-b">
               <CardTitle className="text-base font-black flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-[#f87941]" /> AI Morning Executive Summary & Recommendations
+                <Sparkles className="h-5 w-5 text-primary" /> AI Morning Executive Summary & Recommendations
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-6">
               <div className="p-6 rounded-3xl bg-slate-950 text-white border border-zinc-800 space-y-3">
-                <div className="text-xs font-mono text-[#f87941] font-bold">
+                <div className="text-xs font-mono text-primary font-bold">
                   Daily Workforce Intelligence Briefing
                 </div>
                 <div className="text-xs text-slate-300 whitespace-pre-line leading-relaxed font-sans pt-2">

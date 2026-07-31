@@ -25,7 +25,7 @@ export const POST = withApiHandler(async (request, context) => {
         end_date: new Date().toISOString().split('T')[0],
         is_locked: true,
         locked_at: new Date().toISOString(),
-        locked_by: user.id
+        locked_by: user.providerUserId
       });
     } catch (err) {
       console.warn('Period lock error:', err);
@@ -51,7 +51,7 @@ export const POST = withApiHandler(async (request, context) => {
     await supabase.from('timesheet_entries')
       .update({
         status: newStatus,
-        approver_id: user.id,
+        approver_id: user.providerUserId,
         approved_at: action === 'approve' ? new Date().toISOString() : null,
         correction_notes: action === 'correction' ? comments : null,
         updated_at: new Date().toISOString()
@@ -66,7 +66,7 @@ export const POST = withApiHandler(async (request, context) => {
   const approvalLogs = entryIds.map((id: string) => ({
     tenant_id: tenantId,
     timesheet_entry_id: id,
-    actor_id: user.id,
+    actor_id: user.providerUserId,
     action_taken: entryIds.length > 1 ? `Bulk_${action.toUpperCase()}` : action.toUpperCase(),
     comments: comments || `${action} action executed.`
   }));

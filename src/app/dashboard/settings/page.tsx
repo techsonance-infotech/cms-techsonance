@@ -1656,8 +1656,13 @@ export default function SettingsPage() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    const tabParam = searchParams.get('tab');
+    let tabParam = searchParams.get('tab');
     if (tabParam) {
+      if (tabParam === 'privacy') {
+        tabParam = 'compliance';
+      } else if (tabParam === 'backups') {
+        tabParam = 'backup';
+      }
       setActiveTab(tabParam);
     }
     const regParam = searchParams.get('registry');

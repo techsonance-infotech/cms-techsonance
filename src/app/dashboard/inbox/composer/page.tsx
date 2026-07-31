@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -26,14 +26,25 @@ import {
   HelpCircle,
   Clock,
   ArrowRight,
-  Smile
+  Smile,
+  Loader2
 } from 'lucide-react';
 
 export default function CRMComposerPage() {
   const router = useRouter();
+  const editorRef = useRef<HTMLDivElement>(null);
+
+  // SMTP Settings State
+  const [showSmtpModal, setShowSmtpModal] = useState(false);
+  const [smtpHost, setSmtpHost] = useState('');
+  const [smtpPort, setSmtpPort] = useState('587');
+  const [smtpSecure, setSmtpSecure] = useState(false);
+  const [smtpUser, setSmtpUser] = useState('');
+  const [smtpPass, setSmtpPass] = useState('');
+  const [useCustomSmtp, setUseCustomSmtp] = useState(false);
 
   // Recipient details
-  const [recipients, setRecipients] = useState<string[]>(['Sarah Jenkins']);
+  const [recipients, setRecipients] = useState<string[]>(['sarah.jenkins@example.com']);
   const [newRecipient, setNewRecipient] = useState('');
   const [subject, setSubject] = useState('Revised Infrastructure Proposal - Skyline Ventures');
   const [emailBody, setEmailBody] = useState(
@@ -51,6 +62,58 @@ export default function CRMComposerPage() {
   const [toneUrgent, setToneUrgent] = useState(30);
 
   const [aiPrompt, setAiPrompt] = useState('');
+  const [sending, setSending] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [toneLoading, setToneLoading] = useState(false);
+
+  // Load SMTP configurations from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('custom_smtp_settings');
+    if (saved) {
+      try {
+        const config = JSON.parse(saved);
+        setSmtpHost(config.host || '');
+        setSmtpPort(String(config.port || '587'));
+        setSmtpSecure(!!config.secure);
+        setSmtpUser(config.auth?.user || '');
+        setSmtpPass(config.auth?.pass || '');
+        setUseCustomSmtp(true);
+      } catch (e) {
+        // Ignore
+      }
+    }
+  }, []);
+
+  // Keep editor content synchronized with templates or AI generation
+  useEffect(() => {
+    if (editorRef.current && editorRef.current.innerHTML !== emailBody) {
+      editorRef.current.innerHTML = emailBody;
+    }
+  }, [emailBody]);
+
+  const handleSaveSmtp = () => {
+    if (useCustomSmtp) {
+      if (!smtpHost || !smtpUser || !smtpPass) {
+        toast.error('SMTP Host, User, and Password are required for custom relay.');
+        return;
+      }
+      const config = {
+        host: smtpHost,
+        port: Number(smtpPort) || 587,
+        secure: smtpSecure,
+        auth: {
+          user: smtpUser,
+          pass: smtpPass
+        }
+      };
+      localStorage.setItem('custom_smtp_settings', JSON.stringify(config));
+      toast.success('Custom SMTP credentials loaded to local session memory.');
+    } else {
+      localStorage.removeItem('custom_smtp_settings');
+      toast.success('Switched to default corporate relay SMTP settings.');
+    }
+    setShowSmtpModal(false);
+  };
 
   const handleRemoveRecipient = (name: string) => {
     setRecipients(prev => prev.filter(r => r !== name));
@@ -67,6 +130,7 @@ export default function CRMComposerPage() {
     setActiveTemplate(templateName);
     
     if (templateName === 'Professional Follow-up') {
+      setSubject('Revised Infrastructure Proposal - Skyline Ventures');
       setEmailBody(
         `<p>Dear Sarah,</p>
 <p>I hope this email finds you well. Following our productive roadmap discussion yesterday afternoon, I have put together a revised proposal outlining our seat licensing and rollout parameters.</p>
@@ -76,6 +140,7 @@ export default function CRMComposerPage() {
 <p><strong>Alex Rivera</strong><br/><span style="color: #64748b; font-size: 12px;">Senior Account Manager | Nexus ERP</span></p>`
       );
     } else if (templateName === 'Invoice Reminder') {
+      setSubject('Gentle Invoice Reminder: #INV-2026-991');
       setEmailBody(
         `<p>Dear Sarah,</p>
 <p>I hope you are doing well. This is a gentle reminder that invoice <strong>#INV-2026-991</strong> is scheduled for payment next Tuesday, May 26th.</p>
@@ -84,6 +149,7 @@ export default function CRMComposerPage() {
 <p><strong>Alex Rivera</strong><br/><span style="color: #64748b; font-size: 12px;">Senior Account Manager | Nexus ERP</span></p>`
       );
     } else if (templateName === 'Meeting Invitation') {
+      setSubject('Invitation: Executive Roadmap Roundtable');
       setEmailBody(
         `<p>Dear Sarah,</p>
 <p>I would love to invite you to our upcoming Executive Roadmap Roundtable next Wednesday at 11:00 AM.</p>
@@ -91,23 +157,77 @@ export default function CRMComposerPage() {
 <p>Warmly,</p>
 <p><strong>Alex Rivera</strong><br/><span style="color: #64748b; font-size: 12px;">Senior Account Manager | Nexus ERP</span></p>`
       );
+    } else if (templateName === 'Contract Agreement') {
+      setSubject('SOW Agreement: Enterprise CRM Integration');
+      setEmailBody(
+        `<p>Dear Sarah,</p>
+<p>Please find attached the final Statement of Work (SOW) for our enterprise CRM integration project.</p>
+<p>Once you review the milestones and service level deliverables, please sign the digital contract envelope to initiate technical setup.</p>
+<p>Warm regards,</p>
+<p><strong>Alex Rivera</strong><br/><span style="color: #64748b; font-size: 12px;">Senior Account Manager | Nexus ERP</span></p>`
+      );
+    } else if (templateName === 'Cold Outreach') {
+      setSubject('Automate your Lead Pipeline - TechSonance CRM');
+      setEmailBody(
+        `<p>Hi Sarah,</p>
+<p>I noticed your team handles incoming customer requests across multiple channels. Our AI-driven CRM consolidates form, email, and chat inquiries in real-time.</p>
+<p>Are you open to a short 10-minute discovery call next Tuesday to see a live simulation?</p>
+<p>Cheers,</p>
+<p><strong>Alex Rivera</strong><br/><span style="color: #64748b; font-size: 12px;">Senior Account Manager | Nexus ERP</span></p>`
+      );
+    } else if (templateName === 'Client Onboarding') {
+      setSubject('Welcome to TechSonance CRM Onboarding');
+      setEmailBody(
+        `<p>Hi Sarah,</p>
+<p>Welcome to the onboarding phase! We have initialized your secure tenant workspace under ID: <strong>dc98ef2f-c32a-460f-965b-6d6f209721c7</strong>.</p>
+<p>Please log in using the credentials shared below and proceed with cloud database initialization.</p>
+<p>Best regards,</p>
+<p><strong>Alex Rivera</strong><br/><span style="color: #64748b; font-size: 12px;">Senior Account Manager | Nexus ERP</span></p>`
+      );
     }
-    toast.success(`${templateName} template loaded`);
+    toast.success(`${templateName} template loaded.`);
   };
 
-  const handleImproveTone = () => {
-    toast.loading('AI Assistant is analyzing tone constraints...', { id: 'tone-loading' });
-    setTimeout(() => {
-      let refined = emailBody;
-      if (toneFriendly > 75) {
-        refined = refined.replace('Dear Sarah,', 'Hi Sarah! Hope you are having a wonderful week! 😊');
+  const handleImproveTone = async () => {
+    setToneLoading(true);
+    const toastId = toast.loading('AI Sales Copilot is refining email tone...', { id: 'tone-loading' });
+    try {
+      const token = localStorage.getItem('session_token');
+      const currentBody = editorRef.current?.innerHTML || emailBody;
+      
+      const optimizePrompt = `Optimize and tone-adjust this email. 
+Ensure warmth and friendliness density is ${toneFriendly}/100, professional vocabulary is ${toneProfessional}/100, and urgency density is ${toneUrgent}/100.
+Original Email Content:
+"${currentBody.replace(/<[^>]*>/g, '')}"`;
+
+      const targetRecipient = recipients[0] || newRecipient.trim() || 'Client';
+      const res = await fetch('/api/crm/ai-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          prompt: optimizePrompt,
+          tone: toneFriendly > 70 ? 'Casual' : 'Professional',
+          category: 'Tone Adjustment',
+          recipientName: targetRecipient
+        })
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        setEmailBody(`<p>${json.data.body.replace(/\n/g, '<br/>')}</p>`);
+        toast.success('Email tone successfully optimized by AI!', { id: 'tone-loading' });
+      } else {
+        toast.error('AI tone optimizer encountered an error.', { id: 'tone-loading' });
       }
-      if (toneUrgent > 60) {
-        refined = refined + '<p><em>Note: As discussed, our Q4 implementation slots are filling quickly. Let\'s finalize today to lock in our December 1st date.</em></p>';
-      }
-      setEmailBody(refined);
-      toast.success('Tone updated dynamically based on sliders!', { id: 'tone-loading' });
-    }, 800);
+    } catch (e) {
+      console.error(e);
+      toast.error('Network failure connecting to AI Sales Copilot.', { id: 'tone-loading' });
+    } finally {
+      setToneLoading(false);
+    }
   };
 
   const handleGenerateFromPrompt = async () => {
@@ -115,9 +235,11 @@ export default function CRMComposerPage() {
       toast.error('Please specify a prompt instruction for the AI');
       return;
     }
-    toast.loading('AI is crafting a contextual draft...', { id: 'ai-prompt-loading' });
+    setAiLoading(true);
+    const toastId = toast.loading('AI is crafting a contextual draft...', { id: 'ai-prompt-loading' });
     try {
       const token = localStorage.getItem('session_token');
+      const targetRecipient = recipients[0] || newRecipient.trim() || 'Client';
       const res = await fetch('/api/crm/ai-email', {
         method: 'POST',
         headers: {
@@ -128,31 +250,99 @@ export default function CRMComposerPage() {
           prompt: aiPrompt,
           tone: toneFriendly > 70 ? 'Casual' : 'Professional',
           category: activeTemplate.includes('Reminder') ? 'Payment Reminder' : activeTemplate.includes('Roundtable') ? 'Proposal' : 'Cold Outreach',
-          recipientName: recipients[0] || 'Client'
+          recipientName: targetRecipient
         })
       });
       if (res.ok) {
         const json = await res.json();
         setSubject(json.data.subject);
-        setEmailBody(`<p>${json.data.body.replace(/\n/g, '<br/>')}</p><p><strong>CTA:</strong> ${json.data.cta}</p><p><em>Spam Score check: ${json.data.spamScore}</em></p>`);
+        setEmailBody(`<p>${json.data.body.replace(/\n/g, '<br/>')}</p>`);
         setAiPrompt('');
-        toast.success('AI Draft Generated', { id: 'ai-prompt-loading' });
+        toast.success('AI Draft successfully generated!', { id: 'ai-prompt-loading' });
       } else {
-        toast.error('Failed to generate AI email', { id: 'ai-prompt-loading' });
+        toast.error('Failed to generate AI email.', { id: 'ai-prompt-loading' });
       }
     } catch (err) {
       console.error(err);
-      toast.error('Error generating AI email', { id: 'ai-prompt-loading' });
+      toast.error('Error generating AI email.', { id: 'ai-prompt-loading' });
+    } finally {
+      setAiLoading(false);
     }
   };
 
-  const handleSend = () => {
-    toast.success('Email dispatched successfully through corporate relay');
-    router.push('/dashboard/inbox');
+  const handleSend = async () => {
+    let activeRecipients = [...recipients];
+    if (activeRecipients.length === 0 && newRecipient.trim()) {
+      activeRecipients = [newRecipient.trim()];
+      setRecipients(activeRecipients);
+      setNewRecipient('');
+    }
+
+    if (activeRecipients.length === 0) {
+      toast.error('Please specify at least one recipient email address.');
+      return;
+    }
+    
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const invalidEmails = activeRecipients.filter(r => !emailRegex.test(r));
+    if (invalidEmails.length > 0) {
+      toast.error(`Invalid email address format: ${invalidEmails.join(', ')}`);
+      return;
+    }
+
+    try {
+      setSending(true);
+      const toastId = toast.loading('Dispatching message through SMTP...', { id: 'email-sending' });
+      
+      let smtpConfig = null;
+      if (useCustomSmtp) {
+        smtpConfig = {
+          host: smtpHost,
+          port: Number(smtpPort) || 587,
+          secure: smtpSecure,
+          auth: {
+            user: smtpUser,
+            pass: smtpPass
+          }
+        };
+      }
+
+      const token = localStorage.getItem('session_token');
+      const targetEmail = activeRecipients[0];
+
+      const currentBody = editorRef.current?.innerHTML || emailBody;
+      const res = await fetch('/api/crm/send-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          to: targetEmail,
+          subject,
+          html: currentBody,
+          smtpConfig
+        })
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success !== false) {
+        toast.success(data.message || `Message successfully sent to ${targetEmail}`, { id: 'email-sending' });
+        router.push('/dashboard/inbox');
+      } else {
+        toast.error(data.message || 'SMTP delivery failure. Check configuration.', { id: 'email-sending' });
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Network error during SMTP delivery.', { id: 'email-sending' });
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
-    <div className="flex h-[calc(100vh-60px)] overflow-hidden bg-background text-foreground border-t border-border">
+    <div className="flex h-[calc(100vh-115px)] overflow-hidden bg-background text-foreground rounded-2xl border border-border">
       {/* Main Workspace */}
       <main className="flex-1 flex flex-col bg-card overflow-hidden border-r border-border">
         {/* Composer Header / Control Bar */}
@@ -166,7 +356,7 @@ export default function CRMComposerPage() {
             >
               <ArrowLeft className="h-4.5 w-4.5" />
             </Button>
-            <h2 className="text-base font-bold tracking-tight">New Message</h2>
+            <h2 className="text-base font-bold tracking-tight text-slate-800 dark:text-slate-100">New Message</h2>
           </div>
           
           <div className="flex items-center gap-3">
@@ -180,15 +370,28 @@ export default function CRMComposerPage() {
                 <option value="Professional Follow-up">Professional Follow-up</option>
                 <option value="Invoice Reminder">Invoice Reminder</option>
                 <option value="Meeting Invitation">Meeting Invitation</option>
+                <option value="Contract Agreement">Contract Agreement</option>
+                <option value="Cold Outreach">Cold Outreach</option>
+                <option value="Client Onboarding">Client Onboarding</option>
               </select>
             </div>
+
+            <Button 
+              size="icon" 
+              variant="outline" 
+              onClick={() => setShowSmtpModal(true)} 
+              className="h-8 w-8 text-muted-foreground rounded-lg border-border hover:bg-accent"
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
             
             <Button 
               onClick={handleSend}
-              className="bg-primary hover:bg-primary/90 text-white px-5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-[0.98] transition-all border-none"
+              disabled={sending}
+              className="bg-primary hover:bg-primary/95 text-white px-5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-[0.98] transition-all border-none"
             >
-              Send
-              <Send className="h-3.5 w-3.5" />
+              {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Send'}
+              {!sending && <Send className="h-3.5 w-3.5" />}
             </Button>
           </div>
         </div>
@@ -214,7 +417,7 @@ export default function CRMComposerPage() {
                 value={newRecipient}
                 onChange={(e) => setNewRecipient(e.target.value)}
                 onKeyDown={handleAddRecipient}
-                placeholder={recipients.length === 0 ? "Enter recipient name..." : ""}
+                placeholder={recipients.length === 0 ? "recipient@example.com (Press Enter)" : ""}
                 className="flex-1 bg-transparent border-none focus-visible:ring-0 p-0 text-xs h-7 text-foreground placeholder:text-muted-foreground"
               />
             </div>
@@ -232,11 +435,11 @@ export default function CRMComposerPage() {
 
         {/* Rich Text Editor Simulation */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          <div className="min-h-[300px] text-xs leading-relaxed focus:outline-none text-foreground"
+          <div 
+            ref={editorRef}
+            className="min-h-[300px] text-xs leading-relaxed focus:outline-none text-foreground"
             contentEditable
             suppressContentEditableWarning
-            onInput={(e) => setEmailBody(e.currentTarget.innerHTML)}
-            dangerouslySetInnerHTML={{ __html: emailBody }}
           />
         </div>
 
@@ -259,11 +462,11 @@ export default function CRMComposerPage() {
         </div>
       </main>
 
-      {/* Right AI Sidebar Panel (320px) */}
-      <aside className="w-80 bg-card p-6 overflow-y-auto shrink-0 hidden lg:block">
+      {/* Right AI Sidebar Panel */}
+      <aside className="w-80 bg-card p-6 overflow-y-auto shrink-0 hidden lg:block border-l border-border">
         <div className="flex items-center gap-2 mb-6">
           <div className="w-8 h-8 bg-primary/10 rounded-xl flex items-center justify-center shadow-sm">
-            <Sparkles className="h-4.5 w-4.5 text-primary" />
+            <Sparkles className="h-4.5 w-4.5 text-primary animate-pulse" />
           </div>
           <div>
             <h3 className="text-sm font-bold text-foreground">AI Sales Copilot</h3>
@@ -317,10 +520,11 @@ export default function CRMComposerPage() {
 
           <Button 
             onClick={handleImproveTone}
+            disabled={toneLoading}
             className="w-full mt-2 bg-primary/10 border border-primary/20 hover:bg-primary/20 text-primary font-bold py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-[0.98]"
           >
-            Optimize Tone
-            <ChevronRight className="h-4.5 w-4.5" />
+            {toneLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Optimize Tone'}
+            {!toneLoading && <ChevronRight className="h-4.5 w-4.5" />}
           </Button>
         </div>
 
@@ -328,19 +532,25 @@ export default function CRMComposerPage() {
         <div className="py-6 space-y-3 border-b border-border">
           <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Suggested AI Templates</h4>
           
-          <button className="w-full text-left p-3.5 rounded-2xl border border-border bg-background hover:border-primary/40 hover:bg-primary/5 cursor-pointer transition-all flex items-start gap-3 shadow-sm group">
+          <button 
+            onClick={() => setAiPrompt("Write a polite follow-up reminder to Sarah asking if they had a chance to review our revised infrastructure SOW.")}
+            className="w-full text-left p-3.5 rounded-2xl border border-border bg-background hover:border-primary/40 hover:bg-primary/5 cursor-pointer transition-all flex items-start gap-3 shadow-sm group"
+          >
             <span className="p-2 bg-primary/10 rounded-xl text-primary"><Clock className="h-4.5 w-4.5" /></span>
             <div>
               <p className="text-xs font-bold group-hover:text-primary transition-colors">Nudge Decision Makers</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Polite reminder for review</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Prompt: Ask Sarah for review</p>
             </div>
           </button>
 
-          <button className="w-full text-left p-3.5 rounded-2xl border border-border bg-background hover:border-primary/40 hover:bg-primary/5 cursor-pointer transition-all flex items-start gap-3 shadow-sm group">
+          <button 
+            onClick={() => setAiPrompt("Draft a Q4 enterprise proposal email outlining milestones, Grand SOW budgets, and expected kick-off timelines.")}
+            className="w-full text-left p-3.5 rounded-2xl border border-border bg-background hover:border-primary/40 hover:bg-primary/5 cursor-pointer transition-all flex items-start gap-3 shadow-sm group"
+          >
             <span className="p-2 bg-primary/10 rounded-xl text-primary"><Smile className="h-4.5 w-4.5" /></span>
             <div>
               <p className="text-xs font-bold group-hover:text-primary transition-colors">Q4 Project Proposal</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Outline implementation SOW</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Prompt: Outline CRM SOW SOW</p>
             </div>
           </button>
         </div>
@@ -362,19 +572,122 @@ export default function CRMComposerPage() {
             <textarea 
               value={aiPrompt}
               onChange={(e) => setAiPrompt(e.target.value)}
-              placeholder="Ask Sales Copilot to write: 'Ask Sarah for a call next Monday morning...'"
+              placeholder="Ask Sales Copilot: 'Ask Sarah for a call next Monday morning...'"
               className="w-full bg-accent border border-border rounded-2xl p-3 text-xs focus:ring-2 focus:ring-primary focus:border-transparent resize-none h-24 placeholder:text-muted-foreground text-foreground"
             />
             <Button 
               size="icon"
               onClick={handleGenerateFromPrompt}
+              disabled={aiLoading}
               className="absolute bottom-2.5 right-2.5 p-2 bg-primary hover:bg-primary/90 text-white rounded-lg transition-colors h-7 w-7 flex items-center justify-center border-none"
             >
-              <Sparkles className="h-4 w-4" />
+              {aiLoading ? <Loader2 className="h-4.5 w-4.5 animate-spin" /> : <Sparkles className="h-4 w-4" />}
             </Button>
           </div>
         </div>
       </aside>
+
+      {/* SMTP Configuration Dialog Modal */}
+      {showSmtpModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fadeIn duration-200">
+          <div className="w-full max-w-md bg-card border border-border p-6 rounded-2xl shadow-2xl relative space-y-5">
+            <button 
+              onClick={() => setShowSmtpModal(false)}
+              className="absolute top-4 right-4 text-muted-foreground hover:text-foreground hover:bg-accent p-1.5 rounded-lg transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            <div>
+              <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                <Settings className="h-4 w-4 text-primary" /> SMTP Relay Configurations
+              </h3>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Customize SMTP relays or switch back to default corporate credentials.</p>
+            </div>
+
+            <div className="flex items-center gap-2 pb-1 border-b border-border/60">
+              <input 
+                type="checkbox" 
+                id="smtpOverride"
+                checked={useCustomSmtp} 
+                onChange={(e) => setUseCustomSmtp(e.target.checked)}
+                className="accent-primary h-3.5 w-3.5 rounded-sm border-gray-300"
+              />
+              <label htmlFor="smtpOverride" className="text-xs font-bold text-foreground cursor-pointer select-none">
+                Enable Custom SMTP Configurations
+              </label>
+            </div>
+
+            {useCustomSmtp && (
+              <div className="space-y-3.5 animate-in slideInFromTop duration-200">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase">SMTP Host Server</label>
+                  <Input 
+                    value={smtpHost}
+                    onChange={(e) => setSmtpHost(e.target.value)}
+                    placeholder="smtp.gmail.com"
+                    className="bg-accent border-border text-xs rounded-xl h-9"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase">SMTP Port</label>
+                    <Input 
+                      value={smtpPort}
+                      onChange={(e) => setSmtpPort(e.target.value)}
+                      placeholder="587"
+                      className="bg-accent border-border text-xs rounded-xl h-9"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 pt-6">
+                    <input 
+                      type="checkbox" 
+                      id="smtpSecure"
+                      checked={smtpSecure}
+                      onChange={(e) => setSmtpSecure(e.target.checked)}
+                      className="accent-primary h-3.5 w-3.5 rounded-sm border-gray-300"
+                    />
+                    <label htmlFor="smtpSecure" className="text-[10px] font-bold text-muted-foreground uppercase cursor-pointer select-none">
+                      SSL/TLS Secure
+                    </label>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase">SMTP User Email</label>
+                  <Input 
+                    value={smtpUser}
+                    onChange={(e) => setSmtpUser(e.target.value)}
+                    placeholder="sales@company.com"
+                    className="bg-accent border-border text-xs rounded-xl h-9"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase">SMTP Password / Token</label>
+                  <Input 
+                    type="password"
+                    value={smtpPass}
+                    onChange={(e) => setSmtpPass(e.target.value)}
+                    placeholder="••••••••••••••••"
+                    className="bg-accent border-border text-xs rounded-xl h-9"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-3 justify-end pt-3">
+              <Button variant="ghost" onClick={() => setShowSmtpModal(false)} className="text-xs font-semibold hover:bg-accent rounded-xl px-4">
+                Cancel
+              </Button>
+              <Button onClick={handleSaveSmtp} className="bg-primary hover:bg-primary/95 text-white font-bold text-xs rounded-xl px-4 border-none">
+                Save & Load Configuration
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

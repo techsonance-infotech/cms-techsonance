@@ -117,31 +117,58 @@ export const GET = withApiHandler(async (request, context) => {
     3. Active issues dashboard check: Found ${activeIssues} system/API alerts registered in the past 24 hours.`;
   }
 
-  // Derive dynamic insights/anomalies
-  const insights = [
-    {
-      id: 'ins_1',
-      category: 'Operations Security',
-      title: 'Failed API Authorization Event Detected',
-      description: `Detected unauthorized audit logging credentials requests from unauthorized actors.`,
-      riskLevel: activeIssues > 0 ? 'Critical' : 'Medium',
-      confidenceScore: 98,
-      recommendedAction: 'Verify API keys, enforce token fallback validation, and audit system-wide security clearances.',
-      status: activeIssues > 0 ? 'Review' : 'Resolved',
-      createdAt: new Date().toISOString()
-    },
-    {
-      id: 'ins_2',
-      category: 'Workforce Welfare',
-      title: 'Workload Rest Gap Warning',
-      description: 'System identified potential shift roster overlaps with less than 11-hour rest intervals.',
-      riskLevel: 'Medium',
-      confidenceScore: 94,
-      recommendedAction: 'Review department shift templates and adjust roster assignments to enforce statutory rest times.',
-      status: 'Review',
-      createdAt: new Date().toISOString()
-    }
-  ];
+  // Fetch insights from the database
+  let { data: dbInsights } = await supabase
+    .from('ai_operations_insights')
+    .select('id, category, title, description, risk_level, confidence_score, recommended_action, status, created_at')
+    .eq('tenant_id', tenantId)
+    .order('created_at', { ascending: false });
+
+  if (!dbInsights || dbInsights.length === 0) {
+    // Seed insights dynamically
+    const seed = [
+      {
+        tenant_id: tenantId,
+        category: 'Operations Security',
+        title: 'Failed API Authorization Event Detected',
+        description: `Detected unauthorized audit logging credentials requests from unauthorized actors.`,
+        risk_level: activeIssues > 0 ? 'Critical' : 'High',
+        confidence_score: 98,
+        recommended_action: 'Verify API keys, enforce token fallback validation, and audit system-wide security clearances.',
+        status: activeIssues > 0 ? 'Review' : 'Resolved'
+      },
+      {
+        tenant_id: tenantId,
+        category: 'Workforce Welfare',
+        title: 'Workload Rest Gap Warning',
+        description: 'System identified potential shift roster overlaps with less than 11-hour rest intervals.',
+        risk_level: 'Medium',
+        confidence_score: 94,
+        recommended_action: 'Review department shift templates and adjust roster assignments to enforce statutory rest times.',
+        status: 'Review'
+      }
+    ];
+
+    const { data: inserted } = await supabase
+      .from('ai_operations_insights')
+      .insert(seed)
+      .select('id, category, title, description, risk_level, confidence_score, recommended_action, status, created_at');
+    
+    dbInsights = inserted || [];
+  }
+
+  // Map database insights to expected camelCase keys for the frontend
+  const insights = dbInsights.map((i: any) => ({
+    id: i.id,
+    category: i.category,
+    title: i.title,
+    description: i.description,
+    riskLevel: i.risk_level,
+    confidenceScore: Number(i.confidence_score),
+    recommendedAction: i.recommended_action,
+    status: i.status,
+    createdAt: i.created_at
+  }));
 
   return NextResponse.json({
     success: true,

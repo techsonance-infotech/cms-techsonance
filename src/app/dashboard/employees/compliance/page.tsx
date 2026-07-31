@@ -136,6 +136,7 @@ function getDomainBadgeClass(pct: number | null): string {
 export default function ComplianceOperationsPage() {
   const [activeTab, setActiveTab] = useState('command');
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [capaProcessing, setCapaProcessing] = useState(false);
 
@@ -223,6 +224,7 @@ export default function ComplianceOperationsPage() {
 
   // Fetch 100% Dynamic Data from Backend API
   const loadComplianceDataFromApi = async () => {
+    setRefreshing(true);
     try {
       const token = getSessionToken();
       const res = await fetch('/api/compliance/operations', {
@@ -255,6 +257,7 @@ export default function ComplianceOperationsPage() {
       console.error('API Fetch error:', err);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -550,19 +553,82 @@ export default function ComplianceOperationsPage() {
   // SKELETON
   if (loading) {
     return (
-      <div className="space-y-6 max-w-[1700px] mx-auto p-4 md:p-6">
-        <div className="rounded-3xl bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-6 md:p-8 animate-pulse">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="h-14 w-14 rounded-2xl bg-slate-200 dark:bg-zinc-800" />
-            <div className="space-y-2 flex-1">
-              <div className="h-7 w-72 bg-slate-200 dark:bg-zinc-800 rounded-xl" />
-              <div className="h-4 w-96 bg-slate-200 dark:bg-zinc-800 rounded-lg" />
-            </div>
+      <div className="space-y-6 max-w-[1700px] mx-auto p-4 md:p-6 text-foreground flex flex-col animate-pulse">
+        {/* Header Banner Skeleton */}
+        <div className="rounded-3xl bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-6 md:p-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-3">
+            <div className="h-3 w-40 bg-slate-200 dark:bg-zinc-800 rounded-lg" />
+            <div className="h-8 w-80 bg-slate-200 dark:bg-zinc-800 rounded-xl" />
+            <div className="h-4 w-96 bg-slate-200 dark:bg-zinc-800 rounded-lg" />
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-20 rounded-2xl bg-slate-200 dark:bg-zinc-800" />
+          <div className="h-9 w-24 bg-slate-200 dark:bg-zinc-800 rounded-lg shrink-0" />
+        </div>
+
+        {/* KPI Stats Row Skeleton */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="rounded-3xl border border-slate-200 dark:border-zinc-800 p-5 bg-slate-50 dark:bg-zinc-900/60 h-28 flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <div className="h-2.5 w-20 bg-slate-200 dark:bg-zinc-800 rounded-md" />
+                <div className="h-6 w-12 bg-slate-200 dark:bg-zinc-800 rounded-lg" />
+                <div className="h-2 w-28 bg-slate-100 dark:bg-zinc-800 rounded-md" />
+              </div>
+              <div className="h-10 w-10 bg-slate-200 dark:bg-zinc-800 rounded-2xl shrink-0" />
+            </div>
+          ))}
+        </div>
+
+        {/* Tabs Bar Skeleton */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-zinc-850 pb-2">
+          <div className="flex flex-wrap gap-2">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="h-8 w-32 bg-slate-100 dark:bg-zinc-900/80 rounded-xl" />
             ))}
+          </div>
+          <div className="h-9 w-40 bg-slate-200 dark:bg-zinc-800 rounded-xl shrink-0" />
+        </div>
+
+        {/* Dashboard Content Skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Org Health Index Dial Card */}
+          <div className="lg:col-span-4 rounded-3xl border border-slate-200 dark:border-zinc-800 p-6 bg-slate-50 dark:bg-zinc-900/60 h-96 flex flex-col justify-between">
+            <div className="h-4 w-32 bg-slate-200 dark:bg-zinc-800 rounded-md" />
+            <div className="h-44 w-44 rounded-full border-8 border-slate-200 dark:border-zinc-800 mx-auto flex items-center justify-center" />
+            <div className="h-4 w-48 bg-slate-200 dark:bg-zinc-800 rounded-md mx-auto" />
+          </div>
+
+          {/* High Risk Employees List Card */}
+          <div className="lg:col-span-4 rounded-3xl border border-slate-200 dark:border-zinc-800 p-6 bg-slate-50 dark:bg-zinc-900/60 h-96 space-y-4">
+            <div className="h-4 w-40 bg-slate-200 dark:bg-zinc-800 rounded-md" />
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-zinc-850">
+                <div className="space-y-1.5 flex-1">
+                  <div className="h-3.5 w-32 bg-slate-200 dark:bg-zinc-800 rounded-md" />
+                  <div className="h-2.5 w-24 bg-slate-100 dark:bg-zinc-800 rounded-md" />
+                </div>
+                <div className="h-5 w-16 bg-slate-200 dark:bg-zinc-800 rounded-full" />
+              </div>
+            ))}
+          </div>
+
+          {/* AI Risk Insight Card */}
+          <div className="lg:col-span-4 rounded-3xl border border-slate-200 dark:border-zinc-800 p-6 bg-slate-50 dark:bg-zinc-900/60 h-96 flex flex-col justify-between">
+            <div className="flex justify-between items-center">
+              <div className="h-4 w-28 bg-slate-200 dark:bg-zinc-800 rounded-md" />
+              <div className="h-7 w-14 bg-slate-200 dark:bg-zinc-800 rounded-lg" />
+            </div>
+            <div className="space-y-4 flex-1 mt-6">
+              <div className="flex justify-between">
+                <div className="h-3 w-16 bg-slate-100 dark:bg-zinc-800 rounded-md" />
+                <div className="h-5 w-12 bg-slate-200 dark:bg-zinc-800 rounded-full" />
+              </div>
+              <div className="space-y-2">
+                <div className="h-2 w-20 bg-slate-150 dark:bg-zinc-800 rounded-md" />
+                <div className="h-3.5 w-full bg-slate-200 dark:bg-zinc-800 rounded-md" />
+                <div className="h-3.5 w-5/6 bg-slate-200 dark:bg-zinc-800 rounded-md" />
+              </div>
+            </div>
+            <div className="h-8 w-full bg-slate-200 dark:bg-zinc-800 rounded-lg" />
           </div>
         </div>
       </div>
@@ -573,93 +639,138 @@ export default function ComplianceOperationsPage() {
     <div className="space-y-6 max-w-[1700px] mx-auto p-4 md:p-6 text-slate-900 dark:text-slate-100 animate-fadeIn">
 
       {/* Hero Header Section */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-950 via-[#0f172a] to-zinc-950 p-6 md:p-8 border border-zinc-800 shadow-2xl">
-        <div className="absolute right-0 top-0 -mr-12 -mt-12 h-64 w-64 rounded-full bg-[#f87941]/10 blur-3xl animate-pulse pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-[#f87941]/15 rounded-2xl border border-[#f87941]/30">
-                <ShieldCheck className="h-7 w-7 text-[#f87941]" />
-              </div>
-              <div>
-                <h1 className="text-2xl md:text-3xl font-black tracking-tight bg-gradient-to-r from-[#f87941] via-orange-400 to-amber-400 bg-clip-text text-transparent">
-                  Enterprise Compliance Operations
-                </h1>
-                <p className="text-slate-400 text-xs md:text-sm font-medium mt-0.5">
-                  12 Compliance Domains: Labour Laws, BGV, Visas, Medical, Contracts, Audits & Corrective Action Plans (CAPA)
-                </p>
-              </div>
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-primary/95 to-zinc-900 p-6 text-white shadow-xl border border-primary/20">
+        <div className="absolute right-0 top-0 -mr-6 -mt-6 h-32 w-32 rounded-full bg-primary/10 blur-2xl pointer-events-none" />
+        <div className="absolute left-1/3 bottom-0 -mb-6 h-24 w-24 rounded-full bg-primary/10 blur-xl pointer-events-none" />
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="h-2 w-2 rounded-full bg-white animate-ping" />
+              <span className="text-xs font-semibold uppercase tracking-wider text-primary-soft">Enterprise Statutory Guard</span>
             </div>
+            <h2 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white via-primary-soft to-primary-light bg-clip-text text-transparent">
+              Enterprise Compliance Operations
+            </h2>
+            <p className="text-sm text-primary-soft mt-1 max-w-xl">
+              12 Compliance Domains: Labour Laws, BGV, Visas, Medical, Contracts, Audits & Corrective Action Plans (CAPA)
+            </p>
           </div>
-
-          {/* Quick Metrics Bar */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Overall compliance</div>
-              <div className="text-xl font-black text-emerald-400 mt-0.5">{globalComplianceScore}%</div>
-              <div className="text-[10px] text-emerald-400 flex items-center justify-center gap-0.5 mt-0.5">
-                <CheckCircle2 className="h-2.5 w-2.5" /> Org Score
-              </div>
-            </div>
-
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Audit Readiness</div>
-              <div className="text-xl font-black text-cyan-400 mt-0.5">{summaryStats.auditReadinessScore}</div>
-              <div className="text-[10px] text-cyan-400/80 mt-0.5">Live Readiness</div>
-            </div>
-
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Open Violations</div>
-              <div className="text-xl font-black text-amber-400 mt-0.5">{violations.filter(v => v.status !== 'Resolved').length}</div>
-              <div className="text-[10px] text-amber-400/80 mt-0.5">Action Cases</div>
-            </div>
-
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Penalties Avoided</div>
-              <div className="text-[11px] font-black text-emerald-400 mt-0.5 leading-tight">{summaryStats.regulatoryPenaltiesAvoided}</div>
-              <div className="text-[9px] text-emerald-400/80">Statutory Status</div>
-            </div>
-
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Verification Ledger</div>
-              <div className="text-xl font-black text-purple-400 mt-0.5">{items.length}</div>
-              <div className="text-[10px] text-purple-400/80 mt-0.5">{summaryStats.domainsMonitored} Active Checks</div>
-            </div>
+          <div className="flex gap-2 items-center">
+            <Button
+              variant="outline"
+              onClick={loadComplianceDataFromApi}
+              disabled={refreshing}
+              className="bg-white/10 hover:bg-white/20 text-white rounded-lg h-9 border-white/15 shrink-0"
+            >
+              {refreshing ? (
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-1.5 h-4 w-4" />
+              )}
+              Refresh
+            </Button>
           </div>
         </div>
+      </div>
+
+      {/* Standalone KPI Stats Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <Card className="rounded-3xl border-slate-200 dark:border-zinc-800 shadow-md">
+          <CardContent className="p-5 flex items-center justify-between">
+            <div className="space-y-1">
+              <div className="text-[10px] text-slate-400 uppercase font-black tracking-wider">Overall Compliance</div>
+              <div className="text-2xl font-black text-emerald-500">{globalComplianceScore}%</div>
+              <div className="text-[10px] text-slate-400 font-semibold">Active Org Score</div>
+            </div>
+            <div className="p-3 bg-emerald-500/10 rounded-2xl">
+              <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-3xl border-slate-200 dark:border-zinc-800 shadow-md">
+          <CardContent className="p-5 flex items-center justify-between">
+            <div className="space-y-1">
+              <div className="text-[10px] text-slate-400 uppercase font-black tracking-wider">Audit Readiness</div>
+              <div className="text-2xl font-black text-cyan-500">{summaryStats.auditReadinessScore}</div>
+              <div className="text-[10px] text-slate-400 font-semibold">Live Assessment</div>
+            </div>
+            <div className="p-3 bg-cyan-500/10 rounded-2xl">
+              <Activity className="h-5 w-5 text-cyan-500" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-3xl border-slate-200 dark:border-zinc-800 shadow-md">
+          <CardContent className="p-5 flex items-center justify-between">
+            <div className="space-y-1">
+              <div className="text-[10px] text-slate-400 uppercase font-black tracking-wider">Open Violations</div>
+              <div className="text-2xl font-black text-amber-500">{violations.filter(v => v.status !== 'Resolved').length}</div>
+              <div className="text-[10px] text-slate-400 font-semibold">Requires Attention</div>
+            </div>
+            <div className="p-3 bg-amber-500/10 rounded-2xl">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-3xl border-slate-200 dark:border-zinc-800 shadow-md">
+          <CardContent className="p-5 flex items-center justify-between">
+            <div className="space-y-1">
+              <div className="text-[10px] text-slate-400 uppercase font-black tracking-wider">Penalties Avoided</div>
+              <div className="text-sm font-black text-emerald-500 line-clamp-2 leading-snug">{summaryStats.regulatoryPenaltiesAvoided}</div>
+              <div className="text-[9px] text-slate-400 font-semibold">Statutory Standard</div>
+            </div>
+            <div className="p-3 bg-emerald-500/10 rounded-2xl shrink-0">
+              <Scale className="h-5 w-5 text-emerald-500" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-3xl border-slate-200 dark:border-zinc-800 shadow-md">
+          <CardContent className="p-5 flex items-center justify-between">
+            <div className="space-y-1">
+              <div className="text-[10px] text-slate-400 uppercase font-black tracking-wider">Verification Ledger</div>
+              <div className="text-2xl font-black text-purple-500">{items.length}</div>
+              <div className="text-[10px] text-slate-400 font-semibold">{summaryStats.domainsMonitored} Active Checks</div>
+            </div>
+            <div className="p-3 bg-purple-500/10 rounded-2xl">
+              <FileCheck className="h-5 w-5 text-purple-500" />
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Main Tabs Navigation */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-6">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-zinc-800 pb-2">
           <TabsList className="bg-slate-100 dark:bg-zinc-900/80 p-1 rounded-2xl border border-slate-200 dark:border-zinc-800 flex flex-wrap h-auto">
-            <TabsTrigger value="command" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-[#f87941] data-[state=active]:text-white">
+            <TabsTrigger value="command" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-white">
               <TrendingUp className="h-3.5 w-3.5" /> Compliance Command Centre
             </TabsTrigger>
-            <TabsTrigger value="domains" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-[#f87941] data-[state=active]:text-white">
+            <TabsTrigger value="domains" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-white">
               <ShieldCheck className="h-3.5 w-3.5" /> 12 Domains ({domains.length})
             </TabsTrigger>
-            <TabsTrigger value="records" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-[#f87941] data-[state=active]:text-white">
+            <TabsTrigger value="records" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-white">
               <FileCheck className="h-3.5 w-3.5" /> Verification Ledger ({items.length})
             </TabsTrigger>
-            <TabsTrigger value="violations" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-[#f87941] data-[state=active]:text-white">
+            <TabsTrigger value="violations" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-white">
               <AlertTriangle className="h-3.5 w-3.5" /> Violations & Cases ({violations.filter(v => v.status !== 'Resolved').length})
             </TabsTrigger>
-            <TabsTrigger value="audits" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-[#f87941] data-[state=active]:text-white">
+            <TabsTrigger value="audits" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-white">
               <ShieldAlert className="h-3.5 w-3.5" /> Audit Findings ({findings.length})
             </TabsTrigger>
-            <TabsTrigger value="scorecard" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-[#f87941] data-[state=active]:text-white">
+            <TabsTrigger value="scorecard" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-white">
               <BarChart3 className="h-3.5 w-3.5" /> Statutory Scorecard
             </TabsTrigger>
-            <TabsTrigger value="copilot" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-[#f87941] data-[state=active]:text-white">
+            <TabsTrigger value="copilot" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-white">
               <Bot className="h-3.5 w-3.5" /> AI Copilot
             </TabsTrigger>
           </TabsList>
 
           <Button
             onClick={() => setShowLogModal(true)}
-            className="bg-[#f87941] hover:bg-[#e06634] text-white font-extrabold text-xs h-9 px-4 rounded-xl flex items-center gap-1.5 shadow-md shadow-[#f87941]/20"
+            className="bg-primary hover:bg-primary/95 text-white font-extrabold text-xs h-9 px-4 rounded-xl flex items-center gap-1.5 shadow-md shadow-primary/20"
           >
             <Plus className="h-3.5 w-3.5" /> {canApprove ? 'Log Compliance Item' : 'Self-Service Sign-off'}
           </Button>
@@ -675,7 +786,7 @@ export default function ComplianceOperationsPage() {
             <Card className="lg:col-span-4 rounded-3xl border-slate-200 dark:border-zinc-800 shadow-md flex flex-col justify-between">
               <CardHeader className="pb-3 border-b">
                 <CardTitle className="text-base font-black flex items-center gap-2">
-                  <Activity className="h-4.5 w-4.5 text-[#f87941]" /> Org Health Index
+                  <Activity className="h-4.5 w-4.5 text-primary" /> Org Health Index
                 </CardTitle>
               </CardHeader>
               <CardContent className="py-6 flex flex-col items-center justify-center space-y-4">
@@ -827,7 +938,7 @@ export default function ComplianceOperationsPage() {
                           <tr key={ud.id} className="hover:bg-slate-50/70 dark:hover:bg-zinc-900/20 transition-colors">
                             <td className="p-3 px-6 font-bold">{ud.employeeName}</td>
                             <td className="p-3">
-                              <Badge className="bg-[#f87941]/10 text-[#f87941] border-none font-bold text-[9px]">
+                              <Badge className="bg-primary/10 text-primary border-none font-bold text-[9px]">
                                 {ud.category}
                               </Badge>
                             </td>
@@ -874,7 +985,7 @@ export default function ComplianceOperationsPage() {
             <Card className="lg:col-span-4 rounded-3xl border-slate-200 dark:border-zinc-800 shadow-md">
               <CardHeader className="pb-3 border-b flex flex-row items-center justify-between">
                 <CardTitle className="text-base font-black flex items-center gap-2">
-                  <Sparkles className="h-4.5 w-4.5 text-[#f87941]" /> AI Risk Insight
+                  <Sparkles className="h-4.5 w-4.5 text-primary" /> AI Risk Insight
                 </CardTitle>
                 <Button
                   size="sm"
@@ -909,7 +1020,7 @@ export default function ComplianceOperationsPage() {
                     </div>
 
                     <div className="space-y-1 pt-1">
-                      <div className="font-bold text-[#f87941] text-[10px] uppercase">L&D Recommendations</div>
+                      <div className="font-bold text-primary text-[10px] uppercase">L&D Recommendations</div>
                       <ul className="list-decimal pl-4 space-y-1 text-slate-600 dark:text-slate-400">
                         {aiRiskSnapshot.recommendations.map((rec, idx) => (
                           <li key={idx} className="font-semibold leading-relaxed">{rec}</li>
@@ -921,8 +1032,20 @@ export default function ComplianceOperationsPage() {
                   <div className="text-center py-8 text-slate-400 space-y-2">
                     <Sparkles className="h-8 w-8 mx-auto text-slate-300 animate-pulse" />
                     <p className="font-semibold text-xs">AI Risk Snapshot is ready to scan compliance drivers.</p>
-                    <Button size="sm" onClick={runAiRiskAssessment} className="bg-[#f87941] hover:bg-[#e06634] text-white text-[10px] font-bold rounded-lg px-3.5 h-8 mt-2">
-                      Generate AI Risk Report
+                    <Button
+                      size="sm"
+                      onClick={runAiRiskAssessment}
+                      disabled={aiRiskLoading}
+                      className="bg-primary hover:bg-primary/95 text-white text-[10px] font-bold rounded-lg px-3.5 h-8 mt-2"
+                    >
+                      {aiRiskLoading ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                          Generating...
+                        </>
+                      ) : (
+                        'Generate AI Risk Report'
+                      )}
                     </Button>
                   </div>
                 )}
@@ -1028,7 +1151,7 @@ export default function ComplianceOperationsPage() {
                     onClick={() => setDomainPage(i + 1)}
                     className={`h-8 w-8 p-0 rounded-lg text-xs font-bold ${
                       domainPage === i + 1
-                        ? 'bg-[#f87941] hover:bg-[#e06634] text-white'
+                        ? 'bg-primary hover:bg-primary/95 text-white'
                         : 'border-slate-200 dark:border-zinc-800'
                     }`}
                   >
@@ -1057,7 +1180,7 @@ export default function ComplianceOperationsPage() {
             <CardHeader className="pb-3 border-b">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <CardTitle className="text-base font-black flex items-center gap-2">
-                  <FileCheck className="h-4.5 w-4.5 text-[#f87941]" /> Employee Compliance Verification Ledger
+                  <FileCheck className="h-4.5 w-4.5 text-primary" /> Employee Compliance Verification Ledger
                 </CardTitle>
                 <div className="flex items-center gap-2">
                   <Input
@@ -1083,7 +1206,7 @@ export default function ComplianceOperationsPage() {
                     onClick={handleExportComplianceCsv}
                     className="rounded-xl text-xs font-bold h-9 px-3 flex items-center gap-1.5 border-slate-200 dark:border-zinc-800 hover:bg-slate-100 dark:hover:bg-zinc-800"
                   >
-                    <Download className="h-3.5 w-3.5 text-[#f87941]" /> Export CSV
+                    <Download className="h-3.5 w-3.5 text-primary" /> Export CSV
                   </Button>
                 </div>
               </div>
@@ -1110,7 +1233,7 @@ export default function ComplianceOperationsPage() {
                             {i.employeeName}
                           </td>
                           <td className="p-4">
-                            <Badge className="bg-[#f87941]/10 text-[#f87941] border-none font-bold text-[9px]">
+                            <Badge className="bg-primary/10 text-primary border-none font-bold text-[9px]">
                               {i.category}
                             </Badge>
                           </td>
@@ -1124,7 +1247,7 @@ export default function ComplianceOperationsPage() {
                             {canApprove ? (
                               <div className="flex items-center gap-1.5">
                                 {updatingStatusId === i.id && (
-                                  <Loader2 className="h-3 w-3 text-[#f87941] animate-spin" />
+                                  <Loader2 className="h-3 w-3 text-primary animate-spin" />
                                 )}
                                 <Select
                                   value={i.complianceStatus}
@@ -1201,7 +1324,7 @@ export default function ComplianceOperationsPage() {
                               onClick={() => setLedgerPage(pageNum)}
                               className={`h-8 w-8 p-0 rounded-lg text-xs font-bold ${
                                 ledgerPage === pageNum
-                                  ? 'bg-[#f87941] hover:bg-[#e06634] text-white'
+                                  ? 'bg-primary hover:bg-primary/95 text-white'
                                   : 'border-slate-200 dark:border-zinc-800'
                               }`}
                             >
@@ -1284,7 +1407,7 @@ export default function ComplianceOperationsPage() {
                             <div className="text-[10px] text-slate-400 font-medium">{v.department}</div>
                           </td>
                           <td className="p-4 max-w-sm space-y-1">
-                            <Badge className="bg-[#f87941]/10 text-[#f87941] border-none font-bold text-[9px] mb-1">
+                            <Badge className="bg-primary/10 text-primary border-none font-bold text-[9px] mb-1">
                               {v.category}
                             </Badge>
                             <div className="font-bold text-slate-800 dark:text-slate-200">{v.title}</div>
@@ -1310,7 +1433,8 @@ export default function ComplianceOperationsPage() {
                                 size="sm"
                                 variant="outline"
                                 onClick={() => getAiRemediation(v.id)}
-                                className="h-7 text-[10px] font-black border-[#f87941]/30 hover:bg-[#f87941]/5 text-[#f87941] rounded-lg"
+                                disabled={recommendedActionsId === v.id}
+                                className="h-7 text-[10px] font-black border-primary/30 hover:bg-primary/5 text-primary rounded-lg"
                               >
                                 {recommendedActionsId === v.id ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Sparkles className="h-3 w-3 mr-1" />}
                                 AI Action Guide
@@ -1345,7 +1469,7 @@ export default function ComplianceOperationsPage() {
                             onClick={() => setViolationPage(i + 1)}
                             className={`h-8 w-8 p-0 rounded-lg text-xs font-bold ${
                               violationPage === i + 1
-                                ? 'bg-[#f87941] hover:bg-[#e06634] text-white'
+                                ? 'bg-primary hover:bg-primary/95 text-white'
                                 : 'border-slate-200 dark:border-zinc-800'
                             }`}
                           >
@@ -1447,7 +1571,7 @@ export default function ComplianceOperationsPage() {
                         onClick={() => setAuditsPage(i + 1)}
                         className={`h-8 w-8 p-0 rounded-lg text-xs font-bold ${
                           auditsPage === i + 1
-                            ? 'bg-[#f87941] hover:bg-[#e06634] text-white'
+                            ? 'bg-primary hover:bg-primary/95 text-white'
                             : 'border-slate-200 dark:border-zinc-800'
                         }`}
                       >
@@ -1523,7 +1647,7 @@ export default function ComplianceOperationsPage() {
             <Card className="rounded-3xl border-slate-200 dark:border-zinc-800 shadow-md">
               <CardHeader className="pb-3 border-b">
                 <CardTitle className="text-base font-black flex items-center gap-2">
-                  <ShieldCheck className="h-4.5 w-4.5 text-[#f87941]" /> Annual Audit Readiness
+                  <ShieldCheck className="h-4.5 w-4.5 text-primary" /> Annual Audit Readiness
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-4 space-y-3 text-xs font-semibold">
@@ -1548,7 +1672,7 @@ export default function ComplianceOperationsPage() {
             <Card className="md:col-span-3 rounded-3xl border-slate-200 dark:border-zinc-800 shadow-md">
               <CardHeader className="pb-3 border-b">
                 <CardTitle className="text-base font-black flex items-center gap-2">
-                  <BarChart3 className="h-4.5 w-4.5 text-[#f87941]" /> Domain Coverage Overview
+                  <BarChart3 className="h-4.5 w-4.5 text-primary" /> Domain Coverage Overview
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-4">
@@ -1576,7 +1700,7 @@ export default function ComplianceOperationsPage() {
           <Card className="rounded-3xl border-slate-200 dark:border-zinc-800 shadow-md">
             <CardHeader className="pb-3 border-b">
               <CardTitle className="text-base font-black flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-[#f87941]" /> Ask AI Compliance Copilot
+                <Sparkles className="h-5 w-5 text-primary" /> Ask AI Compliance Copilot
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-6 space-y-4">
@@ -1633,7 +1757,7 @@ export default function ComplianceOperationsPage() {
                 <Button
                   onClick={() => runCopilotQuery()}
                   disabled={aiCopilotLoading || !aiCopilotQuery.trim()}
-                  className="bg-[#f87941] hover:bg-[#e06634] text-white font-extrabold text-xs h-11 px-5 rounded-xl flex items-center gap-1.5"
+                  className="bg-primary hover:bg-primary/95 text-white font-extrabold text-xs h-11 px-5 rounded-xl flex items-center gap-1.5"
                 >
                   {aiCopilotLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <SendHorizontal className="h-4 w-4" />}
                   Ask AI
@@ -1644,7 +1768,7 @@ export default function ComplianceOperationsPage() {
               {(aiCopilotAnswer || aiCopilotLoading) && (
                 <div className="p-5 rounded-2xl bg-slate-950 text-slate-100 border border-zinc-800 space-y-3">
                   <div className="flex items-center justify-between text-xs border-b border-zinc-800 pb-2">
-                    <span className="flex items-center gap-1.5 font-bold text-[#f87941]"><Bot className="h-4 w-4" /> AI Copilot Response</span>
+                    <span className="flex items-center gap-1.5 font-bold text-primary"><Bot className="h-4 w-4" /> AI Copilot Response</span>
                     {aiCopilotConfidence !== null && (
                       <Badge className="bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 text-[9px] font-mono">
                         Confidence: {Math.round(aiCopilotConfidence * 100)}%
@@ -1710,7 +1834,7 @@ export default function ComplianceOperationsPage() {
                 </PopoverTrigger>
                 <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-2 rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-xl z-50">
                   <div className="flex items-center border border-slate-200 dark:border-zinc-850 rounded-xl px-3 mb-2 bg-slate-50/50 dark:bg-zinc-900">
-                    <Search className="mr-2 h-4 w-4 shrink-0 opacity-50 text-[#f87941]" />
+                    <Search className="mr-2 h-4 w-4 shrink-0 opacity-50 text-primary" />
                     <Input
                       placeholder="Search employee name or department..."
                       value={employeeSearchQuery}
@@ -1730,7 +1854,7 @@ export default function ComplianceOperationsPage() {
                           }}
                           className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-colors ${
                             selectedUserId === e.id
-                              ? 'bg-[#f87941]/10 text-[#f87941]'
+                              ? 'bg-primary/10 text-primary'
                               : 'hover:bg-slate-50 dark:hover:bg-zinc-800/40 text-slate-700 dark:text-slate-300'
                           }`}
                         >
@@ -1738,7 +1862,7 @@ export default function ComplianceOperationsPage() {
                             <div className="font-bold">{e.name}</div>
                             <div className="text-[10px] text-slate-400 font-medium">{e.department} • {e.designation}</div>
                           </div>
-                          {selectedUserId === e.id && <Check className="h-4 w-4 text-[#f87941]" />}
+                          {selectedUserId === e.id && <Check className="h-4 w-4 text-primary" />}
                         </button>
                       ))
                     ) : (
@@ -1840,7 +1964,7 @@ export default function ComplianceOperationsPage() {
               <Button
                 type="submit"
                 disabled={submitting}
-                className="bg-[#f87941] hover:bg-[#e06634] text-white font-extrabold text-xs rounded-full px-6 h-10 flex items-center gap-1.5 shadow-md shadow-[#f87941]/20 transition-all"
+                className="bg-primary hover:bg-primary/95 text-white font-extrabold text-xs rounded-full px-6 h-10 flex items-center gap-1.5 shadow-md shadow-primary/20 transition-all"
               >
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <SendHorizontal className="h-4 w-4" />}
                 Log Record
@@ -1903,7 +2027,7 @@ export default function ComplianceOperationsPage() {
         <DialogContent className="rounded-3xl max-w-lg border-slate-200 dark:border-zinc-800">
           <DialogHeader>
             <DialogTitle className="text-base font-black flex items-center gap-2">
-              <Sparkles className="h-4.5 w-4.5 text-[#f87941]" /> AI Recommended Corrective Actions
+              <Sparkles className="h-4.5 w-4.5 text-primary" /> AI Recommended Corrective Actions
             </DialogTitle>
             <DialogDescription className="text-xs">
               Remediation guide for violation ID: {recommendedActionsId}
@@ -1919,11 +2043,12 @@ export default function ComplianceOperationsPage() {
               </div>
             ) : (
               <p className="text-xs leading-relaxed whitespace-pre-line text-slate-300 font-sans">{aiRecommendationText}</p>
-            )}
+            )
+            }
           </div>
 
           <DialogFooter>
-            <Button onClick={() => setRecommendedActionsId(null)} className="bg-[#f87941] hover:bg-[#e06634] text-white text-xs font-black rounded-xl px-5 h-10">
+            <Button onClick={() => setRecommendedActionsId(null)} className="bg-primary hover:bg-primary/95 text-white text-xs font-black rounded-xl px-5 h-10">
               Close Guide
             </Button>
           </DialogFooter>

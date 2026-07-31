@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { withApiHandler } from '@/server/http/handler';
 import { BadRequestError } from '@/server/http/errors';
 import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
+import { apiSuccess } from '@/server/http/response';
 
 export const GET = withApiHandler(async (request, context) => {
   const tenantId = context.auth?.user.tenantId;
@@ -17,14 +18,21 @@ export const GET = withApiHandler(async (request, context) => {
 
   if (inqErr) throw inqErr;
 
-  // If empty, insert seed values to prevent empty state in demo
+  // If empty, insert seed values with full enterprise CRM columns to prevent empty state in demo
   if (!inquiries || inquiries.length === 0) {
     const seedData = [
       {
         tenant_id: tenantId,
         alias_name: 'Sarah Chen',
+        contact_person: 'Sarah Chen',
+        designation: 'VP of Product',
+        company_name: 'BrightSun Group',
+        inquiry_source: 'WhatsApp',
         tag: 'WhatsApp',
         status: 'Proposal',
+        pipeline_stage: 'Proposal',
+        estimated_value: 450000,
+        priority_level: 'High',
         app_status: 'open',
         is_favourite: true,
         created_by: context.auth!.user.id
@@ -32,8 +40,15 @@ export const GET = withApiHandler(async (request, context) => {
       {
         tenant_id: tenantId,
         alias_name: 'Marcus Wright',
+        contact_person: 'Marcus Wright',
+        designation: 'Procurement Specialist',
+        company_name: 'Strategic Systems Inc',
+        inquiry_source: 'Email',
         tag: 'Email',
         status: 'Negotiation',
+        pipeline_stage: 'Negotiation',
+        estimated_value: 820000,
+        priority_level: 'Medium',
         app_status: 'open',
         is_favourite: false,
         created_by: context.auth!.user.id
@@ -41,8 +56,15 @@ export const GET = withApiHandler(async (request, context) => {
       {
         tenant_id: tenantId,
         alias_name: 'Janet Lee',
+        contact_person: 'Janet Lee',
+        designation: 'Tech Lead',
+        company_name: 'Nova Softwares',
+        inquiry_source: 'SMS',
         tag: 'SMS',
         status: 'Qualified',
+        pipeline_stage: 'Qualified',
+        estimated_value: 120000,
+        priority_level: 'Low',
         app_status: 'open',
         is_favourite: false,
         created_by: context.auth!.user.id
@@ -120,20 +142,31 @@ export const GET = withApiHandler(async (request, context) => {
       });
     }
 
+    const stage = inq.status || inq.pipeline_stage || 'Lead';
+    let progress = 35;
+    if (stage === 'Won' || stage === 'hired') progress = 100;
+    else if (stage === 'Negotiation') progress = 85;
+    else if (stage === 'Proposal') progress = 70;
+    else if (stage === 'Qualified') progress = 50;
+
+    let healthScore = 75;
+    if (inq.priority_level === 'High' || inq.is_favourite) healthScore = 95;
+    else if (inq.priority_level === 'Low') healthScore = 55;
+
     return {
       id: inq.id.toString(),
-      name: inq.alias_name,
-      role: inq.tag === 'WhatsApp' ? 'Client Representative' : 'Lead Procurement',
-      company: inq.tag === 'WhatsApp' ? 'BrightSun Group' : 'Strategic Systems',
-      channel: inq.tag || 'Email',
+      name: inq.alias_name || inq.contact_person || 'Client Representative',
+      role: inq.designation || 'Representative',
+      company: inq.company_name || 'Organization',
+      channel: inq.inquiry_source || inq.tag || 'Email',
       avatar: '',
       lastMessage: lastFeed?.description || 'Awaiting discussion details...',
       time: lastFeed ? new Date(lastFeed.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now',
-      activeDeal: inq.app_status === 'open',
-      health: inq.is_favourite ? 95 : 78,
-      dealValue: inq.is_favourite ? '₹4,50,000' : '₹1,20,000',
-      dealStage: inq.status || 'Qualified',
-      dealProgress: inq.status === 'Won' ? 100 : inq.status === 'Proposal' ? 70 : 35,
+      activeDeal: inq.app_status === 'open' || ['lead', 'qualified', 'proposal', 'negotiation', 'follow_up'].includes(String(inq.status).toLowerCase()),
+      health: healthScore,
+      dealValue: inq.estimated_value ? `₹${Number(inq.estimated_value).toLocaleString()}` : '₹1,50,000',
+      dealStage: stage,
+      dealProgress: progress,
       activity: [
         { title: 'Inquiry Created', time: new Date(inq.created_at).toLocaleDateString(), type: 'doc' }
       ],
@@ -141,7 +174,7 @@ export const GET = withApiHandler(async (request, context) => {
     };
   });
 
-  return NextResponse.json({ success: true, data: threads });
+  return apiSuccess(threads);
 }, { requireAuth: true, roles: ['Employee'] });
 
 export const POST = withApiHandler(async (request, context) => {
@@ -166,5 +199,5 @@ export const POST = withApiHandler(async (request, context) => {
     .single();
 
   if (error) throw error;
-  return NextResponse.json({ success: true, data });
+  return apiSuccess(data);
 }, { requireAuth: true, roles: ['Employee'] });
