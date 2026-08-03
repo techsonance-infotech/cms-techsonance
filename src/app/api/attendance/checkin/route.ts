@@ -156,30 +156,39 @@ export const POST = withApiHandler(async (request, context) => {
       reader_id: payload.readerId ?? null,
       notes: payload.metadata?.notes ?? (isWeekend ? 'Weekend Check-in' : `AI Alert: ${aiResult.details}`),
       violation_flags: violationFlags,
+      tenant_id: tenantId,
+      created_at: nowDate.toISOString(),
+      updated_at: nowDate.toISOString(),
       metadata: { 
         ...payload.metadata, 
         aiConfidence: aiResult.confidenceScore, 
         aiDetails: aiResult.details,
         clientIp,
-        userAgent
-      },
-      tenant_id: tenantId,
-      created_at: nowDate.toISOString(),
-      updated_at: nowDate.toISOString(),
-      requested_time_in: nowDate.toISOString(),
-      reason_type: isWeekend ? 'regularization' : 'dispute',
-      gps_latitude: payload.locationLatitude ?? null,
-      gps_longitude: payload.locationLongitude ?? null,
-      ai_fraud_check: {
-        isAnomaly: aiResult.isAnomaly,
-        anomalyType: aiResult.anomalyType,
-        confidenceScore: aiResult.confidenceScore,
-        details: aiResult.details,
-        recommendation: aiResult.recommendation
+        userAgent,
+        requested_time_in: nowDate.toISOString(),
+        reason_type: isWeekend ? 'regularization' : 'dispute',
+        gps_latitude: payload.locationLatitude ?? null,
+        gps_longitude: payload.locationLongitude ?? null,
+        ai_fraud_check: {
+          isAnomaly: aiResult.isAnomaly,
+          anomalyType: aiResult.anomalyType,
+          confidenceScore: aiResult.confidenceScore,
+          details: aiResult.details,
+          recommendation: aiResult.recommendation
+        }
       }
     }).select('*').single();
 
     if (requestError || !requestRecord) throw requestError ?? new Error('Failed to create attendance request');
+
+    const requestRecordMapped = {
+      ...requestRecord,
+      ai_fraud_check: requestRecord.ai_fraud_check ?? requestRecord.metadata?.ai_fraud_check,
+      requested_time_in: requestRecord.requested_time_in ?? requestRecord.metadata?.requested_time_in,
+      reason_type: requestRecord.reason_type ?? requestRecord.metadata?.reason_type,
+      gps_latitude: requestRecord.gps_latitude ?? requestRecord.metadata?.gps_latitude,
+      gps_longitude: requestRecord.gps_longitude ?? requestRecord.metadata?.gps_longitude
+    };
 
     // Create Exception Log for Audits
     if (aiResult.isAnomaly) {

@@ -70,13 +70,26 @@ export const POST = withApiHandler(async (request, context) => {
     .is('time_out', null)
     .maybeSingle();
 
-  const { data: pendingCheckIn } = await supabase.from('attendance_requests').select('*')
+  const { data: rawPending } = await supabase.from('attendance_requests').select('*')
     .eq('employee_id', finalEmployeeId)
     .eq('date', today)
     .eq('tenant_id', tenantId)
     .is('time_out', null)
     .maybeSingle();
 
+  const mapRequestRecord = (req: any) => {
+    if (!req) return req;
+    return {
+      ...req,
+      ai_fraud_check: req.ai_fraud_check ?? req.metadata?.ai_fraud_check,
+      requested_time_in: req.requested_time_in ?? req.metadata?.requested_time_in,
+      reason_type: req.reason_type ?? req.metadata?.reason_type,
+      gps_latitude: req.gps_latitude ?? req.metadata?.gps_latitude,
+      gps_longitude: req.gps_longitude ?? req.metadata?.gps_longitude
+    };
+  };
+
+  const pendingCheckIn = mapRequestRecord(rawPending);
   const currentCheckIn = activeCheckIn || pendingCheckIn;
   const isPendingTable = !!pendingCheckIn;
 
@@ -161,7 +174,7 @@ export const POST = withApiHandler(async (request, context) => {
 
     return apiSuccess({
       action: 'checkin',
-      ...createdReq,
+      ...mapRequestRecord(createdReq),
       employee: employeeView,
       status: 'pending_approval'
     }, 'Time In recorded successfully (Pending Justification)', { status: 202 });

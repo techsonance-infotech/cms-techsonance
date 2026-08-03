@@ -29,7 +29,16 @@ export const GET = withApiHandler(async (request, context) => {
   const { data, error } = await query.order('created_at', { ascending: false });
   if (error) throw error;
 
-  return NextResponse.json(data);
+  const mappedData = (data || []).map(r => ({
+    ...r,
+    ai_fraud_check: r.ai_fraud_check ?? r.metadata?.ai_fraud_check,
+    requested_time_in: r.requested_time_in ?? r.metadata?.requested_time_in,
+    reason_type: r.reason_type ?? r.metadata?.reason_type,
+    gps_latitude: r.gps_latitude ?? r.metadata?.gps_latitude,
+    gps_longitude: r.gps_longitude ?? r.metadata?.gps_longitude
+  }));
+
+  return NextResponse.json(mappedData);
 }, { requireAuth: true, roles: ['Employee'] });
 
 export const PATCH = withApiHandler(async (request, context) => {
@@ -48,15 +57,24 @@ export const PATCH = withApiHandler(async (request, context) => {
   const actor = await getCurrentSupabaseActor(accessToken);
 
   // Fetch the request
-  const { data: attendanceRequest, error: reqError } = await supabase
+  const { data: rawRequest, error: reqError } = await supabase
     .from('attendance_requests')
     .select('*, employees!inner(id, user_id)')
     .eq('id', id)
     .eq('tenant_id', tenantId)
     .single();
 
-  if (reqError || !attendanceRequest) throw new NotFoundError('Attendance request not found');
-  if (attendanceRequest.status !== 'pending') throw new BadRequestError('Request is not pending');
+  if (reqError || !rawRequest) throw new NotFoundError('Attendance request not found');
+  if (rawRequest.status !== 'pending') throw new BadRequestError('Request is not pending');
+
+  const attendanceRequest = {
+    ...rawRequest,
+    ai_fraud_check: rawRequest.ai_fraud_check ?? rawRequest.metadata?.ai_fraud_check,
+    requested_time_in: rawRequest.requested_time_in ?? rawRequest.metadata?.requested_time_in,
+    reason_type: rawRequest.reason_type ?? rawRequest.metadata?.reason_type,
+    gps_latitude: rawRequest.gps_latitude ?? rawRequest.metadata?.gps_latitude,
+    gps_longitude: rawRequest.gps_longitude ?? rawRequest.metadata?.gps_longitude
+  };
 
   const clientIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip');
   const userAgent = request.headers.get('user-agent');
