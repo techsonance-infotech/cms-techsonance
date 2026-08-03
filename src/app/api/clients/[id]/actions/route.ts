@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { withApiHandler } from '@/server/http/handler';
-import { BadRequestError } from '@/server/http/errors';
+import { BadRequestError, NotFoundError } from '@/server/http/errors';
 import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
 import { apiSuccess, apiError } from '@/server/http/response';
 
@@ -20,15 +20,16 @@ export const POST = withApiHandler(async (request, context) => {
 
   const supabase = getAdminRouteSupabase();
 
-  // Fetch client details
+  // Fetch client details with tenant protection
   const { data: client, error: clientErr } = await supabase
     .from('clients')
     .select('*')
-    .eq('id', idSegment)
+    .eq('id', clientId)
+    .eq('tenant_id', tenantId)
     .single();
 
   if (clientErr || !client) {
-    throw new BadRequestError('Client not found');
+    throw new NotFoundError('Client not found');
   }
 
   try {

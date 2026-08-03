@@ -329,21 +329,17 @@ export default function HrAutomationPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6 max-w-[1700px] mx-auto p-4 md:p-6">
-        {/* Hero Skeleton */}
-        <div className="rounded-3xl bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-6 md:p-8 animate-pulse">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="h-14 w-14 rounded-2xl bg-slate-200 dark:bg-zinc-800" />
-            <div className="space-y-2 flex-1">
-              <div className="h-7 w-72 bg-slate-200 dark:bg-zinc-800 rounded-xl" />
-              <div className="h-4 w-96 bg-slate-200 dark:bg-zinc-800 rounded-lg" />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-20 rounded-2xl bg-slate-200 dark:bg-zinc-800" />
-            ))}
-          </div>
+      <div className="space-y-6 max-w-[1700px] mx-auto p-4 md:p-6 animate-pulse">
+        {/* Header Skeleton */}
+        <div className="h-36 w-full bg-slate-100 dark:bg-zinc-800 rounded-3xl" />
+        
+        {/* KPI Stats Row Skeleton */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
+          <div className="h-20 bg-slate-100 dark:bg-zinc-800 rounded-2xl" />
+          <div className="h-20 bg-slate-100 dark:bg-zinc-800 rounded-2xl" />
+          <div className="h-20 bg-slate-100 dark:bg-zinc-800 rounded-2xl" />
+          <div className="h-20 bg-slate-100 dark:bg-zinc-800 rounded-2xl" />
+          <div className="h-20 bg-slate-100 dark:bg-zinc-800 rounded-2xl" />
         </div>
 
         {/* Tabs Skeleton */}
@@ -377,75 +373,82 @@ export default function HrAutomationPage() {
   return (
     <div className="space-y-6 max-w-[1700px] mx-auto p-4 md:p-6 text-slate-900 dark:text-slate-100 animate-fadeIn">
 
-      {/* Hero Header Section */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-950 via-[#0f172a] to-zinc-950 p-6 md:p-8 border border-zinc-800 shadow-2xl">
-        <div className="absolute right-0 top-0 -mr-12 -mt-12 h-64 w-64 rounded-full bg-[#f87941]/10 blur-3xl animate-pulse pointer-events-none" />
+      {/* Hero Header Section (Gradient & Style Aligned to AI Copilot) */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-primary/95 to-zinc-900 p-6 md:p-8 border border-primary/20 shadow-xl">
+        <div className="absolute right-0 top-0 -mr-6 -mt-6 h-32 w-32 rounded-full bg-primary/10 blur-2xl pointer-events-none" />
+        <div className="absolute left-1/3 bottom-0 -mb-6 h-24 w-24 rounded-full bg-primary/10 blur-xl pointer-events-none" />
 
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-[#f87941]/15 rounded-2xl border border-[#f87941]/30">
-                <Cpu className="h-7 w-7 text-[#f87941]" />
-              </div>
-              <div>
-                <h1 className="text-2xl md:text-3xl font-black tracking-tight bg-gradient-to-r from-[#f87941] via-orange-400 to-amber-400 bg-clip-text text-transparent">
-                  Enterprise HR Automation Engine
-                </h1>
-                <p className="text-slate-400 text-xs md:text-sm font-medium mt-0.5">
-                  21 Automated Triggers: Attendance, Missing Punch, Expiries, Birthdays, Anniversaries, Escalations & AI Daily Digest
-                </p>
-              </div>
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-primary/15 rounded-2xl border border-primary/30">
+              <Cpu className="h-7 w-7 text-white" />
             </div>
-          </div>
-
-          {/* Quick Metrics Bar */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Active Workflows</div>
-              <div className="text-xl font-black text-white mt-0.5">{summaryStats.activeTriggersCount} / {summaryStats.totalWorkflows}</div>
-              <div className="text-[10px] text-emerald-400 flex items-center justify-center gap-0.5 mt-0.5">
-                <CheckCircle2 className="h-2.5 w-2.5" /> All Enabled
-              </div>
-            </div>
-
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Dispatches / Mo</div>
-              <div className="text-xl font-black text-emerald-400 mt-0.5">{summaryStats.totalDispatchesThisMonth}</div>
-              <div className="text-[10px] text-emerald-400/80 mt-0.5">Automated Sent</div>
-            </div>
-
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Delivery Rate</div>
-              <div className="text-xl font-black text-cyan-400 mt-0.5">{summaryStats.deliverySuccessRate}</div>
-              <div className="text-[10px] text-cyan-400/80 mt-0.5">Zero Drops</div>
-            </div>
-
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">AI Daily Digest</div>
-              <div className="text-xl font-black text-amber-400 mt-0.5">Live Active</div>
-              <div className="text-[10px] text-amber-400/80 mt-0.5">Executive Morning Sync</div>
-            </div>
-
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Auto Escalations</div>
-              <div className="text-xl font-black text-purple-400 mt-0.5">24h SLA Rule</div>
-              <div className="text-[10px] text-purple-400/80 mt-0.5">L1 to L2 Escalations</div>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white via-primary-soft to-primary-light bg-clip-text text-transparent">
+                Enterprise HR Automation Engine
+              </h1>
+              <p className="text-slate-355 text-xs font-semibold mt-0.5">
+                21 Automated Triggers: Attendance, Missing Punch, Expiries, Birthdays, Anniversaries, Escalations & AI Daily Digest
+              </p>
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Standalone Operations AI KPI Card Row (Moved Below Hero and Aligned to AI Copilot) */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 md:gap-6">
+        <Card className="rounded-2xl border-slate-200 dark:border-zinc-800 shadow-sm relative overflow-hidden">
+          <CardContent className="p-4 space-y-1 text-xs font-semibold">
+            <div className="text-slate-500 uppercase text-[9px] tracking-wider font-extrabold">Active Workflows</div>
+            <div className="text-xl md:text-2xl font-black text-indigo-500">{summaryStats.activeTriggersCount} / {summaryStats.totalWorkflows}</div>
+            <div className="text-[10px] text-slate-400 font-medium">All Triggers Running</div>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-2xl border-slate-200 dark:border-zinc-800 shadow-sm relative overflow-hidden">
+          <CardContent className="p-4 space-y-1 text-xs font-semibold">
+            <div className="text-slate-500 uppercase text-[9px] tracking-wider font-extrabold">Dispatches / Mo</div>
+            <div className="text-xl md:text-2xl font-black text-emerald-500">{summaryStats.totalDispatchesThisMonth}</div>
+            <div className="text-[10px] text-slate-400 font-medium">Automated Sent</div>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-2xl border-slate-200 dark:border-zinc-800 shadow-sm relative overflow-hidden">
+          <CardContent className="p-4 space-y-1 text-xs font-semibold">
+            <div className="text-slate-500 uppercase text-[9px] tracking-wider font-extrabold">Delivery Rate</div>
+            <div className="text-xl md:text-2xl font-black text-cyan-500">{summaryStats.deliverySuccessRate}</div>
+            <div className="text-[10px] text-slate-400 font-medium">Zero Drops</div>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-2xl border-slate-200 dark:border-zinc-800 shadow-sm relative overflow-hidden">
+          <CardContent className="p-4 space-y-1 text-xs font-semibold">
+            <div className="text-slate-500 uppercase text-[9px] tracking-wider font-extrabold">AI Daily Digest</div>
+            <div className="text-xl md:text-2xl font-black text-amber-500">Live Active</div>
+            <div className="text-[10px] text-slate-400 font-medium">Executive sync active</div>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-2xl border-slate-200 dark:border-zinc-800 shadow-sm relative overflow-hidden">
+          <CardContent className="p-4 space-y-1 text-xs font-semibold">
+            <div className="text-slate-500 uppercase text-[9px] tracking-wider font-extrabold">Auto Escalations</div>
+            <div className="text-xl md:text-2xl font-black text-purple-500">24h SLA Rule</div>
+            <div className="text-[10px] text-slate-400 font-medium">L1 to L2 escalations</div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Main Tabs Navigation */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-6">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-zinc-800 pb-2">
           <TabsList className="bg-slate-100 dark:bg-zinc-900/80 p-1 rounded-2xl border border-slate-200 dark:border-zinc-800 flex flex-wrap h-auto">
-            <TabsTrigger value="workflows" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-[#f87941] data-[state=active]:text-white">
+            <TabsTrigger value="workflows" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-white">
               <Cpu className="h-3.5 w-3.5" /> 21 Automated Workflows ({rules.length})
             </TabsTrigger>
-            <TabsTrigger value="logs" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-[#f87941] data-[state=active]:text-white">
+            <TabsTrigger value="logs" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-white">
               <ClipboardList className="h-3.5 w-3.5" /> Execution Logs & History ({logs.length})
             </TabsTrigger>
-            <TabsTrigger value="digest" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-[#f87941] data-[state=active]:text-white">
+            <TabsTrigger value="digest" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-white">
               <Bot className="h-3.5 w-3.5" /> AI Daily Digest Copilot
             </TabsTrigger>
           </TabsList>
@@ -467,12 +470,12 @@ export default function HrAutomationPage() {
               <Card key={r.id} className="rounded-3xl border-slate-200 dark:border-zinc-800 shadow-sm hover:shadow-md transition-all">
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
-                    <Badge className="bg-[#f87941]/10 text-[#f87941] font-mono text-[10px]">
+                    <Badge className="bg-primary/10 text-primary font-mono text-[10px] border-none">
                       {r.category}
                     </Badge>
                     <div className="flex items-center gap-2">
                       {togglingRule === r.category && (
-                        <Loader2 className="h-3.5 w-3.5 text-[#f87941] animate-spin" />
+                        <Loader2 className="h-3.5 w-3.5 text-primary animate-spin" />
                       )}
                       <Switch
                         checked={r.isEnabled}
@@ -488,8 +491,8 @@ export default function HrAutomationPage() {
                   <div className="p-3 rounded-2xl bg-slate-50 dark:bg-zinc-900 border space-y-1">
                     <div className="text-[10px] text-slate-400 uppercase font-bold">Template & Channels</div>
                     <div className="text-slate-700 dark:text-slate-300 font-medium line-clamp-2">{r.templateBody}</div>
-                    <div className="text-[10px] text-[#f87941] font-mono font-bold pt-1 flex items-center gap-1">
-                      <SendHorizontal className="h-3 w-3 text-[#f87941]" /> {r.channel} • {r.triggerSchedule}
+                    <div className="text-[10px] text-primary font-mono font-bold pt-1 flex items-center gap-1">
+                      <SendHorizontal className="h-3 w-3 text-primary" /> {r.channel} • {r.triggerSchedule}
                     </div>
                   </div>
 
@@ -498,12 +501,12 @@ export default function HrAutomationPage() {
                     <div className="flex items-center gap-1.5">
                       {canApprove && (
                         <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleOpenConfigModal(r)}
-                          className="font-extrabold text-[10px] h-7 px-2.5 rounded-lg flex items-center gap-1 border-slate-200 dark:border-zinc-800 hover:bg-slate-100 dark:hover:bg-zinc-800"
+                           size="sm"
+                           variant="outline"
+                           onClick={() => handleOpenConfigModal(r)}
+                           className="font-extrabold text-[10px] h-7 px-2.5 rounded-lg flex items-center gap-1 border-slate-200 dark:border-zinc-800 hover:bg-slate-100 dark:hover:bg-zinc-800"
                         >
-                          <Settings className="h-3 w-3 text-[#f87941]" /> Configure
+                           <Settings className="h-3 w-3 text-primary" /> Configure
                         </Button>
                       )}
                       <Button
@@ -546,7 +549,7 @@ export default function HrAutomationPage() {
                     onClick={() => setWorkflowPage(i + 1)}
                     className={`h-8 w-8 p-0 rounded-lg text-xs font-bold ${
                       workflowPage === i + 1
-                        ? 'bg-[#f87941] hover:bg-[#e06634] text-white'
+                        ? 'bg-primary hover:bg-primary/95 text-white border-none'
                         : 'border-slate-200 dark:border-zinc-800'
                     }`}
                   >
@@ -565,37 +568,37 @@ export default function HrAutomationPage() {
               </div>
             </div>
           )}
-        </TabsContent>
+      </TabsContent>
 
-        {/* ========================================================================= */}
-        {/* TAB 2: EXECUTION LOGS & HISTORY */}
-        {/* ========================================================================= */}
-        <TabsContent value="logs" className="space-y-6 m-0">
-          <Card className="rounded-3xl border-slate-200 dark:border-zinc-800 shadow-md">
-            <CardHeader className="pb-3 border-b flex flex-row items-center justify-between">
-              <CardTitle className="text-base font-black flex items-center gap-2">
-                <ClipboardList className="h-4.5 w-4.5 text-[#f87941]" /> Real-time Automation Execution History
-              </CardTitle>
-              <div className="flex items-center gap-2">
-                {canApprove && logs.length > 0 && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={clearingLogs}
-                    onClick={handleClearLogsHistory}
-                    className="rounded-xl text-xs font-bold h-8 px-3 flex items-center gap-1.5 border-rose-200 dark:border-rose-900/50 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
-                  >
-                    {clearingLogs ? <Loader2 className="h-3.5 w-3.5 text-rose-500 animate-spin" /> : <Trash2 className="h-3.5 w-3.5 text-rose-500" />}
-                    {clearingLogs ? 'Clearing...' : 'Clear History'}
-                  </Button>
-                )}
+      {/* ========================================================================= */}
+      {/* TAB 2: EXECUTION LOGS & HISTORY */}
+      {/* ========================================================================= */}
+      <TabsContent value="logs" className="space-y-6 m-0">
+        <Card className="rounded-3xl border-slate-200 dark:border-zinc-800 shadow-md">
+          <CardHeader className="pb-3 border-b flex flex-row items-center justify-between">
+            <CardTitle className="text-base font-black flex items-center gap-2">
+              <ClipboardList className="h-4.5 w-4.5 text-primary" /> Real-time Automation Execution History
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              {canApprove && logs.length > 0 && (
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={handleExportLogsCsv}
-                  className="rounded-xl text-xs font-bold h-8 px-3 flex items-center gap-1.5 border-slate-200 dark:border-zinc-800 hover:bg-slate-100 dark:hover:bg-zinc-800"
+                  disabled={clearingLogs}
+                  onClick={handleClearLogsHistory}
+                  className="rounded-xl text-xs font-bold h-8 px-3 flex items-center gap-1.5 border-rose-200 dark:border-rose-900/50 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
                 >
-                  <Download className="h-3.5 w-3.5 text-[#f87941]" /> Export CSV
+                  {clearingLogs ? <Loader2 className="h-3.5 w-3.5 text-rose-500 animate-spin" /> : <Trash2 className="h-3.5 w-3.5 text-rose-500" />}
+                  {clearingLogs ? 'Clearing...' : 'Clear History'}
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleExportLogsCsv}
+                className="rounded-xl text-xs font-bold h-8 px-3 flex items-center gap-1.5 border-slate-200 dark:border-zinc-800 hover:bg-slate-100 dark:hover:bg-zinc-800"
+              >
+                  <Download className="h-3.5 w-3.5 text-primary" /> Export CSV
                 </Button>
               </div>
             </CardHeader>
@@ -619,7 +622,7 @@ export default function HrAutomationPage() {
                             {l.createdAt.slice(0, 19).replace('T', ' ')}
                           </td>
                           <td className="p-4">
-                            <Badge className="bg-[#f87941]/10 text-[#f87941] border-none font-bold text-[9px]">
+                            <Badge className="bg-primary/10 text-primary border-none font-bold text-[9px]">
                               {l.ruleCategory}
                             </Badge>
                           </td>
@@ -671,7 +674,7 @@ export default function HrAutomationPage() {
                               onClick={() => setLogsPage(pageNum)}
                               className={`h-8 w-8 p-0 rounded-lg text-xs font-bold ${
                                 logsPage === pageNum
-                                  ? 'bg-[#f87941] hover:bg-[#e06634] text-white'
+                                  ? 'bg-primary hover:bg-primary/95 text-white border-none'
                                   : 'border-slate-200 dark:border-zinc-800'
                               }`}
                             >
@@ -702,7 +705,7 @@ export default function HrAutomationPage() {
                   <Button
                     size="sm"
                     onClick={() => setActiveTab('workflows')}
-                    className="bg-[#f87941] hover:bg-[#e06634] text-white font-extrabold text-xs h-8 px-4 rounded-xl mt-2"
+                    className="bg-primary hover:bg-primary/95 text-white font-extrabold text-xs h-8 px-4 rounded-xl mt-2 border-none"
                   >
                     View Automated Workflows
                   </Button>
@@ -719,12 +722,12 @@ export default function HrAutomationPage() {
           <Card className="rounded-3xl border-slate-200 dark:border-zinc-800 shadow-md">
             <CardHeader className="pb-3 border-b">
               <CardTitle className="text-base font-black flex items-center gap-2">
-                <Bot className="h-5 w-5 text-[#f87941]" /> AI Executive Morning Workforce Digest
+                <Bot className="h-5 w-5 text-primary" /> AI Executive Morning Workforce Digest
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-6 space-y-4">
               <div className="p-6 rounded-3xl bg-slate-950 text-white border border-zinc-800 space-y-3">
-                <div className="text-xs font-mono text-[#f87941] font-bold flex items-center justify-between">
+                <div className="text-xs font-mono text-primary font-bold flex items-center justify-between">
                   <span className="flex items-center gap-2"><Sparkles className="h-4 w-4" /> Live AI Morning Briefing</span>
                   <Button
                     size="sm"
@@ -734,7 +737,7 @@ export default function HrAutomationPage() {
                       await handleExecuteTrigger('AI-generated Daily Digest');
                       setRegeneratingDigest(false);
                     }}
-                    className="bg-[#f87941] hover:bg-[#e06634] text-white font-extrabold text-[10px] h-7 px-3 rounded-lg flex items-center gap-1"
+                    className="bg-primary hover:bg-primary/95 text-white font-extrabold text-[10px] h-7 px-3 rounded-lg flex items-center gap-1 border-none"
                   >
                     {regeneratingDigest ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
                     {regeneratingDigest ? 'Regenerating...' : 'Regenerate Digest'}
@@ -760,7 +763,7 @@ export default function HrAutomationPage() {
               <div className="p-6 rounded-3xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="text-xs font-black flex items-center gap-2 text-slate-900 dark:text-slate-100">
-                    <Sparkles className="h-4 w-4 text-[#f87941]" /> Ask AI Workforce Copilot
+                    <Sparkles className="h-4 w-4 text-primary" /> Ask AI Workforce Copilot
                   </div>
                   <Badge variant="outline" className="text-[9px] font-mono border-slate-300 dark:border-zinc-700">
                     LLM Engine Active
@@ -777,7 +780,7 @@ export default function HrAutomationPage() {
                   <Button
                     type="submit"
                     disabled={askingCopilot || !copilotQuery.trim()}
-                    className="bg-[#f87941] hover:bg-[#e06634] text-white rounded-xl text-xs font-bold h-10 px-4 flex items-center gap-1.5 shrink-0"
+                    className="bg-primary hover:bg-primary/95 text-white rounded-xl text-xs font-bold h-10 px-4 flex items-center gap-1.5 shrink-0 border-none"
                   >
                     {askingCopilot ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <SendHorizontal className="h-3.5 w-3.5" />}
                     Ask AI
@@ -786,7 +789,7 @@ export default function HrAutomationPage() {
 
                 {copilotResponse && (
                   <div className="p-4 rounded-2xl bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 text-xs font-medium space-y-2 animate-fadeIn">
-                    <div className="text-[10px] text-[#f87941] uppercase font-bold tracking-wider">AI Copilot Response</div>
+                    <div className="text-[10px] text-primary uppercase font-bold tracking-wider">AI Copilot Response</div>
                     <div className="text-slate-800 dark:text-slate-200 whitespace-pre-line leading-relaxed">
                       {copilotResponse}
                     </div>
@@ -802,7 +805,7 @@ export default function HrAutomationPage() {
           <Card className="rounded-3xl border-slate-200 dark:border-zinc-800 shadow-md">
             <CardHeader className="pb-3 border-b">
               <CardTitle className="text-base font-black flex items-center gap-2">
-                <BarChart3 className="h-5 w-5 text-[#f87941]" /> AI Engine Performance Monitoring
+                <BarChart3 className="h-5 w-5 text-primary" /> AI Engine Performance Monitoring
               </CardTitle>
               <CardDescription className="text-xs">
                 Real-time inference latency, token economy, cache efficiency, and data quality metrics (24-hour window)
@@ -840,7 +843,7 @@ export default function HrAutomationPage() {
                     {/* Token Economy */}
                     <div className="p-4 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 space-y-3">
                       <div className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                        <Zap className="h-3.5 w-3.5 text-[#f87941]" /> Token Economy
+                        <Zap className="h-3.5 w-3.5 text-primary" /> Token Economy
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">Total Consumed</span>
@@ -859,7 +862,7 @@ export default function HrAutomationPage() {
                     {/* Data Quality */}
                     <div className="p-4 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 space-y-3">
                       <div className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                        <CheckCircle2 className="h-3.5 w-3.5 text-[#f87941]" /> Data Quality Score
+                        <CheckCircle2 className="h-3.5 w-3.5 text-primary" /> Data Quality Score
                       </div>
                       <div className="flex items-center gap-3">
                         <div className="text-3xl font-black text-slate-900 dark:text-white">{aiMonitoring.avgDataQuality}<span className="text-sm font-bold text-slate-400">/100</span></div>
@@ -881,7 +884,7 @@ export default function HrAutomationPage() {
                   {aiMonitoring.modelRouting && Object.keys(aiMonitoring.modelRouting).length > 0 && (
                     <div className="p-4 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 space-y-3">
                       <div className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                        <Cpu className="h-3.5 w-3.5 text-[#f87941]" /> Model Routing Distribution
+                        <Cpu className="h-3.5 w-3.5 text-primary" /> Model Routing Distribution
                       </div>
                       <div className="space-y-2">
                         {Object.entries(aiMonitoring.modelRouting).map(([model, count]) => (
@@ -890,7 +893,7 @@ export default function HrAutomationPage() {
                             <div className="flex items-center gap-2">
                               <div className="w-24 h-1.5 rounded-full bg-slate-200 dark:bg-zinc-700 overflow-hidden">
                                 <div
-                                  className="h-full rounded-full bg-[#f87941]"
+                                  className="h-full rounded-full bg-primary"
                                   style={{ width: `${Math.min(100, (count / Math.max(1, aiMonitoring.totalAiRequests)) * 100)}%` }}
                                 />
                               </div>
@@ -919,7 +922,7 @@ export default function HrAutomationPage() {
         <DialogContent className="sm:max-w-md rounded-3xl p-6">
           <DialogHeader>
             <DialogTitle className="text-base font-black flex items-center gap-2">
-              <Settings className="h-4.5 w-4.5 text-[#f87941]" /> Configure Rule: {selectedRuleForEdit?.category}
+              <Settings className="h-4.5 w-4.5 text-primary" /> Configure Rule: {selectedRuleForEdit?.category}
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500">
               Customize notification channels, trigger execution schedule, and template message payload.
@@ -979,7 +982,7 @@ export default function HrAutomationPage() {
               <Button
                 type="submit"
                 disabled={savingConfig}
-                className="bg-[#f87941] hover:bg-[#e06634] text-white rounded-xl text-xs font-bold h-9 px-4 flex items-center gap-1.5"
+                className="bg-primary hover:bg-primary/95 text-white rounded-xl text-xs font-bold h-9 px-4 flex items-center gap-1.5 border-none"
               >
                 {savingConfig ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                 Save Configuration

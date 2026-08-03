@@ -1,5 +1,5 @@
 'use client';
-
+import { useSearchParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -79,18 +79,16 @@ export default function AuditLogsPage() {
     }
   }, []);
 
-  // Load tab from URL query params
+  // Synchronize activeTab with URL query parameters reactively using searchParams hook
+  const searchParams = useSearchParams();
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const tabParam = params.get('tab');
-      if (tabParam === 'activity' || tabParam === 'timeline') {
-        setActiveTab('timeline');
-      } else if (tabParam && ['command', 'copilot', 'retention'].includes(tabParam)) {
-        setActiveTab(tabParam);
-      }
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'activity' || tabParam === 'timeline') {
+      setActiveTab('timeline');
+    } else if (tabParam && ['command', 'copilot', 'retention'].includes(tabParam)) {
+      setActiveTab(tabParam);
     }
-  }, []);
+  }, [searchParams]);
 
   // Trigger search on inputs
   useEffect(() => {

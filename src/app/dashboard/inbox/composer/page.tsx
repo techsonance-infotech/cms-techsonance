@@ -34,14 +34,7 @@ export default function CRMComposerPage() {
   const router = useRouter();
   const editorRef = useRef<HTMLDivElement>(null);
 
-  // SMTP Settings State
-  const [showSmtpModal, setShowSmtpModal] = useState(false);
-  const [smtpHost, setSmtpHost] = useState('');
-  const [smtpPort, setSmtpPort] = useState('587');
-  const [smtpSecure, setSmtpSecure] = useState(false);
-  const [smtpUser, setSmtpUser] = useState('');
-  const [smtpPass, setSmtpPass] = useState('');
-  const [useCustomSmtp, setUseCustomSmtp] = useState(false);
+  // SMTP settings resolved server-side based on user's active tenant settings
 
   // Recipient details
   const [recipients, setRecipients] = useState<string[]>(['sarah.jenkins@example.com']);
@@ -66,23 +59,7 @@ export default function CRMComposerPage() {
   const [aiLoading, setAiLoading] = useState(false);
   const [toneLoading, setToneLoading] = useState(false);
 
-  // Load SMTP configurations from localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem('custom_smtp_settings');
-    if (saved) {
-      try {
-        const config = JSON.parse(saved);
-        setSmtpHost(config.host || '');
-        setSmtpPort(String(config.port || '587'));
-        setSmtpSecure(!!config.secure);
-        setSmtpUser(config.auth?.user || '');
-        setSmtpPass(config.auth?.pass || '');
-        setUseCustomSmtp(true);
-      } catch (e) {
-        // Ignore
-      }
-    }
-  }, []);
+  // SMTP configurations loaded dynamically by tenantId server-side
 
   // Keep editor content synchronized with templates or AI generation
   useEffect(() => {
@@ -91,29 +68,7 @@ export default function CRMComposerPage() {
     }
   }, [emailBody]);
 
-  const handleSaveSmtp = () => {
-    if (useCustomSmtp) {
-      if (!smtpHost || !smtpUser || !smtpPass) {
-        toast.error('SMTP Host, User, and Password are required for custom relay.');
-        return;
-      }
-      const config = {
-        host: smtpHost,
-        port: Number(smtpPort) || 587,
-        secure: smtpSecure,
-        auth: {
-          user: smtpUser,
-          pass: smtpPass
-        }
-      };
-      localStorage.setItem('custom_smtp_settings', JSON.stringify(config));
-      toast.success('Custom SMTP credentials loaded to local session memory.');
-    } else {
-      localStorage.removeItem('custom_smtp_settings');
-      toast.success('Switched to default corporate relay SMTP settings.');
-    }
-    setShowSmtpModal(false);
-  };
+  // Custom SMTP configurations saved server-side per tenant
 
   const handleRemoveRecipient = (name: string) => {
     setRecipients(prev => prev.filter(r => r !== name));
@@ -294,18 +249,7 @@ Original Email Content:
       setSending(true);
       const toastId = toast.loading('Dispatching message through SMTP...', { id: 'email-sending' });
       
-      let smtpConfig = null;
-      if (useCustomSmtp) {
-        smtpConfig = {
-          host: smtpHost,
-          port: Number(smtpPort) || 587,
-          secure: smtpSecure,
-          auth: {
-            user: smtpUser,
-            pass: smtpPass
-          }
-        };
-      }
+      // SMTP settings resolved server-side based on user's active tenant
 
       const token = localStorage.getItem('session_token');
       const targetEmail = activeRecipients[0];
@@ -320,8 +264,7 @@ Original Email Content:
         body: JSON.stringify({
           to: targetEmail,
           subject,
-          html: currentBody,
-          smtpConfig
+          html: currentBody
         })
       });
 
@@ -376,14 +319,7 @@ Original Email Content:
               </select>
             </div>
 
-            <Button 
-              size="icon" 
-              variant="outline" 
-              onClick={() => setShowSmtpModal(true)} 
-              className="h-8 w-8 text-muted-foreground rounded-lg border-border hover:bg-accent"
-            >
-              <Settings className="h-4 w-4" />
-            </Button>
+
             
             <Button 
               onClick={handleSend}
@@ -587,107 +523,7 @@ Original Email Content:
         </div>
       </aside>
 
-      {/* SMTP Configuration Dialog Modal */}
-      {showSmtpModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fadeIn duration-200">
-          <div className="w-full max-w-md bg-card border border-border p-6 rounded-2xl shadow-2xl relative space-y-5">
-            <button 
-              onClick={() => setShowSmtpModal(false)}
-              className="absolute top-4 right-4 text-muted-foreground hover:text-foreground hover:bg-accent p-1.5 rounded-lg transition-colors"
-            >
-              <X className="h-4 w-4" />
-            </button>
 
-            <div>
-              <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                <Settings className="h-4 w-4 text-primary" /> SMTP Relay Configurations
-              </h3>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Customize SMTP relays or switch back to default corporate credentials.</p>
-            </div>
-
-            <div className="flex items-center gap-2 pb-1 border-b border-border/60">
-              <input 
-                type="checkbox" 
-                id="smtpOverride"
-                checked={useCustomSmtp} 
-                onChange={(e) => setUseCustomSmtp(e.target.checked)}
-                className="accent-primary h-3.5 w-3.5 rounded-sm border-gray-300"
-              />
-              <label htmlFor="smtpOverride" className="text-xs font-bold text-foreground cursor-pointer select-none">
-                Enable Custom SMTP Configurations
-              </label>
-            </div>
-
-            {useCustomSmtp && (
-              <div className="space-y-3.5 animate-in slideInFromTop duration-200">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase">SMTP Host Server</label>
-                  <Input 
-                    value={smtpHost}
-                    onChange={(e) => setSmtpHost(e.target.value)}
-                    placeholder="smtp.gmail.com"
-                    className="bg-accent border-border text-xs rounded-xl h-9"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-muted-foreground uppercase">SMTP Port</label>
-                    <Input 
-                      value={smtpPort}
-                      onChange={(e) => setSmtpPort(e.target.value)}
-                      placeholder="587"
-                      className="bg-accent border-border text-xs rounded-xl h-9"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2 pt-6">
-                    <input 
-                      type="checkbox" 
-                      id="smtpSecure"
-                      checked={smtpSecure}
-                      onChange={(e) => setSmtpSecure(e.target.checked)}
-                      className="accent-primary h-3.5 w-3.5 rounded-sm border-gray-300"
-                    />
-                    <label htmlFor="smtpSecure" className="text-[10px] font-bold text-muted-foreground uppercase cursor-pointer select-none">
-                      SSL/TLS Secure
-                    </label>
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase">SMTP User Email</label>
-                  <Input 
-                    value={smtpUser}
-                    onChange={(e) => setSmtpUser(e.target.value)}
-                    placeholder="sales@company.com"
-                    className="bg-accent border-border text-xs rounded-xl h-9"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase">SMTP Password / Token</label>
-                  <Input 
-                    type="password"
-                    value={smtpPass}
-                    onChange={(e) => setSmtpPass(e.target.value)}
-                    placeholder="••••••••••••••••"
-                    className="bg-accent border-border text-xs rounded-xl h-9"
-                  />
-                </div>
-              </div>
-            )}
-
-            <div className="flex gap-3 justify-end pt-3">
-              <Button variant="ghost" onClick={() => setShowSmtpModal(false)} className="text-xs font-semibold hover:bg-accent rounded-xl px-4">
-                Cancel
-              </Button>
-              <Button onClick={handleSaveSmtp} className="bg-primary hover:bg-primary/95 text-white font-bold text-xs rounded-xl px-4 border-none">
-                Save & Load Configuration
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

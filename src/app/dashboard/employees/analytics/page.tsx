@@ -1,7 +1,7 @@
 'use client';
 
-import AnalyticsDashboardPage from '../../analytics/page';
+import HrAnalyticsPage from '../../hr-operations/analytics/page';
 
 export default function EmployeesAnalyticsAliasPage() {
-  return <AnalyticsDashboardPage />;
+  return <HrAnalyticsPage />;
 }

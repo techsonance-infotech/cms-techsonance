@@ -10,11 +10,14 @@ export const POST = withApiHandler(async (request, context) => {
   const { summary, description, startDateTime, durationMinutes } = await request.json();
   if (!summary || !startDateTime) throw new BadRequestError('summary and startDateTime are required');
 
+  const startMs = Date.parse(startDateTime);
+  if (isNaN(startMs)) throw new BadRequestError('startDateTime must be a valid ISO/RFC date string');
+
+  const endDateTime = new Date(startMs + (durationMinutes || 30) * 60000).toISOString();
   const googleAccessToken = process.env.GOOGLE_CALENDAR_ACCESS_TOKEN;
 
   if (googleAccessToken) {
     try {
-      const endDateTime = new Date(new Date(startDateTime).getTime() + (durationMinutes || 30) * 60000).toISOString();
       const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
         method: 'POST',
         headers: {
@@ -38,7 +41,6 @@ export const POST = withApiHandler(async (request, context) => {
   }
 
   // Simulate success if Google Calendar token is not present in local credentials
-  const endDateTime = new Date(new Date(startDateTime).getTime() + (durationMinutes || 30) * 60000).toISOString();
   return apiSuccess({
     id: `cal-evt-${Date.now()}`,
     status: 'confirmed',
