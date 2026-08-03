@@ -414,4 +414,4 @@ What is the single most urgent recommendation?`;
       }
     }
   });
-});
+}, { requireAuth: true, roles: ['Employee'] });

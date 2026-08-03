@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { withApiHandler } from '@/server/http/handler';
 import { BadRequestError } from '@/server/http/errors';
 import { apiSuccess, apiError } from '@/server/http/response';
+import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
 import nodemailer from 'nodemailer';
 
 export const POST = withApiHandler(async (request, context) => {
@@ -9,17 +10,26 @@ export const POST = withApiHandler(async (request, context) => {
   if (!tenantId) throw new BadRequestError('Tenant context missing');
 
   const body = await request.json();
-  const { to, subject, html, smtpConfig } = body;
+  const { to, subject, html } = body;
 
   if (!to || !subject || !html) {
     throw new BadRequestError('Recipient, subject, and email body are required');
   }
 
+  const supabase = getAdminRouteSupabase();
+
+  // Load the tenant's provisioned SMTP settings server-side
+  const { data: settings } = await supabase
+    .from('company_settings')
+    .select('smtp_host, smtp_port, smtp_user, smtp_password')
+    .eq('tenant_id', tenantId)
+    .maybeSingle();
+
   // Fallback to simulated delivery if no custom settings and default env variable is missing
   const defaultUser = process.env.SMTP_USER;
   const defaultPass = process.env.SMTP_PASSWORD;
 
-  if (!smtpConfig && (!defaultUser || !defaultPass)) {
+  if ((!settings || !settings.smtp_host) && (!defaultUser || !defaultPass)) {
     console.warn('SMTP credentials are not configured. Falling back to simulated delivery.');
     return apiSuccess(
       { messageId: `sim-msg-${Date.now()}@techsonance.local`, isSimulated: true },
@@ -30,15 +40,15 @@ export const POST = withApiHandler(async (request, context) => {
   // Determine SMTP transport config
   let transportConfig: any;
 
-  if (smtpConfig && smtpConfig.host && smtpConfig.auth?.user && smtpConfig.auth?.pass) {
-    // Use custom settings provided by user
+  if (settings && settings.smtp_host && settings.smtp_user && settings.smtp_password) {
+    // Use custom settings retrieved securely from the server-side database
     transportConfig = {
-      host: smtpConfig.host,
-      port: Number(smtpConfig.port) || 587,
-      secure: smtpConfig.secure ?? false,
+      host: settings.smtp_host,
+      port: Number(settings.smtp_port) || 587,
+      secure: Number(settings.smtp_port) === 465,
       auth: {
-        user: smtpConfig.auth.user,
-        pass: smtpConfig.auth.pass,
+        user: settings.smtp_user,
+        pass: settings.smtp_password,
       },
     };
   } else {
@@ -59,7 +69,7 @@ export const POST = withApiHandler(async (request, context) => {
     
     // Send mail
     const info = await transporter.sendMail({
-      from: smtpConfig?.auth?.user || process.env.SMTP_FROM || defaultUser || 'connect.techsonance@gmail.com',
+      from: settings?.smtp_user || process.env.SMTP_FROM || defaultUser || 'connect.techsonance@gmail.com',
       to,
       subject,
       html,

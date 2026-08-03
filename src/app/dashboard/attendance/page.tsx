@@ -2303,6 +2303,8 @@ export default function AttendancePage() {
           </TabsContent>
         )}
 
+
+
         {/* Company Holidays Tab - Keep existing code */}
               </Tabs>
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
 import {
@@ -114,7 +114,63 @@ interface NavCategory {
 }
 
 // Helper to determine exact route matching vs prefix matching
-const isPathActive = (itemHref: string, currentPath: string): boolean => {
+const isPathActive = (itemHref: string, currentPath: string, searchParams?: any): boolean => {
+  // If itemHref has a query param (e.g. ?tab=...)
+  if (itemHref.includes('?')) {
+    const [pathPart, queryPart] = itemHref.split('?');
+    if (currentPath !== pathPart) return false;
+    
+    // Check if query params match using environment-safe string splitting
+    if (!searchParams) return false;
+    
+    const pairs = queryPart.split('&');
+    let allMatch = true;
+    for (let i = 0; i < pairs.length; i++) {
+      const [key, val] = pairs[i].split('=');
+      if (searchParams.get(key) !== val) {
+        allMatch = false;
+        break;
+      }
+    }
+    return allMatch;
+  }
+  
+  if (!itemHref.includes('?')) {
+    if (searchParams && searchParams.get('tab')) {
+      const activeTab = searchParams.get('tab');
+      if (itemHref === '/dashboard/ai-copilot' && activeTab !== 'insights') {
+        return false;
+      }
+      if (itemHref === '/dashboard/employees/audit-logs' && activeTab !== 'timeline') {
+        return false;
+      }
+      if (itemHref === '/dashboard/settings' && !['overview', 'overview-tab'].includes(activeTab)) {
+        return false;
+      }
+    }
+  }
+
+  if (itemHref === '/dashboard/recruitment' && currentPath.startsWith('/dashboard/recruitment/analytics')) {
+    return false;
+  }
+  if (itemHref === '/dashboard/attendance' && currentPath.startsWith('/dashboard/attendance/analytics')) {
+    return false;
+  }
+  if (itemHref === '/dashboard/hr-operations' && currentPath.startsWith('/dashboard/hr-operations/analytics')) {
+    return false;
+  }
+  if (itemHref === '/dashboard/projects' && currentPath.startsWith('/dashboard/projects/analytics')) {
+    return false;
+  }
+  if (itemHref === '/dashboard/finance' && currentPath.startsWith('/dashboard/finance/analytics')) {
+    return false;
+  }
+  if (itemHref === '/dashboard/finance' && currentPath.startsWith('/dashboard/finance/quotations')) {
+    return false;
+  }
+  if (itemHref === '/dashboard/crm' && currentPath.startsWith('/dashboard/crm/analytics')) {
+    return false;
+  }
   if (itemHref === '/dashboard/employees') {
     return currentPath === '/dashboard/employees' || currentPath === '/dashboard/employees/';
   }
@@ -161,8 +217,7 @@ const categories: NavCategory[] = [
       { name: 'Interview Management', href: '/dashboard/recruitment/interviews', icon: Clock, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Offer Management', href: '/dashboard/recruitment/offers', icon: FileText, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Talent Pool', href: '/dashboard/recruitment/talent-pool', icon: Star, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
-      { name: 'Campus Hiring', href: '/dashboard/recruitment/campus', icon: GraduationCap, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
-      { name: 'Recruitment Analytics', href: '/dashboard/recruitment/analytics', icon: TrendingUp, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] }
+      { name: 'Campus Hiring', href: '/dashboard/recruitment/campus', icon: GraduationCap, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] }
     ]
   },
   {
@@ -207,8 +262,7 @@ const categories: NavCategory[] = [
       { name: 'Resource Planner', href: '/dashboard/employees/resource-allocation', icon: ClipboardList, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Capacity Planner', href: '/dashboard/projects/capacity', icon: Activity, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'PSA Planner', href: '/dashboard/employees/resource-allocation?tab=psa', icon: ClipboardList, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
-      { name: 'Timesheets', href: '/dashboard/employees/timesheets', icon: Clock, roles: ['admin', 'project_manager', 'developer', 'employee', 'intern', 'ceo', 'cto', 'business_owner'] },
-      { name: 'Delivery Analytics', href: '/dashboard/projects/analytics', icon: TrendingUp, roles: ['admin', 'project_manager', 'ceo', 'cto', 'business_owner'] }
+      { name: 'Timesheets', href: '/dashboard/employees/timesheets', icon: Clock, roles: ['admin', 'project_manager', 'developer', 'employee', 'intern', 'ceo', 'cto', 'business_owner'] }
     ]
   },
   {
@@ -217,7 +271,7 @@ const categories: NavCategory[] = [
     items: [
       { name: 'Finance Dashboard', href: '/dashboard/finance', icon: BarChart3, roles: ['admin', 'accountant', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Invoices & Billing', href: '/dashboard/finance/invoices', icon: Receipt, roles: ['admin', 'accountant', 'project_manager', 'ceo', 'cto', 'business_owner'] },
-      { name: 'Quotations', href: '/dashboard/finance/quotations', icon: ScrollText, roles: ['admin', 'accountant', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+
       { name: 'Payroll & Salary', href: '/dashboard/payroll', icon: Wallet, roles: ['admin', 'accountant', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Reimbursements', href: '/dashboard/reimbursements', icon: Receipt, roles: ['admin', 'project_manager', 'hr_manager', 'accountant', 'ceo', 'cto', 'business_owner'] },
       { name: 'Expenses', href: '/dashboard/reimbursements?tab=expenses', icon: IndianRupee, roles: ['admin', 'project_manager', 'hr_manager', 'accountant', 'ceo', 'cto', 'business_owner'] },
@@ -236,14 +290,12 @@ const categories: NavCategory[] = [
       { name: 'CRM Dashboard', href: '/dashboard/crm', icon: BarChart3, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'business_development'] },
       { name: 'Client Directory', href: '/dashboard/clients', icon: Users, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'business_development'] },
       { name: 'Client Inquiries', href: '/dashboard/inquiry', icon: Search, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'business_development'] },
-      { name: 'Contacts', href: '/dashboard/clients?tab=contacts', icon: Contact, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'business_development'] },
-      { name: 'Opportunities', href: '/dashboard/inquiry?tab=opportunities', icon: Kanban, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'business_development'] },
-      { name: 'Sales Pipeline', href: '/dashboard/crm?tab=pipeline', icon: TrendingUp, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'business_development'] },
+      { name: 'Contacts', href: '/dashboard/contacts', icon: Contact, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'business_development'] },
+      { name: 'Sales Pipeline', href: '/dashboard/sales-pipeline', icon: TrendingUp, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'business_development'] },
       { name: 'Quotations', href: '/dashboard/finance/quotations', icon: ScrollText, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'business_development'] },
       { name: 'CRM Inbox', href: '/dashboard/inbox', icon: Inbox, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'business_development'] },
       { name: 'AI Email Composer', href: '/dashboard/inbox/composer', icon: PenTool, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'business_development'] },
-      { name: 'Sales Forecast', href: '/dashboard/inquiry/forecast', icon: TrendingUp, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'business_development'] },
-      { name: 'CRM Analytics', href: '/dashboard/crm?tab=analytics', icon: BarChart3, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'business_development'] }
+      { name: 'Sales Forecast', href: '/dashboard/inquiry/forecast', icon: TrendingUp, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'business_development'] }
     ]
   },
   {
@@ -252,13 +304,13 @@ const categories: NavCategory[] = [
     roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'accountant'],
     items: [
       { name: 'Executive Analytics', href: '/dashboard/analytics', icon: BarChart3, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'accountant'] },
-      { name: 'HR Analytics', href: '/dashboard/analytics?tab=workforce', icon: Users, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'HR Analytics', href: '/dashboard/hr-operations/analytics', icon: Users, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Recruitment Analytics', href: '/dashboard/recruitment/analytics', icon: Briefcase, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
-      { name: 'Attendance Analytics', href: '/dashboard/attendance?tab=analytics', icon: Clock, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
-      { name: 'Finance Analytics', href: '/dashboard/analytics?tab=finance', icon: IndianRupee, roles: ['admin', 'accountant', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Attendance Analytics', href: '/dashboard/attendance/analytics', icon: Clock, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Finance Analytics', href: '/dashboard/finance/analytics', icon: IndianRupee, roles: ['admin', 'accountant', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Project Analytics', href: '/dashboard/projects/analytics', icon: FolderKanban, roles: ['admin', 'project_manager', 'ceo', 'cto', 'business_owner'] },
-      { name: 'CRM Analytics', href: '/dashboard/crm?tab=analytics', icon: TrendingUp, roles: ['admin', 'project_manager', 'ceo', 'cto', 'business_owner', 'business_development'] },
-      { name: 'Custom Reports', href: '/dashboard/analytics?tab=builder', icon: ScrollText, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] }
+      { name: 'CRM Analytics', href: '/dashboard/crm/analytics', icon: TrendingUp, roles: ['admin', 'project_manager', 'ceo', 'cto', 'business_owner', 'business_development'] },
+      { name: 'Custom Reports', href: '/dashboard/custom-reports', icon: ScrollText, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] }
     ]
   },
   {
@@ -298,6 +350,7 @@ const categories: NavCategory[] = [
 
 export function DashboardSidebar({ user, isMobile = false, onClose, companyName: propsCompanyName }: DashboardSidebarProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const normalizedRole = normalizeRole(user.role);
 
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({});
@@ -334,14 +387,14 @@ export function DashboardSidebar({ user, isMobile = false, onClose, companyName:
       const hasActive = cat.items.some((item) => {
         const itemRoles = item.roles || [];
         if (!itemRoles.includes(normalizedRole)) return false;
-        return isPathActive(item.href, pathname);
+        return isPathActive(item.href, pathname, searchParams);
       });
       if (hasActive) {
         updatedOpen[cat.name] = true;
       }
     });
     setOpenCategories((prev) => ({ ...prev, ...updatedOpen }));
-  }, [pathname, normalizedRole]);
+  }, [pathname, normalizedRole, searchParams]);
 
   const toggleCategory = (catName: string) => {
     setOpenCategories((prev) => ({
@@ -455,7 +508,7 @@ export function DashboardSidebar({ user, isMobile = false, onClose, companyName:
             }
 
             const isOpen = !!openCategories[cat.name];
-            const isCatActive = visibleItems.some((item) => isPathActive(item.href, pathname));
+            const isCatActive = visibleItems.some((item) => isPathActive(item.href, pathname, searchParams));
             const CatIcon = cat.icon;
 
             if (activeCollapsed) {
@@ -480,7 +533,7 @@ export function DashboardSidebar({ user, isMobile = false, onClose, companyName:
                         {cat.name}
                       </div>
                       {visibleItems.map((item) => {
-                        const isActive = isPathActive(item.href, pathname);
+                        const isActive = isPathActive(item.href, pathname, searchParams);
                         const ItemIcon = item.icon;
 
                         return (
@@ -536,7 +589,7 @@ export function DashboardSidebar({ user, isMobile = false, onClose, companyName:
                 {isOpen && (
                   <ul className="pl-4 space-y-1 border-l border-sidebar-border ml-5 py-1">
                     {visibleItems.map((item) => {
-                      const isActive = isPathActive(item.href, pathname);
+                      const isActive = isPathActive(item.href, pathname, searchParams);
                       const ItemIcon = item.icon;
 
                       return (

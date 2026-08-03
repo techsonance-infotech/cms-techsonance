@@ -13,11 +13,12 @@ export const POST = withApiHandler(async (request, context) => {
 
   const supabase = getAdminRouteSupabase();
 
-  // Fetch the inquiry first to copy details
+  // Fetch the inquiry first to copy details with tenant protection
   const { data: inquiry, error: fetchErr } = await supabase
     .from('inquiries')
     .select('*')
     .eq('id', parseInt(inquiryId))
+    .eq('tenant_id', tenantId)
     .single();
 
   if (fetchErr || !inquiry) {
@@ -29,7 +30,7 @@ export const POST = withApiHandler(async (request, context) => {
 
   try {
     if (type === 'opportunity') {
-      // 1. Convert to CRM Opportunity
+      // 1. Convert to CRM Opportunity with tenant protection
       const { data, error } = await supabase
         .from('inquiries')
         .update({
@@ -40,6 +41,7 @@ export const POST = withApiHandler(async (request, context) => {
           internal_notes: `Converted to active opportunity. ${inquiry.internal_notes || ''}`
         })
         .eq('id', parseInt(inquiryId))
+        .eq('tenant_id', tenantId)
         .select('*')
         .single();
 

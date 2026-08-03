@@ -307,6 +307,19 @@
         }
       }
     },
+    "/api/attendance/analytics": {
+      "get": {
+        "tags": [
+          "attendance"
+        ],
+        "summary": "GET handler for /api/attendance/analytics",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
     "/api/attendance/break": {
       "post": {
         "tags": [
@@ -1155,6 +1168,32 @@
         }
       }
     },
+    "/api/clients/{id}/actions": {
+      "post": {
+        "tags": [
+          "clients"
+        ],
+        "summary": "POST handler for /api/clients/{id}/actions",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
+    "/api/clients/{id}/documents": {
+      "get": {
+        "tags": [
+          "clients"
+        ],
+        "summary": "GET handler for /api/clients/{id}/documents",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
     "/api/clients/{id}/finance": {
       "get": {
         "tags": [
@@ -1515,12 +1554,110 @@
         }
       }
     },
+    "/api/crm/analytics": {
+      "get": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "GET handler for /api/crm/analytics",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
+    "/api/crm/contacts": {
+      "get": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "GET handler for /api/crm/contacts",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "POST handler for /api/crm/contacts",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "PUT handler for /api/crm/contacts",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "DELETE handler for /api/crm/contacts",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
     "/api/crm/dashboard": {
       "get": {
         "tags": [
           "crm"
         ],
         "summary": "GET handler for /api/crm/dashboard",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
+    "/api/crm/inbox/ai-copilot": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "POST handler for /api/crm/inbox/ai-copilot",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
+    "/api/crm/inbox/calendar-schedule": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "POST handler for /api/crm/inbox/calendar-schedule",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
+    "/api/crm/inbox/convert": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "POST handler for /api/crm/inbox/convert",
         "responses": {
           "200": {
             "description": "Successful request execution."
@@ -1545,6 +1682,115 @@
           "crm"
         ],
         "summary": "POST handler for /api/crm/inbox",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
+    "/api/crm/inbox/suggested-replies": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "POST handler for /api/crm/inbox/suggested-replies",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
+    "/api/crm/quotations": {
+      "get": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "GET handler for /api/crm/quotations",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "POST handler for /api/crm/quotations",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "PUT handler for /api/crm/quotations",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "DELETE handler for /api/crm/quotations",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
+    "/api/crm/sales-pipeline": {
+      "get": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "GET handler for /api/crm/sales-pipeline",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "PUT handler for /api/crm/sales-pipeline",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
+    "/api/crm/send-email": {
+      "post": {
+        "tags": [
+          "crm"
+        ],
+        "summary": "POST handler for /api/crm/send-email",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
+    "/api/custom-reports": {
+      "get": {
+        "tags": [
+          "custom-reports"
+        ],
+        "summary": "GET handler for /api/custom-reports",
         "responses": {
           "200": {
             "description": "Successful request execution."
@@ -2607,6 +2853,19 @@
         }
       }
     },
+    "/api/finance/analytics": {
+      "get": {
+        "tags": [
+          "finance"
+        ],
+        "summary": "GET handler for /api/finance/analytics",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
     "/api/finance/control": {
       "get": {
         "tags": [
@@ -2883,6 +3142,32 @@
           "hr"
         ],
         "summary": "POST handler for /api/hr/service-desk",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
+    "/api/inquiries/convert": {
+      "post": {
+        "tags": [
+          "inquiries"
+        ],
+        "summary": "POST handler for /api/inquiries/convert",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
+    "/api/inquiries/forecast-intelligence": {
+      "get": {
+        "tags": [
+          "inquiries"
+        ],
+        "summary": "GET handler for /api/inquiries/forecast-intelligence",
         "responses": {
           "200": {
             "description": "Successful request execution."
@@ -3760,52 +4045,6 @@
         }
       }
     },
-    "/api/pages": {
-      "get": {
-        "tags": [
-          "pages"
-        ],
-        "summary": "GET handler for /api/pages",
-        "responses": {
-          "200": {
-            "description": "Successful request execution."
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "pages"
-        ],
-        "summary": "POST handler for /api/pages",
-        "responses": {
-          "200": {
-            "description": "Successful request execution."
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "pages"
-        ],
-        "summary": "PUT handler for /api/pages",
-        "responses": {
-          "200": {
-            "description": "Successful request execution."
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "pages"
-        ],
-        "summary": "DELETE handler for /api/pages",
-        "responses": {
-          "200": {
-            "description": "Successful request execution."
-          }
-        }
-      }
-    },
     "/api/payments": {
       "get": {
         "tags": [
@@ -4488,6 +4727,19 @@
         }
       }
     },
+    "/api/projects/analytics": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "GET handler for /api/projects/analytics",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
     "/api/projects/pmo": {
       "get": {
         "tags": [
@@ -4732,6 +4984,19 @@
           "readers"
         ],
         "summary": "POST handler for /api/readers",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
+    "/api/recruitment/analytics": {
+      "get": {
+        "tags": [
+          "recruitment"
+        ],
+        "summary": "GET handler for /api/recruitment/analytics",
         "responses": {
           "200": {
             "description": "Successful request execution."
