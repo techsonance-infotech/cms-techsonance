@@ -281,19 +281,6 @@
         }
       }
     },
-    "/api/attendance/{id}": {
-      "patch": {
-        "tags": [
-          "attendance"
-        ],
-        "summary": "PATCH handler for /api/attendance/{id}",
-        "responses": {
-          "200": {
-            "description": "Successful request execution."
-          }
-        }
-      }
-    },
     "/api/attendance/ai-assistant": {
       "post": {
         "tags": [
@@ -644,6 +631,19 @@
           "attendance"
         ],
         "summary": "POST handler for /api/attendance/toggle",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
+    "/api/attendance/{id}": {
+      "patch": {
+        "tags": [
+          "attendance"
+        ],
+        "summary": "PATCH handler for /api/attendance/{id}",
         "responses": {
           "200": {
             "description": "Successful request execution."
@@ -1168,45 +1168,6 @@
         }
       }
     },
-    "/api/clients/{id}/actions": {
-      "post": {
-        "tags": [
-          "clients"
-        ],
-        "summary": "POST handler for /api/clients/{id}/actions",
-        "responses": {
-          "200": {
-            "description": "Successful request execution."
-          }
-        }
-      }
-    },
-    "/api/clients/{id}/documents": {
-      "get": {
-        "tags": [
-          "clients"
-        ],
-        "summary": "GET handler for /api/clients/{id}/documents",
-        "responses": {
-          "200": {
-            "description": "Successful request execution."
-          }
-        }
-      }
-    },
-    "/api/clients/{id}/finance": {
-      "get": {
-        "tags": [
-          "clients"
-        ],
-        "summary": "GET handler for /api/clients/{id}/finance",
-        "responses": {
-          "200": {
-            "description": "Successful request execution."
-          }
-        }
-      }
-    },
     "/api/clients": {
       "get": {
         "tags": [
@@ -1246,6 +1207,45 @@
           "clients"
         ],
         "summary": "DELETE handler for /api/clients",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
+    "/api/clients/{id}/actions": {
+      "post": {
+        "tags": [
+          "clients"
+        ],
+        "summary": "POST handler for /api/clients/{id}/actions",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
+    "/api/clients/{id}/documents": {
+      "get": {
+        "tags": [
+          "clients"
+        ],
+        "summary": "GET handler for /api/clients/{id}/documents",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
+    "/api/clients/{id}/finance": {
+      "get": {
+        "tags": [
+          "clients"
+        ],
+        "summary": "GET handler for /api/clients/{id}/finance",
         "responses": {
           "200": {
             "description": "Successful request execution."
@@ -2123,6 +2123,200 @@
         }
       }
     },
+    "/api/employees/ai-search": {
+      "post": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "POST handler for /api/employees/ai-search",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
+    "/api/employees/audit-logs": {
+      "get": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "GET handler for /api/employees/audit-logs",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
+    "/api/employees/bulk-import": {
+      "post": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "POST handler for /api/employees/bulk-import",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
+    "/api/employees/documents": {
+      "get": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "GET handler for /api/employees/documents",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "POST handler for /api/employees/documents",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "DELETE handler for /api/employees/documents",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
+    "/api/employees/movement/approve": {
+      "post": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "POST handler for /api/employees/movement/approve",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
+    "/api/employees/movement": {
+      "get": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "GET handler for /api/employees/movement",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "POST handler for /api/employees/movement",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
+    "/api/employees": {
+      "get": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "GET handler for /api/employees",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "POST handler for /api/employees",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "PUT handler for /api/employees",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "DELETE handler for /api/employees",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
+    "/api/employees/wellness": {
+      "get": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "GET handler for /api/employees/wellness",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "POST handler for /api/employees/wellness",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
+    "/api/employees/wellness/survey": {
+      "post": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "POST handler for /api/employees/wellness/survey",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
     "/api/employees/{id}/assets": {
       "get": {
         "tags": [
@@ -2162,6 +2356,19 @@
           "employees"
         ],
         "summary": "DELETE handler for /api/employees/{id}/assets",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
+    "/api/employees/{id}/attendance": {
+      "get": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "GET handler for /api/employees/{id}/attendance",
         "responses": {
           "200": {
             "description": "Successful request execution."
@@ -2337,6 +2544,19 @@
           "employees"
         ],
         "summary": "DELETE handler for /api/employees/{id}/experience",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
+    "/api/employees/{id}/leaves": {
+      "get": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "GET handler for /api/employees/{id}/leaves",
         "responses": {
           "200": {
             "description": "Successful request execution."
@@ -2530,211 +2750,6 @@
         }
       }
     },
-    "/api/employees/audit-logs": {
-      "get": {
-        "tags": [
-          "employees"
-        ],
-        "summary": "GET handler for /api/employees/audit-logs",
-        "responses": {
-          "200": {
-            "description": "Successful request execution."
-          }
-        }
-      }
-    },
-    "/api/employees/bulk-import": {
-      "post": {
-        "tags": [
-          "employees"
-        ],
-        "summary": "POST handler for /api/employees/bulk-import",
-        "responses": {
-          "200": {
-            "description": "Successful request execution."
-          }
-        }
-      }
-    },
-    "/api/employees/documents": {
-      "get": {
-        "tags": [
-          "employees"
-        ],
-        "summary": "GET handler for /api/employees/documents",
-        "responses": {
-          "200": {
-            "description": "Successful request execution."
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "employees"
-        ],
-        "summary": "POST handler for /api/employees/documents",
-        "responses": {
-          "200": {
-            "description": "Successful request execution."
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "employees"
-        ],
-        "summary": "DELETE handler for /api/employees/documents",
-        "responses": {
-          "200": {
-            "description": "Successful request execution."
-          }
-        }
-      }
-    },
-    "/api/employees/movement/approve": {
-      "post": {
-        "tags": [
-          "employees"
-        ],
-        "summary": "POST handler for /api/employees/movement/approve",
-        "responses": {
-          "200": {
-            "description": "Successful request execution."
-          }
-        }
-      }
-    },
-    "/api/employees/movement": {
-      "get": {
-        "tags": [
-          "employees"
-        ],
-        "summary": "GET handler for /api/employees/movement",
-        "responses": {
-          "200": {
-            "description": "Successful request execution."
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "employees"
-        ],
-        "summary": "POST handler for /api/employees/movement",
-        "responses": {
-          "200": {
-            "description": "Successful request execution."
-          }
-        }
-      }
-    },
-    "/api/employees": {
-      "get": {
-        "tags": [
-          "employees"
-        ],
-        "summary": "GET handler for /api/employees",
-        "responses": {
-          "200": {
-            "description": "Successful request execution."
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "employees"
-        ],
-        "summary": "POST handler for /api/employees",
-        "responses": {
-          "200": {
-            "description": "Successful request execution."
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "employees"
-        ],
-        "summary": "PUT handler for /api/employees",
-        "responses": {
-          "200": {
-            "description": "Successful request execution."
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "employees"
-        ],
-        "summary": "DELETE handler for /api/employees",
-        "responses": {
-          "200": {
-            "description": "Successful request execution."
-          }
-        }
-      }
-    },
-    "/api/employees/wellness": {
-      "get": {
-        "tags": [
-          "employees"
-        ],
-        "summary": "GET handler for /api/employees/wellness",
-        "responses": {
-          "200": {
-            "description": "Successful request execution."
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "employees"
-        ],
-        "summary": "POST handler for /api/employees/wellness",
-        "responses": {
-          "200": {
-            "description": "Successful request execution."
-          }
-        }
-      }
-    },
-    "/api/employees/wellness/survey": {
-      "post": {
-        "tags": [
-          "employees"
-        ],
-        "summary": "POST handler for /api/employees/wellness/survey",
-        "responses": {
-          "200": {
-            "description": "Successful request execution."
-          }
-        }
-      }
-    },
-    "/api/enrollments/{id}": {
-      "put": {
-        "tags": [
-          "enrollments"
-        ],
-        "summary": "PUT handler for /api/enrollments/{id}",
-        "responses": {
-          "200": {
-            "description": "Successful request execution."
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "enrollments"
-        ],
-        "summary": "DELETE handler for /api/enrollments/{id}",
-        "responses": {
-          "200": {
-            "description": "Successful request execution."
-          }
-        }
-      }
-    },
     "/api/enrollments": {
       "get": {
         "tags": [
@@ -2765,6 +2780,30 @@
           "enrollments"
         ],
         "summary": "GET handler for /api/enrollments/tag/{tagUid}",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
+    "/api/enrollments/{id}": {
+      "put": {
+        "tags": [
+          "enrollments"
+        ],
+        "summary": "PUT handler for /api/enrollments/{id}",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "enrollments"
+        ],
+        "summary": "DELETE handler for /api/enrollments/{id}",
         "responses": {
           "200": {
             "description": "Successful request execution."
@@ -3455,30 +3494,6 @@
         }
       }
     },
-    "/api/leave-requests/{id}": {
-      "delete": {
-        "tags": [
-          "leave-requests"
-        ],
-        "summary": "DELETE handler for /api/leave-requests/{id}",
-        "responses": {
-          "200": {
-            "description": "Successful request execution."
-          }
-        }
-      },
-      "patch": {
-        "tags": [
-          "leave-requests"
-        ],
-        "summary": "PATCH handler for /api/leave-requests/{id}",
-        "responses": {
-          "200": {
-            "description": "Successful request execution."
-          }
-        }
-      }
-    },
     "/api/leave-requests": {
       "get": {
         "tags": [
@@ -3518,6 +3533,30 @@
           "leave-requests"
         ],
         "summary": "DELETE handler for /api/leave-requests",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
+    "/api/leave-requests/{id}": {
+      "delete": {
+        "tags": [
+          "leave-requests"
+        ],
+        "summary": "DELETE handler for /api/leave-requests/{id}",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "leave-requests"
+        ],
+        "summary": "PATCH handler for /api/leave-requests/{id}",
         "responses": {
           "200": {
             "description": "Successful request execution."
@@ -4941,6 +4980,30 @@
         }
       }
     },
+    "/api/readers": {
+      "get": {
+        "tags": [
+          "readers"
+        ],
+        "summary": "GET handler for /api/readers",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "readers"
+        ],
+        "summary": "POST handler for /api/readers",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
     "/api/readers/{id}/heartbeat": {
       "post": {
         "tags": [
@@ -4971,30 +5034,6 @@
           "readers"
         ],
         "summary": "DELETE handler for /api/readers/{id}",
-        "responses": {
-          "200": {
-            "description": "Successful request execution."
-          }
-        }
-      }
-    },
-    "/api/readers": {
-      "get": {
-        "tags": [
-          "readers"
-        ],
-        "summary": "GET handler for /api/readers",
-        "responses": {
-          "200": {
-            "description": "Successful request execution."
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "readers"
-        ],
-        "summary": "POST handler for /api/readers",
         "responses": {
           "200": {
             "description": "Successful request execution."
@@ -6227,41 +6266,6 @@
         }
       }
     },
-    "/api/upload/{id}": {
-      "get": {
-        "tags": [
-          "upload"
-        ],
-        "summary": "GET handler for /api/upload/{id}",
-        "responses": {
-          "200": {
-            "description": "Successful request execution."
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "upload"
-        ],
-        "summary": "PUT handler for /api/upload/{id}",
-        "responses": {
-          "200": {
-            "description": "Successful request execution."
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "upload"
-        ],
-        "summary": "DELETE handler for /api/upload/{id}",
-        "responses": {
-          "200": {
-            "description": "Successful request execution."
-          }
-        }
-      }
-    },
     "/api/upload/cleanup": {
       "get": {
         "tags": [
@@ -6292,6 +6296,41 @@
           "upload"
         ],
         "summary": "POST handler for /api/upload",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      }
+    },
+    "/api/upload/{id}": {
+      "get": {
+        "tags": [
+          "upload"
+        ],
+        "summary": "GET handler for /api/upload/{id}",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "upload"
+        ],
+        "summary": "PUT handler for /api/upload/{id}",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "upload"
+        ],
+        "summary": "DELETE handler for /api/upload/{id}",
         "responses": {
           "200": {
             "description": "Successful request execution."

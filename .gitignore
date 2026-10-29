@@ -61,3 +61,8 @@ CMS_Portal_UI_Prompt.md
 /prd_sections_7to14.js
 /prd_sections_15to24.js
 /docs/implementation-guide
+
+# knowledge graphs and analyzer artifacts
+graphify-out/
+graph.html
+
