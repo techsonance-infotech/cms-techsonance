@@ -75,14 +75,25 @@ export const GET = withApiHandler(async (request, context) => {
   const branchesList = Array.from(new Set(employees.map((e: any) => e.branch).filter(Boolean)));
   const businessUnitsList = ['Enterprise Solutions', 'Cloud & Infrastructure', 'Digital Products', 'Global Sales', 'Corporate Shared Services'];
 
+  const searchParams = new URL(request.url).searchParams;
+  const filterEmployeeId = searchParams.get('employeeId');
+  const filterUserId = searchParams.get('userId');
+
   // 2. Relational Query: Movement transactions joined with public.users
   let dbMovements: any[] = [];
   try {
-    const { data } = await supabase
+    let query = supabase
       .from('employee_movements')
       .select('*')
-      .eq('tenant_id', tenantId)
-      .order('created_at', { ascending: false });
+      .eq('tenant_id', tenantId);
+
+    if (filterEmployeeId) {
+      query = query.eq('employee_table_id', Number(filterEmployeeId));
+    } else if (filterUserId) {
+      query = query.eq('user_id', filterUserId);
+    }
+
+    const { data } = await query.order('created_at', { ascending: false });
     if (data) dbMovements = data;
   } catch (err) {
     console.warn('Movements DB query info:', err);

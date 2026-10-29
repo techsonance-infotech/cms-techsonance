@@ -245,48 +245,9 @@ export default function EmployeeDetailPage() {
   const [mfaEnabled, setMfaEnabled] = useState(false);
   const [ipWhitelist, setIpWhitelist] = useState('192.168.10.0/24, 10.2.0.0/16');
   const [taxRegime, setTaxRegime] = useState('New');
-  const [sessions, setSessions] = useState([
-    {
-      id: 'sess_1',
-      device: 'Apple MacBook Pro (Chrome)',
-      ip: '192.168.10.15',
-      date: 'Active Now',
-      current: true,
-    },
-    {
-      id: 'sess_2',
-      device: 'Ubuntu Desktop (Firefox)',
-      ip: '74.12.14.82',
-      date: 'Yesterday, 14:32',
-    },
-    { id: 'sess_3', device: 'iPhone 15 Pro (Mobile Safari)', ip: '10.2.14.8', date: '3 days ago' },
-  ]);
-  const [travelLogs, setTravelLogs] = useState([
-    {
-      id: 1,
-      destination: 'San Francisco, USA',
-      purpose: 'Business Meeting',
-      status: 'approved',
-      dates: 'Oct 10, 2025 - Oct 22, 2025',
-      cost: 'INR 1,42,000',
-    },
-    {
-      id: 2,
-      destination: 'London, UK',
-      purpose: 'Architecture Migration consulting',
-      status: 'approved',
-      dates: 'Feb 05, 2026 - Feb 12, 2026',
-      cost: 'INR 1,22,400',
-    },
-    {
-      id: 3,
-      destination: 'Bangalore Office, IN',
-      purpose: 'HQ Tech Summit',
-      status: 'pending',
-      dates: 'Nov 12, 2026 - Nov 15, 2026',
-      cost: 'INR 24,000',
-    },
-  ]);
+  const [movements, setMovements] = useState<any[]>([]);
+  const [reimbursements, setReimbursements] = useState<any[]>([]);
+  const [performanceReviews, setPerformanceReviews] = useState<any[]>([]);
 
   useEffect(() => {
     fetchCurrentUser();
@@ -353,6 +314,9 @@ export default function EmployeeDetailPage() {
         fetchTabContent('experience');
         fetchTabContent('bank-accounts');
         fetchTabContent('medical');
+        fetchTabContent('movements');
+        fetchTabContent('reimbursements');
+        fetchTabContent('performance-reviews');
       }
     } catch (error) {
       console.error('Error fetching employee data:', error);
@@ -364,6 +328,38 @@ export default function EmployeeDetailPage() {
   const fetchTabContent = async (type: string) => {
     try {
       const token = getStoredSessionToken();
+      if (type === 'movements') {
+        const res = await fetch(`/api/employees/movement?employeeId=${employeeId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          setMovements(json.movements || []);
+        }
+        return;
+      }
+      if (type === 'reimbursements') {
+        const res = await fetch(`/api/reimbursements?employeeId=${employeeId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          const rows = Array.isArray(json) ? json : json.data || [];
+          setReimbursements(rows);
+        }
+        return;
+      }
+      if (type === 'performance-reviews') {
+        const res = await fetch(`/api/performance-reviews?employeeId=${employeeId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          const rows = Array.isArray(json) ? json : json.data || [];
+          setPerformanceReviews(rows);
+        }
+        return;
+      }
       const res = await fetch(`/api/employees/${employeeId}/${type}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -1836,34 +1832,74 @@ export default function EmployeeDetailPage() {
 
               {/* Career Progression & Transitions log */}
               <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
-                <CardHeader>
-                  <CardTitle className="text-sm font-bold">
-                    Historical Movements & Progression
-                  </CardTitle>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="text-sm font-bold">
+                      Historical Movements & Progression
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      Official promotions, department transfers, and designation updates.
+                    </CardDescription>
+                  </div>
+                  {isAdmin && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => router.push('/dashboard/employees/movement')}
+                      className="text-xs h-7 border-[#f87941] text-[#f87941] hover:bg-[#f87941]/10"
+                    >
+                      Record Movement
+                    </Button>
+                  )}
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="flex gap-4 text-xs relative border-l-2 pl-4 py-2 border-rose-500">
-                    <div className="absolute -left-1.5 top-3.5 h-3.5 w-3.5 rounded-full bg-rose-500" />
-                    <div>
-                      <p className="font-bold">Promotion to Senior Engineer</p>
-                      <p className="text-slate-500">
-                        Transitioned designation from Software Engineer to Senior Software Engineer.
-                        CTC revised (+15%).
+                  {movements.length === 0 ? (
+                    <div className="text-center py-8 text-slate-400 dark:text-zinc-500 text-xs">
+                      <Briefcase className="h-8 w-8 mx-auto mb-2 opacity-30 text-slate-400" />
+                      <p className="font-semibold text-slate-700 dark:text-slate-300">
+                        No Historical Movements Recorded
                       </p>
-                      <span className="text-[10px] text-slate-400">Effective: Jan 15, 2025</span>
-                    </div>
-                  </div>
-                  <div className="flex gap-4 text-xs relative border-l-2 pl-4 py-2 border-slate-200 dark:border-zinc-800">
-                    <div className="absolute -left-1.5 top-3.5 h-3.5 w-3.5 rounded-full bg-slate-300 dark:bg-zinc-800" />
-                    <div>
-                      <p className="font-bold">Department Transfer</p>
-                      <p className="text-slate-500">
-                        Transferred from general application engineering team to Platform &
-                        Infrastructure architecture division.
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        Any promotions, department reassignments, or designation upgrades for this employee will be tracked and displayed here.
                       </p>
-                      <span className="text-[10px] text-slate-400">Effective: May 10, 2025</span>
                     </div>
-                  </div>
+                  ) : (
+                    movements.map((m, idx) => (
+                      <div
+                        key={m.id || idx}
+                        className="flex gap-4 text-xs relative border-l-2 pl-4 py-2 border-[#f87941]"
+                      >
+                        <div className="absolute -left-1.5 top-3.5 h-3.5 w-3.5 rounded-full bg-[#f87941]" />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-bold text-slate-800 dark:text-slate-200">
+                              {m.movementType || 'Internal Movement'}
+                            </p>
+                            {m.status && (
+                              <Badge variant="outline" className="text-[9px] capitalize">
+                                {m.status}
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-slate-500 mt-0.5">
+                            {m.previousDesignation && m.newDesignation
+                              ? `${m.previousDesignation} → ${m.newDesignation}`
+                              : m.reason || 'Designation / Department update'}
+                            {m.newDepartment &&
+                              m.previousDepartment &&
+                              m.newDepartment !== m.previousDepartment &&
+                              ` (${m.previousDepartment} → ${m.newDepartment})`}
+                          </p>
+                          <span className="text-[10px] text-slate-400 mt-1 block">
+                            Effective:{' '}
+                            {m.effectiveDate
+                              ? new Date(m.effectiveDate).toLocaleDateString()
+                              : 'Immediate'}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -2155,7 +2191,6 @@ export default function EmployeeDetailPage() {
           {/* TAB 7: PERFORMANCE & REVIEWS */}
           {activeTab === 'reviews' && (
             <div className="space-y-6">
-              {/* Appraisal Summary */}
               <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
                 <CardHeader className="flex flex-row items-center justify-between pb-3 border-b">
                   <div>
@@ -2163,91 +2198,45 @@ export default function EmployeeDetailPage() {
                       Appraisals & Performance Ratings
                     </CardTitle>
                     <CardDescription>
-                      KPI targets and 360-degree feedback loop details.
+                      Performance evaluations, manager feedback, and appraisal cycles.
                     </CardDescription>
                   </div>
-                  <Badge className="bg-rose-500/10 text-rose-500 border-none font-bold text-xs px-2.5 py-1">
-                    PROMOTION ELIGIBLE: 92%
-                  </Badge>
                 </CardHeader>
-                <CardContent className="pt-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                  <div className="p-3 border rounded-xl bg-slate-50 dark:bg-zinc-900">
-                    <span className="font-semibold text-slate-500">Manager Rating:</span>
-                    <p className="font-bold text-sm mt-1">4.8 / 5.0 (Exceeds Expectations)</p>
-                  </div>
-                  <div className="p-3 border rounded-xl bg-slate-50 dark:bg-zinc-900">
-                    <span className="font-semibold text-slate-500">Peer Calibration:</span>
-                    <p className="font-bold text-sm mt-1">4.6 / 5.0 (High Collaboration)</p>
-                  </div>
-                  <div className="p-3 border rounded-xl bg-slate-50 dark:bg-zinc-900">
-                    <span className="font-semibold text-slate-500">Competency Level:</span>
-                    <p className="font-bold text-sm mt-1">L4 Senior Tech Lead (Advanced)</p>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* OKR Checklist */}
-              <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
-                <CardHeader>
-                  <CardTitle className="text-sm font-bold">Active OKRs & Strategic Goals</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="font-semibold">
-                        Goal 1: Re-architect dynamic form engine codebase
-                      </span>
-                      <Badge className="bg-rose-500/10 text-rose-500 border-none text-[9px]">
-                        80% COMPLETE
-                      </Badge>
+                <CardContent className="pt-4 space-y-4">
+                  {performanceReviews.length === 0 ? (
+                    <div className="text-center py-8 text-slate-400 dark:text-zinc-500 text-xs">
+                      <Award className="h-8 w-8 mx-auto mb-2 opacity-30 text-slate-400" />
+                      <p className="font-semibold text-slate-700 dark:text-slate-300">
+                        No Performance Reviews Recorded
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        Completed appraisal cycles, ratings, and formal evaluations will be listed here.
+                      </p>
                     </div>
-                    <div className="w-full bg-slate-100 dark:bg-zinc-800 rounded-full h-2">
-                      <div className="bg-rose-500 h-2 rounded-full" style={{ width: '80%' }}></div>
+                  ) : (
+                    <div className="space-y-3">
+                      {performanceReviews.map(rev => (
+                        <div
+                          key={rev.id}
+                          className="p-3 border rounded-xl bg-slate-50/50 dark:bg-zinc-900/10 text-xs flex justify-between items-center"
+                        >
+                          <div>
+                            <p className="font-bold text-slate-800 dark:text-slate-200">
+                              Period: {rev.reviewPeriod || 'Annual Appraisal'}
+                            </p>
+                            <p className="text-slate-500 text-[11px] mt-0.5">
+                              {rev.comments || 'Performance review completed'}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <Badge className="bg-[#f87941]/10 text-[#f87941] border-none font-bold">
+                              Rating: {rev.rating} / 5.0
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    <span className="text-[10px] text-slate-400 block">
-                      Milestone target: Sep 30, 2026 • Blocker: None
-                    </span>
-                  </div>
-
-                  <div className="space-y-2 border-t pt-3">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="font-semibold">
-                        Goal 2: Enforce GDPR compliance in client-session middleware
-                      </span>
-                      <Badge className="bg-emerald-500/10 text-emerald-500 border-none text-[9px]">
-                        100% COMPLETE
-                      </Badge>
-                    </div>
-                    <div className="w-full bg-slate-100 dark:bg-zinc-800 rounded-full h-2">
-                      <div
-                        className="bg-emerald-500 h-2 rounded-full"
-                        style={{ width: '100%' }}
-                      ></div>
-                    </div>
-                    <span className="text-[10px] text-slate-400 block">
-                      Milestone target: Jun 15, 2026 • Completed
-                    </span>
-                  </div>
-
-                  <div className="space-y-2 border-t pt-3">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="font-semibold">
-                        Goal 3: Reduce REST API dashboard metrics page load by 20%
-                      </span>
-                      <Badge className="bg-yellow-500/10 text-yellow-600 border-none text-[9px]">
-                        50% COMPLETE
-                      </Badge>
-                    </div>
-                    <div className="w-full bg-slate-100 dark:bg-zinc-800 rounded-full h-2">
-                      <div
-                        className="bg-yellow-500 h-2 rounded-full"
-                        style={{ width: '50%' }}
-                      ></div>
-                    </div>
-                    <span className="text-[10px] text-slate-400 block">
-                      Milestone target: Dec 31, 2026 • Blocker: Query optimization
-                    </span>
-                  </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -2768,7 +2757,7 @@ export default function EmployeeDetailPage() {
                     </div>
                     <div className="flex justify-between text-slate-400">
                       <span>Approval chain routes:</span>
-                      <span>Reporting Manager (Sarah Jenkins) → HR Business Partner</span>
+                      <span>Reporting Manager ({employee.managerName || 'Assigned Manager'}) → HR Business Partner</span>
                     </div>
                   </div>
 
@@ -2820,25 +2809,14 @@ export default function EmployeeDetailPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                    <div className="p-3 border rounded-xl bg-slate-50 dark:bg-zinc-900 space-y-1">
-                      <p className="font-semibold text-slate-400">US B1/B2 Visa</p>
-                      <p className="font-bold text-slate-800 dark:text-slate-200">
-                        Valid until: Dec 12, 2030
-                      </p>
-                      <Badge className="bg-emerald-500/10 text-emerald-600 border-none font-bold text-[9px]">
-                        COMPLIANT / ISSUED
-                      </Badge>
-                    </div>
-                    <div className="p-3 border rounded-xl bg-slate-50 dark:bg-zinc-900 space-y-1">
-                      <p className="font-semibold text-slate-400">UK Business Visitor</p>
-                      <p className="font-bold text-slate-800 dark:text-slate-200">
-                        Valid until: Jul 30, 2027
-                      </p>
-                      <Badge className="bg-emerald-500/10 text-emerald-600 border-none font-bold text-[9px]">
-                        COMPLIANT / ISSUED
-                      </Badge>
-                    </div>
+                  <div className="text-center py-6 text-slate-400 dark:text-zinc-500 text-xs">
+                    <Globe className="h-8 w-8 mx-auto mb-2 opacity-30 text-slate-400" />
+                    <p className="font-semibold text-slate-700 dark:text-slate-300">
+                      No Travel Visas or Corporate Itineraries on Record
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      International travel permits, business visas, and travel authorizations will be logged here.
+                    </p>
                   </div>
                 </CardContent>
               </Card>
@@ -2848,33 +2826,51 @@ export default function EmployeeDetailPage() {
                   <CardTitle className="text-sm font-bold">Expense Reimbursement Ledgers</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3 text-xs">
-                  {travelLogs.map(log => (
-                    <div
-                      key={log.id}
-                      className="flex justify-between items-center p-3 border rounded-xl bg-slate-50/50 dark:bg-zinc-900/10"
-                    >
-                      <div>
-                        <p className="font-bold text-slate-800 dark:text-slate-200">
-                          {log.destination}
-                        </p>
-                        <p className="text-[10px] text-slate-400">
-                          Purpose: {log.purpose} • Dates: {log.dates}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-bold text-slate-800 dark:text-slate-200">{log.cost}</p>
-                        <Badge
-                          className={
-                            log.status === 'approved'
-                              ? 'bg-emerald-500/15 text-emerald-600 font-bold border-none text-[9px]'
-                              : 'bg-yellow-500/15 text-yellow-600 font-bold border-none text-[9px]'
-                          }
-                        >
-                          {log.status.toUpperCase()}
-                        </Badge>
-                      </div>
+                  {reimbursements.length === 0 ? (
+                    <div className="text-center py-6 text-slate-400 dark:text-zinc-500 text-xs">
+                      <p className="font-medium text-slate-700 dark:text-slate-300">
+                        No Expense Claims Recorded
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        Reimbursements and travel expense claims submitted by this employee will appear here.
+                      </p>
                     </div>
-                  ))}
+                  ) : (
+                    reimbursements.map(item => (
+                      <div
+                        key={item.id}
+                        className="flex justify-between items-center p-3 border rounded-xl bg-slate-50/50 dark:bg-zinc-900/10"
+                      >
+                        <div>
+                          <p className="font-bold text-slate-800 dark:text-slate-200">
+                            {item.title || item.category || 'Expense Claim'}
+                          </p>
+                          <p className="text-[10px] text-slate-400">
+                            {item.description || 'Corporate expense'} • Date:{' '}
+                            {item.expenseDate
+                              ? new Date(item.expenseDate).toLocaleDateString()
+                              : item.createdAt
+                                ? new Date(item.createdAt).toLocaleDateString()
+                                : 'N/A'}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-slate-800 dark:text-slate-200">
+                            INR {Number(item.amount || 0).toLocaleString()}
+                          </p>
+                          <Badge
+                            className={
+                              item.status === 'approved' || item.status === 'paid'
+                                ? 'bg-emerald-500/15 text-emerald-600 font-bold border-none text-[9px]'
+                                : 'bg-yellow-500/15 text-yellow-600 font-bold border-none text-[9px]'
+                            }
+                          >
+                            {(item.status || 'PENDING').toUpperCase()}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -3002,44 +2998,25 @@ export default function EmployeeDetailPage() {
               <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
                 <CardHeader>
                   <CardTitle className="text-sm font-bold">
-                    Active Authenticated Devices & Sessions ({sessions.length})
+                    Active Authenticated Devices & Sessions
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3 text-xs">
-                  {sessions.map(sess => (
-                    <div
-                      key={sess.id}
-                      className="flex justify-between items-center p-3.5 border rounded-xl"
-                    >
-                      <div>
-                        <p className="font-bold text-slate-800 dark:text-slate-200">
-                          {sess.device}
-                        </p>
-                        <p className="text-[10px] text-slate-400">
-                          IP Address: {sess.ip} • Last seen: {sess.date}
-                        </p>
-                      </div>
-                      <div>
-                        {sess.current ? (
-                          <Badge className="bg-rose-500/10 text-rose-500 border-none font-bold text-[9px]">
-                            CURRENT DEVICE
-                          </Badge>
-                        ) : (
-                          <Button
-                            size="xs"
-                            variant="outline"
-                            className="text-rose-500 border-rose-500/20 hover:bg-rose-500/5 h-7"
-                            onClick={() => {
-                              setSessions(prev => prev.filter(s => s.id !== sess.id));
-                              toast.success('Session deauthorized and dynamic tokens cleared.');
-                            }}
-                          >
-                            Revoke login session
-                          </Button>
-                        )}
-                      </div>
+                  <div className="flex justify-between items-center p-3.5 border rounded-xl bg-slate-50/50 dark:bg-zinc-900/10">
+                    <div>
+                      <p className="font-bold text-slate-800 dark:text-slate-200">
+                        Current Web Session
+                      </p>
+                      <p className="text-[10px] text-slate-400">
+                        Status: Active & Verified • Authentication: Bearer Token
+                      </p>
                     </div>
-                  ))}
+                    <div>
+                      <Badge className="bg-emerald-500/10 text-emerald-600 border-none font-bold text-[9px]">
+                        ACTIVE
+                      </Badge>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             </div>
