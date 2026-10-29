@@ -11,12 +11,14 @@ export function normalizeAppRole(role: string | null | undefined): AppRole {
     case 'business_owner':
     case 'tenant_owner':
     case 'hr_manager':
+    case 'hr_executive':
     case 'cms_administrator':
     case 'management':
     case 'ceo':
     case 'cto':
     case 'director':
     case 'accountant':
+    case 'finance':
       return 'Admin';
     case 'manager':
     case 'project_manager':

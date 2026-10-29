@@ -225,11 +225,11 @@ const categories: NavCategory[] = [
     icon: Clock,
     items: [
       { name: 'Attendance Dashboard', href: '/dashboard/attendance', icon: BarChart3, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
-      { name: 'Attendance Register', href: '/dashboard/attendance/register', icon: Clock, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'My Attendance', href: '/dashboard/attendance/register', icon: Clock, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] },
       { name: 'Shift Management', href: '/dashboard/employees/shifts', icon: Clock, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Timesheet Operations', href: '/dashboard/employees/timesheets', icon: Clock, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
-      { name: 'Leaves & Time Off', href: '/dashboard/leaves', icon: Calendar, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
-      { name: 'Work From Home', href: '/dashboard/employees/wfh', icon: Home, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Leaves & Time Off', href: '/dashboard/leaves', icon: Calendar, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] },
+      { name: 'Work From Home', href: '/dashboard/employees/wfh', icon: Home, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] },
       { name: 'Holiday Calendar', href: '/dashboard/employees/holidays', icon: CalendarDays, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] },
       { name: 'Attendance Policies', href: '/dashboard/attendance/policies', icon: ScrollText, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] }
     ]
@@ -239,13 +239,13 @@ const categories: NavCategory[] = [
     icon: BadgeCheck,
     items: [
       { name: 'Operations Dashboard', href: '/dashboard/hr-operations', icon: BarChart3, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
-      { name: 'HR Service Desk', href: '/dashboard/hr-service-desk', icon: HelpCircle, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'HR Service Desk', href: '/dashboard/hr-service-desk', icon: HelpCircle, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] },
       { name: 'Employee Request Center', href: '/dashboard/employees/requests', icon: MessageSquare, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee'] },
       { name: 'Broadcast Hub', href: '/dashboard/employees/broadcast', icon: Inbox, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Document Vault', href: '/dashboard/employees/documents', icon: FileText, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Asset Tracker', href: '/dashboard/employees/assets', icon: Laptop, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
-      { name: 'Training & Skills', href: '/dashboard/employees/training', icon: GraduationCap, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
-      { name: 'Wellness Operations', href: '/dashboard/employees/wellness', icon: HeartHandshake, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Training & Skills', href: '/dashboard/employees/training', icon: GraduationCap, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] },
+      { name: 'Wellness Operations', href: '/dashboard/employees/wellness', icon: HeartHandshake, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] },
       { name: 'Visitor Passes', href: '/dashboard/visitors', icon: QrCode, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Knowledge Base & SOPs', href: '/dashboard/knowledge-base', icon: BookOpen, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] }
     ]
@@ -273,12 +273,12 @@ const categories: NavCategory[] = [
       { name: 'Invoices & Billing', href: '/dashboard/finance/invoices', icon: Receipt, roles: ['admin', 'accountant', 'project_manager', 'ceo', 'cto', 'business_owner'] },
 
       { name: 'Payroll & Salary', href: '/dashboard/payroll', icon: Wallet, roles: ['admin', 'accountant', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
-      { name: 'Reimbursements', href: '/dashboard/reimbursements', icon: Receipt, roles: ['admin', 'project_manager', 'hr_manager', 'accountant', 'ceo', 'cto', 'business_owner'] },
-      { name: 'Expenses', href: '/dashboard/reimbursements?tab=expenses', icon: IndianRupee, roles: ['admin', 'project_manager', 'hr_manager', 'accountant', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Reimbursements', href: '/dashboard/reimbursements', icon: Receipt, roles: ['admin', 'project_manager', 'hr_manager', 'accountant', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] },
+      { name: 'Expenses', href: '/dashboard/reimbursements?tab=expenses', icon: IndianRupee, roles: ['admin', 'project_manager', 'hr_manager', 'accountant', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] },
       { name: 'Project Financials', href: '/dashboard/projects/financials', icon: IndianRupee, roles: ['admin', 'project_manager', 'accountant', 'ceo', 'cto', 'business_owner'] },
       { name: 'Procurement & Purchase', href: '/dashboard/procurement', icon: ShoppingCart, roles: ['admin', 'accountant', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Vendor Directory', href: '/dashboard/procurement/vendors', icon: Users, roles: ['admin', 'accountant', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
-      { name: 'Travel Management', href: '/dashboard/travel', icon: Plane, roles: ['admin', 'accountant', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Travel Management', href: '/dashboard/travel', icon: Plane, roles: ['admin', 'accountant', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] },
       { name: 'Financial Reports', href: '/dashboard/finance/executive', icon: TrendingUp, roles: ['admin', 'accountant', 'hr_manager', 'ceo', 'cto', 'business_owner'] }
     ]
   },
@@ -347,6 +347,24 @@ const categories: NavCategory[] = [
     items: []
   }
 ];
+
+const getModuleByCategoryName = (name: string): string => {
+  switch (name.toLowerCase().trim()) {
+    case 'dashboard': return 'dashboard';
+    case 'workforce hub': return 'workforce_hub';
+    case 'recruitment & talent': return 'recruitment';
+    case 'time & attendance': return 'time_attendance';
+    case 'hr operations': return 'hr_operations';
+    case 'projects & delivery': return 'projects_delivery';
+    case 'finance': return 'finance_claims';
+    case 'crm & sales': return 'crm_sales';
+    case 'analytics & bi': return 'analytics_bi';
+    case 'ai hub': return 'ai_hub';
+    case 'security & compliance': return 'security_compliance';
+    case 'business settings': return 'administration';
+    default: return '';
+  }
+};
 
 export function DashboardSidebar({ user, isMobile = false, onClose, companyName: propsCompanyName }: DashboardSidebarProps) {
   const pathname = usePathname();
@@ -444,8 +462,15 @@ export function DashboardSidebar({ user, isMobile = false, onClose, companyName:
             const catRoles = cat.roles || [];
             const isSingleton = cat.isSingleton;
 
-            // Global Category-level RBAC check for both singleton and sub-menu categories
-            if (catRoles.length > 0 && !catRoles.includes(normalizedRole)) {
+            const userPerms = (user as any).permissions;
+            if (userPerms) {
+              const modName = getModuleByCategoryName(cat.name);
+              if (modName && userPerms[modName] && userPerms[modName].read === false) {
+                return null;
+              }
+            }
+
+            if (!userPerms && catRoles.length > 0 && !catRoles.includes(normalizedRole)) {
               return null;
             }
 
@@ -498,6 +523,18 @@ export function DashboardSidebar({ user, isMobile = false, onClose, companyName:
             }
 
             const visibleItems = cat.items.filter((item) => {
+              const userPerms = (user as any).permissions;
+              if (userPerms) {
+                if (item.href === '/dashboard/attendance') {
+                  const ta = userPerms.time_attendance;
+                  if (!ta || !ta.approve) return false;
+                }
+                if (item.href === '/dashboard/attendance/register') {
+                  const ta = userPerms.time_attendance;
+                  if (!ta || !ta.read) return false;
+                }
+              }
+
               const itemRoles = item.roles || [];
               if (itemRoles.length === 0) return true;
               return itemRoles.includes(normalizedRole);

@@ -303,14 +303,24 @@ export default function AttendancePage() {
   }, []);
 
   useEffect(() => {
+    if (currentUser) {
+      const isAdminHubRole = hasFullAccess(currentUser.role as UserRole);
+      const userPerms = (currentUser as any).permissions;
+      const hasAdminAccess = isAdminHubRole || (userPerms?.time_attendance?.approve);
+      
+      if (!hasAdminAccess) {
+        window.location.href = '/dashboard/attendance/register';
+      }
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
     if (initialTab) {
       setActiveTab(initialTab);
-    } else if (currentUser) {
-      // Strictly separate Admin Hub from Manager/Employee Personal View
-      const isAdminHubRole = hasFullAccess(currentUser.role as UserRole);
-      setActiveTab(isAdminHubRole ? 'all-attendance' : 'attendance');
+    } else {
+      setActiveTab('all-attendance');
     }
-  }, [initialTab, currentUser]);
+  }, [initialTab]);
   useEffect(() => {
     if (currentUser) {
       if (hasFullAccess(currentUser.role as UserRole)) {
@@ -2006,296 +2016,7 @@ export default function AttendancePage() {
         </TabsContent>
 
 
-        {/* Attendance Tab (Personal) */}
-        {(true) && (
-          <TabsContent value="attendance" className="space-y-6">
-            <Tabs defaultValue="console" className="space-y-6">
-              <TabsList className="bg-slate-50 dark:bg-[#18191B] p-1 border border-border rounded-lg text-xs font-bold text-slate-500">
-                <TabsTrigger value="console" className="text-xs">My Attendance Portal</TabsTrigger>
-                <TabsTrigger value="overtime-claims" className="text-xs">My Overtime Claims</TabsTrigger>
-                <TabsTrigger value="history" className="text-xs">My Attendance Logs & Ledger</TabsTrigger>
-              </TabsList>
 
-              <TabsContent value="console" className="space-y-6">
-                <PunchConsole
-                  employeeId={employeeId}
-                  onPunchSuccess={fetchAttendance}
-                  todayRecord={attendance.find(r => r.date === formatLocalDate(new Date()))}
-                />
-
-                {/* Attendance Analytics Grid */}
-                <AttendanceStatsGrid attendance={attendance} />
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Break Tracking Control */}
-                  <BreakCard
-                    employeeId={employeeId}
-                    onBreakChange={fetchAttendance}
-                    todayRecord={attendance.find(r => r.date === formatLocalDate(new Date()))}
-                  />
-
-                  {/* AI Attendance Virtual Assistant */}
-                  <AiAssistant employeeId={employeeId} />
-                </div>
-              </TabsContent>
-
-              <TabsContent value="overtime-claims" className="space-y-6">
-                <EmployeeOvertimeTab employeeId={employeeId} />
-              </TabsContent>
-
-              <TabsContent value="history" className="space-y-6">
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <CardTitle>Attendance History</CardTitle>
-                        <CardDescription>View your attendance records and daily work hours log.</CardDescription>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {/* Filters */}
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                      <div className="space-y-2">
-                        <Label>Month</Label>
-                        <Select
-                          value={selectedMonth.toString()}
-                          onValueChange={(value) => setSelectedMonth(parseInt(value))}
-                        >
-                          <SelectTrigger className="h-10">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {Array.from({ length: 12 }, (_, i) => (
-                              <SelectItem key={i + 1} value={(i + 1).toString()}>
-                                {new Date(2024, i).toLocaleString('default', { month: 'long' })}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Year</Label>
-                        <Select
-                          value={selectedYear.toString()}
-                          onValueChange={(value) => setSelectedYear(parseInt(value))}
-                        >
-                          <SelectTrigger className="h-10">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {Array.from({ length: 5 }, (_, i) => {
-                              const y = new Date().getFullYear() - 2 + i;
-                              return (
-                                <SelectItem key={y} value={y.toString()}>
-                                  {y}
-                                </SelectItem>
-                              );
-                            })}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Start Date</Label>
-                        <Input
-                          type="date"
-                          value={attendanceStartDate}
-                          onChange={(e) => setAttendanceStartDate(e.target.value)}
-                          className="h-10"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>End Date</Label>
-                        <Input
-                          type="date"
-                          value={attendanceEndDate}
-                          onChange={(e) => setAttendanceEndDate(e.target.value)}
-                          className="h-10"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <Button onClick={fetchAttendance} disabled={loading} variant="outline" className="h-10">
-                        {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Apply Filters
-                      </Button>
-                      <Button
-                        onClick={() => {
-                          setAttendanceStartDate('');
-                          setAttendanceEndDate('');
-                          setSelectedMonth(new Date().getMonth() + 1);
-                          setSelectedYear(new Date().getFullYear());
-                        }}
-                        variant="ghost"
-                        className="h-10"
-                      >
-                        Reset
-                      </Button>
-                    </div>
-
-                    {/* Stats summary cards */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4">
-                      <Card>
-                        <CardHeader className="pb-3 text-center md:text-left">
-                          <CardDescription>Present Days</CardDescription>
-                          <CardTitle className="text-2xl">{stats.presentDays}</CardTitle>
-                        </CardHeader>
-                      </Card>
-                      <Card>
-                        <CardHeader className="pb-3 text-center md:text-left">
-                          <CardDescription>Holidays</CardDescription>
-                          <CardTitle className="text-2xl">{stats.holidays}</CardTitle>
-                        </CardHeader>
-                      </Card>
-                      <Card className="border-primary/20 bg-primary/5">
-                        <CardHeader className="pb-3 text-center md:text-left">
-                          <div className="flex items-center justify-between">
-                            <CardDescription className="text-primary font-medium">Month Total</CardDescription>
-                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${stats.monthlyDifference >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                              {formatDuration(stats.monthlyDifference)}
-                            </span>
-                          </div>
-                          <CardTitle className="text-2xl text-primary">{formatDuration(stats.monthlyTotalHours, false)}</CardTitle>
-                        </CardHeader>
-                      </Card>
-                      <Card className={stats.weeklyTotalHours >= stats.weeklyTarget ? "border-emerald-500/30 bg-emerald-500/5" : "border-amber-500/30 bg-amber-500/5"}>
-                        <CardHeader className="pb-3 text-center md:text-left">
-                          <CardDescription className="flex items-center justify-between">
-                            <span className="font-medium text-[10px] md:text-xs">Weekly (40h)</span>
-                            <span className="hidden xl:inline text-[10px] uppercase font-bold text-muted-foreground">{stats.weeklyDifference >= 0 ? 'Goal Met' : 'Awaiting Progress'}</span>
-                          </CardDescription>
-                          <div className="flex items-baseline justify-center md:justify-start gap-2">
-                            <CardTitle className="text-xl md:text-2xl">
-                              {formatDuration(stats.weeklyTotalHours, false)}
-                              <span className="text-xs font-normal text-muted-foreground ml-1">/40</span>
-                            </CardTitle>
-                            <span className={`text-[10px] font-medium ${stats.weeklyDifference >= 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
-                              ({formatDuration(stats.weeklyDifference)})
-                            </span>
-                          </div>
-                        </CardHeader>
-                      </Card>
-                    </div>
-
-                    {/* Table */}
-                    <div className="max-h-[600px] overflow-y-auto rounded-md border">
-                      <Table>
-                        <TableHeader className="sticky top-0 bg-background z-10">
-                          <TableRow>
-                            <TableHead>No</TableHead>
-                            <TableHead>Date</TableHead>
-                            <TableHead>In Time</TableHead>
-                            <TableHead>Out Time</TableHead>
-                            <TableHead>Work Hours</TableHead>
-                            <TableHead>Method</TableHead>
-                            <TableHead>Status</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {loading ? (
-                            <TableSkeleton columns={7} rows={10} />
-                          ) : attendance.length === 0 ? (
-                            <TableRow>
-                              <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                                No attendance records found
-                              </TableCell>
-                            </TableRow>
-                          ) : (
-                            attendance.map((record, index) => {
-                              // Support both old checkIn and new timeIn fields
-                              const tIn = record.timeIn || record.checkIn;
-                              const tOut = record.timeOut || record.checkOut;
-                              const workHours = calculateWorkHours(tIn, tOut);
-
-                              return (
-                                <TableRow key={record.id}>
-                                  <TableCell>{personalAttendancePage * PAGE_SIZE + index + 1}</TableCell>
-                                  <TableCell className="font-medium">{formatDateOrdinal(record.date)}</TableCell>
-                                  <TableCell>
-                                    {tIn ? new Date(tIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
-                                  </TableCell>
-                                  <TableCell>
-                                    {tOut ? new Date(tOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
-                                  </TableCell>
-                                  <TableCell>
-                                    {(() => {
-                                      const stats = calculateWorkHours(tIn, tOut);
-                                      return (
-                                        <div className="flex flex-col">
-                                          <span>{formatDuration(calculateWorkHours(tIn, tOut).hours, false)}</span>
-                                          {stats.hours > 0 && (
-                                            <span className={`text-[10px] font-semibold ${stats.type === 'Full Day' ? 'text-emerald-600' : 'text-amber-600'}`}>
-                                              {stats.type}
-                                            </span>
-                                          )}
-                                        </div>
-                                      );
-                                    })()}
-                                  </TableCell>
-                                  <TableCell>
-                                    <Badge
-                                      variant="outline"
-                                      className={`capitalize text-[10px] px-1.5 py-0 ${(record.checkInMethod === 'rfid' || record.checkInMethod === 'nfc')
-                                        ? 'bg-blue-500/10 text-blue-700 border-blue-200'
-                                        : ''
-                                        }`}
-                                    >
-                                      {(record.checkInMethod === 'rfid' || record.checkInMethod === 'nfc') ? 'RFID Attendance' :
-                                        record.checkInMethod === 'legacy' ? 'Manual' :
-                                          (record.checkInMethod || 'Manual')}
-                                    </Badge>
-                                  </TableCell>
-                                  <TableCell>
-                                    <Badge className={
-                                      record.status === 'present' ? 'bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/25 border-emerald-200' :
-                                        record.status === 'absent' ? 'bg-red-500/15 text-red-700 hover:bg-red-500/25 border-red-200' :
-                                          'bg-amber-500/15 text-amber-700 hover:bg-amber-500/25 border-amber-200'
-                                    }>
-                                      {record.status}
-                                    </Badge>
-                                  </TableCell>
-                                </TableRow>
-                              );
-                            })
-                          )}
-                        </TableBody>
-                      </Table>
-                    </div>
-
-                    {/* Pagination */}
-                    <div className="flex items-center justify-between pt-4 border-t">
-                      <div className="text-sm text-muted-foreground">
-                        Page {personalAttendancePage + 1}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setPersonalAttendancePage(p => Math.max(0, p - 1))}
-                          disabled={personalAttendancePage === 0 || loading}
-                        >
-                          <ChevronLeft className="h-4 w-4 mr-1" /> Previous
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setPersonalAttendancePage(p => p + 1)}
-                          disabled={attendance.length < PAGE_SIZE || loading}
-                        >
-                          Next <ChevronRight className="h-4 w-4 ml-1" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            </Tabs>
-          </TabsContent>
-        )}
 
         {isFullAccessUser && (
           <TabsContent value="attendance-settings" className="space-y-6">

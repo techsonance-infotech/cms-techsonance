@@ -64,6 +64,7 @@ export const GET = withApiHandler(async (_request, context) => {
       name: profile ? `${profile.first_name} ${profile.last_name}`.trim() : emp.preferred_name || 'Anonymous Employee',
       email: profile?.email || null,
       avatarUrl: profile?.avatar_url || null,
+      skills: emp.skills || null,
     };
   });
 

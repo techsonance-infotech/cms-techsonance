@@ -340,84 +340,96 @@ export default function WorkforceDashboardPage() {
 
   return (
     <div className="flex flex-col bg-transparent text-slate-900 dark:text-[#fdfcfc] space-y-6">
-      {/* Premium Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between border-b border-[#e6e4e6]/30 dark:border-[#2f3035]/30 pb-5 gap-4">
-        <div>
-          <h1 className="text-2xl font-black tracking-tight md:text-3xl flex items-center gap-2">
-            <BarChart3 className="h-7 w-7 text-[#f87941]" />
-            Workforce Intelligence
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-[#b1b1b1] mt-1">
-            Real-time workforce demographics, status trackers, and department allocations.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Date Picker Selector */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="border-[#e6e4e6]/30 dark:border-[#2f3035]/30 text-slate-700 dark:text-[#fdfcfc] font-semibold flex items-center gap-2 bg-white dark:bg-[#1E1F22]">
-                <Calendar className="h-4 w-4 text-slate-400" />
-                {dateRange}
-                <ChevronDown className="h-4 w-4 text-slate-400" />
+      {/* Premium Header Box (Client directory style match) */}
+      <div className="shrink-0">
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#f87941]/95 to-zinc-900 p-6 text-white shadow-xl border border-[#f87941]/20">
+          <div className="absolute right-0 top-0 -mr-6 -mt-6 h-32 w-32 rounded-full bg-[#f87941]/10 blur-2xl" />
+          <div className="absolute left-1/3 bottom-0 -mb-6 h-24 w-24 rounded-full bg-[#f87941]/10 blur-xl" />
+          <div className="relative z-10 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="h-2 w-2 rounded-full bg-white animate-ping" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-orange-200">Workforce Analytics Hub</span>
+              </div>
+              <h2 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white via-orange-100 to-orange-200 bg-clip-text text-transparent flex items-center gap-2">
+                <BarChart3 className="h-7 w-7 text-white" />
+                Workforce Intelligence
+              </h2>
+              <p className="text-sm text-orange-100/80 mt-1 max-w-2xl">
+                Real-time workforce demographics, status trackers, and department allocations.
+              </p>
+            </div>
+            
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Date Picker Selector */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="border-white/15 text-white font-semibold flex items-center gap-2 bg-white/10 hover:bg-white/20 rounded-xl h-9 shrink-0">
+                    <Calendar className="h-4 w-4 text-orange-200" />
+                    {dateRange}
+                    <ChevronDown className="h-4 w-4 text-orange-200" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30">
+                  {['Last 7 Days', 'Last 30 Days', 'This Month', 'This Quarter', 'This Year'].map(preset => (
+                    <DropdownMenuItem key={preset} onClick={() => setDateRange(preset)} className="cursor-pointer">
+                      {preset}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Filter Dropdown with Orange Count Badge */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="border-white/15 text-white font-semibold flex items-center gap-2 bg-white/10 hover:bg-white/20 relative rounded-xl h-9 shrink-0">
+                    <Filter className="h-4 w-4 text-orange-200" />
+                    Filters
+                    {activeFilters.length > 0 && (
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#f87941] text-[10px] font-bold text-white shadow-[0_2px_6px_rgba(248,121,65,0.4)]">
+                        {activeFilters.length}
+                      </span>
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56 bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 p-2 space-y-1">
+                  <div className="px-2 py-1.5 text-xs font-bold text-slate-400 uppercase">Toggle Presets</div>
+                  {[
+                    { key: 'hq', label: 'HQ Location Only' },
+                    { key: 'remote', label: 'Remote Personnel Only' },
+                    { key: 'on-leave', label: 'On Leave Status' }
+                  ].map(item => {
+                    const isActive = activeFilters.includes(item.key);
+                    return (
+                      <DropdownMenuItem
+                        key={item.key}
+                        onClick={() => toggleDemoFilter(item.key)}
+                        className="flex items-center justify-between cursor-pointer rounded-lg text-xs"
+                      >
+                        <span>{item.label}</span>
+                        {isActive && <span className="h-2 w-2 rounded-full bg-[#f87941]" />}
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Export Report Button */}
+              <Button
+                onClick={exportPDF}
+                variant="outline"
+                className="border-white/15 text-white font-semibold flex items-center gap-2 bg-white/10 hover:bg-white/20 rounded-xl h-9 shrink-0"
+              >
+                <Download className="h-4 w-4 text-orange-200" /> Export Report
               </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30">
-              {['Last 7 Days', 'Last 30 Days', 'This Month', 'This Quarter', 'This Year'].map(preset => (
-                <DropdownMenuItem key={preset} onClick={() => setDateRange(preset)} className="cursor-pointer">
-                  {preset}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
 
-          {/* Filter Dropdown with Orange Count Badge */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="border-[#e6e4e6]/30 dark:border-[#2f3035]/30 text-slate-700 dark:text-[#fdfcfc] font-semibold flex items-center gap-2 bg-white dark:bg-[#1E1F22] relative">
-                <Filter className="h-4 w-4 text-slate-400" />
-                Filters
-                {activeFilters.length > 0 && (
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#f87941] text-[10px] font-bold text-white shadow-[0_2px_6px_rgba(248,121,65,0.4)]">
-                    {activeFilters.length}
-                  </span>
-                )}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56 bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 p-2 space-y-1">
-              <div className="px-2 py-1.5 text-xs font-bold text-slate-400 uppercase">Toggle Presets</div>
-              {[
-                { key: 'hq', label: 'HQ Location Only' },
-                { key: 'remote', label: 'Remote Personnel Only' },
-                { key: 'on-leave', label: 'On Leave Status' }
-              ].map(item => {
-                const isActive = activeFilters.includes(item.key);
-                return (
-                  <DropdownMenuItem
-                    key={item.key}
-                    onClick={() => toggleDemoFilter(item.key)}
-                    className="flex items-center justify-between cursor-pointer"
-                  >
-                    <span>{item.label}</span>
-                    {isActive && <span className="h-2 w-2 rounded-full bg-[#f87941]" />}
-                  </DropdownMenuItem>
-                );
-              })}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Export Report Button */}
-          <Button
-            onClick={exportPDF}
-            className="bg-[#f87941]/10 text-[#f87941] border border-[#f87941]/20 hover:bg-[#f87941]/20 font-bold flex items-center gap-2 transition-colors"
-          >
-            <Download className="h-4 w-4" /> Export Report
-          </Button>
-
-          <Link href="/dashboard/employees/new">
-            <Button className="bg-[#f87941] text-white hover:bg-[#e06634] font-semibold flex items-center gap-2 shadow-[0_4px_12px_rgba(248,121,65,0.2)]">
-              <UserPlus className="h-4 w-4" /> Add Employee
-            </Button>
-          </Link>
+              <Link href="/dashboard/employees/new">
+                <Button className="bg-[#f87941] hover:bg-[#e06634] text-white font-bold border-none shadow-sm rounded-xl h-9 flex items-center gap-2 shrink-0">
+                  <UserPlus className="h-4 w-4" /> Add Employee
+                </Button>
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
 

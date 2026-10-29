@@ -203,7 +203,10 @@ export default function ProfilePage() {
     ? rawSkills.filter((skill: string) => typeof skill === 'string' && !skill.startsWith('__'))
     : [];
 
-  const isEmployeeOrAbove = ['SuperAdmin', 'Admin', 'Manager', 'Employee'].includes(employee.role);
+  const userRole = String(employee.role).toLowerCase().replace(/[\s_-]+/g, '');
+  const isEmployeeOrAbove = [
+    'superadmin', 'admin', 'manager', 'employee', 'hr_executive', 'finance', 'project_manager', 'hr_manager', 'viewer'
+  ].includes(userRole);
 
   const getInitials = () => {
     const first = employee.firstName?.[0]?.toUpperCase() || '?';
@@ -279,6 +282,7 @@ export default function ProfilePage() {
                       });
                       if (updateRes.ok) {
                         setEmployee((prev) => prev ? { ...prev, avatarUrl: null } : null);
+                        window.dispatchEvent(new Event('user-updated'));
                         toast.success('Profile picture removed successfully');
                       }
                       return;
@@ -301,6 +305,7 @@ export default function ProfilePage() {
                     }
 
                     setEmployee((prev) => prev ? { ...prev, avatarUrl: newUrl } : null);
+                    window.dispatchEvent(new Event('user-updated'));
                     toast.success('Profile picture updated successfully!');
                   }}
                 />

@@ -15,6 +15,7 @@ export interface AuthenticatedUser {
   firstName: string;
   lastName: string;
   role: AppRole;
+  rawRole?: string;
   avatarUrl: string | null;
   phone: string | null;
   providerUserId?: string | null;
@@ -51,7 +52,8 @@ export async function authenticateRequest(request: Request, options?: { required
           firstName: session.user.first_name || '',
           lastName: (session.user as any).last_name || '',
           role: normalizeAppRole(session.user.role),
-          avatarUrl: session.user.avatar_url || null,
+          rawRole: session.user.role || '',
+          avatarUrl: session.user.image || (session.user as any).avatar_url || null,
           phone: session.user.phone || null,
           providerUserId: session.user.id,
           tenantId: (session.user as any).tenant_id || null,
@@ -109,6 +111,7 @@ export async function authenticateRequest(request: Request, options?: { required
         firstName: profile.first_name,
         lastName: profile.last_name,
         role: normalizeAppRole(profile.role),
+        rawRole: profile.role || '',
         avatarUrl: profile.avatar_url,
         phone: profile.phone,
         providerUserId: profile.id,

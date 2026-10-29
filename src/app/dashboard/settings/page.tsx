@@ -1691,6 +1691,12 @@ export default function SettingsPage() {
     username: ''
   });
 
+  // Dynamic RBAC states
+  const [rolesList, setRolesList] = useState<any[]>([]);
+  const [loadingRoles, setLoadingRoles] = useState(false);
+  const [selectedRoleId, setSelectedRoleId] = useState('org_admin');
+  const [savingPermissions, setSavingPermissions] = useState(false);
+
   // Document Vault Form States
   const [isDocUploadModalOpen, setIsDocUploadModalOpen] = useState(false);
   const [docUploadName, setDocUploadName] = useState('');
@@ -1833,7 +1839,8 @@ export default function SettingsPage() {
       const [userRes] = await Promise.all([
         fetchCurrentUser(),
         fetchSettingsFromBackend(),
-        fetchTenantUsers()
+        fetchTenantUsers(),
+        fetchRolesList()
       ]);
       if (userRes && !hasFullAccess(userRes.role)) {
         // Will render Access Denied view securely
@@ -1863,6 +1870,84 @@ export default function SettingsPage() {
       console.error('Failed to load workspace users:', err);
     } finally {
       setLoadingUsers(false);
+    }
+  };
+
+  const fetchRolesList = async () => {
+    setLoadingRoles(true);
+    try {
+      const token = getStoredSessionToken();
+      const headers: Record<string, string> = {};
+      if (token && token !== 'null' && token !== 'undefined') {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      const response = await fetch('/api/rbac/roles', { headers });
+      if (response.ok) {
+        const resJson = await response.json();
+        setRolesList(resJson.data || []);
+      }
+    } catch (err) {
+      console.error('Failed to load roles list:', err);
+    } finally {
+      setLoadingRoles(false);
+    }
+  };
+
+  const handlePermissionToggle = (roleId: string, moduleName: string, action: string) => {
+    setRolesList(prev => prev.map(role => {
+      if (role.role_key !== roleId && role.id !== roleId) return role;
+      
+      const rolePerms = { ...role.permissions };
+      const currentActions = rolePerms[moduleName] || [];
+      
+      let updatedActions: string[];
+      if (currentActions.includes(action)) {
+        updatedActions = currentActions.filter((a: string) => a !== action);
+      } else {
+        updatedActions = [...currentActions, action];
+      }
+      
+      rolePerms[moduleName] = updatedActions;
+      return { ...role, permissions: rolePerms };
+    }));
+  };
+
+  const handleSavePermissions = async (roleId: string) => {
+    const role = rolesList.find(r => r.role_key === roleId || r.id === roleId);
+    if (!role) return;
+
+    setSavingPermissions(true);
+    toast.loading('Saving permissions configuration...', { id: 'save-perms' });
+
+    try {
+      const token = getStoredSessionToken();
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token && token !== 'null' && token !== 'undefined') {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch('/api/rbac/roles', {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({
+          roleId: role.id || role.role_key,
+          permissions: role.permissions
+        })
+      });
+
+      if (response.ok) {
+        toast.success('Permissions saved successfully!', { id: 'save-perms' });
+        await fetchRolesList();
+      } else {
+        const errJson = await response.json();
+        toast.error(`Failed to save: ${errJson.error || 'Unknown error'}`, { id: 'save-perms' });
+      }
+    } catch (err: any) {
+      toast.error(`Failed to save: ${err?.message || err}`, { id: 'save-perms' });
+    } finally {
+      setSavingPermissions(false);
     }
   };
 
@@ -3997,62 +4082,143 @@ export default function SettingsPage() {
 
               {/* Roles Permissions Matrix display */}
               <Card className="border-border shadow-xs rounded-2xl overflow-hidden">
-                <CardHeader className="bg-slate-50/50 dark:bg-zinc-950/20 border-b border-border">
-                  <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                    <Shield className="h-4 w-4 text-primary" />
-                    Role-Based Access Control (RBAC) Permissions Matrix
-                  </CardTitle>
-                  <CardDescription className="text-xs">Review default access permissions mapped to system roles.</CardDescription>
+                <CardHeader className="bg-slate-50/50 dark:bg-zinc-950/20 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-4 px-5">
+                  <div className="space-y-1">
+                    <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                      <Shield className="h-4 w-4 text-primary" />
+                      Dynamic Roles & Permissions Matrix
+                    </CardTitle>
+                    <CardDescription className="text-xs">Select a workspace role to dynamically customize its access privileges across modules.</CardDescription>
+                  </div>
+                  {rolesList.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <Label className="text-xs font-bold text-muted-foreground whitespace-nowrap">Active Role:</Label>
+                      <select
+                        value={selectedRoleId}
+                        onChange={e => setSelectedRoleId(e.target.value)}
+                        className="text-xs rounded-lg border border-input bg-background px-3 h-8 focus:outline-hidden focus:ring-1 focus:ring-primary/20 min-w-[180px]"
+                      >
+                        {rolesList.map(r => (
+                          <option key={r.role_key} value={r.role_key}>{r.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </CardHeader>
                 <CardContent className="p-0">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs border-collapse">
-                      <thead>
-                        <tr className="bg-slate-50/20 dark:bg-zinc-900/10 border-b border-border">
-                          <th className="py-2.5 px-4 font-bold text-muted-foreground">Module / Operations Group</th>
-                          <th className="py-2.5 px-4 font-bold text-muted-foreground text-center">SuperAdmin</th>
-                          <th className="py-2.5 px-4 font-bold text-muted-foreground text-center">HR Manager</th>
-                          <th className="py-2.5 px-4 font-bold text-muted-foreground text-center">Project Manager</th>
-                          <th className="py-2.5 px-4 font-bold text-muted-foreground text-center">Developer</th>
-                          <th className="py-2.5 px-4 font-bold text-muted-foreground text-center">Intern</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border">
-                        <tr>
-                          <td className="py-2.5 px-4 font-semibold">Corporate Financial Settings</td>
-                          <td className="text-center py-2.5 px-4"><Check className="h-4 w-4 text-emerald-500 mx-auto" /></td>
-                          <td className="text-center py-2.5 px-4"><X className="h-4 w-4 text-red-500 mx-auto" /></td>
-                          <td className="text-center py-2.5 px-4"><X className="h-4 w-4 text-red-500 mx-auto" /></td>
-                          <td className="text-center py-2.5 px-4"><X className="h-4 w-4 text-red-500 mx-auto" /></td>
-                          <td className="text-center py-2.5 px-4"><X className="h-4 w-4 text-red-500 mx-auto" /></td>
-                        </tr>
-                        <tr>
-                          <td className="py-2.5 px-4 font-semibold">Employee Database Management</td>
-                          <td className="text-center py-2.5 px-4"><Check className="h-4 w-4 text-emerald-500 mx-auto" /></td>
-                          <td className="text-center py-2.5 px-4"><Check className="h-4 w-4 text-emerald-500 mx-auto" /></td>
-                          <td className="text-center py-2.5 px-4"><X className="h-4 w-4 text-red-500 mx-auto" /></td>
-                          <td className="text-center py-2.5 px-4"><X className="h-4 w-4 text-red-500 mx-auto" /></td>
-                          <td className="text-center py-2.5 px-4"><X className="h-4 w-4 text-red-500 mx-auto" /></td>
-                        </tr>
-                        <tr>
-                          <td className="py-2.5 px-4 font-semibold">Project Allocation & Sprints</td>
-                          <td className="text-center py-2.5 px-4"><Check className="h-4 w-4 text-emerald-500 mx-auto" /></td>
-                          <td className="text-center py-2.5 px-4"><Check className="h-4 w-4 text-emerald-500 mx-auto" /></td>
-                          <td className="text-center py-2.5 px-4"><Check className="h-4 w-4 text-emerald-500 mx-auto" /></td>
-                          <td className="text-center py-2.5 px-4"><Check className="h-4 w-4 text-emerald-500 mx-auto" /></td>
-                          <td className="text-center py-2.5 px-4"><X className="h-4 w-4 text-red-500 mx-auto" /></td>
-                        </tr>
-                        <tr>
-                          <td className="py-2.5 px-4 font-semibold">Leave Approvals & Workflows</td>
-                          <td className="text-center py-2.5 px-4"><Check className="h-4 w-4 text-emerald-500 mx-auto" /></td>
-                          <td className="text-center py-2.5 px-4"><Check className="h-4 w-4 text-emerald-500 mx-auto" /></td>
-                          <td className="text-center py-2.5 px-4"><Check className="h-4 w-4 text-emerald-500 mx-auto" /></td>
-                          <td className="text-center py-2.5 px-4"><X className="h-4 w-4 text-red-500 mx-auto" /></td>
-                          <td className="text-center py-2.5 px-4"><X className="h-4 w-4 text-red-500 mx-auto" /></td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
+                  {loadingRoles ? (
+                    <div className="py-12 flex justify-center items-center text-xs text-muted-foreground">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary mr-2" />
+                      Loading permissions cache...
+                    </div>
+                  ) : rolesList.length === 0 ? (
+                    <div className="py-12 text-center text-xs text-muted-foreground">
+                      No roles loaded. Make sure the database is configured.
+                    </div>
+                  ) : (() => {
+                    const activeRole = rolesList.find(r => r.role_key === selectedRoleId || r.id === selectedRoleId);
+                    if (!activeRole) return <div className="p-5 text-xs text-muted-foreground">Select a role above</div>;
+                    
+                    const modulesMapping = [
+                      { key: 'dashboard', label: 'Main Dashboard Hub' },
+                      { key: 'workforce_hub', label: 'Workforce Hub (Directory & Chart)' },
+                      { key: 'recruitment', label: 'Recruitment & Talent (ATS)' },
+                      { key: 'time_attendance', label: 'Time & Attendance Tracker' },
+                      { key: 'hr_operations', label: 'HR Operations (Desk & Assets)' },
+                      { key: 'projects_delivery', label: 'Projects & Delivery Hub' },
+                      { key: 'finance_claims', label: 'Corporate Finance & Claims' },
+                      { key: 'crm_sales', label: 'CRM & Sales Pipeline' },
+                      { key: 'analytics_bi', label: 'Analytics & BI Insights' },
+                      { key: 'ai_hub', label: 'AI Operations & Copilot Hub' },
+                      { key: 'administration', label: 'System Settings & Config' },
+                      { key: 'security_compliance', label: 'Security & Compliance Auditing' }
+                    ];
+
+                    const actionsMapping = [
+                      { key: 'read', label: 'Read' },
+                      { key: 'create', label: 'Create' },
+                      { key: 'update', label: 'Edit' },
+                      { key: 'delete', label: 'Delete' },
+                      { key: 'approve', label: 'Approve' },
+                      { key: 'export', label: 'Export' }
+                    ];
+
+                    return (
+                      <div className="space-y-4">
+                        <div className="p-5 bg-slate-50/30 dark:bg-zinc-900/5 border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-4">
+                          <div className="space-y-1">
+                            <span className="text-xs font-bold text-foreground block">{activeRole.name}</span>
+                            <span className="text-[11px] text-muted-foreground block max-w-2xl">{activeRole.description}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-slate-100 dark:bg-zinc-800 text-muted-foreground border border-border">
+                              Rank Level: {activeRole.level}
+                            </span>
+                            {activeRole.is_core_role && (
+                              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                                Core System Role
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="overflow-x-auto px-5 pb-5">
+                          <table className="w-full text-left text-xs border-collapse border border-border rounded-xl overflow-hidden shadow-xs">
+                            <thead>
+                              <tr className="bg-slate-50/50 dark:bg-zinc-900/30 border-b border-border">
+                                <th className="py-3 px-4 font-bold text-muted-foreground">Module / Operations Group</th>
+                                {actionsMapping.map(act => (
+                                  <th key={act.key} className="py-3 px-4 font-bold text-muted-foreground text-center">{act.label}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border">
+                              {modulesMapping.map(mod => {
+                                const allowedActions = activeRole.permissions[mod.key] || [];
+                                return (
+                                  <tr key={mod.key} className="hover:bg-slate-50/30 dark:hover:bg-zinc-900/10 transition-colors">
+                                    <td className="py-3 px-4 font-semibold text-foreground">{mod.label}</td>
+                                    {actionsMapping.map(act => {
+                                      const isChecked = allowedActions.includes(act.key);
+                                      const isSuperAdmin = activeRole.role_key === 'super_admin';
+                                      
+                                      return (
+                                        <td key={act.key} className="text-center py-3 px-4">
+                                          <input
+                                            type="checkbox"
+                                            checked={isSuperAdmin || isChecked}
+                                            disabled={isSuperAdmin || savingPermissions}
+                                            onChange={() => handlePermissionToggle(activeRole.role_key, mod.key, act.key)}
+                                            className="h-4 w-4 rounded border-input text-primary focus:ring-primary/20 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+                                          />
+                                        </td>
+                                      );
+                                    })}
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {activeRole.role_key !== 'super_admin' && (
+                          <div className="flex justify-end p-5 border-t border-border bg-slate-50/20 dark:bg-zinc-900/5">
+                            <button
+                              type="button"
+                              disabled={savingPermissions}
+                              onClick={() => handleSavePermissions(activeRole.role_key)}
+                              className="px-5 h-9 rounded-xl text-xs font-bold text-white bg-primary hover:bg-primary/95 transition-colors disabled:opacity-50 shadow-xs flex items-center justify-center gap-1.5"
+                            >
+                              {savingPermissions && (
+                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1" />
+                              )}
+                              Save {activeRole.name} Permissions
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </CardContent>
               </Card>
 

@@ -87,6 +87,16 @@ export default function DashboardLayout({
     }
 
     checkAuth();
+
+    if (typeof window !== 'undefined') {
+      const handleUserUpdate = () => {
+        void checkAuth();
+      };
+      window.addEventListener('user-updated', handleUserUpdate);
+      return () => {
+        window.removeEventListener('user-updated', handleUserUpdate);
+      };
+    }
   }, [router]);
 
   if (loading || isRedirecting) {

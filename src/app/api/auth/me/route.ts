@@ -7,8 +7,10 @@ import { BadRequestError } from '@/server/http/errors';
 import { cookies } from 'next/headers';
 import { writeAccessTokenCookie } from '@/server/auth/session';
 
+import { fetchRolePermissions } from '@/server/rbac/service';
+
 export const GET = withApiHandler(async (request, context) => {
-  const user = await getCurrentUser(request as NextRequest);
+  const user = await getCurrentUser(request as NextRequest) as any;
   
   // Self-heal: If authenticated via Authorization header and session_token cookie is missing, write it
   const authHeader = request.headers.get('authorization');
@@ -20,6 +22,18 @@ export const GET = withApiHandler(async (request, context) => {
         await writeAccessTokenCookie(token, { persistent: true });
       }
     } catch {}
+  }
+
+  if (user && user.role && user.tenantId) {
+    try {
+      const supabase = getSupabaseAdminClient();
+      const perms = await fetchRolePermissions(supabase, user.tenantId, user.role);
+      if (perms) {
+        user.permissions = perms;
+      }
+    } catch (err) {
+      console.error('Failed to attach dynamic permissions to me user:', err);
+    }
   }
 
   return NextResponse.json({ user: user ?? context.auth?.user ?? null });

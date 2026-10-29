@@ -31,7 +31,13 @@ export const GET = withApiHandler(async (request, context) => {
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (error.message?.includes('schema cache') || error.message?.includes('does not exist')) {
+      console.warn('employee_notes table missing in schema cache, returning empty list');
+      return NextResponse.json(buildListResponse([], 0, 1, limit, 'Notes fetched successfully (fallback)'));
+    }
+    throw new Error(error.message);
+  }
 
   return NextResponse.json(buildListResponse(
     (data as Record<string, unknown>[] | null) ?? [],

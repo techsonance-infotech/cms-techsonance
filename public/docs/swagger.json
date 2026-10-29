@@ -4928,6 +4928,17 @@
             "description": "Successful request execution."
           }
         }
+      },
+      "put": {
+        "tags": [
+          "rbac"
+        ],
+        "summary": "PUT handler for /api/rbac/roles",
+        "responses": {
+          "200": {
+            "description": "Successful request execution."
+          }
+        }
       }
     },
     "/api/readers/{id}/heartbeat": {

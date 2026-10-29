@@ -26,9 +26,51 @@ export const GET = withApiHandler(async (request, context) => {
     const dateRangeParam = searchParams.get('dateRange') || 'Last 30 Days';
     const filtersParam = searchParams.get('filters') || '';
 
-    const allEmployeesRaw = (employees as Record<string, unknown>[] | null) ?? [];
+    const allEmployeesRaw = (employees as Record<string, any>[] | null) ?? [];
 
-    let allEmployees = [...allEmployeesRaw];
+    // Helper to extract fields from row or fallback skills JSONB column
+    const getField = (row: any, columnName: string, camelName: string, defaultValue: any = null) => {
+      if (row[columnName] !== undefined && row[columnName] !== null) {
+        return row[columnName];
+      }
+      let parsedSkills: any = null;
+      if (typeof row.skills === 'string') {
+        try {
+          parsedSkills = JSON.parse(row.skills);
+        } catch {}
+      } else {
+        parsedSkills = row.skills;
+      }
+      if (parsedSkills && typeof parsedSkills === 'object' && !Array.isArray(parsedSkills) && parsedSkills[camelName] !== undefined) {
+        return parsedSkills[camelName];
+      }
+      return defaultValue;
+    };
+
+    const normalizedEmployees = allEmployeesRaw.map(row => {
+      const workMode = getField(row, 'work_mode', 'workMode', 'office');
+      const salaryVal = row.salary ? Number(row.salary) : Number(getField(row, 'ctc', 'ctc', 0));
+      const genderVal = getField(row, 'gender', 'gender');
+      const dateOfJoining = row.date_of_joining || getField(row, 'date_of_joining', 'dateOfJoining');
+      const dateOfBirth = row.date_of_birth || getField(row, 'date_of_birth', 'dateOfBirth');
+      const confirmationDate = getField(row, 'confirmation_date', 'confirmationDate');
+      const exitDate = row.exit_date || getField(row, 'exit_date', 'exitDate');
+      const workLocation = row.work_location || getField(row, 'work_location', 'workLocation', 'Office');
+      
+      return {
+        ...row,
+        work_mode: typeof workMode === 'string' ? workMode.toLowerCase() : 'office',
+        salary: salaryVal,
+        gender: genderVal,
+        date_of_joining: dateOfJoining,
+        date_of_birth: dateOfBirth,
+        confirmation_date: confirmationDate,
+        exit_date: exitDate,
+        work_location: workLocation
+      };
+    });
+
+    let allEmployees = [...normalizedEmployees];
     if (filtersParam) {
       const filters = filtersParam.split(',');
       if (filters.includes('hq')) {
@@ -269,14 +311,102 @@ export const GET = withApiHandler(async (request, context) => {
     console.error('Error fetching dashboard auxiliary metrics:', dbErr);
   }
 
-  // AI Insights
-  const aiInsights = [
-    `Attrition Overview: Attrition rate is currently at **${attritionRate}%**. Suggest conducting exit interviews for key roles.`,
-    `Compliance Alert: **${pendingDocuments}** active employees are missing complete KYC or contract documentation.`,
-    `Pending Reviews: **${pendingReviews}** performance reviews are pending. Review cycles should be prioritized.`,
-    `Asset Return Check: **${assetRecovery}** notice-period/resigned staff still hold company-issued assets.`,
-    `Today's Attendance: **${missingAttendance}** employees have not logged check-in today.`
-  ];
+  // Call Groq / Gemini AI for real dynamic insights!
+  let dynamicInsights: string[] = [];
+  const groqApiKey = process.env.GROQ_API_KEY;
+  const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY;
+
+  const aiPrompt = `Analyze the following HR/Workforce Metrics for our company and generate exactly 4 short, actionable, bulleted HR recommendations or insights.
+Identify any risks (such as attrition risk, missing compliance/documentation, outstanding performance reviews, or high remote headcount) or positive trends.
+Format each bullet point to start with a category label in bold (e.g. "**Attrition Risk**: ...", "**Compliance Action**: ...", "**Staffing Balance**: ...") and keep it under 30 words per bullet point.
+Do not output any introductory or concluding text. Return exactly 4 separate bullet points.
+
+Metrics:
+- Total Headcount: ${total} staff (${active} active, ${onLeave} on leave, ${onNotice} on notice, ${probation} on probation)
+- Work Modes: ${remote} remote, ${hybrid} hybrid, ${wfo} in office
+- Locations count: ${locations} locations
+- Attrition Rate: ${attritionRate}%
+- Missing Documents (KYC): ${pendingDocuments} profiles
+- Pending Performance Reviews: ${pendingReviews} reviews
+- Assets Pending Return: ${assetRecovery} assets
+- Missing Attendance Today: ${missingAttendance} profiles
+- New Joiners this month: ${newJoiners}
+- Resignations this month: ${resignedThisMonth}`;
+
+  if (groqApiKey) {
+    try {
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${groqApiKey}`
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: [
+            { role: 'system', content: 'You are an expert HR analyst. Provide actionable, concise bullet points.' },
+            { role: 'user', content: aiPrompt }
+          ],
+          temperature: 0.3,
+          max_tokens: 300
+        })
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const content = json.choices?.[0]?.message?.content;
+        if (content) {
+          dynamicInsights = content
+            .split('\n')
+            .map((line: string) => line.replace(/^-\s*/, '').replace(/^\*\s*/, '').trim())
+            .filter((line: string) => line.length > 5)
+            .slice(0, 4);
+        }
+      }
+    } catch (err) {
+      console.error('Groq workforce insights query failed:', err);
+    }
+  }
+
+  if (dynamicInsights.length === 0 && geminiKey) {
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{
+              text: aiPrompt
+            }]
+          }]
+        })
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const content = json.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (content) {
+          dynamicInsights = content
+            .split('\n')
+            .map((line: string) => line.replace(/^-\s*/, '').replace(/^\*\s*/, '').trim())
+            .filter((line: string) => line.length > 5)
+            .slice(0, 4);
+        }
+      }
+    } catch (err) {
+      console.error('Gemini workforce insights query failed:', err);
+    }
+  }
+
+  // Fallback if APIs are offline or not configured
+  if (dynamicInsights.length === 0) {
+    dynamicInsights = [
+      `Attrition Trend: The attrition rate is currently at **${attritionRate}%**. Suggest initiating exit interviews to identify triggers.`,
+      `Document Gap: **${pendingDocuments}** active profiles are missing KYC or employment contracts. Action is required.`,
+      `Performance Backlog: **${pendingReviews}** review cycles are overdue. Prioritize review completions.`,
+      `Asset Recovery: **${assetRecovery}** notice-period/resigned staff still hold company-issued assets.`
+    ];
+  }
+
+  const aiInsights = dynamicInsights;
 
     return NextResponse.json({
       success: true,

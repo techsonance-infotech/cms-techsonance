@@ -63,3 +63,53 @@ export async function GET(request: Request) {
     );
   }
 }
+
+export async function PUT(request: Request) {
+  try {
+    const auth = await authenticateRequest(request, { required: true });
+    if (!auth) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    try {
+      requireRole(normalizeAppRole(auth.user.role), ['SuperAdmin', 'Admin']);
+    } catch {
+      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+    }
+
+    const tenantId = auth.user.tenantId;
+    if (!tenantId) {
+      return NextResponse.json({ error: 'No tenant context' }, { status: 400 });
+    }
+
+    const body = await request.json();
+    const { roleId, permissions, name, description, level, category } = body;
+
+    if (!roleId) {
+      return NextResponse.json({ error: 'Role ID is required' }, { status: 400 });
+    }
+
+    const supabase = getRouteSupabase(auth.accessToken);
+
+    const updated = await updateRole(supabase, tenantId, roleId, {
+      ...(permissions ? { permissions } : {}),
+      ...(name ? { name } : {}),
+      ...(description ? { description } : {}),
+      ...(level !== undefined ? { level } : {}),
+      ...(category ? { category } : {})
+    });
+
+    if (!updated) {
+      return NextResponse.json({ error: 'Role not found or update failed' }, { status: 404 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Role permissions updated successfully',
+      data: updated
+    });
+  } catch (error) {
+    console.error('Error updating role permissions:', error);
+    return NextResponse.json({ error: 'Failed to update role permissions' }, { status: 500 });
+  }
+}

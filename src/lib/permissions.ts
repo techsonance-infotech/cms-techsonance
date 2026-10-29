@@ -707,8 +707,51 @@ export function hasFullAccess(role: UserRole): boolean {
  * Identify which dashboard layout to display
  */
 export function getDashboardType(role: UserRole): 'admin' | 'employee' {
+  const raw = String(role).toLowerCase().replace(/[\s-]+/g, '_');
   if (hasFullAccess(role)) return 'admin';
+  
+  const adminLayoutRoles = [
+    'hr_executive',
+    'finance',
+    'project_manager',
+    'manager',
+    'devops_engineer',
+    'business_analyst'
+  ];
+  if (adminLayoutRoles.includes(raw)) return 'admin';
+  
   return 'employee';
+}
+
+/**
+ * Get authorized dashboard views for a role
+ */
+export function getRoleDashboardViews(role: UserRole): ('ceo' | 'hr' | 'finance' | 'operations' | 'manager')[] {
+  const raw = String(role).toLowerCase().replace(/[\s-]+/g, '_');
+  
+  // Super admin / Executive C-level can see all sections
+  if (hasFullAccess(role) && ![
+    'hr_manager',
+    'accountant'
+  ].includes(raw)) {
+    return ['ceo', 'hr', 'finance', 'operations', 'manager'];
+  }
+  
+  // Specific role mappings
+  if (raw === 'hr_manager' || raw === 'hr_executive') {
+    return ['hr'];
+  }
+  if (raw === 'accountant' || raw === 'finance') {
+    return ['finance'];
+  }
+  if (raw === 'project_manager' || raw === 'manager') {
+    return ['manager'];
+  }
+  if (raw === 'devops_engineer' || raw === 'business_analyst') {
+    return ['operations'];
+  }
+  
+  return [];
 }
 
 /**
