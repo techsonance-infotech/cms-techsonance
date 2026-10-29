@@ -11,6 +11,7 @@ import { ProjectFormDialog } from '@/components/projects/project-form-dialog';
 import { ProjectKanban } from '@/components/projects/project-kanban';
 import { isEmployeeRole, hasFullAccess, type UserRole } from '@/lib/permissions';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import {
   Table,
   TableBody,
@@ -115,7 +116,24 @@ function getTimelineProgress(project: Project): { percent: number; color: string
   return { percent: pct, color: 'bg-emerald-500' };
 }
 
-export default function ProjectsPage() {
+interface ProjectsPageProps {
+  defaultTab?: string;
+  defaultActiveFilter?: string;
+}
+
+export default function ProjectsPage({ defaultTab, defaultActiveFilter }: ProjectsPageProps = {}) {
+  const searchParams = useSearchParams();
+  const tabFromQuery = searchParams?.get('tab');
+  const [activeTab, setActiveTab] = useState<string>(defaultTab || tabFromQuery || 'pipeline');
+
+  useEffect(() => {
+    if (defaultTab) {
+      setActiveTab(defaultTab);
+    } else if (tabFromQuery) {
+      setActiveTab(tabFromQuery);
+    }
+  }, [defaultTab, tabFromQuery]);
+
   const [projects, setProjects] = useState<Project[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
@@ -134,7 +152,9 @@ export default function ProjectsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [clientFilter, setClientFilter] = useState<string>('all');
-  const [activeFilter, setActiveFilter] = useState<string>('all');
+  const [activeFilter, setActiveFilter] = useState<string>(
+    defaultActiveFilter || (searchParams?.get('active') === 'true' ? 'true' : 'all')
+  );
   const [startDateFilter, setStartDateFilter] = useState('');
   const [endDateFilter, setEndDateFilter] = useState('');
   
@@ -395,7 +415,7 @@ export default function ProjectsPage() {
         breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Projects' }]}
       />
 
-      <Tabs defaultValue="pipeline" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="mb-4">
           <TabsTrigger value="pipeline" className="font-bold">Active Pipeline</TabsTrigger>
           <TabsTrigger value="portfolio" className="font-bold" onClick={fetchPmoData}>Portfolio & Margin BI</TabsTrigger>

@@ -147,6 +147,12 @@ const isPathActive = (itemHref: string, currentPath: string, searchParams?: any)
       if (itemHref === '/dashboard/settings' && !['overview', 'overview-tab'].includes(activeTab)) {
         return false;
       }
+      if (itemHref === '/dashboard/projects' && activeTab === 'portfolio') {
+        return false;
+      }
+      if (itemHref === '/dashboard/employees/resource-allocation' && (activeTab === 'psa' || activeTab === 'forecasting')) {
+        return false;
+      }
     }
   }
 
@@ -254,13 +260,13 @@ const categories: NavCategory[] = [
     name: 'Projects & Delivery',
     icon: FolderKanban,
     items: [
-      { name: 'Project Dashboard', href: '/dashboard/projects', icon: BarChart3, roles: ['admin', 'project_manager', 'ceo', 'cto', 'business_owner'] },
-      { name: 'Active Projects', href: '/dashboard/projects/active', icon: FolderKanban, roles: ['admin', 'project_manager', 'developer', 'employee', 'intern', 'ceo', 'cto', 'business_owner'] },
-      { name: 'Project Portfolio', href: '/dashboard/projects/portfolio', icon: Layers, roles: ['admin', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Project Dashboard', href: '/dashboard/projects/analytics', icon: BarChart3, roles: ['admin', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Active Projects', href: '/dashboard/projects', icon: FolderKanban, roles: ['admin', 'project_manager', 'developer', 'employee', 'intern', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Project Portfolio', href: '/dashboard/projects?tab=portfolio', icon: Layers, roles: ['admin', 'project_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Task Board', href: '/dashboard/tasks', icon: Kanban, roles: ['admin', 'project_manager', 'developer', 'employee', 'intern', 'ceo', 'cto', 'business_owner'] },
       { name: 'Sprint Planner', href: '/dashboard/tasks/sprint-planning', icon: Kanban, roles: ['admin', 'project_manager', 'developer', 'employee', 'intern', 'ceo', 'cto', 'business_owner'] },
       { name: 'Resource Planner', href: '/dashboard/employees/resource-allocation', icon: ClipboardList, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
-      { name: 'Capacity Planner', href: '/dashboard/projects/capacity', icon: Activity, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Capacity Planner', href: '/dashboard/employees/resource-allocation?tab=forecasting', icon: Activity, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'PSA Planner', href: '/dashboard/employees/resource-allocation?tab=psa', icon: ClipboardList, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Timesheets', href: '/dashboard/employees/timesheets', icon: Clock, roles: ['admin', 'project_manager', 'developer', 'employee', 'intern', 'ceo', 'cto', 'business_owner'] }
     ]

@@ -125,7 +125,25 @@ export default function ProjectDetailPage() {
   const [wikiText, setWikiText] = useState('');
   const [isEditingWiki, setIsEditingWiki] = useState(false);
 
+  useEffect(() => {
+    if (!projectId) return;
+    const lower = projectId.toLowerCase();
+    const reservedWords = ['active', 'portfolio', 'capacity', 'analytics', 'financials'];
+    if (reservedWords.includes(lower)) {
+      if (lower === 'active') {
+        router.replace('/dashboard/projects');
+      } else if (lower === 'portfolio') {
+        router.replace('/dashboard/projects?tab=portfolio');
+      } else if (lower === 'capacity') {
+        router.replace('/dashboard/employees/resource-allocation?tab=forecasting');
+      } else {
+        router.replace(`/dashboard/projects/${lower}`);
+      }
+    }
+  }, [projectId, router]);
+
   const fetchEnrichedData = useCallback(async () => {
+    if (!projectId || isNaN(Number(projectId))) return;
     try {
       const token = localStorage.getItem('session_token');
       // Fetch risks
@@ -160,6 +178,10 @@ export default function ProjectDetailPage() {
   }, [projectId]);
 
   const fetchProjectData = useCallback(async () => {
+    if (!projectId || isNaN(Number(projectId))) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const token = localStorage.getItem('session_token');
