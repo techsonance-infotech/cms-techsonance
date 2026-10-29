@@ -36,19 +36,23 @@ function getClient(options?: ProfileLookupOptions) {
   return getSupabaseServerClient(options?.accessToken) as any;
 }
 
+export async function getNextLegacyUserId(client?: any): Promise<number> {
+  const supabase = client || getSupabaseAdminClient();
+  const { data } = await supabase
+    .from('users')
+    .select('legacy_user_id')
+    .order('legacy_user_id', { ascending: false })
+    .limit(1);
+
+  const currentMax = Number((data as { legacy_user_id: number | null }[] | null)?.[0]?.legacy_user_id ?? 0);
+  return currentMax + 1;
+}
+
 async function selfHealLegacyUserId(data: any) {
   if (data && data.legacy_user_id === null) {
     try {
       const admin = getSupabaseAdminClient();
-      const { data: maxQuery } = await admin
-        .from('users')
-        .select('legacy_user_id')
-        .eq('tenant_id', data.tenant_id)
-        .order('legacy_user_id', { ascending: false })
-        .limit(1);
-      
-      const maxId = Number(maxQuery?.[0]?.legacy_user_id ?? 0);
-      const nextId = maxId + 1;
+      const nextId = await getNextLegacyUserId(admin);
       
       await admin
         .from('users')

@@ -40,12 +40,11 @@ function normalizeSupabaseUser(user: Record<string, unknown>) {
   };
 }
 
-async function getNextLegacyUserId(tenantId: string) {
+async function getNextLegacyUserId(tenantId?: string) {
   const supabase = getAdminRouteSupabase();
   const { data } = await supabase
     .from('users')
     .select('legacy_user_id')
-    .eq('tenant_id', tenantId)
     .order('legacy_user_id', { ascending: false })
     .limit(1);
 

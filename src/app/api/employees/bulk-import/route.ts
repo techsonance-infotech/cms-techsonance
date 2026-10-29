@@ -21,11 +21,10 @@ async function getEmployeesColumns(supabase: any) {
   ];
 }
 
-async function getNextLegacyUserId(supabase: any, tenantId: string) {
+async function getNextLegacyUserId(supabase: any, tenantId?: string) {
   const { data } = await supabase
     .from('users')
     .select('legacy_user_id')
-    .eq('tenant_id', tenantId)
     .order('legacy_user_id', { ascending: false })
     .limit(1);
 

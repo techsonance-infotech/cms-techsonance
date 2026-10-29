@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getSupabaseAdminClient } from '@/server/supabase/admin';
 import { registerTenantAdmin } from '@/server/supabase/auth';
+import { getNextLegacyUserId } from '@/server/supabase/users';
 import { sendVerificationEmail } from '@/server/mail/verification';
 import crypto from 'crypto';
 
@@ -212,31 +213,45 @@ export async function POST(request: Request) {
 
     // 6. Create Profile in public.users
     let profileError: any = null;
+    let legacyUserId = await getNextLegacyUserId(supabase);
 
-    const firstProfileTry = await supabase.from('users').insert({
-      id: authUser.id,
-      tenant_id: tenant.id,
-      legacy_user_id: 1,
-      email: email.toLowerCase().trim(),
-      first_name: firstName,
-      last_name: lastName,
-      role: 'Admin',
-      phone: phone.trim(),
-      is_active: true,
-      is_email_verified: false,
-      verification_token: verificationToken,
-      verification_token_expires_at: tokenExpiresAt.toISOString(),
-      username: username.toLowerCase().trim(),
-    });
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) {
+        legacyUserId = await getNextLegacyUserId(supabase);
+      }
 
-    if (firstProfileTry.error) {
+      const firstProfileTry = await supabase.from('users').insert({
+        id: authUser.id,
+        tenant_id: tenant.id,
+        legacy_user_id: legacyUserId,
+        email: email.toLowerCase().trim(),
+        first_name: firstName,
+        last_name: lastName,
+        role: 'Admin',
+        phone: phone.trim(),
+        is_active: true,
+        is_email_verified: false,
+        verification_token: verificationToken,
+        verification_token_expires_at: tokenExpiresAt.toISOString(),
+        username: username.toLowerCase().trim(),
+      });
+
+      if (!firstProfileTry.error) {
+        profileError = null;
+        break;
+      }
+
+      if (firstProfileTry.error.code === '23505' && firstProfileTry.error.message?.includes('legacy_user_id')) {
+        continue;
+      }
+
       console.warn('Registration: Primary profile insertion failed, attempting fallback...', firstProfileTry.error);
       
       // Fallback: strip out newly added schema fields
       const fallbackProfileTry = await supabase.from('users').insert({
         id: authUser.id,
         tenant_id: tenant.id,
-        legacy_user_id: 1,
+        legacy_user_id: legacyUserId,
         email: email.toLowerCase().trim(),
         first_name: firstName,
         last_name: lastName,
@@ -245,9 +260,17 @@ export async function POST(request: Request) {
         is_active: true,
       });
 
-      if (fallbackProfileTry.error) {
-        profileError = fallbackProfileTry.error;
+      if (!fallbackProfileTry.error) {
+        profileError = null;
+        break;
       }
+
+      if (fallbackProfileTry.error.code === '23505' && fallbackProfileTry.error.message?.includes('legacy_user_id')) {
+        continue;
+      }
+
+      profileError = fallbackProfileTry.error;
+      break;
     }
 
     if (profileError) {
@@ -257,6 +280,15 @@ export async function POST(request: Request) {
       await supabase.from('tenants').delete().eq('id', tenant.id);
       return NextResponse.json({ message: 'Failed to create user profile.' }, { status: 500 });
     }
+
+    // Sync legacy_user_id to auth app_metadata for session consistency
+    await supabase.auth.admin.updateUserById(authUser.id, {
+      app_metadata: {
+        tenant_id: tenant.id,
+        role: 'Owner',
+        legacy_user_id: legacyUserId,
+      },
+    }).catch((err: any) => console.warn('Could not set legacy_user_id in app_metadata:', err));
 
     // 7. Create Membership mapping in public.tenant_users
     const { error: membershipError } = await supabase.from('tenant_users').insert({
