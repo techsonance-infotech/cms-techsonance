@@ -153,22 +153,76 @@ export const GET = withApiHandler(
       }
     }
 
-    const { data, count, error } = await query
-      .order(
-        sortField === 'department'
-          ? 'department'
-          : sortField === 'designation'
-            ? 'designation'
-            : sortField === 'dateOfJoining'
-              ? 'date_of_joining'
-              : sortField === 'status'
-                ? 'status'
-                : 'created_at',
-        { ascending }
-      )
-      .range(offset, offset + limit - 1);
+    const statsPromise = supabase
+      .from('employees')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .is('deleted_at', null);
 
-    if (error) throw new Error(error.message);
+    const [mainResult, statsResult] = await Promise.allSettled([
+      query
+        .order(
+          sortField === 'department'
+            ? 'department'
+            : sortField === 'designation'
+              ? 'designation'
+              : sortField === 'dateOfJoining'
+                ? 'date_of_joining'
+                : sortField === 'status'
+                  ? 'status'
+                  : 'created_at',
+          { ascending }
+        )
+        .range(offset, offset + limit - 1),
+      statsPromise,
+    ]);
+
+    if (mainResult.status === 'rejected' || mainResult.value.error) {
+      const err = mainResult.status === 'rejected' ? mainResult.reason : mainResult.value.error;
+      throw new Error(err?.message || 'Failed to fetch employees');
+    }
+
+    const { data, count } = mainResult.value;
+
+    const rawStats = (statsResult.status === 'fulfilled' && !statsResult.value.error && statsResult.value.data
+      ? statsResult.value.data
+      : (data as Record<string, any>[] | null) ?? []) as Record<string, any>[];
+
+    const now = new Date();
+    const totalEmployees = rawStats.length;
+    const activeEmployees = rawStats.filter(e => e.status === 'active').length;
+    const onLeaveEmployees = rawStats.filter(e => e.status === 'on_leave').length;
+    const onNoticeEmployees = rawStats.filter(e => e.status === 'on_notice').length;
+    const probationEmployees = rawStats.filter(e => {
+      let parsedSkills: any = null;
+      if (typeof e.skills === 'string') {
+        try { parsedSkills = JSON.parse(e.skills); } catch {}
+      } else {
+        parsedSkills = e.skills;
+      }
+      const cDate = e.confirmation_date || (parsedSkills && typeof parsedSkills === 'object' && !Array.isArray(parsedSkills) ? parsedSkills.confirmationDate : null);
+      const confirmDate = cDate ? new Date(cDate) : null;
+      return e.status === 'active' && confirmDate && confirmDate > now;
+    }).length;
+    const contractEmployees = rawStats.filter(e => {
+      let parsedSkills: any = null;
+      if (typeof e.skills === 'string') {
+        try { parsedSkills = JSON.parse(e.skills); } catch {}
+      } else {
+        parsedSkills = e.skills;
+      }
+      const empType = e.employment_type || (parsedSkills && typeof parsedSkills === 'object' && !Array.isArray(parsedSkills) ? parsedSkills.employmentType : null);
+      return empType === 'contract';
+    }).length;
+
+    const stats = {
+      total: totalEmployees,
+      active: activeEmployees,
+      onLeave: onLeaveEmployees,
+      onNotice: onNoticeEmployees,
+      probation: probationEmployees,
+      contract: contractEmployees,
+    };
 
     const sanitizedAuthUserIds = ((data as Record<string, unknown>[] | null) ?? [])
       .flatMap(row => [String(row.user_id), row.manager_id ? String(row.manager_id) : ''])
@@ -195,6 +249,7 @@ export const GET = withApiHandler(
         page: Math.floor(offset / limit) + 1,
         limit,
         total: Number(count ?? 0),
+        stats,
       },
     });
   },

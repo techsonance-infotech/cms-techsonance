@@ -644,7 +644,8 @@ export default function EmployeeDetailPage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          skillName: newSkillName,
+          employeeId: Number(employeeId),
+          skillName: newSkillName.trim(),
           proficiencyLevel: newSkillProficiency,
           category: newSkillCategory,
         }),
@@ -655,6 +656,9 @@ export default function EmployeeDetailPage() {
         setShowAddSkill(false);
         fetchTabContent('skills');
         fetchTabContent('timeline');
+      } else {
+        const errJson = await res.json().catch(() => null);
+        toast.error(errJson?.message || errJson?.error || 'Failed to add skill');
       }
     } catch {
       toast.error('Failed to add skill');
@@ -671,6 +675,9 @@ export default function EmployeeDetailPage() {
       if (res.ok) {
         toast.success('Skill removed');
         fetchTabContent('skills');
+      } else {
+        const errJson = await res.json().catch(() => null);
+        toast.error(errJson?.message || errJson?.error || 'Failed to delete skill');
       }
     } catch {
       toast.error('Failed to delete skill');
@@ -681,6 +688,7 @@ export default function EmployeeDetailPage() {
     if (!newAssetName.trim()) return;
     try {
       const token = getStoredSessionToken();
+      const nowStr = new Date().toISOString().split('T')[0];
       const res = await fetch(`/api/employees/${employeeId}/assets`, {
         method: 'POST',
         headers: {
@@ -688,11 +696,13 @@ export default function EmployeeDetailPage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
+          employeeId: Number(employeeId),
           assetType: newAssetType,
-          assetName: newAssetName,
-          serialNumber: newAssetSerial || null,
+          assetName: newAssetName.trim(),
+          serialNumber: newAssetSerial.trim() || null,
           status: 'issued',
-          issuedDate: new Date().toISOString().split('T')[0],
+          issueDate: nowStr,
+          issuedDate: nowStr,
         }),
       });
       if (res.ok) {
@@ -702,9 +712,31 @@ export default function EmployeeDetailPage() {
         setShowAddAsset(false);
         fetchTabContent('assets');
         fetchTabContent('timeline');
+      } else {
+        const errJson = await res.json().catch(() => null);
+        toast.error(errJson?.message || errJson?.error || 'Failed to issue asset');
       }
     } catch {
       toast.error('Failed to issue asset');
+    }
+  };
+
+  const handleRemoveAsset = async (id: number) => {
+    try {
+      const token = getStoredSessionToken();
+      const res = await fetch(`/api/employees/${employeeId}/assets?assetId=${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        toast.success('Asset removed');
+        fetchTabContent('assets');
+      } else {
+        const errJson = await res.json().catch(() => null);
+        toast.error(errJson?.message || errJson?.error || 'Failed to remove asset');
+      }
+    } catch {
+      toast.error('Failed to remove asset');
     }
   };
 
@@ -719,7 +751,8 @@ export default function EmployeeDetailPage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          courseName: newTrainingName,
+          employeeId: Number(employeeId),
+          courseName: newTrainingName.trim(),
           trainingType: newTrainingType,
           status: newTrainingStatus,
           startDate: new Date().toISOString().split('T')[0],
@@ -731,9 +764,31 @@ export default function EmployeeDetailPage() {
         setShowAddTraining(false);
         fetchTabContent('training');
         fetchTabContent('timeline');
+      } else {
+        const errJson = await res.json().catch(() => null);
+        toast.error(errJson?.message || errJson?.error || 'Failed to log training');
       }
     } catch {
       toast.error('Failed to log training');
+    }
+  };
+
+  const handleRemoveTraining = async (id: number) => {
+    try {
+      const token = getStoredSessionToken();
+      const res = await fetch(`/api/employees/${employeeId}/training?trainingId=${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        toast.success('Training record removed');
+        fetchTabContent('training');
+      } else {
+        const errJson = await res.json().catch(() => null);
+        toast.error(errJson?.message || errJson?.error || 'Failed to delete training record');
+      }
+    } catch {
+      toast.error('Failed to delete training record');
     }
   };
 
@@ -748,9 +803,11 @@ export default function EmployeeDetailPage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          title: newNoteTitle || null,
-          content: newNoteContent,
+          employeeId: Number(employeeId),
+          title: newNoteTitle.trim() || null,
+          content: newNoteContent.trim(),
           noteType: newNoteType,
+          visibility: 'private',
           isPrivate: true,
         }),
       });
@@ -761,6 +818,9 @@ export default function EmployeeDetailPage() {
         setShowAddNote(false);
         fetchTabContent('notes');
         fetchTabContent('timeline');
+      } else {
+        const errJson = await res.json().catch(() => null);
+        toast.error(errJson?.message || errJson?.error || 'Failed to save note');
       }
     } catch {
       toast.error('Failed to save note');
@@ -815,6 +875,110 @@ export default function EmployeeDetailPage() {
     { id: 'documents', label: 'Documents Vault', icon: FileText },
     { id: 'notes', label: 'HR Notes', icon: MessageSquare, adminOnly: true },
   ];
+
+  // Dynamic real-data calculations for Overview tab cards
+  const activeProjectsCount = assignedProjects?.length || 0;
+  const billableUtilisation = activeProjectsCount > 0 ? `${Math.min(100, activeProjectsCount * 50)}%` : '0%';
+
+  const reviewCount = performanceReviews?.length || 0;
+  const avgReviewScore = reviewCount > 0
+    ? (performanceReviews.reduce((sum: number, r: any) => sum + Number(r.rating || 0), 0) / reviewCount).toFixed(1)
+    : null;
+
+  const skillCount = skills?.length || 0;
+
+  const earnedBadges: { label: string; icon: string }[] = [];
+  if (employee?.dateOfJoining) {
+    const joined = new Date(employee.dateOfJoining);
+    const now = new Date();
+    const diffYears = (now.getTime() - joined.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+    if (diffYears >= 3) earnedBadges.push({ label: '3+ Yrs Veteran', icon: '🎖️' });
+    else if (diffYears >= 2) earnedBadges.push({ label: '2 Yrs Loyalty', icon: '🏆' });
+    else if (diffYears >= 1) earnedBadges.push({ label: '1 Yr Milestone', icon: '⭐' });
+    else earnedBadges.push({ label: 'Rising Star', icon: '🚀' });
+  }
+  if (activeProjectsCount > 0) {
+    earnedBadges.push({ label: `${activeProjectsCount} Project${activeProjectsCount > 1 ? 's' : ''}`, icon: '💼' });
+  }
+  if (skillCount >= 3) {
+    earnedBadges.push({ label: `${skillCount} Verified Skills`, icon: '⚡' });
+  }
+  if (employee?.department) {
+    earnedBadges.push({ label: `${employee.department} Core`, icon: '🎯' });
+  }
+
+  // Real data-driven Burnout Risk
+  const calculateBurnoutRisk = () => {
+    if (!attendance || attendance.length === 0) {
+      return { score: 'Low Risk', percent: '10%', desc: 'Normal workload (limited logs)' };
+    }
+    const presentDays = attendance.filter((a: any) => a.status === 'present').length;
+    const lateDays = attendance.filter((a: any) => a.status === 'late').length;
+    const leavesTaken = leaves?.filter((l: any) => l.status === 'approved').length || 0;
+    if (presentDays > 22 && leavesTaken === 0) {
+      return { score: 'Moderate', percent: '45%', desc: 'High consecutive days without leave' };
+    }
+    if (lateDays > 5) {
+      return { score: 'Elevated', percent: '55%', desc: 'Frequent late shifts detected' };
+    }
+    return { score: 'Low Risk', percent: '15%', desc: 'Consistent attendance rhythm' };
+  };
+  const burnoutRisk = calculateBurnoutRisk();
+
+  // Real data-driven Attrition Propensity
+  const calculateAttritionRisk = () => {
+    const statusLower = (employee?.status || '').toLowerCase();
+    if (statusLower === 'on_notice' || statusLower === 'notice period') {
+      return { score: 'Active Notice', percent: '100%', desc: 'Currently serving notice period' };
+    }
+    if (statusLower === 'resigned' || statusLower === 'terminated') {
+      return { score: 'Exited', percent: '100%', desc: 'Inactive employment' };
+    }
+    if (avgReviewScore && Number(avgReviewScore) < 2.5) {
+      return { score: 'Elevated', percent: '55%', desc: 'Low performance feedback' };
+    }
+    if (movements && movements.length > 0) {
+      return { score: 'Stable', percent: '10%', desc: 'Internal career progression' };
+    }
+    return { score: 'Stable', percent: '8%', desc: 'Healthy retention indicators' };
+  };
+  const attritionRisk = calculateAttritionRisk();
+
+  // Real training & learning recommendations
+  const getTrainingRecommendation = () => {
+    const reviewWithRec = performanceReviews?.find(
+      (r: any) => r.training_recommendations?.length || r.improvements || r.comments
+    );
+    if (reviewWithRec) {
+      if (Array.isArray(reviewWithRec.training_recommendations) && reviewWithRec.training_recommendations.length > 0) {
+        return `Reviewer Recommended: ${reviewWithRec.training_recommendations.join(', ')}`;
+      }
+      if (reviewWithRec.improvements) return `Review Feedback: ${reviewWithRec.improvements}`;
+      if (reviewWithRec.comments) return `Review Notes: ${reviewWithRec.comments}`;
+    }
+    if (skills && skills.length > 0) {
+      const topSkills = skills
+        .slice(0, 3)
+        .map((s: any) => s.skillName || s.skill_name || s.name || (typeof s === 'string' ? s : ''))
+        .filter(Boolean);
+      if (topSkills.length > 0) {
+        return `Recommended upskilling: Advanced tracks in ${topSkills.join(', ')} aligned with department initiatives.`;
+      }
+    }
+    if (employee?.department) {
+      return `Recommended upskilling: Professional certifications and continuous learning tracks for ${employee.department}.`;
+    }
+    return 'Complete profile skills and performance reviews to receive personalized training recommendations.';
+  };
+  const trainingRecommendation = getTrainingRecommendation();
+
+  const dataSignalsCount = [
+    skills?.length ? 1 : 0,
+    performanceReviews?.length ? 1 : 0,
+    attendance?.length ? 1 : 0,
+    assignedProjects?.length ? 1 : 0,
+  ].reduce((a, b) => a + b, 0);
+  const dataConfidence = dataSignalsCount >= 3 ? 'High (3+ Sources)' : dataSignalsCount >= 1 ? 'Moderate (Partial Data)' : 'Preliminary';
 
   return (
     <div className="flex flex-col bg-transparent text-slate-900 dark:text-[#fdfcfc] space-y-6">
@@ -1009,17 +1173,17 @@ export default function EmployeeDetailPage() {
                     <div className="flex justify-between items-center p-2 rounded-xl bg-slate-50 dark:bg-zinc-900 border">
                       <span className="font-semibold text-slate-500">Buddy Assigned:</span>
                       <span className="font-bold text-slate-800 dark:text-slate-200">
-                        Samantha Lee (PM)
+                        {employee?.skills?.buddy || employee?.skills?.buddyName || 'Not Assigned'}
                       </span>
                     </div>
                     <div className="flex justify-between items-center p-2 rounded-xl bg-slate-50 dark:bg-zinc-900 border">
                       <span className="font-semibold text-slate-500">Mentor Assigned:</span>
                       <span className="font-bold text-slate-800 dark:text-slate-200">
-                        Alex Chen (Principal Architect)
+                        {employee?.skills?.mentor || employee?.skills?.mentorName || 'Not Assigned'}
                       </span>
                     </div>
                     <div className="flex justify-between items-center text-[10px] text-slate-400 pt-1">
-                      <span>Floor Seating coordinates: Floor 4, Bay D, Desk 412</span>
+                      <span>{employee.workLocation ? `Location: ${employee.workLocation}` : `Work Mode: ${employee.workMode || 'Office'}`}</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -1038,14 +1202,18 @@ export default function EmployeeDetailPage() {
                         <span className="text-[10px] text-slate-400 block font-semibold">
                           Billable Utilisation
                         </span>
-                        <span className="text-sm font-black text-rose-500 mt-1 block">84%</span>
+                        <span className="text-sm font-black text-rose-500 mt-1 block">{billableUtilisation}</span>
+                        <span className="text-[9px] text-slate-400 mt-0.5 block">{activeProjectsCount} assigned</span>
                       </div>
                       <div className="p-3 border rounded-xl bg-slate-50/50 dark:bg-zinc-900/50">
                         <span className="text-[10px] text-slate-400 block font-semibold">
                           Review Score
                         </span>
                         <span className="text-sm font-black text-rose-500 mt-1 block">
-                          4.8 / 5.0
+                          {avgReviewScore ? `${avgReviewScore} / 5.0` : '—'}
+                        </span>
+                        <span className="text-[9px] text-slate-400 mt-0.5 block">
+                          {reviewCount > 0 ? `${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'}` : 'No reviews'}
                         </span>
                       </div>
                       <div className="p-3 border rounded-xl bg-slate-50/50 dark:bg-zinc-900/50">
@@ -1053,8 +1221,9 @@ export default function EmployeeDetailPage() {
                           Skill Inventory
                         </span>
                         <span className="text-sm font-black text-rose-500 mt-1 block">
-                          92 / 100
+                          {skillCount > 0 ? `${Math.min(100, skillCount * 20)} / 100` : '0 / 100'}
                         </span>
+                        <span className="text-[9px] text-slate-400 mt-0.5 block">{skillCount} recorded</span>
                       </div>
                     </div>
                     <div className="space-y-1.5">
@@ -1062,28 +1231,28 @@ export default function EmployeeDetailPage() {
                         Anniversary Badges Earned
                       </Label>
                       <div className="flex flex-wrap gap-1.5 pt-1">
-                        <Badge className="bg-rose-500/10 text-rose-500 border-none font-bold text-[9px]">
-                          Sprint Maverick 🚀
-                        </Badge>
-                        <Badge className="bg-rose-500/10 text-rose-500 border-none font-bold text-[9px]">
-                          Code Quality Champion 💻
-                        </Badge>
-                        <Badge className="bg-rose-500/10 text-rose-500 border-none font-bold text-[9px]">
-                          Client Delight 🌟
-                        </Badge>
+                        {earnedBadges.length > 0 ? (
+                          earnedBadges.map((badge, idx) => (
+                            <Badge key={idx} className="bg-rose-500/10 text-rose-500 border-none font-bold text-[9px]">
+                              {badge.label} {badge.icon}
+                            </Badge>
+                          ))
+                        ) : (
+                          <span className="text-[11px] text-slate-400 italic">No milestone badges earned yet</span>
+                        )}
                       </div>
                     </div>
                   </CardContent>
                 </Card>
 
-                {/* AI Assistant Coach Coach Insights */}
+                {/* AI Assistant Coach Insights */}
                 <Card className="bg-white dark:bg-[#1E1F22] border border-rose-500/20 dark:border-rose-500/10 shadow-md">
                   <CardHeader className="flex flex-row items-center justify-between py-3.5 border-b border-slate-100 dark:border-zinc-800">
                     <CardTitle className="text-xs font-extrabold uppercase tracking-wider text-rose-500 flex items-center gap-1.5">
                       <Sparkles className="h-4 w-4 text-rose-500" /> AI Coach Assistant Insights
                     </CardTitle>
                     <Badge className="bg-rose-500/15 text-rose-500 font-bold border-none text-[9px]">
-                      Confidence: 94%
+                      Confidence: {dataConfidence}
                     </Badge>
                   </CardHeader>
                   <CardContent className="pt-4 space-y-3.5 text-xs">
@@ -1093,7 +1262,10 @@ export default function EmployeeDetailPage() {
                           Burnout Risk Index
                         </span>
                         <span className="text-xs font-black text-rose-500 mt-0.5 block">
-                          15% (Low Risk)
+                          {burnoutRisk.percent} ({burnoutRisk.score})
+                        </span>
+                        <span className="text-[9px] text-slate-400 mt-0.5 block">
+                          {burnoutRisk.desc}
                         </span>
                       </div>
                       <div className="p-2 border rounded-xl bg-slate-50/30 dark:bg-zinc-900/10">
@@ -1101,7 +1273,10 @@ export default function EmployeeDetailPage() {
                           Attrition Propensity
                         </span>
                         <span className="text-xs font-black text-rose-500 mt-0.5 block">
-                          8% (Stable)
+                          {attritionRisk.percent} ({attritionRisk.score})
+                        </span>
+                        <span className="text-[9px] text-slate-400 mt-0.5 block">
+                          {attritionRisk.desc}
                         </span>
                       </div>
                     </div>
@@ -1109,9 +1284,8 @@ export default function EmployeeDetailPage() {
                       <p className="font-bold text-slate-800 dark:text-slate-100">
                         Learning & Training Recommendations:
                       </p>
-                      <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                        Consider enrolling in advanced Next.js Performance Optimization and GraphQL
-                        schema architectures based on commit velocity changes.
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                        {trainingRecommendation}
                       </p>
                     </div>
                   </CardContent>
@@ -1974,13 +2148,13 @@ export default function EmployeeDetailPage() {
                         className="flex items-center justify-between p-3 border rounded-xl border-[#e6e4e6]/20 dark:border-[#2f3035]/20"
                       >
                         <div>
-                          <p className="text-sm font-bold">{s.skillName}</p>
+                          <p className="text-sm font-bold">{s.skillName || s.skill_name}</p>
                           <div className="flex gap-2 mt-1">
                             <Badge variant="secondary" className="text-[10px]">
                               {s.category}
                             </Badge>
                             <Badge variant="outline" className="text-[10px]">
-                              {s.proficiencyLevel}
+                              {s.proficiencyLevel || s.proficiency_level}
                             </Badge>
                           </div>
                         </div>
@@ -2079,15 +2253,27 @@ export default function EmployeeDetailPage() {
                         className="flex items-center justify-between p-3.5 border rounded-xl border-[#e6e4e6]/20 dark:border-[#2f3035]/20"
                       >
                         <div>
-                          <p className="text-sm font-bold">{t.courseName}</p>
+                          <p className="text-sm font-bold">{t.courseName || t.course_name}</p>
                           <span className="text-xs text-slate-500">
-                            {t.trainingType} • Started:{' '}
-                            {t.startDate ? new Date(t.startDate).toLocaleDateString() : 'N/A'}
+                            {t.trainingType || t.training_type} • Started:{' '}
+                            {t.startDate || t.start_date ? new Date(t.startDate || t.start_date).toLocaleDateString() : 'N/A'}
                           </span>
                         </div>
-                        <Badge variant={t.status === 'completed' ? 'default' : 'secondary'}>
-                          {t.status}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={t.status === 'completed' ? 'default' : 'secondary'}>
+                            {t.status}
+                          </Badge>
+                          {isAdmin && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-red-500 hover:text-red-700"
+                              onClick={() => handleRemoveTraining(t.id)}
+                            >
+                              <Trash className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -2168,18 +2354,32 @@ export default function EmployeeDetailPage() {
                         className="flex items-center justify-between p-3.5 border rounded-xl border-[#e6e4e6]/20 dark:border-[#2f3035]/20"
                       >
                         <div>
-                          <p className="text-sm font-bold">{asset.assetName}</p>
+                          <p className="text-sm font-bold">{asset.assetName || asset.asset_name}</p>
                           <span className="text-xs text-slate-500">
-                            S/N: {asset.serialNumber || 'N/A'} • Issued:{' '}
-                            {new Date(asset.issuedDate).toLocaleDateString()}
+                            S/N: {asset.serialNumber || asset.serial_number || 'N/A'} • Issued:{' '}
+                            {asset.issuedDate || asset.issueDate || asset.issue_date
+                              ? new Date(asset.issuedDate || asset.issueDate || asset.issue_date).toLocaleDateString()
+                              : 'N/A'}
                           </span>
                         </div>
-                        <Badge
-                          variant="outline"
-                          className="capitalize text-emerald-600 border-emerald-500/20 bg-emerald-500/5"
-                        >
-                          {asset.status}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            variant="outline"
+                            className="capitalize text-emerald-600 border-emerald-500/20 bg-emerald-500/5"
+                          >
+                            {asset.status}
+                          </Badge>
+                          {isAdmin && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-red-500 hover:text-red-700"
+                              onClick={() => handleRemoveAsset(asset.id)}
+                            >
+                              <Trash className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -2736,35 +2936,30 @@ export default function EmployeeDetailPage() {
                       Leave Summaries & Requests
                     </CardTitle>
                     <CardDescription>
-                      Current balance tracking & forecasting models.
+                      Official leave applications and status tracking.
                     </CardDescription>
                   </div>
-                  <Badge className="bg-rose-500/10 text-rose-500 border-none font-bold text-xs">
-                    AI Forecast: Burnout Risk Mid-Dec
-                  </Badge>
                 </CardHeader>
                 <CardContent className="pt-4 space-y-4">
-                  {/* Encashment calculator ledger */}
-                  <div className="p-4 rounded-xl border bg-slate-50/50 dark:bg-zinc-900/10 text-xs space-y-2">
-                    <p className="font-bold">Leave Balance Ledger</p>
-                    <div className="flex justify-between">
-                      <span>Annual Paid Leave balance:</span>
-                      <span className="font-bold">18 Days (Accrued)</span>
+                  {employee.managerName && (
+                    <div className="p-3 rounded-xl border bg-slate-50/50 dark:bg-zinc-900/10 text-xs flex justify-between items-center text-slate-500">
+                      <span>Approval Routing:</span>
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">
+                        Reporting Manager ({employee.managerName}) → HR
+                      </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Sick Leave:</span>
-                      <span className="font-bold">6 Days</span>
-                    </div>
-                    <div className="flex justify-between text-slate-400">
-                      <span>Approval chain routes:</span>
-                      <span>Reporting Manager ({employee.managerName || 'Assigned Manager'}) → HR Business Partner</span>
-                    </div>
-                  </div>
+                  )}
 
                   {leaves.length === 0 ? (
-                    <p className="text-sm text-slate-500 text-center py-6">
-                      No leave requests logged.
-                    </p>
+                    <div className="text-center py-10 text-slate-400 dark:text-zinc-500 text-xs">
+                      <Calendar className="h-8 w-8 mx-auto mb-2 opacity-30 text-slate-400" />
+                      <p className="font-semibold text-slate-700 dark:text-slate-300">
+                        No leave requests logged
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        Any leave requests submitted by this employee will appear here.
+                      </p>
+                    </div>
                   ) : (
                     <div className="space-y-3">
                       {leaves.map(leave => (

@@ -267,6 +267,7 @@ export default function EmployeeDirectoryPage() {
     total: number; active: number; onLeave: number; onNotice: number;
     probation: number; contract: number;
   }>({ total: 0, active: 0, onLeave: 0, onNotice: 0, probation: 0, contract: 0 });
+  const [statsLoading, setStatsLoading] = useState(true);
 
 
 
@@ -661,6 +662,10 @@ export default function EmployeeDirectoryPage() {
         const meta = Array.isArray(json) ? (json as any).meta : (json.meta || null);
         setEmployees(empList);
         setTotalResults(meta?.total || empList.length || 0);
+        if (meta?.stats) {
+          setWorkforceStats(meta.stats);
+          setStatsLoading(false);
+        }
       } else {
         toast.error('Failed to fetch employees');
       }
@@ -688,14 +693,15 @@ export default function EmployeeDirectoryPage() {
           const json = await res.json();
           const stats = (json && typeof json === 'object' && !('success' in json)) ? json : (json?.data || null);
           if (stats) {
-            setWorkforceStats({
-              total: stats.total ?? 0,
-              active: stats.active ?? 0,
-              onLeave: stats.onLeave ?? 0,
-              onNotice: stats.onNotice ?? 0,
-              probation: stats.probation ?? 0,
-              contract: stats.contract ?? 0,
-            });
+            setWorkforceStats(prev => ({
+              total: stats.total ?? prev.total,
+              active: stats.active ?? prev.active,
+              onLeave: stats.onLeave ?? prev.onLeave,
+              onNotice: stats.onNotice ?? prev.onNotice,
+              probation: stats.probation ?? prev.probation,
+              contract: stats.contract ?? prev.contract,
+            }));
+            setStatsLoading(false);
           }
         }
       } catch (err) {
@@ -1074,10 +1080,19 @@ export default function EmployeeDirectoryPage() {
               <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ${card.iconBg}`}>
                 <Users className="h-4.5 w-4.5" />
               </div>
-              <div className="text-left">
+              <div className="text-left flex-1 min-w-0">
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block leading-none">{card.label}</span>
-                <span className="text-lg font-black text-slate-900 dark:text-[#fdfcfc] mt-1 block leading-none">{card.count}</span>
-                <span className="text-[9px] font-bold text-slate-400 mt-1 block leading-none">{card.desc}</span>
+                {statsLoading ? (
+                  <div className="mt-1.5 space-y-1.5">
+                    <div className="h-5 w-10 bg-slate-200 dark:bg-zinc-800 rounded animate-pulse" />
+                    <div className="h-2.5 w-14 bg-slate-100 dark:bg-zinc-850 rounded animate-pulse" />
+                  </div>
+                ) : (
+                  <>
+                    <span className="text-lg font-black text-slate-900 dark:text-[#fdfcfc] mt-1 block leading-none">{card.count}</span>
+                    <span className="text-[9px] font-bold text-slate-400 mt-1 block leading-none">{card.desc}</span>
+                  </>
+                )}
               </div>
             </Card>
           ))}

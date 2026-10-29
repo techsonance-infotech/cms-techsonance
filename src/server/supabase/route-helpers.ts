@@ -175,7 +175,7 @@ export function normalizeSupabaseEmployeeRecord(
     gender:
       profile?.gender ??
       (getField('gender', 'gender') ||
-        skillsList.find((s: string) => s.startsWith('__gender:'))?.split(':')[1] ||
+        skillsList.find((s: any) => typeof s === 'string' && s.startsWith('__gender:'))?.split(':')[1] ||
         null),
     maritalStatus: getField('marital_status', 'maritalStatus'),
     bloodGroup: getField('blood_group', 'bloodGroup'),
@@ -230,8 +230,10 @@ export function normalizeSupabaseEmployeeRecord(
     referralSource: getField('referral_source', 'referralSource'),
     notes: getField('notes', 'notes'),
 
-    // Cleaned skills list (excluding __ tags)
-    skills: skillsList.filter((s: string) => !s.startsWith('__')),
+    // Cleaned skills list (excluding __ tags, handling both strings and skill objects)
+    skills: skillsList
+      .map((s: any) => (typeof s === 'string' ? s : (s?.skillName || s?.skill_name || s?.name || '')))
+      .filter((s: any) => typeof s === 'string' && s.length > 0 && !s.startsWith('__')),
   };
 }
 
