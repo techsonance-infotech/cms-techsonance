@@ -415,6 +415,19 @@ export const POST = withApiHandler(
       console.warn('Failed to auto-insert onboarding documents:', docErr);
     }
 
+    // Auto-sync Medical record if blood group is provided
+    if (payload.bloodGroup) {
+      try {
+        await supabase.from('employee_medical').insert({
+          tenant_id: tenantId,
+          employee_id: data.id,
+          blood_group: payload.bloodGroup.trim(),
+        });
+      } catch (medErr) {
+        console.warn('Failed to auto-insert medical record:', medErr);
+      }
+    }
+
     // Auto-boot onboarding workflows sequence
     try {
       const { data: newWf } = await supabase
@@ -769,6 +782,35 @@ export const PUT = withApiHandler(
         }
       } catch (emerErr) {
         console.warn('Failed to sync emergency contact update:', emerErr);
+      }
+    }
+
+    // Sync medical record if blood group is provided
+    if (payload.bloodGroup) {
+      try {
+        const { data: existingMed } = await supabase
+          .from('employee_medical')
+          .select('id')
+          .eq('employee_id', id)
+          .maybeSingle();
+
+        if (existingMed) {
+          await supabase
+            .from('employee_medical')
+            .update({
+              blood_group: payload.bloodGroup.trim(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', existingMed.id);
+        } else {
+          await supabase.from('employee_medical').insert({
+            tenant_id: tenantId,
+            employee_id: id,
+            blood_group: payload.bloodGroup.trim(),
+          });
+        }
+      } catch (medErr) {
+        console.warn('Failed to sync medical record update:', medErr);
       }
     }
     const sanitizedAuthUserIds = [

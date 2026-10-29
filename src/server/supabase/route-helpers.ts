@@ -86,8 +86,11 @@ export function normalizeSupabaseEmployeeRecord(
     if (row[columnName] !== undefined && row[columnName] !== null) {
       return row[columnName];
     }
-    if (isSkillsObject && parsedSkills[camelName] !== undefined) {
+    if (isSkillsObject && parsedSkills[camelName] !== undefined && parsedSkills[camelName] !== null) {
       return parsedSkills[camelName];
+    }
+    if (isSkillsObject && parsedSkills[columnName] !== undefined && parsedSkills[columnName] !== null) {
+      return parsedSkills[columnName];
     }
     return defaultValue;
   };
@@ -177,7 +180,10 @@ export function normalizeSupabaseEmployeeRecord(
     maritalStatus: getField('marital_status', 'maritalStatus'),
     bloodGroup: getField('blood_group', 'bloodGroup'),
     nationality: getField('nationality', 'nationality'),
-    personalIdNumber: getField('personal_id_number', 'personalIdNumber'),
+    personalIdNumber:
+      getField('personal_id_number', 'personalIdNumber') ||
+      getField('aadhaar_number', 'aadhaarNumber') ||
+      null,
 
     // Work details
     probationPeriod: getField('probation_period', 'probationPeriod'),

@@ -643,6 +643,12 @@ export default function NewEmployeePage() {
           referralSource: formData.referralSource || null,
           notes: formData.notes || null,
           gender: formData.gender,
+          maritalStatus: formData.maritalStatus || null,
+          bloodGroup: formData.bloodGroup || null,
+          nationality: formData.nationality || null,
+          personalIdNumber: formData.personalIdNumber || null,
+          middleName: formData.middleName || null,
+          officeEmail: formData.officeEmail || null,
         };
 
         const employeeRes = await fetch(`/api/employees?id=${employeeEditId}`, {
@@ -746,6 +752,12 @@ export default function NewEmployeePage() {
           referralSource: formData.referralSource || undefined,
           notes: formData.notes || undefined,
           gender: formData.gender,
+          maritalStatus: formData.maritalStatus || undefined,
+          bloodGroup: formData.bloodGroup || undefined,
+          nationality: formData.nationality || undefined,
+          personalIdNumber: formData.personalIdNumber || undefined,
+          middleName: formData.middleName || undefined,
+          officeEmail: formData.officeEmail || undefined,
         };
 
         const employeeRes = await fetch('/api/employees', {

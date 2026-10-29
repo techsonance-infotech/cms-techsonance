@@ -293,6 +293,18 @@ export default function EmployeeDetailPage() {
     fetchEmployeeData();
   }, [employeeId]);
 
+  useEffect(() => {
+    if (medical) {
+      setMedBlood((medical as any).blood_group || employee?.bloodGroup || '');
+      setMedAllergies((medical as any).allergies || '');
+      setMedConditions((medical as any).medical_conditions || '');
+      setMedProvider((medical as any).insurance_provider || '');
+      setMedPolicy((medical as any).insurance_policy_number || '');
+    } else if (employee?.bloodGroup) {
+      setMedBlood(employee.bloodGroup);
+    }
+  }, [medical, employee]);
+
   const fetchCurrentUser = async () => {
     try {
       const token = getStoredSessionToken();
@@ -1158,7 +1170,7 @@ export default function EmployeeDetailPage() {
                     <div>
                       <p className="text-xs text-slate-500">Blood Group</p>
                       <p className="font-semibold mt-0.5">
-                        {employee.bloodGroup || 'Not provided'}
+                        {employee.bloodGroup || (medical as any)?.blood_group || 'Not provided'}
                       </p>
                     </div>
                     <div>
@@ -1190,7 +1202,7 @@ export default function EmployeeDetailPage() {
                     <div>
                       <p className="text-xs text-slate-500">Personal ID Number</p>
                       <p className="font-semibold mt-0.5">
-                        {employee.personalIdNumber || 'Not provided'}
+                        {employee.personalIdNumber || employee.aadhaarNumber || 'Not provided'}
                       </p>
                     </div>
                     <div>
