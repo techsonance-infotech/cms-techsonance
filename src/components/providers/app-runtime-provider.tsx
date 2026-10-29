@@ -225,39 +225,49 @@ export function AppRuntimeProvider({ children }: Props) {
           return createJsonResponse(cached.status, cached.payload);
         }
 
-        const activePromise = routePromises.get(path);
-        if (activePromise) {
-          const resolved = await activePromise;
-          if (resolved) {
-            return createJsonResponse(resolved.status, resolved.payload);
+        let activePromise = routePromises.get(path);
+        if (!activePromise) {
+          activePromise = (async () => {
+            try {
+              const res = await doFetch();
+              if (res.headers.get('content-type')?.includes('application/json')) {
+                const payload = await res.json();
+                routeCache.set(path, {
+                  status: res.status,
+                  payload,
+                  cachedAt: Date.now(),
+                });
+                return {
+                  status: res.status,
+                  payload,
+                };
+              }
+              return {
+                status: res.status,
+                payload: null,
+                isNotJson: true,
+                rawResponse: res,
+              };
+            } catch (err) {
+              console.error('Runtime cache fetch error:', err);
+              return null;
+            } finally {
+              routePromises.delete(path);
+            }
+          })();
+          routePromises.set(path, activePromise);
+        }
+
+        const resolved = (await activePromise) as any;
+        if (resolved) {
+          if (resolved.isNotJson && resolved.rawResponse) {
+            return resolved.rawResponse.clone();
           }
+          return createJsonResponse(resolved.status, resolved.payload);
         }
       }
 
       let response = await doFetch();
-
-      if (isCacheable && response.headers.get('content-type')?.includes('application/json')) {
-        const clonedResponse = response.clone();
-        const promise = clonedResponse
-          .json()
-          .then((payload) => {
-            routeCache.set(path, {
-              status: response.status,
-              payload,
-              cachedAt: Date.now(),
-            });
-            return {
-              status: response.status,
-              payload,
-            };
-          })
-          .catch(() => null)
-          .finally(() => {
-            routePromises.delete(path);
-          });
-
-        routePromises.set(path, promise);
-      }
 
       if (isSameApiRoute && response.status === 401 && token && !isAuthRefresh && !isAuthLogin) {
         const refreshedToken = await refreshAccessToken();

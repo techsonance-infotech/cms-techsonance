@@ -4,7 +4,7 @@ import { BadRequestError, NotFoundError, ConflictError } from '@/server/http/err
 import { createUserSchema, updateUserSchema, userRoleSchema } from '@/server/validation/users';
 import { getSupabaseAdminClient } from '@/server/supabase/admin';
 import { getCurrentSupabaseActor, getAdminRouteSupabase } from '@/server/supabase/route-helpers';
-import { getSupabaseProfileByEmail, getSupabaseProfileByLegacyUserId } from '@/server/supabase/users';
+import { getSupabaseProfileByEmail, getSupabaseProfileByLegacyUserId, getSupabaseProfileByAuthUserId } from '@/server/supabase/users';
 import { normalizeAppRole } from '@/server/auth/rbac';
 
 let usersColumnsCache: string[] | null = null;
@@ -64,11 +64,23 @@ export const GET = withApiHandler(async (request, context) => {
   const supabase = getAdminRouteSupabase();
 
   if (id) {
-    const profile = await getSupabaseProfileByLegacyUserId(Number(id), { 
-      accessToken, 
-      tenantId,
-      useAdmin: true 
-    }).catch(() => null);
+    let profile: any = null;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    
+    if (isUuid) {
+      profile = await getSupabaseProfileByAuthUserId(id, {
+        accessToken,
+        tenantId,
+        useAdmin: true
+      }).catch(() => null);
+    } else {
+      profile = await getSupabaseProfileByLegacyUserId(Number(id), { 
+        accessToken, 
+        tenantId,
+        useAdmin: true 
+      }).catch(() => null);
+    }
+
     if (!profile) throw new NotFoundError('User not found');
     return NextResponse.json(normalizeSupabaseUser(profile as unknown as Record<string, unknown>));
   }

@@ -250,44 +250,85 @@ export const GET = withApiHandler(async (request, context) => {
     ? Math.round((approvedClaimsCount / settledClaimsCount) * 100) 
     : 100;
 
-  let recommendationTitle = 'Optimal Operations Confirmed';
-  let recommendationMessage = 'All tenant metrics are within normal bounds. Resource levels and financial flows are stable.';
+  // RBAC check definitions
+  const rawRole = (context.auth!.user.rawRole || user.role) as UserRole;
   
-  if (pendingInvoicesCount > 0) {
+  const canSeeFinance = [
+    'super_admin', 'superadmin', 'admin', 'owner', 'business_owner', 'tenant_owner', 
+    'ceo', 'cto', 'director', 'cms_administrator', 'management', 'finance', 'accountant'
+  ].includes(rawRole);
+
+  const canSeeHR = [
+    'super_admin', 'superadmin', 'admin', 'owner', 'business_owner', 'tenant_owner', 
+    'ceo', 'cto', 'director', 'cms_administrator', 'management', 'hr_manager', 'hr_executive'
+  ].includes(rawRole);
+
+  const canSeeOps = [
+    'super_admin', 'superadmin', 'admin', 'owner', 'business_owner', 'tenant_owner', 
+    'ceo', 'cto', 'director', 'cms_administrator', 'management', 'project_manager', 'manager', 
+    'devops_engineer', 'business_analyst'
+  ].includes(rawRole);
+
+  // Filter approvals by role
+  let filteredApprovals = pendingApprovals;
+  if (!canSeeHR && rawRole !== 'project_manager' && rawRole !== 'manager') {
+    filteredApprovals = filteredApprovals.filter((a: any) => a.type !== 'leave' && a.type !== 'attendance');
+  }
+  if (!canSeeFinance && rawRole !== 'project_manager' && rawRole !== 'manager') {
+    filteredApprovals = filteredApprovals.filter((a: any) => a.type !== 'reimbursement');
+  }
+
+  // Filter recent activities by role
+  let filteredActivity = recentActivity;
+  if (!canSeeFinance) {
+    filteredActivity = filteredActivity.filter((a: any) => a.type !== 'invoice' && a.type !== 'reimbursement');
+  }
+  if (!canSeeOps) {
+    filteredActivity = filteredActivity.filter((a: any) => a.type !== 'project');
+  }
+
+  let recommendationTitle = 'Optimal Operations Confirmed';
+  let recommendationMessage = 'All tenant metrics are within normal bounds. Keep up the great work!';
+  
+  if (canSeeFinance && pendingInvoicesCount > 0) {
     recommendationTitle = 'Awaiting Settlement Action';
     recommendationMessage = `You have ${pendingInvoicesCount} pending invoices totaling ₹${pendingInvoicesValue.toLocaleString()}. We suggest sending automated reminders to clients to accelerate cash inflow.`;
-  } else if (pendingApprovals.length > 0) {
+  } else if (filteredApprovals.length > 0) {
     recommendationTitle = 'Pending Approvals Pending Review';
-    recommendationMessage = `There are ${pendingApprovals.length} pending team requests (leaves, reimbursements, or attendance) in your queue. Resolving these will maintain team productivity.`;
-  } else if (attendanceRate < 80) {
+    recommendationMessage = `There are ${filteredApprovals.length} pending team requests (leaves, reimbursements, or attendance) in your queue. Resolving these will maintain team productivity.`;
+  } else if (canSeeHR && attendanceRate < 80) {
     recommendationTitle = 'Schedule Coverage Adjustment';
     recommendationMessage = `Today's attendance is at ${attendanceRate}%. Review shift schedules to ensure client deliverables are unaffected.`;
   }
 
   return NextResponse.json({
-    activeClients: activeClientsCount,
-    activeProjects: activeProjectsCount,
-    totalRevenue,
-    totalEmployees,
-    monthlyRevenue,
-    netCashFlow,
-    pendingInvoicesCount,
-    pendingInvoicesValue,
-    lowStockAlertsCount,
-    topCustomers,
-    recentActivity,
-    workforce: {
+    activeClients: canSeeOps ? activeClientsCount : 0,
+    activeProjects: canSeeOps ? activeProjectsCount : 0,
+    totalRevenue: canSeeFinance ? totalRevenue : 0,
+    totalEmployees: canSeeHR ? totalEmployees : 0,
+    monthlyRevenue: canSeeFinance ? monthlyRevenue : 0,
+    netCashFlow: canSeeFinance ? netCashFlow : 0,
+    pendingInvoicesCount: canSeeFinance ? pendingInvoicesCount : 0,
+    pendingInvoicesValue: canSeeFinance ? pendingInvoicesValue : 0,
+    lowStockAlertsCount: canSeeOps ? lowStockAlertsCount : 0,
+    topCustomers: canSeeFinance ? topCustomers : [],
+    recentActivity: filteredActivity,
+    workforce: canSeeHR ? {
       presentToday,
       absentToday,
       missingReportsCount
+    } : {
+      presentToday: 0,
+      absentToday: 0,
+      missingReportsCount: 0
     },
-    pendingApprovals,
-    recentProjects: recentProjectsRes.data || [],
-    financialRunRate,
+    pendingApprovals: filteredApprovals,
+    recentProjects: canSeeOps ? (recentProjectsRes.data || []) : [],
+    financialRunRate: canSeeFinance ? financialRunRate : [],
     insights: {
-      projectDeliveryRate,
-      attendanceRate,
-      complianceRate,
+      projectDeliveryRate: canSeeOps ? projectDeliveryRate : 0,
+      attendanceRate: canSeeHR ? attendanceRate : 0,
+      complianceRate: canSeeFinance ? complianceRate : 0,
       recommendationTitle,
       recommendationMessage
     }

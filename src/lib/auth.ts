@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { authenticateRequest } from '@/server/auth/session';
 import { getRouteSupabase } from '@/server/supabase/route-helpers';
+import { getSupabaseAdminClient } from '@/server/supabase/admin';
 
 export interface User {
   id: number;
@@ -46,12 +47,12 @@ export async function getCurrentUser(request: NextRequest): Promise<User | null>
     const auth = await authenticateRequest(request, { required: false });
     if (!auth) return null;
 
-    const supabase = getRouteSupabase(auth.accessToken);
+    const adminDb = getSupabaseAdminClient();
     const providerUserId = auth.user.providerUserId ?? null;
     let employee: Record<string, any> | null = null;
 
     if (providerUserId) {
-      const { data } = await supabase
+      const { data } = await adminDb
         .from('employees')
         .select('*')
         .eq('user_id', providerUserId)
@@ -59,6 +60,30 @@ export async function getCurrentUser(request: NextRequest): Promise<User | null>
         .maybeSingle();
       employee = data;
     }
+
+    // Parse fallback skills JSONB object if columns are missing
+    let skillsObj: Record<string, any> = {};
+    if (employee?.skills) {
+      if (typeof employee.skills === 'string') {
+        try {
+          skillsObj = JSON.parse(employee.skills);
+        } catch {}
+      } else if (typeof employee.skills === 'object') {
+        skillsObj = employee.skills;
+      }
+    }
+
+    const getField = (columnVal: any, camelKey: string, dbKey: string) => {
+      if (columnVal !== null && columnVal !== undefined) return columnVal;
+      if (skillsObj[camelKey] !== undefined) return skillsObj[camelKey];
+      if (skillsObj[dbKey] !== undefined) return skillsObj[dbKey];
+      return null;
+    };
+
+    const rawEmpType = getField(employee?.employment_type, 'employmentType', 'employment_type');
+    const formattedEmploymentType = rawEmpType 
+      ? String(rawEmpType).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+      : null;
 
     return {
       id: auth.user.id,
@@ -78,25 +103,25 @@ export async function getCurrentUser(request: NextRequest): Promise<User | null>
       skills: employee?.skills ?? null,
       salary: employee?.salary === null || employee?.salary === undefined ? null : Number(employee.salary),
       status: employee?.status ?? null,
-      employmentType: employee?.employment_type ?? null,
-      hourlyRate: employee?.hourly_rate === null || employee?.hourly_rate === undefined ? null : Number(employee.hourly_rate),
-      ctc: employee?.ctc === null || employee?.ctc === undefined ? null : Number(employee.ctc),
-      pfNumber: employee?.pf_number ?? null,
-      uanNumber: employee?.uan_number ?? null,
-      bankName: employee?.bank_name ?? null,
-      bankAccountNumber: employee?.bank_account_number ?? null,
-      ifscCode: employee?.ifsc_code ?? null,
-      managerId: employee?.manager_id ?? null,
-      maritalStatus: employee?.marital_status ?? null,
-      bloodGroup: employee?.blood_group ?? null,
-      nationality: employee?.nationality ?? null,
-      panNumber: employee?.pan_number ?? null,
-      aadhaarNumber: employee?.aadhaar_number ?? null,
-      emergencyContactName: employee?.emergency_contact_name ?? null,
-      emergencyContactRelationship: employee?.emergency_contact_relationship ?? null,
-      emergencyContactPhone: employee?.emergency_contact_phone ?? null,
-      emergencyContactAddress: employee?.emergency_contact_address ?? null,
-      gender: employee?.gender ?? null,
+      employmentType: formattedEmploymentType,
+      hourlyRate: getField(employee?.hourly_rate, 'hourlyRate', 'hourly_rate') === null ? null : Number(getField(employee?.hourly_rate, 'hourlyRate', 'hourly_rate')),
+      ctc: getField(employee?.ctc, 'ctc', 'ctc') === null ? null : Number(getField(employee?.ctc, 'ctc', 'ctc')),
+      pfNumber: getField(employee?.pf_number, 'pfNumber', 'pf_number'),
+      uanNumber: getField(employee?.uan_number, 'uanNumber', 'uan_number'),
+      bankName: getField(employee?.bank_name, 'bankName', 'bank_name'),
+      bankAccountNumber: getField(employee?.bank_account_number, 'bankAccountNumber', 'bank_account_number'),
+      ifscCode: getField(employee?.ifsc_code, 'ifscCode', 'ifsc_code'),
+      managerId: getField(employee?.manager_id, 'managerId', 'manager_id'),
+      maritalStatus: getField(employee?.marital_status, 'maritalStatus', 'marital_status'),
+      bloodGroup: getField(employee?.blood_group, 'bloodGroup', 'blood_group'),
+      nationality: getField(employee?.nationality, 'nationality', 'nationality'),
+      panNumber: getField(employee?.pan_number, 'panNumber', 'pan_number'),
+      aadhaarNumber: getField(employee?.aadhaar_number, 'aadhaarNumber', 'aadhaar_number'),
+      emergencyContactName: getField(employee?.emergency_contact_name, 'emergencyContactName', 'emergency_contact_name'),
+      emergencyContactRelationship: getField(employee?.emergency_contact_relationship, 'emergencyContactRelationship', 'emergency_contact_relationship'),
+      emergencyContactPhone: getField(employee?.emergency_contact_phone, 'emergencyContactPhone', 'emergency_contact_phone'),
+      emergencyContactAddress: getField(employee?.emergency_contact_address, 'emergencyContactAddress', 'emergency_contact_address'),
+      gender: getField(employee?.gender, 'gender', 'gender'),
     };
   } catch {
     return null;

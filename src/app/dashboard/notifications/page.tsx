@@ -13,6 +13,7 @@ import {
   Mail, MessageSquare, Smartphone, Check, Trash2,
   RefreshCw, Settings2, Sliders, ShieldCheck, MailQuestion
 } from 'lucide-react';
+import { hasFullAccess, type UserRole } from '@/lib/permissions';
 
 export default function NotificationCenterDashboard() {
   const router = useRouter();
@@ -29,8 +30,9 @@ export default function NotificationCenterDashboard() {
       if (storedUser) {
         try {
           const u = JSON.parse(storedUser);
-          const r = u.role?.toLowerCase() || '';
-          if (r === 'admin' || r === 'hr_manager' || r === 'project_manager' || r === 'superadmin') {
+          const r = u.role as UserRole;
+          const allowedBroadcastRoles = ['hr_manager', 'hr_executive', 'manager', 'project_manager'];
+          if (hasFullAccess(r) || allowedBroadcastRoles.includes(String(r).toLowerCase().replace(/[\s-]+/g, '_'))) {
             setIsAdmin(true);
           }
         } catch (e) {

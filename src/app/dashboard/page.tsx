@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -37,7 +37,7 @@ import {
   Inbox,
   Shield
 } from 'lucide-react';
-import { getDashboardType, hasFullAccess, type UserRole } from '@/lib/permissions';
+import { getDashboardType, hasFullAccess, getRoleDashboardViews, type UserRole } from '@/lib/permissions';
 import { 
   ContentSkeleton, 
   PageHeaderSkeleton, 
@@ -47,6 +47,9 @@ import {
   QuickActionsSkeleton 
 } from '@/components/ui/dashboard-skeleton';
 import Link from 'next/link';
+import { ClientFormDialog } from '@/components/clients/client-form-dialog';
+import { InvoiceDialog } from '@/components/dashboard/invoice-dialog';
+import { ReimbursementDialog } from '@/components/dashboard/reimbursement-dialog';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { PerformanceCharts, FinancialRunRateChart } from '@/components/dashboard/performance-charts';
@@ -122,44 +125,58 @@ export default function DashboardPage() {
   const [employeeStats, setEmployeeStats] = useState<EmployeeDashboardStats | null>(null);
   const [dashboardView, setDashboardView] = useState<'ceo' | 'hr' | 'finance' | 'operations' | 'manager'>('ceo');
 
-  useEffect(() => {
-    const token = localStorage.getItem('session_token');
-    if (!token) {
-      router.push('/login');
-      return;
-    }
-    fetchCurrentUser();
-  }, [router]);
+  // Quick Action Dialog Modals States
+  const [isClientOpen, setIsClientOpen] = useState(false);
+  const [isInvoiceOpen, setIsInvoiceOpen] = useState(false);
+  const [isExpenseOpen, setIsExpenseOpen] = useState(false);
+
+  const hasInitializedRef = useRef(false);
 
   useEffect(() => {
-    if (currentUser) {
-      const type = getDashboardType(currentUser.role as UserRole);
-      setLoading(true);
-      if (type === 'admin') {
-        fetchAdminDashboardData().finally(() => setLoading(false));
-      } else {
-        fetchEmployeeDashboardData().finally(() => setLoading(false));
-      }
-    }
-  }, [currentUser]);
+    if (hasInitializedRef.current) return;
+    hasInitializedRef.current = true;
 
-  const fetchCurrentUser = async () => {
-    const token = localStorage.getItem('session_token');
-    try {
-      const response = await fetch('/api/auth/me', {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      if (!response.ok) {
+    async function initDashboard() {
+      const token = localStorage.getItem('session_token');
+      if (!token) {
         router.push('/login');
         return;
       }
-      const data = await response.json();
-      setCurrentUser(data.user);
-    } catch (error) {
-      console.error('Auth check failed:', error);
-      router.push('/login');
+      try {
+        const response = await fetch('/api/auth/me', {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (!response.ok) {
+          router.push('/login');
+          return;
+        }
+        const data = await response.json();
+        const user = data.user;
+        setCurrentUser(user);
+
+        if (user) {
+          const type = getDashboardType(user.role as UserRole);
+          const allowed = getRoleDashboardViews(user.role as UserRole);
+          if (allowed.length > 0) {
+            setDashboardView(allowed[0]);
+          }
+          setLoading(true);
+          if (type === 'admin') {
+            await fetchAdminDashboardData();
+          } else {
+            await fetchEmployeeDashboardData();
+          }
+        }
+      } catch (error) {
+        console.error('Dashboard init failed:', error);
+        router.push('/login');
+      } finally {
+        setLoading(false);
+      }
     }
-  };
+
+    void initDashboard();
+  }, [router]);
 
   const fetchEmployeeDashboardData = async () => {
     const token = localStorage.getItem('session_token');
@@ -483,7 +500,10 @@ export default function DashboardPage() {
     );
   }
 
-  const isFinancialAdmin = ['super_admin', 'admin', 'ceo', 'cto', 'accountant'].includes(String(currentUser.role).toLowerCase());
+  const isFinancialAdmin = [
+    'super_admin', 'superadmin', 'admin', 'owner', 'business_owner', 'tenant_owner', 
+    'ceo', 'cto', 'director', 'cms_administrator', 'management', 'finance', 'accountant'
+  ].includes(String(currentUser.role).toLowerCase());
 
   const runRate = adminStats?.financialRunRate || [];
   const lastMonthData = runRate[runRate.length - 2] || { revenue: 0, expenses: 0 };
@@ -796,32 +816,52 @@ export default function DashboardPage() {
             <p className="text-sm text-[#e6e4e6]/70 mt-1">Cross-vertical tenant metrics, forecasting yield runs, and operational status dashboards.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={dashboardView}
-              onChange={e => setDashboardView(e.target.value as any)}
-              className="text-xs rounded-xl border border-[#f87941]/30 px-3 outline-none bg-zinc-950 font-sans h-10 text-[#f87941] font-bold cursor-pointer hover:border-[#f87941] transition-all"
-            >
-              <option value="ceo">CEO Command Center</option>
-              <option value="hr">HR Lifecycle Operations</option>
-              <option value="finance">Finance & Payroll Intel</option>
-              <option value="operations">Operations & SLA Metrics</option>
-              <option value="manager">Team Manager Board</option>
-            </select>
-            <Link href="/dashboard/finance/invoices">
-              <Button variant="outline" className="border-[#f87941]/30 bg-transparent text-[#fdfcfc] hover:bg-[#f87941]/10 hover:text-white hover:border-[#f87941] gap-2 font-semibold transition-all">
+            {(() => {
+              const allowed = getRoleDashboardViews(currentUser.role as UserRole);
+              if (allowed.length > 1) {
+                return (
+                  <select
+                    value={dashboardView}
+                    onChange={e => setDashboardView(e.target.value as any)}
+                    className="text-xs rounded-xl border border-[#f87941]/30 px-3 outline-none bg-zinc-950 font-sans h-10 text-[#f87941] font-bold cursor-pointer hover:border-[#f87941] transition-all"
+                  >
+                    {allowed.includes('ceo') && <option value="ceo">CEO Command Center</option>}
+                    {allowed.includes('hr') && <option value="hr">HR Lifecycle Operations</option>}
+                    {allowed.includes('finance') && <option value="finance">Finance & Payroll Intel</option>}
+                    {allowed.includes('operations') && <option value="operations">Operations & SLA Metrics</option>}
+                    {allowed.includes('manager') && <option value="manager">Team Manager Board</option>}
+                  </select>
+                );
+              } else if (allowed.length === 1) {
+                const label = 
+                  allowed[0] === 'hr' ? 'HR Operations Cockpit' :
+                  allowed[0] === 'finance' ? 'Finance & Payroll Console' :
+                  allowed[0] === 'operations' ? 'Operations Console' :
+                  allowed[0] === 'manager' ? 'Team Manager Dashboard' :
+                  'Executive Cockpit';
+                return (
+                  <div className="text-xs border border-[#f87941]/30 bg-zinc-950 px-3 h-10 flex items-center justify-center text-[#f87941] font-bold rounded-xl">
+                    {label}
+                  </div>
+                );
+              }
+              return null;
+            })()}
+            {['super_admin', 'admin', 'owner', 'ceo', 'cto', 'director', 'cms_administrator', 'management', 'finance', 'accountant'].includes(String(currentUser.role).toLowerCase()) && (
+              <Button onClick={() => setIsInvoiceOpen(true)} variant="outline" className="border-[#f87941]/30 bg-transparent text-[#fdfcfc] hover:bg-[#f87941]/10 hover:text-white hover:border-[#f87941] gap-2 font-semibold transition-all">
                 <Receipt className="h-4 w-4" /> Create Invoice
               </Button>
-            </Link>
-            <Link href="/dashboard/reimbursements">
-              <Button variant="outline" className="border-[#f87941]/30 bg-transparent text-[#fdfcfc] hover:bg-[#f87941]/10 hover:text-white hover:border-[#f87941] gap-2 font-semibold transition-all">
+            )}
+            {['super_admin', 'admin', 'owner', 'ceo', 'cto', 'director', 'cms_administrator', 'management', 'finance', 'accountant', 'hr_manager', 'hr_executive', 'project_manager', 'manager'].includes(String(currentUser.role).toLowerCase()) && (
+              <Button onClick={() => setIsExpenseOpen(true)} variant="outline" className="border-[#f87941]/30 bg-transparent text-[#fdfcfc] hover:bg-[#f87941]/10 hover:text-white hover:border-[#f87941] gap-2 font-semibold transition-all">
                 <Wallet className="h-4 w-4" /> Add Expense
               </Button>
-            </Link>
-            <Link href="/dashboard/clients">
-              <Button className="gap-2 font-semibold bg-gradient-to-r from-[#F87941] to-[#F4662B] text-white hover:from-[#F4662B] hover:to-[#E95B1F] hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all border-none shadow-md cursor-pointer">
+            )}
+            {['super_admin', 'admin', 'owner', 'ceo', 'cto', 'director', 'cms_administrator', 'management', 'business_development'].includes(String(currentUser.role).toLowerCase()) && (
+              <Button onClick={() => setIsClientOpen(true)} className="gap-2 font-semibold bg-gradient-to-r from-[#F87941] to-[#F4662B] text-white hover:from-[#F4662B] hover:to-[#E95B1F] hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all border-none shadow-md cursor-pointer">
                 <UserPlus className="h-4 w-4" /> New Customer
               </Button>
-            </Link>
+            )}
           </div>
         </div>
       </div>
@@ -898,7 +938,7 @@ export default function DashboardPage() {
           <div className="grid gap-6 grid-cols-1 lg:grid-cols-12">
             {/* Left Side: Financial Run Rate Chart & Recent Activity */}
             <div className="lg:col-span-8 space-y-6">
-              {adminStats.financialRunRate && (
+              {adminStats.financialRunRate && (dashboardView === 'ceo' || dashboardView === 'finance') && (
                 <Card className="bg-card border border-[#e6e4e6]/30 dark:border-[#2f3035]/30 shadow-sm overflow-hidden">
                   <div className="h-1 w-full bg-[#f87941]" />
                   {isFinancialAdmin ? (
@@ -933,26 +973,32 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="p-4 border rounded-xl bg-slate-50/50 dark:bg-zinc-900/50 hover:bg-slate-50 dark:hover:bg-zinc-900 transition-colors">
-                      <p className="text-xs font-bold text-[#f87941]">Project Delivery Rate</p>
-                      <p className="text-lg font-black mt-1">{adminStats?.insights?.projectDeliveryRate ?? 100}% Completed</p>
-                      <Progress value={adminStats?.insights?.projectDeliveryRate ?? 100} className="h-1.5 mt-2 bg-slate-100 dark:bg-slate-800" />
-                      <p className="text-[10px] text-muted-foreground mt-2">{adminStats?.activeProjects ?? 0} active projects in progress</p>
-                    </div>
+                    {(dashboardView === 'ceo' || dashboardView === 'operations' || dashboardView === 'manager') && (
+                      <div className="p-4 border rounded-xl bg-slate-50/50 dark:bg-zinc-900/50 hover:bg-slate-50 dark:hover:bg-zinc-900 transition-colors">
+                        <p className="text-xs font-bold text-[#f87941]">Project Delivery Rate</p>
+                        <p className="text-lg font-black mt-1">{adminStats?.insights?.projectDeliveryRate ?? 100}% Completed</p>
+                        <Progress value={adminStats?.insights?.projectDeliveryRate ?? 100} className="h-1.5 mt-2 bg-slate-100 dark:bg-slate-800" />
+                        <p className="text-[10px] text-muted-foreground mt-2">{adminStats?.activeProjects ?? 0} active projects in progress</p>
+                      </div>
+                    )}
 
-                    <div className="p-4 border rounded-xl bg-slate-50/50 dark:bg-zinc-900/50 hover:bg-slate-50 dark:hover:bg-zinc-900 transition-colors">
-                      <p className="text-xs font-bold text-[#f87941]">Daily Attendance Rate</p>
-                      <p className="text-lg font-black mt-1">{adminStats?.insights?.attendanceRate ?? 100}% Present</p>
-                      <Progress value={adminStats?.insights?.attendanceRate ?? 100} className="h-1.5 mt-2 bg-slate-100 dark:bg-slate-800" />
-                      <p className="text-[10px] text-muted-foreground mt-2">{adminStats?.workforce?.presentToday ?? 0} of {adminStats?.totalEmployees ?? 0} active employees present</p>
-                    </div>
+                    {(dashboardView === 'ceo' || dashboardView === 'hr') && (
+                      <div className="p-4 border rounded-xl bg-slate-50/50 dark:bg-zinc-900/50 hover:bg-slate-50 dark:hover:bg-zinc-900 transition-colors">
+                        <p className="text-xs font-bold text-[#f87941]">Daily Attendance Rate</p>
+                        <p className="text-lg font-black mt-1">{adminStats?.insights?.attendanceRate ?? 100}% Present</p>
+                        <Progress value={adminStats?.insights?.attendanceRate ?? 100} className="h-1.5 mt-2 bg-slate-100 dark:bg-slate-800" />
+                        <p className="text-[10px] text-muted-foreground mt-2">{adminStats?.workforce?.presentToday ?? 0} of {adminStats?.totalEmployees ?? 0} active employees present</p>
+                      </div>
+                    )}
 
-                    <div className="p-4 border rounded-xl bg-slate-50/50 dark:bg-zinc-900/50 hover:bg-slate-50 dark:hover:bg-zinc-900 transition-colors">
-                      <p className="text-xs font-bold text-emerald-600">Reimbursement Compliance</p>
-                      <p className="text-lg font-black mt-1">{adminStats?.insights?.complianceRate ?? 100}% Approved</p>
-                      <Progress value={adminStats?.insights?.complianceRate ?? 100} className="h-1.5 mt-2 bg-slate-100 dark:bg-slate-800" />
-                      <p className="text-[10px] text-muted-foreground mt-2">100% compliance rate on audit validations</p>
-                    </div>
+                    {(dashboardView === 'ceo' || dashboardView === 'finance') && (
+                      <div className="p-4 border rounded-xl bg-slate-50/50 dark:bg-zinc-900/50 hover:bg-slate-50 dark:hover:bg-zinc-900 transition-colors">
+                        <p className="text-xs font-bold text-emerald-600">Reimbursement Compliance</p>
+                        <p className="text-lg font-black mt-1">{adminStats?.insights?.complianceRate ?? 100}% Approved</p>
+                        <Progress value={adminStats?.insights?.complianceRate ?? 100} className="h-1.5 mt-2 bg-slate-100 dark:bg-slate-800" />
+                        <p className="text-[10px] text-muted-foreground mt-2">100% compliance rate on audit validations</p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Recommendation Card */}
@@ -1064,7 +1110,7 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {/* Unpaid Invoices Alert */}
-                  {adminStats.pendingInvoicesCount > 0 && (
+                  {adminStats.pendingInvoicesCount > 0 && (dashboardView === 'ceo' || dashboardView === 'finance') && (
                     <Link href="/dashboard/invoices" className="block">
                       <div className="flex gap-4 p-3 rounded-xl bg-slate-50 dark:bg-zinc-900/50 border border-slate-100 dark:border-zinc-800/80 hover:border-[#f87941] dark:hover:border-[#f87941] transition-all group cursor-pointer">
                         <div className="w-10 h-10 shrink-0 bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400 flex items-center justify-center rounded-lg">
@@ -1082,7 +1128,7 @@ export default function DashboardPage() {
                   )}
 
                   {/* Low Stock Alerts */}
-                  {adminStats.lowStockAlertsCount > 0 && (
+                  {adminStats.lowStockAlertsCount > 0 && (dashboardView === 'ceo' || dashboardView === 'operations') && (
                     <Link href="/dashboard/procurement" className="block">
                       <div className="flex gap-4 p-3 rounded-xl bg-slate-50 dark:bg-zinc-900/50 border border-slate-100 dark:border-zinc-800/80 hover:border-[#f87941] dark:hover:border-[#f87941] transition-all group cursor-pointer">
                         <div className="w-10 h-10 shrink-0 bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 flex items-center justify-center rounded-lg">
@@ -1100,7 +1146,7 @@ export default function DashboardPage() {
                   )}
 
                   {/* Pending Approvals */}
-                  {adminStats.pendingApprovals && adminStats.pendingApprovals.length > 0 && (
+                  {adminStats.pendingApprovals && adminStats.pendingApprovals.length > 0 && (dashboardView === 'ceo' || dashboardView === 'hr' || dashboardView === 'manager' || dashboardView === 'finance') && (
                     <Link href="/dashboard/reimbursements" className="block">
                       <div className="flex gap-4 p-3 rounded-xl bg-slate-50 dark:bg-zinc-900/50 border border-slate-100 dark:border-zinc-800/80 hover:border-[#f87941] dark:hover:border-[#f87941] transition-all group cursor-pointer">
                         <div className="w-10 h-10 shrink-0 bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400 flex items-center justify-center rounded-lg">
@@ -1126,7 +1172,8 @@ export default function DashboardPage() {
               </Card>
 
               {/* Top Customers */}
-              <Card className="bg-card border border-[#e6e4e6]/30 dark:border-[#2f3035]/30 shadow-sm">
+              {(dashboardView === 'ceo' || dashboardView === 'finance') && (
+                <Card className="bg-card border border-[#e6e4e6]/30 dark:border-[#2f3035]/30 shadow-sm">
                 <CardHeader className="flex flex-row items-center justify-between pb-4">
                   <CardTitle className="text-lg font-bold">Top Customers</CardTitle>
                   <Link href="/dashboard/clients">
@@ -1173,9 +1220,11 @@ export default function DashboardPage() {
                   )}
                 </CardContent>
               </Card>
+              )}
 
               {/* Workforce Hub */}
-              <Card className="bg-card border border-[#e6e4e6]/30 dark:border-[#2f3035]/30 shadow-sm overflow-hidden">
+              {(dashboardView === 'ceo' || dashboardView === 'hr') && (
+                <Card className="bg-card border border-[#e6e4e6]/30 dark:border-[#2f3035]/30 shadow-sm overflow-hidden">
                 <div className="h-1 w-full bg-[#f87941]" />
                 <CardHeader className="pb-3">
                   <CardTitle className="flex items-center gap-2">
@@ -1216,9 +1265,12 @@ export default function DashboardPage() {
                   </div>
                 </CardContent>
               </Card>
+              )}
 
               {/* Broadcaster */}
-              <DashboardBroadcaster />
+              {(dashboardView === 'ceo' || dashboardView === 'hr' || dashboardView === 'operations') && (
+                <DashboardBroadcaster />
+              )}
             </div>
           </div>
 
@@ -1302,6 +1354,13 @@ export default function DashboardPage() {
             )}
           </div>
         </div>
+      )}
+      {currentUser && (
+        <>
+          <ClientFormDialog open={isClientOpen} onOpenChange={setIsClientOpen} onSuccess={() => { fetchAdminDashboardData(); }} />
+          <InvoiceDialog open={isInvoiceOpen} onOpenChange={setIsInvoiceOpen} onSuccess={() => { fetchAdminDashboardData(); }} />
+          <ReimbursementDialog open={isExpenseOpen} onOpenChange={setIsExpenseOpen} currentUser={currentUser} onSuccess={() => { fetchAdminDashboardData(); }} />
+        </>
       )}
     </div>
   );

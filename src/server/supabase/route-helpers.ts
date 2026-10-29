@@ -138,13 +138,13 @@ export function normalizeSupabaseEmployeeRecord(
     // Onboarding fields
     employmentType: formattedEmploymentType,
     experience,
-    hourlyRate: row.hourly_rate ?? null,
-    ctc: row.ctc ?? null,
-    pfNumber: row.pf_number ?? null,
-    uanNumber: row.uan_number ?? null,
-    bankName: row.bank_name ?? null,
-    bankAccountNumber: row.bank_account_number ?? null,
-    ifscCode: row.ifsc_code ?? null,
+    hourlyRate: getField('hourly_rate', 'hourlyRate'),
+    ctc: getField('ctc', 'ctc'),
+    pfNumber: getField('pf_number', 'pfNumber'),
+    uanNumber: getField('uan_number', 'uanNumber'),
+    bankName: getField('bank_name', 'bankName'),
+    bankAccountNumber: getField('bank_account_number', 'bankAccountNumber'),
+    ifscCode: getField('ifsc_code', 'ifscCode'),
     managerId: managerAuthId ? (legacyUserIdMap.get(managerAuthId) ?? null) : null,
 
     // Personal details

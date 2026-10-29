@@ -6,6 +6,7 @@
 
 import { SupabaseClient } from '@supabase/supabase-js';
 import type { ModulePermissions } from '@/lib/rbac/types';
+import { getSupabaseAdminClient } from '@/server/supabase/admin';
 
 // In-memory cache for performance
 const rbacCache = new Map<string, { data: any; timestamp: number }>();
@@ -342,8 +343,11 @@ async function getOrInitRBACConfig(supabase: SupabaseClient, tenantId: string): 
     return cached.data;
   }
 
+  // Use the admin client to bypass any potential recursive RLS loops on company_settings
+  const db = getSupabaseAdminClient();
+
   // Fetch company_settings
-  const { data: settings, error } = await supabase
+  const { data: settings, error } = await db
     .from('company_settings')
     .select('id, feature_flags')
     .eq('tenant_id', tenantId)
@@ -363,7 +367,7 @@ async function getOrInitRBACConfig(supabase: SupabaseClient, tenantId: string): 
     rbac = { roles: getInitialRBACRoles() };
     const updatedFlags = { ...featureFlags, rbac };
 
-    await supabase
+    await db
       .from('company_settings')
       .update({ feature_flags: updatedFlags })
       .eq('id', settings.id);

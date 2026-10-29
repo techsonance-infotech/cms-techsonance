@@ -81,6 +81,45 @@ export const POST = withApiHandler(async (request, context) => {
       });
     }
 
+    // Call Gemini AI Engine as fallback
+    const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY;
+    if (geminiKey) {
+      try {
+        const payload = {
+          contents: [{
+            parts: [{
+              text: `You are the HR AI Copilot assistant.
+Active employee headcount: ${empCount}
+Active departments: ${Array.from(new Set((employees || []).map((e: any) => e.department).filter(Boolean))).join(', ')}
+
+User Query: ${query}
+
+Provide a concise, professional answer based on this context and general assistance.`
+            }]
+          }]
+        };
+
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+          const result = await res.json();
+          const geminiAnswer = result.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (geminiAnswer) {
+            return NextResponse.json({
+              success: true,
+              answer: `[Gemini AI]\n\n${geminiAnswer}`
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Gemini copilot query failed:', err);
+      }
+    }
+
     // Default chat response
     return NextResponse.json({
       success: true,

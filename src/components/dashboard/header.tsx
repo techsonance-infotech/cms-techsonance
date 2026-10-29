@@ -66,16 +66,145 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
   const [allClients, setAllClients] = useState<any[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [shortcutLabel, setShortcutLabel] = useState('⌘K');
-  const [notifications, setNotifications] = useState([
-    { id: '1', title: 'Leave Application Approved', message: 'Your leave request for Aug 12-14 has been approved by HR.', type: 'leave', time: '10m ago', read: false },
-    { id: '2', title: 'September Payslip Generated', message: 'Your payslip is ready for review and secure download.', type: 'payroll', time: '1h ago', read: false },
-    { id: '3', title: 'Asset issued: Macbook Pro', message: 'Serial number C02G45812A has been successfully registered.', type: 'asset', time: '3h ago', read: true },
-    { id: '4', title: 'MFA Policy Update Alert', message: 'Mandatory 2FA setup is required under SOC2 guidelines.', type: 'security', time: '1d ago', read: true }
-  ]);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [aiResponse, setAiResponse] = useState<string | null>(null);
+  const [isAiLoading, setIsAiLoading] = useState(false);
 
-  const markAllRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    toast.success('All notifications marked as read');
+  useEffect(() => {
+    if (!openPalette) {
+      setAiResponse(null);
+      setIsAiLoading(false);
+      setPaletteSearch('');
+    }
+  }, [openPalette]);
+
+  const handleAiSearch = async () => {
+    if (!paletteSearch.trim()) return;
+    setIsAiLoading(true);
+    setAiResponse(null);
+    try {
+      const token = getStoredSessionToken();
+      const res = await fetch('/api/ai/copilot', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: token ? `Bearer ${token}` : '',
+        },
+        body: JSON.stringify({
+          action: 'chat',
+          query: paletteSearch,
+        }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setAiResponse(json.answer || 'No response received from AI.');
+      } else {
+        setAiResponse('Failed to contact AI Assistant. Please check if model keys are configured.');
+      }
+    } catch (err) {
+      console.error('AI search query failed:', err);
+      setAiResponse('An error occurred while communicating with the AI.');
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
+  const fetchNotifications = async () => {
+    try {
+      const token = getStoredSessionToken();
+      if (!token) return;
+      const res = await fetch('/api/notifications?limit=10', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setNotifications(json.data || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch header notifications:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchNotifications();
+    
+    // Only poll when tab is active and visible to user, and use a less aggressive 90s interval
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void fetchNotifications();
+      }
+    }, 90000);
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  const markAllRead = async () => {
+    const unread = notifications.filter(n => !n.isRead);
+    if (unread.length === 0) return;
+
+    try {
+      const token = getStoredSessionToken();
+      await Promise.all(
+        unread.map(n =>
+          fetch(`/api/notifications?id=${n.id}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({ isRead: true })
+          })
+        )
+      );
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+      toast.success('All notifications marked as read');
+    } catch (err) {
+      console.error('Failed to mark all as read:', err);
+      toast.error('Failed to mark all notifications as read');
+    }
+  };
+
+  const handleNotificationClick = async (n: any) => {
+    if (!n.isRead) {
+      try {
+        const token = getStoredSessionToken();
+        await fetch(`/api/notifications?id=${n.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({ isRead: true })
+        });
+        setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, isRead: true } : item));
+      } catch (error) {
+        console.error('Failed to mark notification as read:', error);
+      }
+    }
+    
+    if (n.link) {
+      router.push(n.link);
+    } else {
+      router.push('/dashboard/notifications');
+    }
+  };
+
+  const formatNotificationTime = (dateStr: string) => {
+    if (!dateStr) return '';
+    try {
+      const date = new Date(dateStr);
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      if (diffMins < 1) return 'just now';
+      if (diffMins < 60) return `${diffMins}m ago`;
+      const diffHours = Math.floor(diffMins / 60);
+      if (diffHours < 24) return `${diffHours}h ago`;
+      const diffDays = Math.floor(diffHours / 24);
+      return `${diffDays}d ago`;
+    } catch {
+      return '';
+    }
   };
 
   // Logout routine
@@ -83,15 +212,20 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
     setLoggingOut(true);
     try {
       const token = getStoredSessionToken();
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      });
+      if (token) {
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        }).catch(err => console.error('Sign-out request failed:', err));
+      }
+    } catch (err) {
+      console.error('Logout error:', err);
+    } finally {
       clearClientSession();
+      // Explicitly remove session cookie
+      document.cookie = 'session_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0;';
       router.push('/login');
       router.refresh();
-    } catch {
-      setLoggingOut(false);
     }
   };
 
@@ -166,7 +300,7 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
 
     const loadPaletteData = async () => {
       try {
-        const token = localStorage.getItem('session_token');
+        const token = getStoredSessionToken();
         const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
 
         // Fetch projects
@@ -358,6 +492,19 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
     ...filteredClients
   ];
 
+  if (paletteSearch.trim().length > 1) {
+    matchingItems.unshift({
+      id: 'ai-copilot-search',
+      title: `Ask AI Copilot: "${paletteSearch}"`,
+      description: 'Get natural language insights about employees, payroll, or ask general questions',
+      category: 'AI Assistant',
+      icon: Sparkles,
+      action: () => {
+        void handleAiSearch();
+      }
+    });
+  }
+
   // Reset selected item index whenever search query changes
   useEffect(() => {
     setSelectedIndex(0);
@@ -375,7 +522,9 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
       e.preventDefault();
       if (matchingItems[selectedIndex]) {
         matchingItems[selectedIndex].action();
-        setOpenPalette(false);
+        if (matchingItems[selectedIndex].id !== 'ai-copilot-search') {
+          setOpenPalette(false);
+        }
       }
     } else if (e.key === 'Escape') {
       e.preventDefault();
@@ -442,11 +591,11 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
         </Button>
 
         {/* Notifications */}
-        <DropdownMenu>
+        <DropdownMenu onOpenChange={(open) => { if (open) { void fetchNotifications(); } }}>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="relative rounded-xl hover:bg-accent/80 transition-colors shrink-0">
               <Bell className="h-5 w-5" />
-              {notifications.some(n => !n.read) && (
+              {notifications.some(n => !n.isRead) && (
                 <span className="absolute top-2 right-2 h-2.5 w-2.5 bg-red-500 rounded-full border border-background animate-pulse" />
               )}
             </Button>
@@ -454,32 +603,44 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
           <DropdownMenuContent align="end" className="w-80 p-2 rounded-xl shadow-2xl border border-muted z-50 bg-card/95 backdrop-blur-md max-h-[450px] overflow-y-auto">
             <div className="flex items-center justify-between p-2 pb-3 border-b border-muted">
               <span className="text-xs font-black text-foreground">In-App Notification Center</span>
-              {notifications.some(n => !n.read) && (
+              {notifications.some(n => !n.isRead) && (
                 <button onClick={markAllRead} className="text-[10px] font-bold text-[#f87941] hover:underline">
                   Mark all as read
                 </button>
               )}
             </div>
             <div className="py-1 divide-y divide-muted/40">
-              {notifications.map((n) => (
-                <DropdownMenuItem
-                  key={n.id}
-                  onClick={() => {
-                    setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, read: true } : item));
-                    toast.success(`Marked "${n.title}" as read`);
-                  }}
-                  className="flex flex-col items-start gap-1 p-3 rounded-lg hover:bg-accent/50 focus:bg-accent/50 cursor-pointer text-xs"
-                >
-                  <div className="flex items-center justify-between w-full font-bold">
-                    <span className="text-foreground flex items-center gap-1.5">
-                      {!n.read && <span className="h-2 w-2 rounded-full bg-[#f87941]" />}
-                      {n.title}
-                    </span>
-                    <span className="text-[9px] text-muted-foreground font-mono">{n.time}</span>
-                  </div>
-                  <p className="text-[10px] text-muted-foreground leading-relaxed">{n.message}</p>
-                </DropdownMenuItem>
-              ))}
+              {notifications.length > 0 ? (
+                notifications.map((n) => (
+                  <DropdownMenuItem
+                    key={n.id}
+                    onClick={() => {
+                      void handleNotificationClick(n);
+                    }}
+                    className="flex flex-col items-start gap-1 p-3 rounded-lg hover:bg-accent/50 focus:bg-accent/50 cursor-pointer text-xs"
+                  >
+                    <div className="flex items-center justify-between w-full font-bold">
+                      <span className="text-foreground flex items-center gap-1.5">
+                        {!n.isRead && <span className="h-2 w-2 rounded-full bg-[#f87941]" />}
+                        {n.title}
+                      </span>
+                      <span className="text-[9px] text-muted-foreground font-mono">{formatNotificationTime(n.createdAt)}</span>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground leading-relaxed">{n.message}</p>
+                  </DropdownMenuItem>
+                ))
+              ) : (
+                <div className="py-8 text-center text-xs text-muted-foreground">
+                  No notifications
+                </div>
+              )}
+            </div>
+            <div className="p-2 border-t border-muted text-center">
+              <Link href="/dashboard/notifications">
+                <span className="text-[10px] font-bold text-[#f87941] hover:underline block cursor-pointer">
+                  View All Notifications
+                </span>
+              </Link>
             </div>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -490,16 +651,46 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="relative h-10 w-10 rounded-full p-0 border border-muted/60 hover:border-primary/50 transition-colors shrink-0">
-              <div className="flex h-full w-full items-center justify-center rounded-full bg-primary/10 text-primary font-bold text-sm font-display shadow-xs">
-                {user.firstName[0]}{user.lastName[0]}
+              <div className="flex h-full w-full items-center justify-center rounded-full bg-primary/10 text-primary font-bold text-sm font-display shadow-xs overflow-hidden">
+                {user.avatarUrl ? (
+                  <img 
+                    src={(() => {
+                      const url = user.avatarUrl;
+                      if (url.startsWith('/api/')) {
+                        const token = typeof window !== 'undefined' ? getStoredSessionToken() : null;
+                        return token ? `${url}&token=${encodeURIComponent(token)}` : url;
+                      }
+                      return url;
+                    })()} 
+                    alt={`${user.firstName} ${user.lastName}`} 
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span>{user.firstName[0]}{user.lastName[0]}</span>
+                )}
               </div>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-64 p-2 rounded-xl shadow-2xl border border-muted z-50 bg-card/95 backdrop-blur-md">
             <DropdownMenuLabel className="p-3">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold text-sm">
-                  {user.firstName[0]}{user.lastName[0]}
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold text-sm overflow-hidden">
+                  {user.avatarUrl ? (
+                    <img 
+                      src={(() => {
+                        const url = user.avatarUrl;
+                        if (url.startsWith('/api/')) {
+                          const token = typeof window !== 'undefined' ? getStoredSessionToken() : null;
+                          return token ? `${url}&token=${encodeURIComponent(token)}` : url;
+                        }
+                        return url;
+                      })()} 
+                      alt={`${user.firstName} ${user.lastName}`} 
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span>{user.firstName[0]}{user.lastName[0]}</span>
+                  )}
                 </div>
                 <div className="flex flex-col min-w-0">
                   <p className="text-sm font-semibold text-foreground truncate">{user.firstName} {user.lastName}</p>
@@ -538,7 +729,11 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
               disabled={loggingOut}
               className="p-2.5 rounded-lg text-red-600 focus:bg-red-50 focus:text-red-700 dark:focus:bg-red-950/20 dark:focus:text-red-400 cursor-pointer font-medium transition-colors text-xs flex items-center gap-2"
             >
-              <LogOut className="h-4 w-4 shrink-0" />
+              {loggingOut ? (
+                <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+              ) : (
+                <LogOut className="h-4 w-4 shrink-0" />
+              )}
               <span>{loggingOut ? 'Signing out...' : 'Sign Out'}</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -575,66 +770,126 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
 
           {/* Scrollable Results List */}
           <div className="overflow-y-auto p-2 space-y-4 max-h-[50vh]">
-            {/* Grouped results */}
-            {matchingItems.length > 0 && (
-              <div className="space-y-1">
-                {Array.from(new Set(matchingItems.map(item => item.category))).map(category => {
-                  const categoryItems = matchingItems.filter(item => item.category === category);
-                  return (
-                    <div key={category} className="space-y-1">
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80 px-3 mt-3 mb-1">
-                        {category}
-                      </div>
-                      {categoryItems.map(item => {
-                        const index = matchingItems.indexOf(item);
-                        const ItemIcon = item.icon;
-                        return (
-                          <div
-                            key={item.id}
-                            onClick={() => {
-                              item.action();
-                              setOpenPalette(false);
-                            }}
-                            onMouseEnter={() => setSelectedIndex(index)}
-                            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-left cursor-pointer transition-colors duration-150 ${
-                              index === selectedIndex 
-                                ? 'bg-primary/10 text-primary' 
-                                : 'text-slate-700 dark:text-zinc-300 hover:bg-accent/40'
-                            }`}
-                          >
-                            <div className={`p-2 rounded-lg ${
-                              index === selectedIndex ? 'bg-primary text-primary-foreground' : 'bg-muted/50'
-                            } transition-colors`}>
-                              <ItemIcon className="h-4 w-4" />
-                            </div>
-                            <div className="flex flex-col min-w-0">
-                              <span className="text-xs font-semibold truncate">{item.title}</span>
-                              {item.description && (
-                                <span className="text-[10px] text-muted-foreground truncate max-w-[450px]">
-                                  {item.description}
-                                </span>
-                              )}
-                            </div>
-                            {index === selectedIndex && (
-                              <span className="ml-auto text-[10px] text-primary font-bold flex items-center gap-0.5 animate-in slide-in-from-right-1 duration-150">
-                                Select <ChevronRight className="h-3 w-3" />
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
+            {isAiLoading && (
+              <div className="py-12 px-6 flex flex-col items-center justify-center gap-4">
+                <Sparkles className="h-10 w-10 text-primary animate-spin" />
+                <div className="space-y-2 text-center w-full max-w-md">
+                  <div className="h-4 bg-muted/80 animate-pulse rounded-full w-3/4 mx-auto" />
+                  <div className="h-3 bg-muted/80 animate-pulse rounded-full w-1/2 mx-auto" />
+                  <div className="h-3 bg-muted/80 animate-pulse rounded-full w-2/3 mx-auto" />
+                </div>
+                <span className="text-xs font-bold text-muted-foreground animate-pulse">Consulting AI Knowledge Base...</span>
               </div>
             )}
 
-            {matchingItems.length === 0 && (
-              <div className="py-12 text-center text-xs text-muted-foreground flex flex-col items-center justify-center gap-2">
-                <Command className="h-10 w-10 text-muted-foreground/30 animate-pulse" />
-                <span className="font-bold">No results found for "{paletteSearch}"</span>
-                <span>Try typing another query or look for navigation pages</span>
+            {!isAiLoading && aiResponse && (
+              <div className="p-3 space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b border-muted">
+                  <Sparkles className="h-4 w-4 text-[#f87941]" />
+                  <span className="text-xs font-black text-foreground">AI Copilot Answer</span>
+                  <button 
+                    onClick={() => {
+                      setAiResponse(null);
+                      setSelectedIndex(0);
+                    }}
+                    className="ml-auto text-[10px] font-bold text-[#f87941] hover:underline"
+                  >
+                    Clear Answer
+                  </button>
+                </div>
+                <div className="text-xs leading-relaxed text-slate-800 dark:text-zinc-200 bg-muted/30 p-4 rounded-xl border border-muted/80 whitespace-pre-wrap font-medium">
+                  {aiResponse}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="text-[10px] h-8 rounded-lg font-bold"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(aiResponse);
+                    }}
+                  >
+                    Copy Response
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="text-[10px] h-8 rounded-lg font-bold ml-auto"
+                    onClick={() => {
+                      setAiResponse(null);
+                      setSelectedIndex(0);
+                    }}
+                  >
+                    Back to Search
+                  </Button>
+                </div>
               </div>
+            )}
+
+            {!isAiLoading && !aiResponse && (
+              <>
+                {/* Grouped results */}
+                {matchingItems.length > 0 ? (
+                  <div className="space-y-1">
+                    {Array.from(new Set(matchingItems.map(item => item.category))).map(category => {
+                      const categoryItems = matchingItems.filter(item => item.category === category);
+                      return (
+                        <div key={category} className="space-y-1">
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80 px-3 mt-3 mb-1">
+                            {category}
+                          </div>
+                          {categoryItems.map(item => {
+                            const index = matchingItems.indexOf(item);
+                            const ItemIcon = item.icon;
+                            return (
+                              <div
+                                key={item.id}
+                                onClick={() => {
+                                  item.action();
+                                  if (item.id !== 'ai-copilot-search') {
+                                    setOpenPalette(false);
+                                  }
+                                }}
+                                onMouseEnter={() => setSelectedIndex(index)}
+                                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-left cursor-pointer transition-colors duration-150 ${
+                                  index === selectedIndex 
+                                    ? 'bg-primary/10 text-primary' 
+                                    : 'text-slate-700 dark:text-zinc-300 hover:bg-accent/40'
+                                }`}
+                              >
+                                <div className={`p-2 rounded-lg ${
+                                  index === selectedIndex ? 'bg-primary text-primary-foreground' : 'bg-muted/50'
+                                } transition-colors`}>
+                                  <ItemIcon className="h-4 w-4" />
+                                </div>
+                                <div className="flex flex-col min-w-0">
+                                  <span className="text-xs font-semibold truncate">{item.title}</span>
+                                  {item.description && (
+                                    <span className="text-[10px] text-muted-foreground truncate max-w-[450px]">
+                                      {item.description}
+                                    </span>
+                                  )}
+                                </div>
+                                {index === selectedIndex && (
+                                  <span className="ml-auto text-[10px] text-primary font-bold flex items-center gap-0.5 animate-in slide-in-from-right-1 duration-150">
+                                    Select <ChevronRight className="h-3 w-3" />
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="py-12 text-center text-xs text-muted-foreground flex flex-col items-center justify-center gap-2">
+                    <Command className="h-10 w-10 text-muted-foreground/30 animate-pulse" />
+                    <span className="font-bold">No results found for "{paletteSearch}"</span>
+                    <span>Try typing another query or look for navigation pages</span>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
