@@ -21,6 +21,11 @@ export type SupabaseUserProfile = {
   is_email_verified?: boolean;
   verification_token?: string | null;
   verification_token_expires_at?: string | null;
+  username?: string | null;
+  middle_name?: string | null;
+  gender?: string | null;
+  office_email?: string | null;
+  account_expiry_date?: string | null;
 };
 
 export interface ProfileLookupOptions {
@@ -44,7 +49,9 @@ export async function getNextLegacyUserId(client?: any): Promise<number> {
     .order('legacy_user_id', { ascending: false })
     .limit(1);
 
-  const currentMax = Number((data as { legacy_user_id: number | null }[] | null)?.[0]?.legacy_user_id ?? 0);
+  const currentMax = Number(
+    (data as { legacy_user_id: number | null }[] | null)?.[0]?.legacy_user_id ?? 0
+  );
   return currentMax + 1;
 }
 
@@ -53,12 +60,9 @@ async function selfHealLegacyUserId(data: any) {
     try {
       const admin = getSupabaseAdminClient();
       const nextId = await getNextLegacyUserId(admin);
-      
-      await admin
-        .from('users')
-        .update({ legacy_user_id: nextId })
-        .eq('id', data.id);
-      
+
+      await admin.from('users').update({ legacy_user_id: nextId }).eq('id', data.id);
+
       data.legacy_user_id = nextId;
       console.log(`Self-healed missing legacy_user_id for user ${data.email} -> ${nextId}`);
     } catch (e) {
@@ -67,17 +71,17 @@ async function selfHealLegacyUserId(data: any) {
   }
 }
 
-export async function getSupabaseProfileByAuthUserId(authUserId: string, options?: ProfileLookupOptions) {
+export async function getSupabaseProfileByAuthUserId(
+  authUserId: string,
+  options?: ProfileLookupOptions
+) {
   const supabase = getClient(options);
-  let query = supabase
-    .from('users')
-    .select('*')
-    .eq('id', authUserId);
-    
+  let query = supabase.from('users').select('*').eq('id', authUserId);
+
   if (options?.tenantId) {
     query = query.eq('tenant_id', options.tenantId);
   }
-  
+
   const { data, error } = await query.single();
 
   if (error || !data) {
@@ -108,23 +112,26 @@ export async function getCurrentSupabaseProfile(accessToken: string) {
   };
 }
 
-export async function getSupabaseProfileByEmail(emailOrUsername: string, options?: ProfileLookupOptions) {
+export async function getSupabaseProfileByEmail(
+  emailOrUsername: string,
+  options?: ProfileLookupOptions
+) {
   const supabase = getClient(options);
   const searchKey = emailOrUsername.toLowerCase().trim();
   const isEmail = searchKey.includes('@');
 
   let query = supabase.from('users').select('*');
-  
+
   if (isEmail) {
     query = query.eq('email', searchKey);
   } else {
     query = query.eq('username', searchKey);
   }
-    
+
   if (options?.tenantId) {
     query = query.eq('tenant_id', options.tenantId);
   }
-  
+
   const { data, error } = await query.maybeSingle();
 
   if (error || !data) {
@@ -136,17 +143,17 @@ export async function getSupabaseProfileByEmail(emailOrUsername: string, options
   return data as SupabaseUserProfile;
 }
 
-export async function getSupabaseProfileByLegacyUserId(legacyUserId: number, options?: ProfileLookupOptions) {
+export async function getSupabaseProfileByLegacyUserId(
+  legacyUserId: number,
+  options?: ProfileLookupOptions
+) {
   const supabase = getClient(options);
-  let query = supabase
-    .from('users')
-    .select('*')
-    .eq('legacy_user_id', legacyUserId);
-    
+  let query = supabase.from('users').select('*').eq('legacy_user_id', legacyUserId);
+
   if (options?.tenantId) {
     query = query.eq('tenant_id', options.tenantId);
   }
-  
+
   const { data, error } = await query.single();
 
   if (error || !data) {
@@ -156,21 +163,21 @@ export async function getSupabaseProfileByLegacyUserId(legacyUserId: number, opt
   return data as SupabaseUserProfile;
 }
 
-export async function listSupabaseProfilesByAuthIds(authUserIds: string[], options?: ProfileLookupOptions) {
+export async function listSupabaseProfilesByAuthIds(
+  authUserIds: string[],
+  options?: ProfileLookupOptions
+) {
   if (!authUserIds.length) {
     return new Map<string, SupabaseUserProfile>();
   }
 
   const supabase = getClient(options);
-  let query = supabase
-    .from('users')
-    .select('*')
-    .in('id', authUserIds);
-    
+  let query = supabase.from('users').select('*').in('id', authUserIds);
+
   if (options?.tenantId) {
     query = query.eq('tenant_id', options.tenantId);
   }
-  
+
   const { data, error } = await query;
 
   if (error) {
@@ -178,7 +185,7 @@ export async function listSupabaseProfilesByAuthIds(authUserIds: string[], optio
   }
 
   return new Map<string, SupabaseUserProfile>(
-    ((data as SupabaseUserProfile[] | null) ?? []).map((profile) => [profile.id, profile])
+    ((data as SupabaseUserProfile[] | null) ?? []).map(profile => [profile.id, profile])
   );
 }
 
