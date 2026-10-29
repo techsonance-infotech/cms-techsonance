@@ -369,7 +369,11 @@ export default function EmployeeDetailPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        const arrayData = Array.isArray(data) ? data : data.data || [];
+        if (type === 'medical') {
+          setMedical(data || null);
+          return;
+        }
+        const arrayData = Array.isArray(data) ? data : (data?.data || []);
         if (type === 'attendance') setAttendance(arrayData);
         if (type === 'leaves') setLeaves(arrayData);
         if (type === 'assets') setAssets(arrayData);
@@ -381,7 +385,6 @@ export default function EmployeeDetailPage() {
         if (type === 'education') setEducation(arrayData);
         if (type === 'experience') setExperience(arrayData);
         if (type === 'bank-accounts') setBankAccounts(arrayData);
-        if (type === 'medical') setMedical(data);
       }
     } catch (err) {
       console.error(`Failed to fetch ${type}:`, err);
@@ -621,7 +624,13 @@ export default function EmployeeDetailPage() {
       });
       if (res.ok) {
         toast.success('Medical & insurance information updated');
-        fetchTabContent('medical');
+        await fetchTabContent('medical');
+        if (medBlood) {
+          setEmployee((prev: any) => (prev ? { ...prev, bloodGroup: medBlood } : prev));
+        }
+      } else {
+        const errJson = await res.json().catch(() => null);
+        toast.error(errJson?.message || errJson?.error || 'Failed to update medical details');
       }
     } catch {
       toast.error('Failed to update medical details');
