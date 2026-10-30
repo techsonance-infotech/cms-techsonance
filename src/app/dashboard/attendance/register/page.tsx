@@ -416,24 +416,26 @@ export default function AttendancePage() {
       });
 
       if (response.ok) {
-        const data = await response.json();
-        setEmployees(data);
+        const result = await response.json();
+        const empList = Array.isArray(result) ? result : (result.data || []);
+        setEmployees(empList);
 
         // Fallback default employee selection for administrator test profiles
-        if (data && data.length > 0) {
-          setEmployeeId((prev: any) => prev || Number(data[0].id));
+        if (empList && empList.length > 0) {
+          setEmployeeId((prev: any) => prev || Number(empList[0].id));
         }
 
         // Fetch user details for all employees
-        const userIds = data.map((emp: Employee) => emp.userId);
+        const userIds = empList.map((emp: Employee) => emp.userId).filter(Boolean);
         if (userIds.length > 0) {
           const usersResponse = await fetch('/api/users?limit=100', {
             headers: { 'Authorization': `Bearer ${token}` }
           });
 
           if (usersResponse.ok) {
-            const usersData = await usersResponse.json();
-            setUsers(usersData);
+            const usersResult = await usersResponse.json();
+            const userList = Array.isArray(usersResult) ? usersResult : (usersResult.data || []);
+            setUsers(userList);
           }
         }
       }
@@ -1361,8 +1363,8 @@ export default function AttendancePage() {
                 id: Number(e.id),
                 employeeId: e.employeeId,
                 department: e.department,
-                firstName: profile?.firstName || '',
-                lastName: profile?.lastName || '',
+                firstName: profile?.firstName || e.firstName || '',
+                lastName: profile?.lastName || e.lastName || '',
               };
             })}
           />
@@ -1383,8 +1385,8 @@ export default function AttendancePage() {
                 id: Number(e.id),
                 employeeId: e.employeeId,
                 department: e.department,
-                firstName: profile?.firstName || '',
-                lastName: profile?.lastName || '',
+                firstName: profile?.firstName || e.firstName || '',
+                lastName: profile?.lastName || e.lastName || '',
               };
             })}
           />

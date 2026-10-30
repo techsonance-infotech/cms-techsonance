@@ -53,7 +53,7 @@ async function buildAttendanceEmployeeMap(accessToken: string, tenantId: string,
 export const GET = withApiHandler(async (request, context) => {
   const user = context.auth!.user;
   const searchParams = new URL(request.url).searchParams;
-  const limit = Math.min(Number(searchParams.get('limit') ?? '10'), 100);
+  const limit = Math.min(Number(searchParams.get('limit') ?? '10'), 1000);
   const offset = Math.max(Number(searchParams.get('offset') ?? '0'), 0);
   const startDate = searchParams.get('start_date');
   const endDate = searchParams.get('end_date');
