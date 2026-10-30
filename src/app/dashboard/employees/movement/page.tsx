@@ -20,6 +20,7 @@ import {
   ArrowRight, ShieldCheck, Check, XCircle, Award, Zap
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { getStoredSessionToken } from '@/lib/client-session';
 
 // Define the 9 Movement Types
 export const MOVEMENT_TYPES = [
@@ -36,6 +37,7 @@ export const MOVEMENT_TYPES = [
 
 export interface RosterEmployee {
   id: string;
+  userId?: string;
   employeeTableId?: string;
   name: string;
   email: string;
@@ -48,12 +50,15 @@ export interface RosterEmployee {
   salary: number;
   managerId?: string;
   managerName?: string;
+  dateOfJoining?: string;
 }
 
 export interface MovementOrder {
   id: string;
   movementCode: string;
-  employeeId: string;
+  userId?: string;
+  employeeTableId?: string | number;
+  employeeId?: string;
   employeeName: string;
   employeeEmail: string;
   movementType: string;
@@ -130,9 +135,16 @@ export default function EmployeeMovementPage() {
   // Fetch 100% Dynamic Data from Backend API
   const loadMovementDataFromApi = async () => {
     try {
-      const token = localStorage.getItem('session_token');
+      const token = getStoredSessionToken();
+      const headers: Record<string, string> = {};
+      if (token && token !== 'null' && token !== 'undefined') {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const res = await fetch('/api/employees/movement', {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        headers,
+        credentials: 'include',
+        cache: 'no-store'
       });
 
       if (res.ok) {
@@ -145,10 +157,10 @@ export default function EmployeeMovementPage() {
             setTargetDept(first.department);
             setTargetBranch(first.branch);
             setTargetBusinessUnit(first.businessUnit || 'Enterprise Solutions');
-            setTargetManagerName('David Miller (VP Product)');
+            setTargetManagerName(first.managerName || 'Department Head');
             setTargetDesignation(`Senior ${first.designation}`);
-            setTargetGrade('L5');
-            setTargetSalary(first.salary * 1.15);
+            setTargetGrade(first.grade || 'L5');
+            setTargetSalary(first.salary > 0 ? Math.round(first.salary * 1.15) : 50000);
             setHistorySearchEmpId(first.id);
           }
         }
@@ -168,6 +180,12 @@ export default function EmployeeMovementPage() {
   useEffect(() => {
     loadMovementDataFromApi();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'movements' || activeTab === 'timeline') {
+      loadMovementDataFromApi();
+    }
+  }, [activeTab]);
 
   // Update target values when selected employee changes
   const activeEmployee = roster.find(e => e.id === selectedEmployeeId) || roster[0];
@@ -213,40 +231,45 @@ export default function EmployeeMovementPage() {
     setSubmitting(true);
 
     try {
-      const token = localStorage.getItem('session_token');
+      const token = getStoredSessionToken();
       const payload = {
-        userId: activeEmployee.id,
-        employeeTableId: activeEmployee.employeeTableId,
+        userId: activeEmployee?.userId || activeEmployee?.id || selectedEmployeeId,
+        employeeTableId: activeEmployee?.employeeTableId,
         movementTypes: selectedMovementTypes,
         effectiveDate,
         reason: reason || 'Career progression & organizational restructuring.',
         notes,
-        previousDepartment: activeEmployee.department,
-        newDepartment: selectedMovementTypes.includes('department') ? targetDept : activeEmployee.department,
-        previousBranch: activeEmployee.branch,
-        newBranch: selectedMovementTypes.includes('transfer') || selectedMovementTypes.includes('branch') ? targetBranch : activeEmployee.branch,
-        previousBusinessUnit: activeEmployee.businessUnit,
-        newBusinessUnit: selectedMovementTypes.includes('business_unit') ? targetBusinessUnit : activeEmployee.businessUnit,
-        previousManagerName: activeEmployee.managerName,
-        newManagerName: selectedMovementTypes.includes('manager') ? targetManagerName : activeEmployee.managerName,
-        previousDesignation: activeEmployee.designation,
-        newDesignation: selectedMovementTypes.includes('promotion') || selectedMovementTypes.includes('designation') ? targetDesignation : activeEmployee.designation,
-        previousGrade: activeEmployee.grade,
-        newGrade: selectedMovementTypes.includes('promotion') ? targetGrade : activeEmployee.grade,
-        previousEmploymentType: activeEmployee.employmentType,
-        newEmploymentType: selectedMovementTypes.includes('employment_type') ? targetEmploymentType : activeEmployee.employmentType,
-        previousSalary: activeEmployee.salary,
-        newSalary: selectedMovementTypes.includes('salary_revision') ? targetSalary : activeEmployee.salary,
+        previousDepartment: activeEmployee?.department,
+        newDepartment: selectedMovementTypes.includes('department') ? targetDept : (activeEmployee?.department || ''),
+        previousBranch: activeEmployee?.branch,
+        newBranch: selectedMovementTypes.includes('transfer') || selectedMovementTypes.includes('branch') ? targetBranch : (activeEmployee?.branch || ''),
+        previousBusinessUnit: activeEmployee?.businessUnit,
+        newBusinessUnit: selectedMovementTypes.includes('business_unit') ? targetBusinessUnit : (activeEmployee?.businessUnit || ''),
+        previousManagerName: activeEmployee?.managerName,
+        newManagerName: selectedMovementTypes.includes('manager') ? targetManagerName : (activeEmployee?.managerName || ''),
+        previousDesignation: activeEmployee?.designation,
+        newDesignation: selectedMovementTypes.includes('promotion') || selectedMovementTypes.includes('designation') ? targetDesignation : (activeEmployee?.designation || ''),
+        previousGrade: activeEmployee?.grade,
+        newGrade: selectedMovementTypes.includes('promotion') ? targetGrade : (activeEmployee?.grade || ''),
+        previousEmploymentType: activeEmployee?.employmentType,
+        newEmploymentType: selectedMovementTypes.includes('employment_type') ? targetEmploymentType : (activeEmployee?.employmentType || 'Full-Time'),
+        previousSalary: activeEmployee?.salary || 0,
+        newSalary: selectedMovementTypes.includes('salary_revision') ? targetSalary : (activeEmployee?.salary || 0),
         salaryIncrementPercentage: selectedMovementTypes.includes('salary_revision') ? incrementPct : 0,
         autoUpdateProfile
       };
 
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token && token !== 'null' && token !== 'undefined') {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const res = await fetch('/api/employees/movement', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
+        headers,
+        credentials: 'include',
         body: JSON.stringify(payload)
       });
 
@@ -268,13 +291,18 @@ export default function EmployeeMovementPage() {
   const handleApproveWorkflow = async (movementId: string, action: 'approve' | 'reject') => {
     setProcessingId(movementId);
     try {
-      const token = localStorage.getItem('session_token');
+      const token = getStoredSessionToken();
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token && token !== 'null' && token !== 'undefined') {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const res = await fetch('/api/employees/movement/approve', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
+        headers,
+        credentials: 'include',
         body: JSON.stringify({ movementId, action, comments: 'Stage verified.' })
       });
 
@@ -383,6 +411,17 @@ export default function EmployeeMovementPage() {
           </TabsList>
 
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                await loadMovementDataFromApi();
+                toast.success('Movement register refreshed!');
+              }}
+              className="rounded-xl text-xs font-bold border-slate-200 dark:border-zinc-800 flex items-center gap-1.5 hover:bg-slate-100 dark:hover:bg-zinc-800"
+            >
+              <RefreshCw className="h-3.5 w-3.5" /> Refresh
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -985,56 +1024,159 @@ export default function EmployeeMovementPage() {
             <div className="col-span-12 lg:col-span-8">
               <Card className="rounded-3xl border-slate-200 dark:border-zinc-800 shadow-md">
                 <CardHeader className="pb-3 border-b">
-                  <CardTitle className="text-base font-black flex items-center gap-2">
-                    <TrendingUp className="h-4.5 w-4.5 text-[#f87941]" /> Career Progression Audit Timeline
-                  </CardTitle>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-base font-black flex items-center gap-2">
+                        <TrendingUp className="h-4.5 w-4.5 text-[#f87941]" /> Career Progression Audit Timeline
+                      </CardTitle>
+                      <CardDescription className="text-xs">
+                        Chronological record of transfers, promotions, and compensation changes for {roster.find(e => e.id === historySearchEmpId)?.name || 'Selected Employee'}.
+                      </CardDescription>
+                    </div>
+                    {(() => {
+                      const selEmp = roster.find(e => e.id === historySearchEmpId);
+                      const count = movements.filter(m =>
+                        (selEmp?.employeeTableId && String(m.employeeTableId) === String(selEmp.employeeTableId)) ||
+                        (selEmp?.id && String(m.employeeTableId) === String(selEmp.id)) ||
+                        (selEmp?.userId && String(m.userId) === String(selEmp.userId))
+                      ).length;
+                      return (
+                        <Badge className="bg-[#f87941]/10 text-[#f87941] border-none font-bold text-xs">
+                          {count} Movement Order{count !== 1 ? 's' : ''}
+                        </Badge>
+                      );
+                    })()}
+                  </div>
                 </CardHeader>
                 <CardContent className="pt-6">
-                  <div className="relative border-l-2 border-[#f87941]/30 ml-4 space-y-8 pl-6">
+                  {(() => {
+                    const selEmp = roster.find(e => e.id === historySearchEmpId);
+                    const empTimelineMovements = movements.filter(m =>
+                      (selEmp?.employeeTableId && String(m.employeeTableId) === String(selEmp.employeeTableId)) ||
+                      (selEmp?.id && String(m.employeeTableId) === String(selEmp.id)) ||
+                      (selEmp?.userId && String(m.userId) === String(selEmp.userId))
+                    );
 
-                    <div className="relative">
-                      <div className="absolute -left-[31px] top-0 p-1.5 rounded-full bg-[#f87941] text-white">
-                        <Award className="h-3.5 w-3.5" />
-                      </div>
-                      <div className="bg-slate-50 dark:bg-zinc-900 p-4 rounded-2xl border space-y-1 text-xs">
-                        <div className="flex justify-between text-[10px] text-slate-400 font-mono">
-                          <span>Jul 27, 2026</span>
-                          <span className="text-emerald-500 font-bold">APPROVED & PROCESSED</span>
-                        </div>
-                        <div className="font-extrabold text-sm text-slate-900 dark:text-white">Promotion & Base Salary Revision</div>
-                        <div className="text-slate-500 text-[11px]">Promoted to Senior Lead Engineer with 15% salary increase.</div>
-                      </div>
-                    </div>
+                    return (
+                      <div className="relative border-l-2 border-[#f87941]/30 ml-4 space-y-6 pl-6">
 
-                    <div className="relative">
-                      <div className="absolute -left-[31px] top-0 p-1.5 rounded-full bg-teal-500 text-white">
-                        <Landmark className="h-3.5 w-3.5" />
-                      </div>
-                      <div className="bg-slate-50 dark:bg-zinc-900 p-4 rounded-2xl border space-y-1 text-xs">
-                        <div className="flex justify-between text-[10px] text-slate-400 font-mono">
-                          <span>Jan 15, 2026</span>
-                          <span className="text-slate-500">COMPLETED</span>
-                        </div>
-                        <div className="font-extrabold text-sm text-slate-900 dark:text-white">Branch Office Transfer</div>
-                        <div className="text-slate-500 text-[11px]">Transferred from London Office to HQ - New York.</div>
-                      </div>
-                    </div>
+                        {/* 1. Real Movement Orders from Database */}
+                        {empTimelineMovements.map((m) => {
+                          const isApproved = m.status.includes('Approved') || m.status.includes('Processed');
+                          const isRejected = m.status.includes('Reject');
+                          const isPromotion = m.movementType.toLowerCase().includes('promotion');
+                          const isTransfer = m.movementType.toLowerCase().includes('transfer') || m.movementType.toLowerCase().includes('branch');
+                          const isSalary = m.movementType.toLowerCase().includes('salary');
 
-                    <div className="relative">
-                      <div className="absolute -left-[31px] top-0 p-1.5 rounded-full bg-blue-500 text-white">
-                        <UserPlus className="h-3.5 w-3.5" />
-                      </div>
-                      <div className="bg-slate-50 dark:bg-zinc-900 p-4 rounded-2xl border space-y-1 text-xs">
-                        <div className="flex justify-between text-[10px] text-slate-400 font-mono">
-                          <span>Jul 10, 2025</span>
-                          <span className="text-slate-500">INITIAL ONBOARDING</span>
-                        </div>
-                        <div className="font-extrabold text-sm text-slate-900 dark:text-white">Joined TechSonance Enterprise</div>
-                        <div className="text-slate-500 text-[11px]">Initial employment contract signed as Full-Time Software Engineer.</div>
-                      </div>
-                    </div>
+                          const IconComponent = isPromotion ? Award : (isTransfer ? Landmark : (isSalary ? DollarSign : ArrowRightLeft));
+                          const iconBg = isPromotion ? 'bg-amber-500' : (isTransfer ? 'bg-teal-500' : (isSalary ? 'bg-rose-500' : 'bg-[#f87941]'));
 
-                  </div>
+                          return (
+                            <div key={m.id} className="relative group">
+                              <div className={`absolute -left-[31px] top-0 p-1.5 rounded-full ${iconBg} text-white shadow-md`}>
+                                <IconComponent className="h-3.5 w-3.5" />
+                              </div>
+                              <div className="bg-slate-50 dark:bg-zinc-900 p-4 rounded-2xl border space-y-2 text-xs transition-all hover:border-[#f87941]/40">
+                                <div className="flex justify-between items-center text-[10px] font-mono">
+                                  <span className="text-slate-400 font-bold">{m.effectiveDate || (m.createdAt ? new Date(m.createdAt).toLocaleDateString() : 'Effective Now')}</span>
+                                  <Badge className={
+                                    isApproved
+                                      ? 'bg-emerald-500/10 text-emerald-600 border-none font-bold text-[9px]'
+                                      : isRejected
+                                        ? 'bg-rose-500/10 text-rose-600 border-none font-bold text-[9px]'
+                                        : 'bg-amber-500/10 text-amber-600 border-none font-bold text-[9px]'
+                                  }>
+                                    {m.status.toUpperCase()}
+                                  </Badge>
+                                </div>
+
+                                <div className="flex items-center justify-between">
+                                  <div className="font-extrabold text-sm text-slate-900 dark:text-white">
+                                    {m.movementType}
+                                  </div>
+                                  <span className="font-mono text-[10px] text-[#f87941] font-bold">{m.movementCode}</span>
+                                </div>
+
+                                {/* Before vs After Changes Breakdown */}
+                                <div className="space-y-1 pt-1 text-[11px]">
+                                  {m.newDepartment && m.newDepartment !== m.previousDepartment && (
+                                    <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                                      <span className="text-slate-400 font-bold">Department:</span>
+                                      <span className="line-through text-slate-400">{m.previousDepartment}</span>
+                                      <ArrowRight className="h-3 w-3 text-[#f87941]" />
+                                      <span className="font-bold text-slate-900 dark:text-white">{m.newDepartment}</span>
+                                    </div>
+                                  )}
+                                  {m.newBranch && m.newBranch !== m.previousBranch && (
+                                    <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                                      <span className="text-slate-400 font-bold">Branch:</span>
+                                      <span className="line-through text-slate-400">{m.previousBranch}</span>
+                                      <ArrowRight className="h-3 w-3 text-[#f87941]" />
+                                      <span className="font-bold text-slate-900 dark:text-white">{m.newBranch}</span>
+                                    </div>
+                                  )}
+                                  {m.newDesignation && m.newDesignation !== m.previousDesignation && (
+                                    <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                                      <span className="text-slate-400 font-bold">Role:</span>
+                                      <span className="line-through text-slate-400">{m.previousDesignation}</span>
+                                      <ArrowRight className="h-3 w-3 text-[#f87941]" />
+                                      <span className="font-bold text-slate-900 dark:text-white">{m.newDesignation}</span>
+                                    </div>
+                                  )}
+                                  {(m.salaryIncrementPercentage > 0 || m.newSalary > m.previousSalary) && (
+                                    <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300 font-mono">
+                                      <span className="text-slate-400 font-bold font-sans">Compensation:</span>
+                                      <span className="line-through text-slate-400">${m.previousSalary.toLocaleString()}</span>
+                                      <ArrowRight className="h-3 w-3 text-[#f87941]" />
+                                      <span className="font-bold text-emerald-500">${m.newSalary.toLocaleString()}</span>
+                                      <span className="text-[10px] text-emerald-600 font-sans font-bold">(+{m.salaryIncrementPercentage}%)</span>
+                                    </div>
+                                  )}
+                                  {m.reason && (
+                                    <div className="text-[11px] text-slate-500 italic pt-1">
+                                      "{m.reason}"
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {/* 2. Real Initial Onboarding from Employee DB Record */}
+                        {selEmp && (
+                          <div className="relative group">
+                            <div className="absolute -left-[31px] top-0 p-1.5 rounded-full bg-blue-500 text-white shadow-md">
+                              <UserPlus className="h-3.5 w-3.5" />
+                            </div>
+                            <div className="bg-slate-50 dark:bg-zinc-900 p-4 rounded-2xl border space-y-2 text-xs">
+                              <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono">
+                                <span className="font-bold">{selEmp.dateOfJoining || 'Initial Joining'}</span>
+                                <Badge className="bg-blue-500/10 text-blue-500 border-none font-bold text-[9px]">
+                                  INITIAL ONBOARDING
+                                </Badge>
+                              </div>
+                              <div className="font-extrabold text-sm text-slate-900 dark:text-white">
+                                Joined TechSonance Enterprise
+                              </div>
+                              <div className="text-slate-500 text-[11px] leading-relaxed">
+                                Officially joined company as <span className="font-bold text-slate-700 dark:text-slate-200">{selEmp.designation}</span> in <span className="font-bold text-slate-700 dark:text-slate-200">{selEmp.department}</span> department ({selEmp.employmentType}) at <span className="font-bold text-slate-700 dark:text-slate-200">{selEmp.branch}</span> branch.
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Empty state notice if no movements created yet */}
+                        {empTimelineMovements.length === 0 && (
+                          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 dark:text-amber-300 flex items-center gap-2">
+                            <AlertCircle className="h-4 w-4 shrink-0" />
+                            <span>No organizational movement orders recorded yet for {selEmp?.name}. Any new movement orders submitted in the "Initiate Movement Request" tab will appear here in chronological order.</span>
+                          </div>
+                        )}
+
+                      </div>
+                    );
+                  })()}
                 </CardContent>
               </Card>
             </div>

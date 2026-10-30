@@ -37,7 +37,8 @@ export const GET = withApiHandler(async (request, context) => {
 
   const combined = (docs || []).map((d: any) => ({
     ...d,
-    document_categories: (cats || []).find((c: any) => c.id === d.category_id) || null
+    document_name: d.document_name || d.name || 'Untitled Document',
+    document_categories: (cats || []).find((c: any) => c.id === d.category_id) || (d.document_type ? { name: d.document_type.replace(/_/g, ' ') } : { name: 'Identity Proof' })
   }));
 
   return NextResponse.json(combined);

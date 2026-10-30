@@ -19,6 +19,7 @@ import {
   DialogFooter 
 } from '@/components/ui/dialog';
 import { Plus, Briefcase, IndianRupee, MapPin, Building2, Layers, Sparkles } from 'lucide-react';
+import { getStoredSessionToken } from '@/lib/client-session';
 
 export default function JobRequisitionsPage() {
   const router = useRouter();
@@ -40,7 +41,7 @@ export default function JobRequisitionsPage() {
 
   const fetchRequisitions = async () => {
     try {
-      const token = localStorage.getItem('session_token');
+      const token = getStoredSessionToken();
       const res = await fetch('/api/recruitment/requisitions', {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -69,7 +70,7 @@ export default function JobRequisitionsPage() {
     setSubmitting(true);
 
     try {
-      const token = localStorage.getItem('session_token');
+      const token = getStoredSessionToken();
       const res = await fetch('/api/recruitment/requisitions', {
         method: 'POST',
         headers: {
@@ -102,11 +103,12 @@ export default function JobRequisitionsPage() {
         setSalaryMax(0);
         fetchRequisitions();
       } else {
-        toast.error('Failed to publish job opening.');
+        const errData = await res.json().catch(() => null);
+        toast.error(errData?.message || errData?.error || 'Failed to publish job opening.');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      toast.error('Error creating job opening.');
+      toast.error(err.message || 'Error creating job opening.');
     } finally {
       setSubmitting(false);
     }

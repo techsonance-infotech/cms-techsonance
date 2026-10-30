@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { withApiHandler } from '@/server/http/handler';
 import { BadRequestError } from '@/server/http/errors';
-import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
+import { getAdminRouteSupabase, resolveActorUuid } from '@/server/supabase/route-helpers';
 
 export const GET = withApiHandler(async (request, context) => {
   const tenantId = context.auth?.user.tenantId;
@@ -18,40 +18,29 @@ export const GET = withApiHandler(async (request, context) => {
 
   // If no applications, seed them linked to candidate profiles and requisitions
   if (!applications || applications.length === 0) {
-    // Let's grab the seeded job requisitions and candidate profiles to link them correctly
     const { data: reqs } = await supabase.from('job_requisitions').select('id').eq('tenant_id', tenantId);
     const { data: cands } = await supabase.from('candidate_profiles').select('id').eq('tenant_id', tenantId);
 
     if (reqs && reqs.length > 0 && cands && cands.length > 0) {
-      const seeds = [
-        {
-          tenant_id: tenantId,
-          job_requisition_id: reqs[0].id,
-          candidate_id: cands[0].id,
-          current_stage: 'Technical',
-          resume_summary: 'Amit is a senior frontend developer specializing in Next.js.',
-          match_score: 92,
-          notes: 'Candidate performed well on initial phone screening round.'
-        },
-        {
-          tenant_id: tenantId,
-          job_requisition_id: reqs[1].id,
-          candidate_id: cands[1].id,
-          current_stage: 'Offer',
-          resume_summary: 'Priyanka is a DevOps lead with core proficiency in Terraform & EKS.',
-          match_score: 95,
-          notes: 'Team approved SOW compensation levels. Preparing offer letter.'
-        },
-        {
-          tenant_id: tenantId,
-          job_requisition_id: reqs[2].id,
-          candidate_id: cands[2].id,
-          current_stage: 'Applied',
-          resume_summary: 'Vijay is a product designer with a solid interactive prototype background.',
-          match_score: 79,
-          notes: 'Awaiting portfolio review from Head of Product Design.'
-        }
+      const candidateMetaList = [
+        { stage: 'Technical', summary: 'Amit is a senior frontend developer specializing in Next.js.', score: 92, notes: 'Candidate performed well on initial phone screening round.' },
+        { stage: 'Offer', summary: 'Priyanka is a DevOps lead with core proficiency in Terraform & EKS.', score: 95, notes: 'Team approved SOW compensation levels. Preparing offer letter.' },
+        { stage: 'Applied', summary: 'Vijay is a product designer with a solid interactive prototype background.', score: 79, notes: 'Awaiting portfolio review from Head of Product Design.' }
       ];
+
+      const seeds = (cands as Array<{ id: string }>).map((cand: { id: string }, idx: number) => {
+        const req = (reqs as Array<{ id: string }>)[idx % reqs.length];
+        const meta = candidateMetaList[idx] || candidateMetaList[0];
+        return {
+          tenant_id: tenantId,
+          job_requisition_id: req.id,
+          candidate_id: cand.id,
+          current_stage: meta.stage,
+          resume_summary: meta.summary,
+          match_score: meta.score,
+          notes: meta.notes
+        };
+      });
 
       const { data: inserted, error: insertErr } = await supabase
         .from('job_applications')
@@ -72,13 +61,58 @@ export const POST = withApiHandler(async (request, context) => {
   if (!tenantId) throw new BadRequestError('Tenant context missing');
 
   const body = await request.json();
-  const { applicationId, currentStage, notes } = body;
+  const { applicationId, jobRequisitionId, candidateId, currentStage, notes, resumeSummary, matchScore } = body;
 
+  const supabase = getAdminRouteSupabase();
+
+  // Mode 1: Create a brand new application
+  if (jobRequisitionId && candidateId) {
+    const { data: createdApp, error: createError } = await supabase
+      .from('job_applications')
+      .upsert({
+        tenant_id: tenantId,
+        job_requisition_id: jobRequisitionId,
+        candidate_id: candidateId,
+        current_stage: currentStage || 'Applied',
+        notes: notes || null,
+        resume_summary: resumeSummary || 'Candidate applied via recruitment system.',
+        match_score: matchScore || 85,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'tenant_id,job_requisition_id,candidate_id' })
+      .select('*, job_requisitions(*), candidate_profiles(*)')
+      .single();
+
+    if (createError) throw createError;
+
+    // If created directly in Offer stage, auto-create offer record
+    if ((currentStage === 'Offer' || createdApp.current_stage === 'Offer') && createdApp?.id) {
+      const creatorUuid = await resolveActorUuid(context, supabase);
+      const baseSalary = createdApp.job_requisitions?.salary_range_max || createdApp.job_requisitions?.salary_range_min || 1600000.00;
+      const joiningDate = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
+
+      await supabase
+        .from('recruitment_offers')
+        .insert({
+          tenant_id: tenantId,
+          application_id: createdApp.id,
+          base_salary: baseSalary,
+          joining_date: joiningDate,
+          status: 'Pending Approval',
+          approval_chain: [
+            { approver: 'HR Manager', status: 'Approved' },
+            { approver: 'VP of Engineering', status: 'Pending' }
+          ],
+          created_by: creatorUuid
+        });
+    }
+
+    return NextResponse.json({ success: true, data: createdApp, message: 'Application created successfully' });
+  }
+
+  // Mode 2: Update existing application stage
   if (!applicationId || !currentStage) {
     throw new BadRequestError('Missing applicationId or currentStage');
   }
-
-  const supabase = getAdminRouteSupabase();
 
   // 1. Update application stage
   const { data, error } = await supabase
@@ -90,7 +124,7 @@ export const POST = withApiHandler(async (request, context) => {
     })
     .eq('id', applicationId)
     .eq('tenant_id', tenantId)
-    .select('*')
+    .select('*, job_requisitions(*)')
     .single();
 
   if (error) throw error;
@@ -108,6 +142,37 @@ export const POST = withApiHandler(async (request, context) => {
       .update({ status: cpStatus, updated_at: new Date().toISOString() })
       .eq('id', data.candidate_id)
       .eq('tenant_id', tenantId);
+  }
+
+  // 3. Auto-create offer record if candidate is moved to 'Offer' stage and has no offer yet
+  if (currentStage === 'Offer' && data?.id) {
+    const { data: existingOffer } = await supabase
+      .from('recruitment_offers')
+      .select('id')
+      .eq('application_id', data.id)
+      .eq('tenant_id', tenantId)
+      .maybeSingle();
+
+    if (!existingOffer) {
+      const creatorUuid = await resolveActorUuid(context, supabase);
+      const baseSalary = data.job_requisitions?.salary_range_max || data.job_requisitions?.salary_range_min || 1600000.00;
+      const joiningDate = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
+
+      await supabase
+        .from('recruitment_offers')
+        .insert({
+          tenant_id: tenantId,
+          application_id: data.id,
+          base_salary: baseSalary,
+          joining_date: joiningDate,
+          status: 'Pending Approval',
+          approval_chain: [
+            { approver: 'HR Manager', status: 'Approved' },
+            { approver: 'VP of Engineering', status: 'Pending' }
+          ],
+          created_by: creatorUuid
+        });
+    }
   }
 
   return NextResponse.json({ success: true, data });

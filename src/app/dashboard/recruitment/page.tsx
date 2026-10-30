@@ -22,6 +22,7 @@ import {
   Search,
   Briefcase
 } from 'lucide-react';
+import { getStoredSessionToken } from '@/lib/client-session';
 import {
   ResponsiveContainer,
   BarChart,
@@ -46,7 +47,7 @@ export default function RecruitmentDashboard() {
   const fetchRecruitmentData = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('session_token');
+      const token = getStoredSessionToken();
       
       const [reqRes, candRes, appRes] = await Promise.all([
         fetch('/api/recruitment/requisitions', { headers: { Authorization: `Bearer ${token}` } }),

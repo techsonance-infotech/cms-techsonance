@@ -30,6 +30,27 @@ export async function resolveAuthUserIdFromLegacyUserId(
   return profile.id;
 }
 
+export async function resolveActorUuid(context: any, supabase?: any): Promise<string | null> {
+  const providerId = context?.auth?.user?.providerUserId;
+  if (providerId && typeof providerId === 'string' && providerId.includes('-')) {
+    return providerId;
+  }
+  const tokenId = context?.auth?.tokenId;
+  if (tokenId && typeof tokenId === 'string' && tokenId.includes('-')) {
+    return tokenId;
+  }
+  const legacyId = context?.auth?.user?.id;
+  if (legacyId && supabase) {
+    const { data: u } = await supabase
+      .from('users')
+      .select('id')
+      .eq('legacy_user_id', legacyId)
+      .maybeSingle();
+    if (u?.id) return u.id;
+  }
+  return null;
+}
+
 export async function buildLegacyUserIdMap(
   accessToken: string,
   authUserIds: string[],
@@ -143,6 +164,10 @@ export function normalizeSupabaseEmployeeRecord(
     managerName: managerProfile
       ? `${managerProfile.first_name} ${managerProfile.last_name}`
       : getField('manager_name', 'managerName', null),
+    buddy: getField('buddy', 'buddy') || getField('buddy_name', 'buddyName', null),
+    buddyName: getField('buddy_name', 'buddyName') || getField('buddy', 'buddy', null),
+    mentor: getField('mentor', 'mentor') || getField('mentor_name', 'mentorName', null),
+    mentorName: getField('mentor_name', 'mentorName') || getField('mentor', 'mentor', null),
     workMode: getField('work_mode', 'workMode', 'Office'),
     employeeId: row.employee_id,
     nfcCardId: row.nfc_card_id ?? null,

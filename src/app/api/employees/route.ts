@@ -610,7 +610,7 @@ export const PUT = withApiHandler(
     let managerAuthId = undefined;
     if ('managerId' in payload) {
       managerAuthId = payload.managerId
-        ? await resolveAuthUserIdFromLegacyUserId(accessToken, payload.managerId, tenantId)
+        ? await resolveAuthUserIdFromLegacyUserId(accessToken, payload.managerId, tenantId).catch(() => null)
         : null;
     }
 
@@ -736,7 +736,7 @@ export const PUT = withApiHandler(
       }
     });
 
-    ['middleName', 'officeEmail', 'accountExpiryDate'].forEach(field => {
+    ['middleName', 'officeEmail', 'accountExpiryDate', 'buddy', 'mentor', 'buddyName', 'mentorName'].forEach(field => {
       const value = (payload as any)[field];
       if (value !== undefined) {
         extraFields[field] = value;

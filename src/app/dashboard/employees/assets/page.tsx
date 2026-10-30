@@ -6,9 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   Laptop, CheckCircle2, AlertTriangle, Plus, ClipboardList, RefreshCw, PenTool, Monitor, Trash2, KeyRound, Wrench,
-  Search, Check, X, ShieldAlert, Cpu, Award, DollarSign, Calendar, Globe, Server, FileText, Smartphone, Users, Undo2
+  Search, Check, X, ShieldAlert, Cpu, Award, DollarSign, Calendar, Globe, Server, FileText, Smartphone, Users, Undo2,
+  User, ArrowRight
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getStoredSessionToken } from '@/lib/client-session';
@@ -80,6 +82,13 @@ export default function AssetTrackerPage() {
   const [recoveryDeductions, setRecoveryDeductions] = useState('0');
   const [recoveryAccessoriesStatus, setRecoveryAccessoriesStatus] = useState('All returned');
 
+  // Requisition form state
+  const [showRequisitionDialog, setShowRequisitionDialog] = useState(false);
+  const [reqEmployeeId, setReqEmployeeId] = useState('');
+  const [reqCategoryId, setReqCategoryId] = useState('');
+  const [reqReason, setReqReason] = useState('');
+  const [submittingRequisition, setSubmittingRequisition] = useState(false);
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -98,6 +107,7 @@ export default function AssetTrackerPage() {
         setCategories(categoriesData);
         if (categoriesData.length > 0) {
           setNewAssetCategoryId(categoriesData[0].id);
+          setReqCategoryId(String(categoriesData[0].id));
         }
       }
     } catch (err) {
@@ -234,6 +244,44 @@ export default function AssetTrackerPage() {
       }
     } catch {
       toast.error('Connection error');
+    }
+  };
+
+  const handleCreateRequisition = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reqEmployeeId || !reqCategoryId || !reqReason.trim()) {
+      toast.error('Please select employee, hardware category, and provide justification');
+      return;
+    }
+    try {
+      setSubmittingRequisition(true);
+      const token = getStoredSessionToken();
+      const res = await fetch('/api/assets/requests', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          employeeId: Number(reqEmployeeId),
+          categoryId: Number(reqCategoryId),
+          reason: reqReason.trim()
+        })
+      });
+      if (res.ok) {
+        toast.success('Asset procurement requisition submitted successfully!');
+        setShowRequisitionDialog(false);
+        setReqReason('');
+        setReqEmployeeId('');
+        fetchData();
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        toast.error(errData.message || 'Failed to submit requisition');
+      }
+    } catch {
+      toast.error('Connection error submitting requisition');
+    } finally {
+      setSubmittingRequisition(false);
     }
   };
 
@@ -579,25 +627,116 @@ export default function AssetTrackerPage() {
               {/* TAB 2: PROCUREMENTS WORKFLOW */}
               {activeTab === 'procurement' && (
                 <div className="space-y-4 pt-4 text-xs">
-                  <Label className="font-bold text-slate-400 block mb-2 uppercase tracking-wider">Employee Requests & Budget Sign-offs</Label>
-                  
-                  {requests.map(req => (
-                    <div key={req.id} className="p-4 border rounded-xl bg-slate-50/50 dark:bg-zinc-900/10 space-y-3">
-                      <div className="flex justify-between items-center border-b pb-1.5">
-                        <span className="font-bold">Request for Category: {req.asset_categories?.name || 'Device Item'}</span>
-                        <Badge className={req.status === 'pending' ? 'bg-amber-500/10 text-amber-600 font-bold border-none' : 'bg-emerald-500/10 text-emerald-600 font-bold border-none'}>
-                          {req.status.toUpperCase()}
-                        </Badge>
-                      </div>
-                      <p className="text-slate-500">Reason: "{req.reason}"</p>
-                      {req.status === 'pending' && (
-                        <div className="flex justify-end gap-2 pt-2 border-t">
-                          <Button size="xs" variant="outline" className="text-[#f87941] border-[#f87941]/25 h-7" onClick={() => handleRequestApproval(req.id, 'rejected')}>Reject Request</Button>
-                          <Button size="xs" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-7" onClick={() => handleRequestApproval(req.id, 'approved')}>Approve Budget & Quality Check</Button>
-                        </div>
-                      )}
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b pb-3">
+                    <div>
+                      <Label className="font-bold text-slate-700 dark:text-slate-200 block uppercase tracking-wider text-xs">
+                        Employee Requisitions & Budget Sign-offs
+                      </Label>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Review hardware procurement requests, approve IT budgets, and issue devices.
+                      </p>
                     </div>
-                  ))}
+                    <Button
+                      size="sm"
+                      onClick={() => setShowRequisitionDialog(true)}
+                      className="bg-[#f87941] hover:bg-[#e06634] text-white font-bold flex items-center gap-1.5 h-8 text-xs shrink-0"
+                    >
+                      <Plus className="h-3.5 w-3.5" /> Submit Requisition
+                    </Button>
+                  </div>
+                  
+                  {requests.length === 0 ? (
+                    <div className="p-8 border border-dashed rounded-2xl text-center space-y-3 bg-slate-50/50 dark:bg-zinc-900/10">
+                      <div className="h-10 w-10 mx-auto rounded-full bg-[#f87941]/10 flex items-center justify-center text-[#f87941]">
+                        <FileText className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-slate-700 dark:text-slate-300 text-sm">No Pending Procurement Requisitions</p>
+                        <p className="text-xs text-slate-400 max-w-sm mx-auto mt-1">
+                          No employees have pending device requests. You can submit a hardware procurement requisition on behalf of a team member.
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={() => setShowRequisitionDialog(true)}
+                        className="bg-[#f87941] hover:bg-[#e06634] text-white font-semibold text-xs"
+                      >
+                        <Plus className="h-3.5 w-3.5 mr-1" /> Create Hardware Requisition
+                      </Button>
+                    </div>
+                  ) : (
+                    requests.map(req => (
+                      <div key={req.id} className="p-4 border rounded-xl bg-slate-50/50 dark:bg-zinc-900/10 space-y-3">
+                        <div className="flex justify-between items-center border-b pb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-sm text-slate-800 dark:text-slate-200">
+                              {req.asset_categories?.name || 'Hardware Device'}
+                            </span>
+                            <Badge className="bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-slate-400 border-none text-[10px]">
+                              Requisition #{req.id}
+                            </Badge>
+                          </div>
+                          <Badge className={`font-bold border-none text-[10px] uppercase ${
+                            req.status === 'pending'
+                              ? 'bg-amber-500/10 text-amber-600'
+                              : req.status === 'approved'
+                              ? 'bg-emerald-500/10 text-emerald-600'
+                              : 'bg-rose-500/10 text-rose-600'
+                          }`}>
+                            {req.status}
+                          </Badge>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-3 text-slate-500">
+                          <span className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1">
+                            <User className="h-3.5 w-3.5 text-[#f87941]" />
+                            {req.requester_name || 'Employee'}
+                          </span>
+                          <span>•</span>
+                          <span>{req.requester_department} ({req.requester_designation})</span>
+                          <span>•</span>
+                          <span className="text-slate-400">
+                            Requested {new Date(req.created_at || Date.now()).toLocaleDateString()}
+                          </span>
+                        </div>
+
+                        <div className="p-2.5 rounded-lg bg-white dark:bg-zinc-950 border text-slate-600 dark:text-slate-300">
+                          <span className="text-[10px] text-slate-400 block font-bold uppercase mb-0.5">Business Justification:</span>
+                          <p className="leading-relaxed">"{req.reason}"</p>
+                        </div>
+
+                        {req.status === 'pending' && (
+                          <div className="flex justify-end gap-2 pt-2 border-t">
+                            <Button size="xs" variant="outline" className="text-rose-500 hover:bg-rose-50 border-rose-200 h-7" onClick={() => handleRequestApproval(req.id, 'rejected')}>
+                              Reject Request
+                            </Button>
+                            <Button size="xs" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-7" onClick={() => handleRequestApproval(req.id, 'approved')}>
+                              <Check className="h-3.5 w-3.5 mr-1" /> Approve Budget & Requisition
+                            </Button>
+                          </div>
+                        )}
+
+                        {req.status === 'approved' && (
+                          <div className="flex justify-between items-center pt-2 border-t">
+                            <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
+                              <CheckCircle2 className="h-3.5 w-3.5" /> Budget Approved by HR Operations
+                            </span>
+                            <Button
+                              size="xs"
+                              className="bg-[#f87941] hover:bg-[#e06634] text-white font-bold h-7 flex items-center gap-1"
+                              onClick={() => {
+                                setCheckoutEmployeeId(String(req.employee_id));
+                                setActiveTab('checkout');
+                                toast.info(`Navigated to Check-out tab for ${req.requester_name || 'employee'}`);
+                              }}
+                            >
+                              Allocate from Inventory <ArrowRight className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
                 </div>
               )}
 
@@ -895,6 +1034,76 @@ export default function AssetTrackerPage() {
           </Card>
         </div>
       </div>
+
+      {/* New Hardware Requisition Dialog */}
+      <Dialog open={showRequisitionDialog} onOpenChange={setShowRequisitionDialog}>
+        <DialogContent className="max-w-md bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-3xl p-6 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+              <Plus className="h-4 w-4 text-[#f87941]" /> Submit Hardware Requisition
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-400 mt-1">
+              Submit a formal equipment request for IT budget approval and procurement.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleCreateRequisition} className="space-y-4 pt-2">
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Select Employee / Custodian</Label>
+              <select
+                value={reqEmployeeId}
+                onChange={e => setReqEmployeeId(e.target.value)}
+                className="w-full border rounded-xl p-2.5 bg-transparent text-xs border-input outline-none"
+                required
+              >
+                <option value="" className="bg-white dark:bg-zinc-950">Select Employee</option>
+                {employees.map(emp => (
+                  <option key={emp.id} value={String(emp.id)} className="bg-white dark:bg-zinc-950">
+                    {emp.firstName} {emp.lastName} ({emp.department || 'Operations'} • {emp.designation || 'Staff'})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Hardware Category</Label>
+              <select
+                value={reqCategoryId}
+                onChange={e => setReqCategoryId(e.target.value)}
+                className="w-full border rounded-xl p-2.5 bg-transparent text-xs border-input outline-none"
+                required
+              >
+                {categories.map(c => (
+                  <option key={c.id} value={String(c.id)} className="bg-white dark:bg-zinc-950">
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Business Justification / Work Need</Label>
+              <textarea
+                rows={3}
+                value={reqReason}
+                onChange={e => setReqReason(e.target.value)}
+                placeholder="e.g. Developing iOS/Android client apps requiring high-RAM compilation machine..."
+                className="w-full text-xs p-3 rounded-xl border border-input bg-transparent outline-none resize-none focus:ring-1 focus:ring-[#f87941]"
+                required
+              />
+            </div>
+
+            <div className="flex gap-2 justify-end pt-3 border-t">
+              <Button type="button" variant="outline" size="sm" onClick={() => setShowRequisitionDialog(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" size="sm" disabled={submittingRequisition} className="bg-[#f87941] hover:bg-[#e06634] text-white font-bold">
+                {submittingRequisition ? 'Submitting...' : 'Submit Requisition'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

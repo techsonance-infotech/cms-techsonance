@@ -278,8 +278,16 @@ export const PUT = withApiHandler(async (request, context) => {
   if (payload.accountExpiryDate !== undefined && columns.includes('account_expiry_date')) updates.account_expiry_date = payload.accountExpiryDate || null;
 
   if (payload.email !== undefined || payload.password || payload.role !== undefined || payload.firstName !== undefined || payload.lastName !== undefined || payload.username !== undefined || payload.middleName !== undefined || payload.gender !== undefined || payload.officeEmail !== undefined || payload.accountExpiryDate !== undefined) {
-    const { data: authUserData } = await admin.auth.admin.getUser(existingUser.id);
-    const existingMeta = authUserData?.user?.user_metadata || {};
+    let existingMeta: Record<string, any> = {};
+    try {
+      if (typeof admin.auth?.admin?.getUserById === 'function') {
+        const { data: authUserData } = await admin.auth.admin.getUserById(existingUser.id);
+        existingMeta = authUserData?.user?.user_metadata || {};
+      }
+    } catch (e) {
+      console.warn('Could not fetch existing auth user metadata:', e);
+    }
+
     const adminPayload: Record<string, unknown> = {
       ...(payload.email !== undefined ? { email: payload.email.toLowerCase().trim() } : {}),
       ...(payload.password ? { password: payload.password } : {}),
@@ -301,8 +309,16 @@ export const PUT = withApiHandler(async (request, context) => {
         legacy_user_id: existingUser.legacy_user_id,
       };
     }
-    const { error: adminError } = await admin.auth.admin.updateUserById(existingUser.id, adminPayload);
-    if (adminError) throw adminError;
+    try {
+      if (typeof admin.auth?.admin?.updateUserById === 'function') {
+        const { error: adminError } = await admin.auth.admin.updateUserById(existingUser.id, adminPayload);
+        if (adminError) {
+          console.warn('Auth admin updateUserById returned error:', adminError);
+        }
+      }
+    } catch (e) {
+      console.warn('Error invoking admin.auth.admin.updateUserById:', e);
+    }
   }
 
   const { data, error } = await admin

@@ -103,6 +103,10 @@ interface Employee {
   aadhaarNumber?: string | null;
   managerId?: number | null;
   managerName?: string | null;
+  buddy?: string | null;
+  buddyName?: string | null;
+  mentor?: string | null;
+  mentorName?: string | null;
   workMode?: string | null;
   officeEmail?: string | null;
   accountExpiryDate?: string | null;
@@ -1014,7 +1018,7 @@ export default function EmployeeDetailPage() {
         {isAdmin && (
           <div className="flex items-center gap-2">
             <Button
-              onClick={() => setEditDialogOpen(true)}
+              onClick={() => router.push(`/dashboard/employees/new?id=${employee.id}`)}
               className="bg-[#f87941] text-white hover:bg-[#e06634] font-semibold flex items-center gap-2"
             >
               <Edit className="h-4 w-4" /> Edit Profile
@@ -1073,7 +1077,7 @@ export default function EmployeeDetailPage() {
                 <CardContent className="pt-4">
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                     <Button
-                      onClick={() => setEditDialogOpen(true)}
+                      onClick={() => router.push(`/dashboard/employees/new?id=${employee.id}`)}
                       size="sm"
                       variant="outline"
                       className="border-[#e6e4e6]/30 hover:border-rose-500"
@@ -1160,8 +1164,18 @@ export default function EmployeeDetailPage() {
 
                 {/* Organizational Node Map */}
                 <Card className="bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
-                  <CardHeader>
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
                     <CardTitle className="text-sm font-bold">Workspace Tree Hierarchy</CardTitle>
+                    {isAdmin && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => router.push(`/dashboard/employees/new?id=${employee.id}`)}
+                        className="h-7 text-xs text-[#f87941] hover:text-[#e06634] hover:bg-[#f87941]/10 px-2 flex items-center gap-1 font-semibold"
+                      >
+                        <Edit className="h-3 w-3" /> Edit Hierarchy
+                      </Button>
+                    )}
                   </CardHeader>
                   <CardContent className="space-y-3 text-xs">
                     <div className="flex justify-between items-center p-2 rounded-xl bg-slate-50 dark:bg-zinc-900 border">
@@ -1173,13 +1187,13 @@ export default function EmployeeDetailPage() {
                     <div className="flex justify-between items-center p-2 rounded-xl bg-slate-50 dark:bg-zinc-900 border">
                       <span className="font-semibold text-slate-500">Buddy Assigned:</span>
                       <span className="font-bold text-slate-800 dark:text-slate-200">
-                        {employee?.skills?.buddy || employee?.skills?.buddyName || 'Not Assigned'}
+                        {employee.buddyName || employee.buddy || employee?.skills?.buddy || employee?.skills?.buddyName || 'Not Assigned'}
                       </span>
                     </div>
                     <div className="flex justify-between items-center p-2 rounded-xl bg-slate-50 dark:bg-zinc-900 border">
                       <span className="font-semibold text-slate-500">Mentor Assigned:</span>
                       <span className="font-bold text-slate-800 dark:text-slate-200">
-                        {employee?.skills?.mentor || employee?.skills?.mentorName || 'Not Assigned'}
+                        {employee.mentorName || employee.mentor || employee?.skills?.mentor || employee?.skills?.mentorName || 'Not Assigned'}
                       </span>
                     </div>
                     <div className="flex justify-between items-center text-[10px] text-slate-400 pt-1">

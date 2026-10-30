@@ -12,11 +12,22 @@ export const POST = withApiHandler(async (request, context) => {
   }
 
   const user = context.auth!.user;
-  const tenantId = user.tenantId;
+  const supabase = getAdminRouteSupabase();
+  let tenantId = user.tenantId;
+
+  if (!tenantId) {
+    const userIdentifier = user.providerUserId || user.id;
+    if (userIdentifier) {
+      const { data: u } = await supabase
+        .from('users')
+        .select('tenant_id')
+        .or(`id.eq.${userIdentifier},legacy_user_id.eq.${typeof userIdentifier === 'number' ? userIdentifier : 0}`)
+        .maybeSingle();
+      tenantId = u?.tenant_id;
+    }
+  }
 
   if (!tenantId) throw new BadRequestError('Tenant ID missing');
-
-  const supabase = getAdminRouteSupabase();
 
   // Fetch current movement request from Supabase
   let movement: any = null;
@@ -98,26 +109,47 @@ export const POST = withApiHandler(async (request, context) => {
   if (newStatus === 'Approved & Processed' && movement.auto_update_profile) {
     const profileUpdates: any = {};
     if (movement.new_department) profileUpdates.department = movement.new_department;
-    if (movement.new_branch) profileUpdates.branch = movement.new_branch;
     if (movement.new_designation) profileUpdates.designation = movement.new_designation;
+    if (movement.new_employment_type) profileUpdates.employment_type = movement.new_employment_type;
+    if (movement.new_manager_id) profileUpdates.manager_id = movement.new_manager_id;
     if (movement.new_salary && movement.new_salary > 0) profileUpdates.salary = movement.new_salary;
 
-    if (Object.keys(profileUpdates).length > 0) {
-      try {
-        if (movement.employee_table_id) {
-          await supabase
-            .from('employees')
-            .update(profileUpdates)
-            .eq('id', movement.employee_table_id);
-        } else if (movement.user_id) {
-          await supabase
-            .from('employees')
-            .update(profileUpdates)
-            .eq('user_id', movement.user_id);
+    try {
+      // If branch changed, update branch in skills JSONB
+      let currentEmpRecord: any = null;
+      const empQuery = movement.employee_table_id
+        ? supabase.from('employees').select('id, skills').eq('id', movement.employee_table_id).single()
+        : supabase.from('employees').select('id, skills').eq('user_id', movement.user_id).single();
+
+      const { data: empData } = await empQuery;
+      if (empData) {
+        currentEmpRecord = empData;
+        let existingSkills: any = {};
+        if (typeof currentEmpRecord.skills === 'string') {
+          try { existingSkills = JSON.parse(currentEmpRecord.skills); } catch { existingSkills = {}; }
+        } else if (currentEmpRecord.skills && typeof currentEmpRecord.skills === 'object') {
+          existingSkills = { ...currentEmpRecord.skills };
         }
-      } catch (err) {
-        console.warn('Employee profile auto-sync info:', err);
+
+        if (movement.new_branch) {
+          existingSkills.branchName = movement.new_branch;
+          existingSkills.workLocation = movement.new_branch;
+        }
+        if (movement.new_business_unit) {
+          existingSkills.businessUnit = movement.new_business_unit;
+        }
+        if (movement.new_grade) {
+          existingSkills.grade = movement.new_grade;
+        }
+        profileUpdates.skills = existingSkills;
+
+        await supabase
+          .from('employees')
+          .update(profileUpdates)
+          .eq('id', currentEmpRecord.id);
       }
+    } catch (err) {
+      console.warn('Employee profile auto-sync info:', err);
     }
   }
 

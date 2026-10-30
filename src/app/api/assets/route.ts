@@ -5,13 +5,26 @@ import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
 import { assetSchema } from '@/server/validation/assets';
 
 export const GET = withApiHandler(async (request, context) => {
-  const tenantId = context.auth?.user.tenantId;
+  const user = context.auth?.user;
+  const supabase = getAdminRouteSupabase();
+  let tenantId = user?.tenantId;
+
+  if (!tenantId && user) {
+    const userIdentifier = user.providerUserId || user.id;
+    if (userIdentifier) {
+      const { data: u } = await supabase
+        .from('users')
+        .select('tenant_id')
+        .or(`id.eq.${userIdentifier},legacy_user_id.eq.${typeof userIdentifier === 'number' ? userIdentifier : 0}`)
+        .maybeSingle();
+      tenantId = u?.tenant_id;
+    }
+  }
+
   if (!tenantId) throw new BadRequestError('Tenant info required');
 
   const searchParams = new URL(request.url).searchParams;
   const status = searchParams.get('status');
-
-  const supabase = getAdminRouteSupabase();
   let query = supabase
     .from('assets')
     .select('*, asset_categories(*)')

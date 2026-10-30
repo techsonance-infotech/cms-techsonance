@@ -377,7 +377,9 @@ export default function DocumentVaultPage() {
 
   const filteredDocs = documents.filter(d => {
     const q = searchQuery.toLowerCase();
-    const matchesSearch = d.document_name?.toLowerCase().includes(q) || d.document_categories?.name?.toLowerCase().includes(q);
+    const nameStr = (d.document_name || d.name || '').toLowerCase();
+    const catStr = (d.document_categories?.name || d.document_type || '').toLowerCase();
+    const matchesSearch = nameStr.includes(q) || catStr.includes(q);
     if (selectedEmployeeFilterId) {
       return matchesSearch && Number(d.employee_id) === Number(selectedEmployeeFilterId);
     }
@@ -610,8 +612,8 @@ export default function DocumentVaultPage() {
                 <div className="mt-4 p-4 rounded-xl border border-[#f87941]/10 bg-[#f87941]/5 flex items-center justify-between text-xs animate-fadeIn">
                   <div>
                     <span className="font-semibold text-slate-500">Selected Document Target:</span>
-                    <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">{selectedDoc.document_name}</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">Classification: {selectedDoc.confidentialityLevel || 'Internal Only'} • Category: {selectedDoc.document_categories?.name || 'Identity proof'}</p>
+                    <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">{selectedDoc.document_name || selectedDoc.name}</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Classification: {selectedDoc.confidentialityLevel || selectedDoc.confidentiality_level || 'Internal Only'} • Category: {selectedDoc.document_categories?.name || selectedDoc.document_type?.replace(/_/g, ' ') || 'Identity proof'}</p>
                   </div>
                   <div className="flex gap-2">
                     <Badge className="bg-[#f87941]/10 text-[#f87941] border-none font-bold uppercase tracking-wider">{selectedDoc.verification_status}</Badge>
@@ -669,14 +671,31 @@ export default function DocumentVaultPage() {
                           }`}
                         >
                           <div className="flex justify-between items-start">
-                            <div>
-                              <p className="font-bold text-sm text-slate-800 dark:text-slate-100">{d.document_name}</p>
-                              <div className="flex flex-wrap gap-2 mt-1">
-                                <Badge variant="outline" className="text-[10px] border-slate-200 uppercase">
-                                  {d.document_categories?.name || 'Document'}
+                            <div className="space-y-1">
+                              <p className="font-bold text-sm text-slate-800 dark:text-slate-100">{d.document_name || d.name || 'Untitled Document'}</p>
+                              <div className="flex flex-wrap items-center gap-2 mt-1">
+                                <Badge variant="outline" className="text-[10px] border-slate-200 uppercase font-semibold">
+                                  {d.document_categories?.name || d.document_type?.replace(/_/g, ' ') || 'Document'}
+                                </Badge>
+                                {(() => {
+                                  const emp = employees.find(e => Number(e.id) === Number(d.employee_id));
+                                  return emp ? (
+                                    <span className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
+                                      <User className="h-3 w-3 text-[#f87941]" /> {emp.firstName} {emp.lastName}
+                                    </span>
+                                  ) : null;
+                                })()}
+                                <Badge className={`text-[9px] uppercase font-bold border-none ${
+                                  d.verification_status === 'verified'
+                                    ? 'bg-emerald-500/10 text-emerald-500'
+                                    : d.verification_status === 'rejected'
+                                    ? 'bg-rose-500/10 text-rose-500'
+                                    : 'bg-amber-500/10 text-amber-500'
+                                }`}>
+                                  {d.verification_status || 'pending'}
                                 </Badge>
                                 {d.expiry_date && (
-                                  <span className="text-slate-500 flex items-center gap-1">
+                                  <span className="text-slate-500 flex items-center gap-1 text-[11px]">
                                     <Calendar className="h-3 w-3 text-[#f87941]" /> Expires: {d.expiry_date}
                                   </span>
                                 )}

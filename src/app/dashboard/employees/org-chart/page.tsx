@@ -72,20 +72,41 @@ export default function OrgChartPage() {
     try {
       setLoading(true);
       const token = getStoredSessionToken();
+      const headers: Record<string, string> = {};
+      if (token && token !== 'null' && token !== 'undefined') {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const res = await fetch('/api/org-chart', {
-        headers: { Authorization: `Bearer ${token}` }
+        headers,
+        credentials: 'include',
+        cache: 'no-store',
       });
       const result = await res.json();
-      const nodes = result.data || [];
+
+      if (!res.ok) {
+        toast.error(result?.message || 'Failed to load organization hierarchy');
+        setFlatNodes([]);
+        setTreeRoots([]);
+        return;
+      }
+
+      const nodes = Array.isArray(result)
+        ? result
+        : (Array.isArray(result?.data) ? result.data : []);
+
       setFlatNodes(nodes);
 
       // Build tree
       const roots = buildTreeFromNodes(nodes);
       setTreeRoots(roots);
-      if (roots.length > 0 && !selectedNodeDetails) {
+      if (roots.length > 0) {
         setSelectedNodeDetails(roots[0]);
+      } else {
+        setSelectedNodeDetails(null);
       }
-    } catch {
+    } catch (err: any) {
+      console.error('Failed to load organization hierarchy:', err);
       toast.error('Failed to load organization hierarchy');
     } finally {
       setLoading(false);
@@ -93,22 +114,63 @@ export default function OrgChartPage() {
   };
 
   const buildTreeFromNodes = (nodes: any[]): OrgNode[] => {
-    const map = new Map<string, OrgNode>();
+    if (!nodes || !nodes.length) return [];
+
+    const idMap = new Map<string, OrgNode>();
+    const aliasToId = new Map<string, string>();
+
     nodes.forEach(node => {
-      map.set(node.userId, { ...node, children: [] });
+      const orgNode: OrgNode = { ...node, children: [] };
+      const internalId = String(node.id);
+      idMap.set(internalId, orgNode);
+
+      aliasToId.set(internalId, internalId);
+      if (node.userId) aliasToId.set(String(node.userId), internalId);
+      if (node.employeeId) aliasToId.set(String(node.employeeId), internalId);
     });
 
     const roots: OrgNode[] = [];
+    const childIds = new Set<string>();
+
     nodes.forEach(node => {
-      const mappedNode = map.get(node.userId);
-      if (mappedNode) {
-        if (node.managerId && map.has(node.managerId)) {
-          map.get(node.managerId)!.children.push(mappedNode);
-        } else {
-          roots.push(mappedNode);
+      const current = idMap.get(String(node.id));
+      if (!current) return;
+
+      let parentId: string | null = null;
+      if (node.managerId) {
+        parentId = aliasToId.get(String(node.managerId)) || null;
+      }
+
+      // Avoid self-reporting cycles
+      if (parentId && parentId === String(node.id)) {
+        parentId = null;
+      }
+
+      if (parentId && idMap.has(parentId)) {
+        const parent = idMap.get(parentId)!;
+        if (!parent.children.some(c => String(c.id) === String(node.id))) {
+          parent.children.push(current);
+          childIds.add(String(node.id));
         }
+      } else {
+        roots.push(current);
       }
     });
+
+    // In case all nodes were assigned into a cycle and no root exists:
+    if (roots.length === 0 && nodes.length > 0) {
+      nodes.forEach(n => {
+        if (!childIds.has(String(n.id))) {
+          const nodeObj = idMap.get(String(n.id));
+          if (nodeObj) roots.push(nodeObj);
+        }
+      });
+      if (roots.length === 0) {
+        const first = idMap.get(String(nodes[0].id));
+        if (first) roots.push(first);
+      }
+    }
+
     return roots;
   };
 
@@ -123,20 +185,30 @@ export default function OrgChartPage() {
     const matches = flatNodes.filter(n => 
       n.name.toLowerCase().includes(q) || 
       n.designation.toLowerCase().includes(q) ||
+      (n.employeeId && n.employeeId.toLowerCase().includes(q)) ||
       (n.department && n.department.toLowerCase().includes(q)) ||
       (n.office && n.office.toLowerCase().includes(q)) ||
       (n.skills && JSON.stringify(n.skills).toLowerCase().includes(q))
     );
 
-    const pathUserIds = new Set<string>();
+    const pathKeys = new Set<string>();
     matches.forEach(m => {
-      let current = m;
-      while (current) {
-        pathUserIds.add(current.userId);
-        current = flatNodes.find(n => n.userId === current.managerId);
+      let current: any = m;
+      let depth = 0;
+      while (current && depth < 20) {
+        depth++;
+        if (current.userId) pathKeys.add(String(current.userId));
+        pathKeys.add(String(current.id));
+        const managerId = current.managerId;
+        if (!managerId) break;
+        current = flatNodes.find(n => 
+          String(n.id) === String(managerId) ||
+          String(n.userId) === String(managerId) ||
+          String(n.employeeId) === String(managerId)
+        );
       }
     });
-    setHighlightedUserIds(pathUserIds);
+    setHighlightedUserIds(pathKeys);
   };
 
   // Submit Restructuring Change
@@ -156,12 +228,17 @@ export default function OrgChartPage() {
     try {
       setUpdatingHierarchy(true);
       const token = getStoredSessionToken();
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token && token !== 'null' && token !== 'undefined') {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const res = await fetch('/api/org-chart', {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
+        headers,
+        credentials: 'include',
         body: JSON.stringify({
           employeeId: Number(selectedEmpId),
           parentEmployeeId: parentNode ? parentNode.id : null
@@ -187,7 +264,7 @@ export default function OrgChartPage() {
   // Recursive node layout renderer
   const OrgNodeView = ({ node }: { node: OrgNode }) => {
     const [collapsed, setCollapsed] = useState(false);
-    const isHighlighted = highlightedUserIds.has(node.userId) || (searchQuery && node.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    const isHighlighted = highlightedUserIds.has(String(node.id)) || (node.userId && highlightedUserIds.has(String(node.userId))) || (searchQuery && (node.name.toLowerCase().includes(searchQuery.toLowerCase()) || node.designation.toLowerCase().includes(searchQuery.toLowerCase()) || node.employeeId.toLowerCase().includes(searchQuery.toLowerCase())));
     const isOverloaded = node.children.length > 8;
 
     return (
@@ -246,7 +323,7 @@ export default function OrgChartPage() {
             {/* Horizontal branch divider container */}
             <div className="flex gap-6 border-t border-slate-200 dark:border-zinc-800 pt-6 justify-center relative">
               {node.children.map(child => (
-                <OrgNodeView key={child.userId} node={child} />
+                <OrgNodeView key={child.id || child.userId} node={child} />
               ))}
             </div>
           </div>
@@ -643,7 +720,7 @@ export default function OrgChartPage() {
                 </div>
               ) : viewMode === 'manager' ? (
                 treeRoots.map(root => (
-                  <OrgNodeView key={root.userId} node={root} />
+                  <OrgNodeView key={root.id || root.userId} node={root} />
                 ))
               ) : (
                 <div className="w-full max-w-[900px] space-y-8 px-6 text-left pb-10">
@@ -655,10 +732,10 @@ export default function OrgChartPage() {
                       </h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {nodes.map(node => {
-                          const isHighlighted = highlightedUserIds.has(node.userId) || (searchQuery && node.name.toLowerCase().includes(searchQuery.toLowerCase()));
+                          const isHighlighted = highlightedUserIds.has(String(node.id)) || (node.userId && highlightedUserIds.has(String(node.userId))) || (searchQuery && (node.name.toLowerCase().includes(searchQuery.toLowerCase()) || node.designation.toLowerCase().includes(searchQuery.toLowerCase())));
                           return (
                             <div
-                              key={node.userId}
+                              key={node.id || node.userId}
                               onClick={() => setSelectedNodeDetails(node)}
                               className={`p-4 border rounded-2xl cursor-pointer shadow-sm bg-white dark:bg-zinc-900 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex items-center gap-3 ${
                                 isHighlighted ? 'ring-2 ring-[#f87941] border-[#f87941]' : 'border-slate-100 dark:border-zinc-800/80'
