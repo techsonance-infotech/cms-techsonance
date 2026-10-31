@@ -49,9 +49,9 @@ export const GET = withApiHandler(async (request, context) => {
     supabase.from('employees').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId).eq('status', 'active'),
     supabase.from('attendance_records').select('employee_id').eq('tenant_id', tenantId).eq('date', todayStr),
     supabase.from('daily_reports').select('user_id').eq('tenant_id', tenantId).eq('date', yesterdayStr),
-    supabase.from('leave_requests').select('*, employees!inner(id, user_id, employees:users!inner(first_name, last_name))').eq('tenant_id', tenantId).eq('status', 'pending').limit(10),
-    supabase.from('reimbursements').select('*, employees!inner(id, user_id, employees:users!inner(first_name, last_name))').eq('tenant_id', tenantId),
-    supabase.from('attendance_requests').select('*, employees!inner(id, user_id, employees:users!inner(first_name, last_name))').eq('tenant_id', tenantId).eq('status', 'pending').limit(10),
+    supabase.from('leave_requests').select('*, employees(id, user_id, users!employees_user_id_fkey(first_name, last_name, email))').eq('tenant_id', tenantId).eq('status', 'pending').limit(10),
+    supabase.from('reimbursements').select('*, employees(id, user_id, users!employees_user_id_fkey(first_name, last_name, email))').eq('tenant_id', tenantId),
+    supabase.from('attendance_requests').select('*, employees(id, user_id, users!employees_user_id_fkey(first_name, last_name, email))').eq('tenant_id', tenantId).eq('status', 'pending').limit(10),
     supabase.from('projects').select('*').eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(5),
     supabase.from('purchases').select('*').eq('tenant_id', tenantId),
     supabase.from('expenses').select('*').eq('tenant_id', tenantId)
@@ -126,30 +126,52 @@ export const GET = withApiHandler(async (request, context) => {
   const missingReportsCount = Math.max(0, totalEmployees - usersWithReports.size);
 
   const pendingApprovals = [
-    ...(leavesRes.data || []).map((l: any) => ({ 
-      id: l.id, 
-      type: 'leave', 
-      title: 'Leave Request', 
-      employee: `${l.employees?.employees?.first_name} ${l.employees?.employees?.last_name}`,
-      details: `${l.leave_type?.replace('_', ' ')}: ${l.start_date} to ${l.end_date}`,
-      date: l.created_at 
-    })),
-    ...(claimsRes.data || []).filter((r: any) => r.status === 'pending').map((r: any) => ({ 
-      id: r.id, 
-      type: 'reimbursement', 
-      title: 'Reimbursement', 
-      employee: `${r.employees?.employees?.first_name} ${r.employees?.employees?.last_name}`,
-      details: `Amount: ₹${r.amount} - ${r.purpose}`,
-      date: r.created_at 
-    })),
-    ...(attendanceRequestsRes.data || []).map((a: any) => ({
-      id: a.id,
-      type: 'attendance',
-      title: 'Weekend Attendance',
-      employee: `${a.employees?.employees?.first_name} ${a.employees?.employees?.last_name}`,
-      details: `${a.date}: ${a.notes || 'No reason provided'}`,
-      date: a.created_at
-    }))
+    ...(leavesRes.data || []).map((l: any) => {
+      const u = l.employees?.users;
+      const empName = u ? `${u.first_name || ''} ${u.last_name || ''}`.trim() : `Employee #${l.employee_id}`;
+      return { 
+        id: l.id, 
+        type: 'leave', 
+        title: 'Leave Request', 
+        employee: empName,
+        employeeName: empName,
+        employeeEmail: u?.email || '',
+        employeeId: l.employee_id,
+        leaveType: l.leave_type || 'Annual',
+        startDate: l.start_date,
+        endDate: l.end_date,
+        actualDays: l.actual_days || l.days_count || 1,
+        reason: l.reason || 'No comments',
+        details: `${(l.leave_type || 'Annual').replace('_', ' ')}: ${l.start_date} to ${l.end_date}`,
+        date: l.created_at 
+      };
+    }),
+    ...(claimsRes.data || []).filter((r: any) => r.status === 'pending').map((r: any) => {
+      const u = r.employees?.users;
+      const empName = u ? `${u.first_name || ''} ${u.last_name || ''}`.trim() : `Employee #${r.employee_id}`;
+      return { 
+        id: r.id, 
+        type: 'reimbursement', 
+        title: 'Reimbursement', 
+        employee: empName,
+        employeeName: empName,
+        details: `Amount: ₹${r.amount} - ${r.purpose}`,
+        date: r.created_at 
+      };
+    }),
+    ...(attendanceRequestsRes.data || []).map((a: any) => {
+      const u = a.employees?.users;
+      const empName = u ? `${u.first_name || ''} ${u.last_name || ''}`.trim() : `Employee #${a.employee_id}`;
+      return {
+        id: a.id,
+        type: 'attendance',
+        title: 'Weekend Attendance',
+        employee: empName,
+        employeeName: empName,
+        details: `${a.date}: ${a.notes || 'No reason provided'}`,
+        date: a.created_at
+      };
+    })
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   // Recent Activity Feed (combination of recent invoices, claims, and projects)
@@ -166,7 +188,7 @@ export const GET = withApiHandler(async (request, context) => {
   const recentActivityClaims = (claimsRes.data || []).slice(0, 5).map((c: any) => ({
     id: `claim-${c.id}`,
     type: 'reimbursement',
-    title: `Claim by ${c.employees?.employees?.first_name || 'Staff'}`,
+    title: `Claim by ${c.employees?.users?.first_name || 'Staff'}`,
     description: `Purpose: ${c.purpose} • ${c.status.toUpperCase()}`,
     amount: Number(c.amount),
     status: c.status,

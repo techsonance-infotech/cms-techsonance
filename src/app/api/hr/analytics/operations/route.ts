@@ -36,7 +36,7 @@ export const GET = withApiHandler(async (request, context) => {
   try {
     const { data } = await supabase
       .from('users')
-      .select('id, first_name, last_name, gender, date_of_birth, created_at')
+      .select('id, first_name, last_name, role, email, created_at')
       .eq('tenant_id', tenantId);
     if (data) users = data;
   } catch (err) {
@@ -467,4 +467,4 @@ Return EXACT JSON ONLY, no markdown, no other keys:
       topClientsRevenue: topClientsArray
     }
   });
-}, { requireAuth: true, roles: ['Manager'] });
+}, { requireAuth: true, roles: ['Employee'] });

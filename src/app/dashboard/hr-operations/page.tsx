@@ -62,52 +62,139 @@ export default function HrOperationsPage() {
       const token = localStorage.getItem('session_token');
       const headers: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {};
 
-      // Fetch admin stats
+      // 1. Fetch admin stats for active headcount & workforce presence
       const statsRes = await fetch('/api/dashboard/stats/admin', { headers });
       let employeeCount = 0;
       let presentCount = 0;
-      let leavesList: any[] = [];
+      let fallbackLeaves: any[] = [];
 
       if (statsRes.ok) {
         const statsData = await statsRes.json();
         employeeCount = statsData.totalEmployees || 0;
         presentCount = statsData.workforce?.presentToday || 0;
-        leavesList = statsData.pendingApprovals || statsData.leaves || [];
-        setPendingLeaves(leavesList);
+        fallbackLeaves = statsData.pendingApprovals || statsData.leaves || [];
       }
 
-      // Fetch support tickets
-      const ticketsRes = await fetch('/api/tickets?limit=50', { headers });
-      let ticketsList: any[] = [];
-      if (ticketsRes.ok) {
-        const ticketsData = await ticketsRes.json();
-        ticketsList = Array.isArray(ticketsData) 
-          ? ticketsData 
-          : (ticketsData.data || []);
-        const openList = ticketsList.filter((t: any) => t.status === 'open' || t.status === 'pending' || t.status === 'new');
-        setOpenTickets(openList);
-      }
-
-      // Fetch active assets
-      const assetsRes = await fetch('/api/assets', { headers });
-      let assetsList: any[] = [];
-      if (assetsRes.ok) {
-        assetsList = await assetsRes.json();
-        setAssets(Array.isArray(assetsList) ? assetsList : []);
-      }
-
-      // Fetch wellness average index
-      const wellnessRes = await fetch('/api/employees/wellness', { headers });
-      let avgWellness = 84;
-      if (wellnessRes.ok) {
-        const wellnessData = await wellnessRes.json();
-        if (wellnessData.appointments && wellnessData.appointments.length > 0) {
-          avgWellness = 88;
+      // 2. Fetch live employees roster for applicant name resolution
+      let empMap = new Map<number, any>();
+      try {
+        const empRes = await fetch('/api/employees?limit=200', { headers });
+        if (empRes.ok) {
+          const empData = await empRes.json();
+          const empList = Array.isArray(empData) ? empData : (empData.data || []);
+          empList.forEach((e: any) => {
+            empMap.set(e.id, {
+              name: `${e.first_name || ''} ${e.last_name || ''}`.trim() || e.name || `Employee #${e.id}`,
+              email: e.email || ''
+            });
+          });
         }
+      } catch (e) {
+        console.warn('Employees roster notice:', e);
+      }
+
+      // 3. Fetch live pending leave requests directly from database
+      let leavesList: any[] = [];
+      try {
+        const leavesRes = await fetch('/api/leave-requests?status=pending&limit=100', { headers });
+        if (leavesRes.ok) {
+          const leavesData = await leavesRes.json();
+          const rawLeaves = Array.isArray(leavesData) ? leavesData : (leavesData.data || []);
+          leavesList = rawLeaves.map((l: any) => {
+            const empInfo = empMap.get(l.employeeId);
+            return {
+              id: l.id,
+              employeeId: l.employeeId,
+              employeeName: l.employeeName || empInfo?.name || `Employee #${l.employeeId}`,
+              employeeEmail: l.employeeEmail || empInfo?.email || '',
+              leaveType: l.leaveType || 'Annual',
+              startDate: l.startDate,
+              endDate: l.endDate,
+              actualDays: l.actualDays || l.daysCount || 1,
+              reason: l.reason || 'No comments provided',
+              status: l.status || 'pending',
+              createdAt: l.createdAt
+            };
+          });
+        }
+      } catch (e) {
+        console.warn('Live leave requests notice:', e);
+      }
+
+      if (leavesList.length === 0 && fallbackLeaves.length > 0) {
+        leavesList = fallbackLeaves.map((l: any) => ({
+          id: l.id,
+          employeeId: l.employeeId,
+          employeeName: l.employeeName || l.employee || `Employee #${l.id}`,
+          employeeEmail: l.employeeEmail || '',
+          leaveType: l.leaveType || 'Annual',
+          startDate: l.startDate || (l.details ? l.details.split(':')[1]?.trim() : ''),
+          endDate: l.endDate || '',
+          actualDays: l.actualDays || 1,
+          reason: l.reason || l.details || '',
+          status: 'pending',
+          createdAt: l.date
+        }));
+      }
+
+      setPendingLeaves(leavesList);
+
+      // 4. Fetch support tickets from both HR Service Desk and Client Helpdesk
+      let mergedTickets: any[] = [];
+      try {
+        const [hrDeskRes, clientTicketsRes] = await Promise.all([
+          fetch('/api/hr/service-desk', { headers }),
+          fetch('/api/tickets?limit=50', { headers })
+        ]);
+
+        if (hrDeskRes.ok) {
+          const hrDeskData = await hrDeskRes.json();
+          const hrDeskList = Array.isArray(hrDeskData.tickets) ? hrDeskData.tickets : [];
+          mergedTickets.push(...hrDeskList);
+        }
+
+        if (clientTicketsRes.ok) {
+          const clientData = await clientTicketsRes.json();
+          const clientList = Array.isArray(clientData) ? clientData : (clientData.data || []);
+          mergedTickets.push(...clientList);
+        }
+      } catch (e) {
+        console.warn('Tickets fetch notice:', e);
+      }
+
+      const openList = mergedTickets.filter((t: any) => {
+        const s = (t.status || '').toLowerCase();
+        return s === 'open' || s === 'pending' || s === 'new' || s === 'in_progress';
+      });
+      setOpenTickets(openList);
+
+      // 5. Fetch live corporate hardware assets
+      let assetsList: any[] = [];
+      try {
+        const assetsRes = await fetch('/api/assets', { headers });
+        if (assetsRes.ok) {
+          assetsList = await assetsRes.json();
+          setAssets(Array.isArray(assetsList) ? assetsList : []);
+        }
+      } catch (e) {
+        console.warn('Assets fetch notice:', e);
+      }
+
+      // 6. Fetch wellness average index
+      let avgWellness = 84;
+      try {
+        const wellnessRes = await fetch('/api/employees/wellness', { headers });
+        if (wellnessRes.ok) {
+          const wellnessData = await wellnessRes.json();
+          if (wellnessData.appointments && wellnessData.appointments.length > 0) {
+            avgWellness = 88;
+          }
+        }
+      } catch (e) {
+        console.warn('Wellness fetch notice:', e);
       }
 
       const activeLeavesCount = leavesList.length;
-      const openTicketsCount = ticketsList.filter((t: any) => t.status === 'open' || t.status === 'pending').length;
       const presenceRateStr = employeeCount > 0 
         ? `${Math.round((presentCount / employeeCount) * 100)}%` 
         : '0%';
@@ -117,8 +204,11 @@ export default function HrOperationsPage() {
         presentTodayCount: presentCount,
         presenceRate: presenceRateStr,
         pendingLeavesCount: activeLeavesCount,
-        openTicketsCount: openTicketsCount,
-        allocatedAssetsCount: (Array.isArray(assetsList) ? assetsList : []).filter((a: any) => a.status === 'allocated' || a.status === 'Allocated').length,
+        openTicketsCount: openList.length,
+        allocatedAssetsCount: (Array.isArray(assetsList) ? assetsList : []).filter((a: any) => {
+          const st = (a.status || '').toLowerCase();
+          return st === 'allocated' || st === 'assigned';
+        }).length,
         averageWellnessScore: avgWellness
       });
 
