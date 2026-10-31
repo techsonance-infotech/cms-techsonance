@@ -2,6 +2,20 @@ import { NextResponse } from 'next/server';
 import { withApiHandler } from '@/server/http/handler';
 import { BadRequestError } from '@/server/http/errors';
 import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
+import { logger } from '@/server/logging/logger';
+
+// Helper to validate UUID string
+const isValidUuid = (val: unknown): val is string =>
+  typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+
+function resolveAuthUserUuid(context: any): string | null {
+  const user = context.auth?.user;
+  if (!user) return null;
+  if (isValidUuid(user.providerUserId)) return user.providerUserId;
+  if (isValidUuid(context.auth?.tokenId)) return context.auth.tokenId;
+  if (isValidUuid(context.auth?.sessionId)) return context.auth.sessionId;
+  return null;
+}
 
 export const GET = withApiHandler(async (request, context) => {
   const tenantId = context.auth?.user.tenantId;
@@ -19,6 +33,7 @@ export const GET = withApiHandler(async (request, context) => {
 
   // Seeding default templates if database is fresh
   if (!docs || docs.length === 0) {
+    const userUuid = resolveAuthUserUuid(context);
     const seeds = [
       {
         tenant_id: tenantId,
@@ -27,7 +42,7 @@ export const GET = withApiHandler(async (request, context) => {
         type: 'Policy',
         category: 'Security',
         version: 1,
-        created_by: context.auth!.user.id
+        created_by: userUuid
       },
       {
         tenant_id: tenantId,
@@ -36,7 +51,7 @@ export const GET = withApiHandler(async (request, context) => {
         type: 'SOP',
         category: 'Tech',
         version: 1,
-        created_by: context.auth!.user.id
+        created_by: userUuid
       },
       {
         tenant_id: tenantId,
@@ -45,7 +60,7 @@ export const GET = withApiHandler(async (request, context) => {
         type: 'FAQ',
         category: 'HR',
         version: 1,
-        created_by: context.auth!.user.id
+        created_by: userUuid
       },
       {
         tenant_id: tenantId,
@@ -54,7 +69,7 @@ export const GET = withApiHandler(async (request, context) => {
         type: 'Announcement',
         category: 'Operations',
         version: 1,
-        created_by: context.auth!.user.id
+        created_by: userUuid
       }
     ];
 
@@ -82,38 +97,46 @@ export const POST = withApiHandler(async (request, context) => {
     throw new BadRequestError('Missing title, content, or type');
   }
 
+  const userUuid = resolveAuthUserUuid(context);
   const supabase = getAdminRouteSupabase();
 
   const { data, error } = await supabase
     .from('knowledge_documents')
     .insert({
       tenant_id: tenantId,
-      title,
-      content,
+      title: title.trim(),
+      content: content.trim(),
       type,
       category: category || 'General',
       version: 1,
-      created_by: context.auth!.user.id
+      created_by: userUuid
     })
     .select('*')
     .single();
 
-  if (error) throw error;
+  if (error) {
+    logger.error('Failed to insert knowledge document', { error });
+    throw new BadRequestError(error.message || 'Failed to publish knowledge document');
+  }
 
   // Insert initial version audit log
-  await supabase
-    .from('knowledge_document_versions')
-    .insert({
-      tenant_id: tenantId,
-      document_id: data.id,
-      version: 1,
-      title: data.title,
-      content: data.content,
-      changed_by: context.auth!.user.id,
-      change_summary: 'Initial document publication'
-    });
+  try {
+    await supabase
+      .from('knowledge_document_versions')
+      .insert({
+        tenant_id: tenantId,
+        document_id: data.id,
+        version: 1,
+        title: data.title,
+        content: data.content,
+        changed_by: userUuid,
+        change_summary: 'Initial document publication'
+      });
+  } catch (verErr) {
+    console.warn('Initial document version log notice:', verErr);
+  }
 
-  return NextResponse.json({ success: true, data });
+  return NextResponse.json({ success: true, data }, { status: 201 });
 }, { requireAuth: true, roles: ['Employee'] });
 
 export const PUT = withApiHandler(async (request, context) => {
@@ -141,14 +164,15 @@ export const PUT = withApiHandler(async (request, context) => {
     throw new BadRequestError('Document not found');
   }
 
-  const nextVersion = currentDoc.version + 1;
+  const nextVersion = (currentDoc.version || 1) + 1;
+  const userUuid = resolveAuthUserUuid(context);
 
   // 2. Update document
   const { data, error } = await supabase
     .from('knowledge_documents')
     .update({
-      title,
-      content,
+      title: title.trim(),
+      content: content.trim(),
       category: category || 'General',
       version: nextVersion,
       updated_at: new Date().toISOString()
@@ -158,20 +182,59 @@ export const PUT = withApiHandler(async (request, context) => {
     .select('*')
     .single();
 
-  if (error) throw error;
+  if (error) {
+    logger.error('Failed to update knowledge document', { error });
+    throw new BadRequestError(error.message || 'Failed to update document');
+  }
 
   // 3. Log version history
-  await supabase
-    .from('knowledge_document_versions')
-    .insert({
-      tenant_id: tenantId,
-      document_id: docId,
-      version: nextVersion,
-      title,
-      content,
-      changed_by: context.auth!.user.id,
-      change_summary: changeSummary || `Updated to version ${nextVersion}`
-    });
+  try {
+    await supabase
+      .from('knowledge_document_versions')
+      .insert({
+        tenant_id: tenantId,
+        document_id: docId,
+        version: nextVersion,
+        title: data.title,
+        content: data.content,
+        changed_by: userUuid,
+        change_summary: changeSummary || `Updated to version ${nextVersion}`
+      });
+  } catch (verErr) {
+    console.warn('Document version log notice:', verErr);
+  }
 
   return NextResponse.json({ success: true, data });
+}, { requireAuth: true, roles: ['Employee'] });
+
+export const DELETE = withApiHandler(async (request, context) => {
+  const tenantId = context.auth?.user.tenantId;
+  if (!tenantId) throw new BadRequestError('Tenant context missing');
+
+  const { searchParams } = new URL(request.url);
+  const docId = searchParams.get('id') || searchParams.get('docId');
+
+  if (!docId) throw new BadRequestError('Document ID is required');
+
+  const supabase = getAdminRouteSupabase();
+
+  // Remove versions first
+  await supabase
+    .from('knowledge_document_versions')
+    .delete()
+    .eq('document_id', docId)
+    .eq('tenant_id', tenantId);
+
+  const { error } = await supabase
+    .from('knowledge_documents')
+    .delete()
+    .eq('id', docId)
+    .eq('tenant_id', tenantId);
+
+  if (error) {
+    logger.error('Failed to delete knowledge document', { error });
+    throw new BadRequestError(error.message || 'Failed to delete document');
+  }
+
+  return NextResponse.json({ success: true, message: 'Document deleted successfully' });
 }, { requireAuth: true, roles: ['Employee'] });

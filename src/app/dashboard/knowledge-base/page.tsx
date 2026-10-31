@@ -21,7 +21,7 @@ import {
 import { 
   BookOpen, Search, Plus, Sparkles, FileText, 
   HelpCircle, MessageSquare, History, Edit, 
-  ShieldAlert, RefreshCw, FolderClosed, Eye 
+  ShieldAlert, RefreshCw, FolderClosed, Eye, Trash2
 } from 'lucide-react';
 
 type DocType = 'Policy' | 'Article' | 'FAQ' | 'Announcement' | 'SOP';
@@ -122,11 +122,12 @@ export default function KnowledgeBasePortal() {
         setContent('');
         fetchDocuments();
       } else {
-        toast.error('Failed to publish document.');
+        const errJson = await res.json().catch(() => ({}));
+        toast.error(errJson.error || errJson.message || 'Failed to publish document.');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      toast.error('Error publishing knowledge document.');
+      toast.error(err.message || 'Error publishing knowledge document.');
     } finally {
       setSubmitting(false);
     }
@@ -160,13 +161,34 @@ export default function KnowledgeBasePortal() {
         setIsViewOpen(false);
         fetchDocuments();
       } else {
-        toast.error('Failed to update document.');
+        const errJson = await res.json().catch(() => ({}));
+        toast.error(errJson.error || errJson.message || 'Failed to update document.');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      toast.error('Error saving document updates.');
+      toast.error(err.message || 'Error saving document updates.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleDeleteDocument = async (docId: string, docTitle: string) => {
+    try {
+      const token = localStorage.getItem('session_token');
+      const res = await fetch(`/api/knowledge-base?id=${encodeURIComponent(docId)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        toast.success(`Document "${docTitle}" deleted.`);
+        fetchDocuments();
+        setIsViewOpen(false);
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        toast.error(errJson.error || errJson.message || 'Failed to delete document.');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Error deleting document.');
     }
   };
 
@@ -526,6 +548,14 @@ export default function KnowledgeBasePortal() {
                     </>
                   ) : (
                     <>
+                      <Button 
+                        type="button" 
+                        variant="ghost" 
+                        onClick={() => handleDeleteDocument(selectedDoc.id, selectedDoc.title)}
+                        className="text-destructive hover:bg-destructive/10 font-bold text-xs flex items-center gap-1.5 mr-auto"
+                      >
+                        <Trash2 className="h-4 w-4" /> Delete
+                      </Button>
                       <Button type="button" variant="outline" onClick={() => setIsViewOpen(false)}>
                         Close
                       </Button>
