@@ -49,9 +49,29 @@ export default function PunchConsole({ employeeId, onPunchSuccess, todayRecord }
     return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
+  const resolveActiveEmployeeId = async (): Promise<number | null> => {
+    if (employeeId) return employeeId;
+    try {
+      const token = localStorage.getItem('session_token');
+      const meRes = await fetch('/api/auth/me', {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
+      if (meRes.ok) {
+        const meData = await meRes.json();
+        if (meData.user?.employeeRecordId) {
+          return Number(meData.user.employeeRecordId);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to self-resolve employee profile:', err);
+    }
+    return null;
+  };
+
   const handleClockIn = async () => {
-    if (!employeeId) {
-      toast.error('Employee profile not loaded');
+    const activeEmpId = await resolveActiveEmployeeId();
+    if (!activeEmpId) {
+      toast.error('Employee profile not loaded. Please refresh the page.');
       return;
     }
     setLoading(true);
@@ -60,7 +80,7 @@ export default function PunchConsole({ employeeId, onPunchSuccess, todayRecord }
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          employeeId,
+          employeeId: activeEmpId,
           date: time.toISOString().split('T')[0],
           timeIn: time.toISOString(),
           locationLatitude: gps?.lat || null,
@@ -84,8 +104,9 @@ export default function PunchConsole({ employeeId, onPunchSuccess, todayRecord }
   };
 
   const handleClockOut = async () => {
-    if (!employeeId) {
-      toast.error('Employee profile not loaded');
+    const activeEmpId = await resolveActiveEmployeeId();
+    if (!activeEmpId) {
+      toast.error('Employee profile not loaded. Please refresh the page.');
       return;
     }
     setLoading(true);
@@ -94,7 +115,7 @@ export default function PunchConsole({ employeeId, onPunchSuccess, todayRecord }
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          employeeId,
+          employeeId: activeEmpId,
           tagUid: null
         }),
       });

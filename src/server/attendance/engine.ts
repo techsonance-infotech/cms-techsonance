@@ -291,14 +291,14 @@ export async function calculateAttendance(
 
     // Otherwise mark as Absent (if policy auto-absence is active)
     return {
-      status: policy.auto_mark_absence ? 'absent' : 'missing_punch',
+      status: 'absent',
       totalHours: 0,
       productiveHours: 0,
       idleHours: 0,
       overtimeMinutes: 0,
       isLate: false,
       isEarlyExit: false,
-      exceptions: policy.auto_mark_absence ? [] : ['missing_punch'],
+      exceptions: ['missing_punch'],
     };
   }
 
@@ -366,10 +366,11 @@ export async function calculateAttendance(
   let idleHours = Number((breakDeduction / 60).toFixed(2));
   const productiveHours = Number((productiveMinutes / 60).toFixed(2));
 
-  // Determine Attendance Status
+  // Determine Attendance Status (Valid enum: 'present' | 'absent' | 'late' | 'half_day' | 'leave')
   let status = 'present';
   if (!roundedTimeOut) {
-    status = 'missing_punch';
+    status = isLate ? 'late' : 'present';
+    exceptions.push('missing_punch');
   } else if (productiveHours < policy.min_hours_half_day) {
     status = 'absent';
     exceptions.push('insufficient_hours');

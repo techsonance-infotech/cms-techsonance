@@ -107,7 +107,8 @@ export default function TimesheetOperationsPage() {
     }
   };
 
-  const isManagerOrAdmin = currentUser && ['super_admin', 'admin', 'hr_manager', 'finance', 'owner', 'manager', 'project_manager'].includes(currentUser.role);
+  const roleStr = String(currentUser?.role || '').toLowerCase();
+  const isManagerOrAdmin = currentUser && ['super_admin', 'superadmin', 'admin', 'hr_manager', 'finance', 'owner', 'manager', 'project_manager'].includes(roleStr);
 
   // Fetch 100% Dynamic Data from Backend API
   const loadTimesheetDataFromApi = async () => {
@@ -121,9 +122,15 @@ export default function TimesheetOperationsPage() {
         const data = await res.json();
         if (data.employeeRoster) {
           setRoster(data.employeeRoster);
-          if (data.employeeRoster.length > 0 && !selectedUserId) {
-            const selfEntry = data.employeeRoster.find((e: any) => e.id === currentUser?.id);
-            setSelectedUserId(selfEntry?.id || data.employeeRoster[0].id);
+          if (data.employeeRoster.length > 0) {
+            setSelectedUserId(prev => {
+              if (prev) return prev;
+              const selfEntry = data.employeeRoster.find((e: any) => 
+                (currentUser?.providerUserId && e.id === currentUser.providerUserId) ||
+                (currentUser?.id && (String(e.id) === String(currentUser.id) || e.employeeTableId === currentUser.id))
+              );
+              return selfEntry?.id || currentUser?.providerUserId || (currentUser?.id ? String(currentUser.id) : data.employeeRoster[0].id);
+            });
           }
         }
         if (data.summaryStats) {
@@ -165,12 +172,28 @@ export default function TimesheetOperationsPage() {
   }, []);
 
   useEffect(() => {
-    if (currentUser && !isManagerOrAdmin) {
-      setSelectedUserId(currentUser.id);
+    if (currentUser) {
+      setSelectedUserId(prev => {
+        if (prev) return prev;
+        return currentUser.providerUserId || (currentUser.id ? String(currentUser.id) : '');
+      });
     }
-  }, [currentUser, isManagerOrAdmin]);
+  }, [currentUser]);
 
-  const activeEmployee = roster.find(e => e.id === selectedUserId) || roster[0];
+  const effectiveRoster = roster.length > 0 ? roster : (currentUser ? [{
+    id: currentUser.providerUserId || (currentUser.id ? String(currentUser.id) : ''),
+    employeeTableId: currentUser.employeeRecordId || currentUser.id,
+    name: `${currentUser.firstName || 'My'} ${currentUser.lastName || 'Profile'}`.trim(),
+    email: currentUser.email || '',
+    department: currentUser.department || 'Engineering',
+    designation: currentUser.designation || 'Staff Member'
+  }] : []);
+
+  const activeEmployee = effectiveRoster.find(e => 
+    e.id === selectedUserId || 
+    (currentUser?.providerUserId && e.id === currentUser.providerUserId) ||
+    (currentUser?.id && String(e.id) === String(currentUser.id))
+  ) || effectiveRoster[0];
 
   // Submit Daily/Weekly Timesheet Entry
   const handleSubmitTimesheetEntry = async (e: React.FormEvent) => {
@@ -179,19 +202,28 @@ export default function TimesheetOperationsPage() {
       toast.error('Pay period is locked! Timesheet entries cannot be submitted.');
       return;
     }
-    if (!selectedUserId || !entryDate || !taskName.trim()) {
-      toast.error('Please specify an employee, date, and task description');
+
+    const effectiveUserId = selectedUserId || activeEmployee?.id || currentUser?.providerUserId || (currentUser?.id ? String(currentUser.id) : '');
+    if (!effectiveUserId) {
+      toast.error('Please specify an active employee for timesheet logging');
       return;
     }
+
+    if (!entryDate) {
+      toast.error('Please specify a valid timesheet date');
+      return;
+    }
+
+    const effectiveTaskName = taskName.trim() || `${activityCategory || 'Development'} - ${projectName || 'Work'}`;
 
     setSubmitting(true);
 
     try {
       const token = localStorage.getItem('session_token');
       const payload = {
-        userId: selectedUserId,
+        userId: effectiveUserId,
         projectName,
-        taskName: taskName.trim(),
+        taskName: effectiveTaskName,
         activityCategory,
         entryDate,
         billableHours: Number(billableHours),
@@ -475,21 +507,26 @@ export default function TimesheetOperationsPage() {
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Employee</label>
                       {isManagerOrAdmin ? (
-                        <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                          <SelectTrigger className="rounded-xl text-xs font-semibold h-10 border-slate-200 dark:border-zinc-800">
-                            <SelectValue placeholder="Select Employee" />
+                        <Select 
+                          value={selectedUserId || activeEmployee?.id || undefined} 
+                          onValueChange={setSelectedUserId}
+                        >
+                          <SelectTrigger className="w-full rounded-xl text-xs font-semibold h-10 border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs">
+                            <SelectValue placeholder="Select Employee">
+                              {activeEmployee ? `${activeEmployee.name} (${activeEmployee.department})` : undefined}
+                            </SelectValue>
                           </SelectTrigger>
-                          <SelectContent className="rounded-xl">
-                            {roster.map(e => (
+                          <SelectContent className="rounded-xl max-h-72">
+                            {effectiveRoster.map(e => (
                               <SelectItem key={e.id} value={e.id}>{e.name} ({e.department})</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                       ) : (
                         <Input
-                          value={activeEmployee?.name || currentUser?.firstName || 'My Profile'}
+                          value={activeEmployee?.name || (currentUser?.firstName ? `${currentUser.firstName} ${currentUser.lastName || ''}`.trim() : 'My Profile')}
                           disabled
-                          className="rounded-xl text-xs font-semibold h-10 border-slate-200 dark:border-zinc-800 bg-slate-100 dark:bg-zinc-900"
+                          className="w-full rounded-xl text-xs font-semibold h-10 border-slate-200 dark:border-zinc-800 bg-slate-100 dark:bg-zinc-900"
                         />
                       )}
                     </div>
@@ -500,7 +537,7 @@ export default function TimesheetOperationsPage() {
                         type="date"
                         value={entryDate}
                         onChange={e => setEntryDate(e.target.value)}
-                        className="rounded-xl text-xs font-semibold h-10 border-slate-200 dark:border-zinc-800"
+                        className="w-full rounded-xl text-xs font-semibold h-10 border-slate-200 dark:border-zinc-800"
                       />
                     </div>
                   </div>
@@ -509,10 +546,10 @@ export default function TimesheetOperationsPage() {
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Target Project</label>
                       <Select value={projectName} onValueChange={setProjectName}>
-                        <SelectTrigger className="rounded-xl text-xs font-semibold h-10 border-slate-200 dark:border-zinc-800">
-                          <SelectValue />
+                        <SelectTrigger className="w-full rounded-xl text-xs font-semibold h-10 border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs">
+                          <SelectValue placeholder="Select Project" />
                         </SelectTrigger>
-                        <SelectContent className="rounded-xl">
+                        <SelectContent className="rounded-xl max-h-72">
                           {projectsList.length > 0 ? (
                             projectsList.map((p: any) => (
                               <SelectItem key={p.id} value={p.name}>
@@ -535,10 +572,10 @@ export default function TimesheetOperationsPage() {
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Activity Category</label>
                       <Select value={activityCategory} onValueChange={setActivityCategory}>
-                        <SelectTrigger className="rounded-xl text-xs font-semibold h-10 border-slate-200 dark:border-zinc-800">
-                          <SelectValue />
+                        <SelectTrigger className="w-full rounded-xl text-xs font-semibold h-10 border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs">
+                          <SelectValue placeholder="Select Category" />
                         </SelectTrigger>
-                        <SelectContent className="rounded-xl">
+                        <SelectContent className="rounded-xl max-h-72">
                           <SelectItem value="Development">Software Development</SelectItem>
                           <SelectItem value="Code Review">Code Review & QA</SelectItem>
                           <SelectItem value="Client Meeting">Client Meeting & Sprint Review</SelectItem>
@@ -550,7 +587,9 @@ export default function TimesheetOperationsPage() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Task Description / Ticket Details</label>
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Task Description / Ticket Details <span className="text-slate-400 font-normal">(Optional — defaults to Activity Category)</span>
+                    </label>
                     <Input
                       value={taskName}
                       onChange={e => setTaskName(e.target.value)}
@@ -648,59 +687,81 @@ export default function TimesheetOperationsPage() {
                     })()}
                   </div>
 
-                  <div className="grid grid-cols-7 gap-1.5 text-center text-xs font-bold">
-                    {(() => {
-                      const today = new Date();
-                      const day = today.getDay();
-                      const diff = today.getDate() - day + (day === 0 ? -6 : 1);
-                      const monday = new Date(today.setDate(diff));
-                      const weekDates = Array.from({ length: 7 }).map((_, i) => {
-                        const d = new Date(monday);
-                        d.setDate(monday.getDate() + i);
-                        return d.toISOString().split('T')[0];
-                      });
+                  {(() => {
+                    const today = new Date();
+                    const day = today.getDay();
+                    const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+                    const monday = new Date(today.setDate(diff));
+                    const weekDates = Array.from({ length: 7 }).map((_, i) => {
+                      const d = new Date(monday);
+                      d.setDate(monday.getDate() + i);
+                      return d.toISOString().split('T')[0];
+                    });
 
-                      return weekDates.map((dateStr, idx) => {
-                        const dayEntries = timesheetEntries.filter(
-                          (t) => t.entryDate === dateStr && (!currentUser || String(t.userId) === String(currentUser.id))
-                        );
-                        const hrs = dayEntries.reduce((sum, entry) => sum + (entry.totalHours || 0), 0);
+                    const weekEntries = timesheetEntries.filter(t =>
+                      weekDates.includes(t.entryDate) && (
+                        !selectedUserId ||
+                        t.userId === selectedUserId ||
+                        (currentUser?.providerUserId && t.userId === currentUser.providerUserId) ||
+                        (currentUser?.id && String(t.userId) === String(currentUser.id))
+                      )
+                    );
 
-                        return (
-                          <div
-                            key={idx}
-                            className={`p-3 rounded-2xl border flex flex-col justify-between items-center ${
-                              hrs > 8
-                                ? 'bg-rose-500/10 border-rose-500/40 text-rose-600'
-                                : hrs > 0
-                                ? 'bg-emerald-500/5 border-emerald-500/30 text-emerald-600'
-                                : 'bg-slate-50 dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 text-slate-400'
-                            }`}
-                          >
-                            <div className="font-mono font-black text-sm">{hrs > 0 ? `${hrs}h` : '--'}</div>
-                            <div className="text-[9px] font-semibold mt-1">
-                              {hrs > 8 ? `OT ${(hrs - 8).toFixed(1)}h` : (hrs > 0 ? 'Standard' : 'Off')}
-                            </div>
+                    const weekTotalLogged = weekEntries.reduce((sum, e) => sum + (e.totalHours || 0), 0);
+                    const weekBillable = weekEntries.reduce((sum, e) => sum + (e.billableHours || 0), 0);
+                    const weekBillableAmount = weekEntries.reduce((sum, e) => sum + (e.billableAmount || 0), 0);
+                    const weekOvertime = weekEntries.reduce((sum, e) => sum + (e.overtimeHours || 0), 0);
+
+                    return (
+                      <>
+                        <div className="grid grid-cols-7 gap-1.5 text-center text-xs font-bold">
+                          {weekDates.map((dateStr, idx) => {
+                            const dayEntries = weekEntries.filter(t => t.entryDate === dateStr);
+                            const hrs = dayEntries.reduce((sum, entry) => sum + (entry.totalHours || 0), 0);
+
+                            return (
+                              <div
+                                key={idx}
+                                className={`p-3 rounded-2xl border flex flex-col justify-between items-center ${
+                                  hrs > 8
+                                    ? 'bg-rose-500/10 border-rose-500/40 text-rose-600'
+                                    : hrs > 0
+                                    ? 'bg-emerald-500/5 border-emerald-500/30 text-emerald-600'
+                                    : 'bg-slate-50 dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 text-slate-400'
+                                }`}
+                              >
+                                <div className="font-mono font-black text-sm">{hrs > 0 ? `${hrs}h` : '--'}</div>
+                                <div className="text-[9px] font-semibold mt-1">
+                                  {hrs > 8 ? `OT ${(hrs - 8).toFixed(1)}h` : (hrs > 0 ? 'Standard' : 'Off')}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        <div className="p-4 rounded-2xl bg-slate-50 dark:bg-zinc-900 border space-y-2 text-xs font-semibold">
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">Weekly Total Logged:</span>
+                            <span className="font-mono font-black text-slate-900 dark:text-white">
+                              {weekTotalLogged.toFixed(1)} Hours
+                            </span>
                           </div>
-                        );
-                      });
-                    })()}
-                  </div>
-
-                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-zinc-900 border space-y-2 text-xs font-semibold">
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Weekly Total Logged:</span>
-                      <span className="font-mono font-black text-slate-900 dark:text-white">40.0 Hours</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Weekly Billable Hours:</span>
-                      <span className="font-mono font-black text-emerald-500">32.0 Hours ($2,720.00)</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Weekly Overtime (1.5x):</span>
-                      <span className="font-mono font-black text-rose-500">0.5 Hours</span>
-                    </div>
-                  </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">Weekly Billable Hours:</span>
+                            <span className="font-mono font-black text-emerald-500">
+                              {weekBillable.toFixed(1)} Hours (${weekBillableAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">Weekly Overtime (1.5x):</span>
+                            <span className="font-mono font-black text-rose-500">
+                              {weekOvertime.toFixed(1)} Hours
+                            </span>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </CardContent>
               </Card>
             </div>

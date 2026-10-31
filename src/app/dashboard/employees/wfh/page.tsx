@@ -128,11 +128,37 @@ export default function WfhManagementPage() {
 
       if (res.ok) {
         const data = await res.json();
-        if (data.employeeRoster) {
+        if (data.employeeRoster && data.employeeRoster.length > 0) {
           setRoster(data.employeeRoster);
-          if (data.employeeRoster.length > 0 && !selectedUserId) {
+          if (!selectedUserId) {
             setSelectedUserId(data.employeeRoster[0].id);
           }
+        } else {
+          try {
+            const empRes = await fetch('/api/employees?limit=100', {
+              headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+            });
+            if (empRes.ok) {
+              const empJson = await empRes.json();
+              const list = Array.isArray(empJson) ? empJson : empJson?.data ?? [];
+              const mapped = list.map((e: any) => ({
+                id: e.userId || String(e.id),
+                employeeTableId: e.id,
+                name: `${e.firstName || ''} ${e.lastName || ''}`.trim() || e.employeeId || `Employee #${e.id}`,
+                email: e.email || '',
+                department: e.department || 'Engineering',
+                branch: 'Primary Office',
+                designation: e.designation || 'Staff',
+                workMode: 'Hybrid (3 Office / 2 WFH)',
+                currentLocation: 'Office / Remote',
+                wfhStatus: 'Working Remotely'
+              }));
+              if (mapped.length > 0) {
+                setRoster(mapped);
+                if (!selectedUserId) setSelectedUserId(mapped[0].id);
+              }
+            }
+          } catch {}
         }
         if (data.summaryStats) setSummaryStats(data.summaryStats);
         if (data.wfhRequests) setWfhRequests(data.wfhRequests);

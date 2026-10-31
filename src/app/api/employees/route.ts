@@ -122,14 +122,16 @@ export const GET = withApiHandler(
     if (userId) {
       const parsedUserId = Number(userId);
       if (isNaN(parsedUserId)) {
-        throw new BadRequestError('Invalid userId parameter - must be a valid numeric ID');
+        // User passed an auth UUID directly (e.g. from user.id)
+        query = query.eq('user_id', userId);
+      } else {
+        const authUserId = await resolveAuthUserIdFromLegacyUserId(
+          accessToken,
+          parsedUserId,
+          tenantId
+        );
+        query = query.eq('user_id', authUserId);
       }
-      const authUserId = await resolveAuthUserIdFromLegacyUserId(
-        accessToken,
-        parsedUserId,
-        tenantId
-      );
-      query = query.eq('user_id', authUserId);
     }
     if (department) {
       query = query.ilike('department', `%${department}%`);

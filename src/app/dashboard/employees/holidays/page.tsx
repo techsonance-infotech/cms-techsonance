@@ -16,7 +16,7 @@ import {
   Calendar, Globe, Landmark, Building2, Layers, GitMerge, Sparkles,
   Plus, Download, Upload, Bell, BarChart3, TrendingUp, CheckCircle2,
   RefreshCw, SendHorizontal, AlertCircle, Filter, Check, Search, Award,
-  Gift, Sun, Plane, Clock, Inbox
+  Gift, Sun, Plane, Clock, Inbox, Trash2
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -151,6 +151,9 @@ export default function HolidayManagementPage() {
       if (!res.ok) throw new Error(resData.error || 'Failed to add holiday');
 
       toast.success(resData.message || 'Holiday added to enterprise master calendar!');
+      if (resData.holiday) {
+        setHolidays(prev => [resData.holiday, ...prev.filter(h => h.id !== resData.holiday.id)]);
+      }
       await loadHolidayDataFromApi();
       setTitle('');
       setDescription('');
@@ -159,6 +162,28 @@ export default function HolidayManagementPage() {
       toast.error(err.message || 'Error adding holiday');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // Delete Holiday Entry
+  const handleDeleteHoliday = async (id: string, holidayTitle: string) => {
+    try {
+      const token = localStorage.getItem('session_token');
+      const res = await fetch(`/api/holidays/management?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to delete holiday');
+      }
+
+      toast.success(`Holiday "${holidayTitle}" removed`);
+      setHolidays(prev => prev.filter(h => h.id !== id));
+      await loadHolidayDataFromApi();
+    } catch (err: any) {
+      toast.error(err.message || 'Error deleting holiday');
     }
   };
 
@@ -184,10 +209,11 @@ export default function HolidayManagementPage() {
       });
 
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Bulk import failed');
       toast.success(data.message || 'Bulk holiday import completed!');
       await loadHolidayDataFromApi();
-    } catch (err) {
-      toast.error('Bulk import failed');
+    } catch (err: any) {
+      toast.error(err.message || 'Bulk import failed');
     } finally {
       setImporting(false);
     }
@@ -218,8 +244,8 @@ export default function HolidayManagementPage() {
 
   const filteredHolidays = holidays.filter(h => {
     const matchesType = typeFilter === 'all' || h.holidayType === typeFilter;
-    const matchesSearch = h.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          h.scopeTarget.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = (h.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          (h.scopeTarget || '').toLowerCase().includes(searchQuery.toLowerCase());
     return matchesType && matchesSearch;
   });
 
@@ -470,6 +496,15 @@ export default function HolidayManagementPage() {
                         onChange={e => setSearchQuery(e.target.value)}
                         className="w-40 h-9 text-xs rounded-xl"
                       />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={loadHolidayDataFromApi}
+                        title="Refresh holiday schedule"
+                        className="h-9 w-9 p-0 rounded-xl"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
                   </div>
                 </CardHeader>
@@ -484,6 +519,7 @@ export default function HolidayManagementPage() {
                           <th className="p-4">Target Scope</th>
                           <th className="p-4">Type</th>
                           <th className="p-4">Impact</th>
+                          <th className="p-4 text-right pr-6">Action</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-zinc-850">
@@ -522,6 +558,18 @@ export default function HolidayManagementPage() {
                               }`}>
                                 {h.impactLevel} Impact
                               </Badge>
+                            </td>
+
+                            <td className="p-4 text-right pr-6">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteHoliday(h.id, h.title)}
+                                className="h-8 w-8 p-0 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-lg"
+                                title={`Delete ${h.title}`}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
                             </td>
                           </tr>
                         ))}

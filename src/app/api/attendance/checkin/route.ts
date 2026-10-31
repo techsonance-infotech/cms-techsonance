@@ -144,11 +144,14 @@ export const POST = withApiHandler(async (request, context) => {
 
   // ROUTE TO APPROVAL QUEUE IF WEEKEND OR ANOMALY DETECTED
   if (isWeekend || aiResult.isAnomaly) {
+    const targetTimeIn = payload.timeIn || nowDate.toISOString();
+    const targetTimeOut = payload.timeOut || null;
+
     const { data: requestRecord, error: requestError } = await supabase.from('attendance_requests').insert({
       employee_id: resolved.employeeId,
-      date: today,
-      time_in: nowDate.toISOString(),
-      time_out: null,
+      date: payload.date || today,
+      time_in: targetTimeIn,
+      time_out: targetTimeOut,
       duration: null,
       status: 'pending',
       check_in_method: resolved.checkInMethod,
@@ -165,8 +168,9 @@ export const POST = withApiHandler(async (request, context) => {
         aiDetails: aiResult.details,
         clientIp,
         userAgent,
-        requested_time_in: nowDate.toISOString(),
-        reason_type: isWeekend ? 'regularization' : 'dispute',
+        requested_time_in: targetTimeIn,
+        requested_time_out: targetTimeOut,
+        reason_type: payload.metadata?.reasonType || (isWeekend ? 'regularization' : 'dispute'),
         gps_latitude: payload.locationLatitude ?? null,
         gps_longitude: payload.locationLongitude ?? null,
         ai_fraud_check: {

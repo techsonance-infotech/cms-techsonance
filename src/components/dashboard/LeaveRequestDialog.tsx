@@ -439,7 +439,7 @@ export function LeaveRequestDialog({ open, onOpenChange, employeeData, userRole,
         method: 'POST',
         headers,
         body: JSON.stringify({
-          employeeId: employeeData.id,
+          employeeId: employeeData?.id && Number(employeeData.id) > 0 ? Number(employeeData.id) : undefined,
           leaveType: values.type,
           startDate: values.from,
           endDate: values.to,
@@ -457,8 +457,15 @@ export function LeaveRequestDialog({ open, onOpenChange, employeeData, userRole,
         handleClear();
         toast.success('Leave request submitted successfully');
       } else {
-        const error = await response.json();
-        toast.error(error.error || 'Failed to submit leave request');
+        const error = await response.json().catch(() => ({}));
+        let errorMsg = error.error || error.message || 'Failed to submit leave request';
+        if (Array.isArray(error.errors) && error.errors.length > 0) {
+          const details = error.errors
+            .map((e: any) => `${e.path?.join('.') || 'field'}: ${e.message}`)
+            .join('; ');
+          errorMsg = `${errorMsg}: ${details}`;
+        }
+        toast.error(errorMsg);
       }
     } catch {
       toast.error('Failed to submit leave request');

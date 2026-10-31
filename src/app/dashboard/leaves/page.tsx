@@ -153,43 +153,61 @@ export default function LeavesPage() {
     }
 
     const data = await response.json();
-    setUser(data?.user ?? data?.data ?? null);
+    const currentUser = data?.user ?? data?.data ?? null;
+    setUser(currentUser);
+    if (currentUser?.employeeRecordId) {
+      setEmployeeData((prev) => prev ?? {
+        id: currentUser.employeeRecordId,
+        userId: currentUser.id,
+        employeeId: currentUser.employeeId ?? null,
+        department: currentUser.department ?? null,
+        designation: currentUser.designation ?? null,
+        dateOfJoining: currentUser.dateOfJoining ?? null,
+        status: currentUser.status ?? null,
+        firstName: currentUser.firstName ?? null,
+        lastName: currentUser.lastName ?? null,
+        avatarUrl: currentUser.avatarUrl ?? null,
+      });
+    }
   };
 
   const fetchEmployeeData = async () => {
     const token = localStorage.getItem('session_token');
-    if (!token || !user) return;
+    const u = user as any;
+    if (!token || !u) return;
 
-    const response = await fetch(`/api/employees?userId=${user.id}&limit=1`, {
+    const queryParam = u.employeeRecordId ? `id=${u.employeeRecordId}` : `userId=${u.id}&limit=1`;
+    const response = await fetch(`/api/employees?${queryParam}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
 
     if (!response.ok) {
-      toast.error('Unable to load employee profile');
+      // If employee fetch fails, do not wipe out seed from currentUser
       return;
     }
 
     const json = await response.json();
-    const emps = Array.isArray(json) ? json : json?.data ?? [];
-    const currentEmployee = emps[0];
+    const currentEmployee = Array.isArray(json)
+      ? json[0]
+      : (json?.data ? (Array.isArray(json.data) ? json.data[0] : json.data) : json);
 
-    if (currentEmployee) {
+    if (currentEmployee && currentEmployee.id) {
       setEmployeeData({
         id: currentEmployee.id,
-        userId: currentEmployee.userId ?? null,
+        userId: currentEmployee.userId ?? u.id,
         employeeId: currentEmployee.employeeId ?? null,
-        department: currentEmployee.department ?? null,
-        designation: currentEmployee.designation ?? null,
-        dateOfJoining: currentEmployee.dateOfJoining ?? null,
+        department: currentEmployee.department ?? u.department ?? null,
+        designation: currentEmployee.designation ?? u.designation ?? null,
+        dateOfJoining: currentEmployee.dateOfJoining ?? u.dateOfJoining ?? null,
         status: currentEmployee.status ?? null,
-        firstName: user.firstName ?? null,
-        lastName: user.lastName ?? null,
-        avatarUrl: user.avatarUrl ?? null,
+        firstName: u.firstName ?? null,
+        lastName: u.lastName ?? null,
+        avatarUrl: u.avatarUrl ?? null,
       });
     }
 
     // Fetch all employees and users for admin mapping
-    if (hasFullAccess(user.role as UserRole)) {
+    if (u && hasFullAccess(u.role as UserRole)) {
       const empRes = await fetch('/api/employees?limit=1000', { headers: { Authorization: `Bearer ${token}` } });
       const usrRes = await fetch('/api/users?limit=1000', { headers: { Authorization: `Bearer ${token}` } });
       if (empRes.ok) {
@@ -297,13 +315,16 @@ export default function LeavesPage() {
         body: JSON.stringify({ status })
       });
 
-      if (!res.ok) throw new Error('Update failed');
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || error.message || 'Update failed');
+      }
       toast.success(`Leave request ${isApproval ? 'approved' : 'rejected'}`);
       fetchAllLeaveRequests();
       setApprovingLeave(null);
       setRejectingLeave(null);
-    } catch {
-      toast.error('Failed to update leave request');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update leave request');
     }
   };
 
@@ -315,12 +336,15 @@ export default function LeavesPage() {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      if (!res.ok) throw new Error('Deletion failed');
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || error.message || 'Deletion failed');
+      }
       toast.success('Leave request deleted');
       fetchAllLeaveRequests();
       setDeletingLeave(null);
-    } catch {
-      toast.error('Failed to delete leave request');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete leave request');
     }
   };
 
@@ -703,7 +727,20 @@ export default function LeavesPage() {
       <LeaveRequestDialog
         open={showDialog}
         onOpenChange={setShowDialog}
-        employeeData={employeeData ?? { id: 0 }}
+        employeeData={
+          employeeData ?? ((user as any)?.employeeRecordId ? {
+            id: (user as any).employeeRecordId,
+            userId: user!.id,
+            employeeId: (user as any).employeeId ?? null,
+            department: (user as any).department ?? null,
+            designation: (user as any).designation ?? null,
+            dateOfJoining: (user as any).dateOfJoining ?? null,
+            status: (user as any).status ?? null,
+            firstName: user!.firstName ?? null,
+            lastName: user!.lastName ?? null,
+            avatarUrl: user!.avatarUrl ?? null,
+          } : { id: 0 })
+        }
         userRole={user?.role ?? 'Employee'}
         onSuccess={() => {
           fetchLeaveRequests();

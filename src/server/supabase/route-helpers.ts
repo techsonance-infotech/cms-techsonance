@@ -156,6 +156,8 @@ export function normalizeSupabaseEmployeeRecord(
   return {
     id: Number(row.id),
     userId: authUserId ? (legacyUserIdMap.get(authUserId) ?? null) : null,
+    authUserId: authUserId,
+    user_id: authUserId,
     firstName: profile?.first_name ?? getField('first_name', 'firstName', ''),
     lastName: profile?.last_name ?? getField('last_name', 'lastName', ''),
     email: profile?.email ?? getField('email', 'email', ''),

@@ -16,12 +16,13 @@ export const GET = withApiHandler(async (request, context) => {
   // 1. Relational Query: Active employee roster joined with public.users
   let employees: any[] = [];
   try {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('employees')
-      .select('id, user_id, employee_id, department, branch, designation, status')
-      .eq('tenant_id', tenantId)
-      .eq('status', 'active');
-    if (data) employees = data;
+      .select('id, user_id, employee_id, department, designation, status')
+      .eq('tenant_id', tenantId);
+    if (!error && data) {
+      employees = data.filter((e: any) => !e.status || e.status.toLowerCase() === 'active');
+    }
   } catch (err) {
     console.warn('Employees query info:', err);
   }
@@ -41,19 +42,35 @@ export const GET = withApiHandler(async (request, context) => {
 
   const employeeRoster = employees.map((e: any) => {
     const u = userMap.get(e.user_id) || {};
+    const fullName = `${u.first_name || ''} ${u.last_name || ''}`.trim();
     return {
-      id: e.user_id || e.id,
+      id: e.user_id || String(e.id),
       employeeTableId: e.id,
-      name: `${u.first_name || 'Employee'} ${u.last_name || ''}`.trim(),
+      name: fullName || e.employee_id || `Employee #${e.id}`,
       email: u.email || '',
       department: e.department || 'Engineering',
-      branch: e.branch || 'HQ - New York',
-      designation: e.designation || 'Software Engineer',
+      branch: 'Primary Office',
+      designation: e.designation || 'Staff Member',
       workMode: 'Hybrid (3 Office / 2 WFH)',
-      currentLocation: 'San Francisco, CA (Verified IP)',
+      currentLocation: 'Office / Remote',
       wfhStatus: 'Working Remotely'
     };
   });
+
+  if (employeeRoster.length === 0 || !employeeRoster.some(e => e.id === user.id || e.id === user.providerUserId)) {
+    employeeRoster.unshift({
+      id: user.providerUserId || user.id,
+      employeeTableId: (user as any).employeeRecordId || 1,
+      name: `${user.firstName || 'User'} ${user.lastName || ''}`.trim(),
+      email: user.email || '',
+      department: (user as any).department || 'Engineering',
+      branch: 'Primary Office',
+      designation: (user as any).designation || user.role || 'Staff Member',
+      workMode: 'Hybrid (3 Office / 2 WFH)',
+      currentLocation: 'Office / Remote',
+      wfhStatus: 'Working Remotely'
+    });
+  }
 
   // 2. Query WFH Requests from DB `wfh_requests` table
   let dbRequests: any[] = [];

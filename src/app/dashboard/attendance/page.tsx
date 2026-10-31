@@ -396,23 +396,30 @@ export default function AttendancePage() {
         const meData = await meResponse.json();
         setCurrentUser(meData.user);
 
-        // Get employee record for all users (to support personal attendance/leave views)
+        // Immediate direct assignment if employeeRecordId is already attached by /api/auth/me
+        if (meData.user?.employeeRecordId) {
+          setEmployeeId(Number(meData.user.employeeRecordId));
+          setEmployeeData(meData.user);
+        }
+
+        // Also query employee record for details
         {
           const employeeResponse = await fetch(`/api/employees?userId=${meData.user.id}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
 
           if (employeeResponse.ok) {
-            const employees = await employeeResponse.json();
-            if (employees && employees.length > 0) {
-              setEmployeeId(employees[0].id);
+            const employeesRes = await employeeResponse.json();
+            const empList = Array.isArray(employeesRes) ? employeesRes : (employeesRes?.data || []);
+            if (empList && empList.length > 0) {
+              setEmployeeId(Number(empList[0].id));
               setEmployeeData({
-                ...employees[0],
+                ...empList[0],
                 firstName: meData.user.firstName,
                 lastName: meData.user.lastName,
                 avatarUrl: meData.user.avatarUrl
               });
-            } else if (!hasFullAccess(meData.user.role as UserRole)) {
+            } else if (!meData.user?.employeeRecordId && !hasFullAccess(meData.user.role as UserRole)) {
               toast.error('Employee record not found. Please contact admin.');
             }
           }
@@ -2029,6 +2036,9 @@ export default function AttendancePage() {
               const profile = users.find(u => u.id === e.userId);
               return {
                 id: Number(e.id),
+                userId: e.userId,
+                authUserId: e.authUserId || e.user_id || (profile as any)?.id,
+                user_id: e.authUserId || e.user_id || (profile as any)?.id,
                 employeeId: e.employeeId,
                 department: e.department,
                 firstName: profile?.firstName || '',
