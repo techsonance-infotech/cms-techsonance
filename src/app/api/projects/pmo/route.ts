@@ -7,14 +7,21 @@ export const GET = withApiHandler(async (request, context) => {
   const searchParams = new URL(request.url).searchParams;
   const projectId = searchParams.get('projectId');
 
-  const accessToken = context.auth?.accessToken;
-  const tenantId = context.auth?.user.tenantId;
-  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
-
   const supabase = getAdminRouteSupabase();
 
+  let tenantId = context.auth?.user?.tenantId || (context.auth?.user as any)?.tenant_id;
+  if (!tenantId && context.auth?.user?.providerUserId) {
+    const { data: u } = await supabase.from('users').select('tenant_id').eq('id', context.auth.user.providerUserId).maybeSingle();
+    tenantId = u?.tenant_id;
+  }
+  if (!tenantId && context.auth?.user?.email) {
+    const { data: u } = await supabase.from('users').select('tenant_id').eq('email', context.auth.user.email).maybeSingle();
+    tenantId = u?.tenant_id;
+  }
+  if (!tenantId) throw new BadRequestError('Tenant ID missing from user session');
+
   // 1. Fetch Projects
-  let projectsQuery = supabase.from('projects').select('*').eq('tenant_id', tenantId).eq('is_active', true);
+  let projectsQuery = supabase.from('projects').select('*').eq('tenant_id', tenantId);
   if (projectId) {
     projectsQuery = projectsQuery.eq('id', Number(projectId));
   }
@@ -143,4 +150,4 @@ export const GET = withApiHandler(async (request, context) => {
     data: pmoData,
     message: 'PMO and Executive metrics computed successfully',
   });
-}, { requireAuth: true, roles: ['Employee'] });
+}, { requireAuth: true });

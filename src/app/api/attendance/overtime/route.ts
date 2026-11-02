@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { withApiHandler } from '@/server/http/handler';
 import { BadRequestError, NotFoundError } from '@/server/http/errors';
-import { getAdminRouteSupabase, getCurrentSupabaseActor } from '@/server/supabase/route-helpers';
+import { getAdminRouteSupabase, getCurrentSupabaseActor, resolveActorUuid } from '@/server/supabase/route-helpers';
 import { logAuditAction, publishDomainEvent } from '@/server/events/dispatcher';
 
 export const GET = withApiHandler(async (request, context) => {
@@ -100,12 +100,14 @@ export const PATCH = withApiHandler(async (request, context) => {
   const status = action === 'approve' ? 'approved' : 'rejected';
   const approvedOvertimeMinutes = action === 'approve' && approvedHours ? Math.round(approvedHours * 60) : overtimeRequest.calculated_overtime_minutes;
 
+  const approverUuid = actor.authUserId || (await resolveActorUuid(context, supabase)) || null;
+
   const { data: updated, error } = await supabase
     .from('attendance_overtime_requests')
     .update({
       status,
       approved_overtime_minutes: action === 'approve' ? approvedOvertimeMinutes : 0,
-      approver_id: actor.legacyUserId,
+      approver_id: approverUuid,
       approved_at: new Date().toISOString(),
     })
     .eq('id', id)
@@ -128,7 +130,7 @@ export const PATCH = withApiHandler(async (request, context) => {
   const userAgent = request.headers.get('user-agent');
   await logAuditAction(supabase, {
     tenantId,
-    actorId: actor.legacyUserId ? String(actor.legacyUserId) : null,
+    actorId: approverUuid || (actor.legacyUserId ? String(actor.legacyUserId) : null),
     actionType: status === 'approved' ? 'overtime_approve' : 'regularize_reject',
     clientIp,
     userAgent,

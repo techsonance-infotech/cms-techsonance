@@ -3,6 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Clock, Loader2, LogIn, LogOut, CheckCircle2 } from 'lucide-react';
+import { getStoredSessionToken } from '@/lib/client-session';
 
 interface PunchConsoleProps {
   employeeId: number | null;
@@ -52,9 +53,10 @@ export default function PunchConsole({ employeeId, onPunchSuccess, todayRecord }
   const resolveActiveEmployeeId = async (): Promise<number | null> => {
     if (employeeId) return employeeId;
     try {
-      const token = localStorage.getItem('session_token');
+      const token = getStoredSessionToken();
       const meRes = await fetch('/api/auth/me', {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        credentials: 'include'
       });
       if (meRes.ok) {
         const meData = await meRes.json();
@@ -76,16 +78,22 @@ export default function PunchConsole({ employeeId, onPunchSuccess, todayRecord }
     }
     setLoading(true);
     try {
+      const token = getStoredSessionToken();
       const response = await fetch('/api/attendance/checkin', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        credentials: 'include',
         body: JSON.stringify({
           employeeId: activeEmpId,
           date: time.toISOString().split('T')[0],
           timeIn: time.toISOString(),
           locationLatitude: gps?.lat || null,
           locationLongitude: gps?.lng || null,
-          notes: 'Clocked In via Web Dashboard Console'
+          notes: 'Clocked In via Web Dashboard Console',
+          idempotencyKey: crypto.randomUUID()
         }),
       });
 
@@ -111,9 +119,14 @@ export default function PunchConsole({ employeeId, onPunchSuccess, todayRecord }
     }
     setLoading(true);
     try {
+      const token = getStoredSessionToken();
       const response = await fetch('/api/attendance/checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        credentials: 'include',
         body: JSON.stringify({
           employeeId: activeEmpId,
           tagUid: null

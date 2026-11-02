@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { withApiHandler } from '@/server/http/handler';
 import { BadRequestError, NotFoundError, UnprocessableEntityError } from '@/server/http/errors';
 import { apiSuccess } from '@/server/http/response';
@@ -194,7 +195,7 @@ export const POST = withApiHandler(async (request, context) => {
     reader_id: payload.readerId ?? null,
     location: payload.location ?? null,
     tag_uid: payload.tagUid ?? null,
-    idempotency_key: payload.idempotencyKey ?? null,
+    idempotency_key: payload.idempotencyKey || crypto.randomUUID(),
     synced_at: null,
     metadata: payload.metadata ?? null,
     tenant_id: tenantId,

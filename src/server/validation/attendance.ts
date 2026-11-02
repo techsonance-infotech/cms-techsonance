@@ -8,6 +8,9 @@ export const checkInSchema = z.object({
   idempotencyKey: z.string().trim().max(255).optional().nullable(),
   locationLatitude: z.coerce.number().optional().nullable(),
   locationLongitude: z.coerce.number().optional().nullable(),
+  date: z.string().trim().optional().nullable(),
+  timeIn: z.string().trim().optional().nullable(),
+  timeOut: z.string().trim().optional().nullable(),
   metadata: z.record(z.string(), z.unknown()).optional().nullable(),
 }).refine((value) => value.tagUid || value.employeeId, {
   message: 'Either tagUid or employeeId must be provided',

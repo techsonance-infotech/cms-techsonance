@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { withApiHandler } from '@/server/http/handler';
 import { BadRequestError, ConflictError, NotFoundError } from '@/server/http/errors';
 import { checkInSchema } from '@/server/validation/attendance';
@@ -41,7 +42,7 @@ export const POST = withApiHandler(async (request, context) => {
       .select('*')
       .eq('idempotency_key', payload.idempotencyKey)
       .eq('tenant_id', tenantId)
-      .single();
+      .maybeSingle();
     if (existingByKey) {
       return NextResponse.json({ ...existingByKey, message: 'Check-in already processed (idempotency)' });
     }
@@ -266,7 +267,7 @@ export const POST = withApiHandler(async (request, context) => {
     reader_id: payload.readerId ?? null,
     location: payload.location ?? null,
     tag_uid: payload.tagUid ?? null,
-    idempotency_key: payload.idempotencyKey ?? null,
+    idempotency_key: payload.idempotencyKey || crypto.randomUUID(),
     synced_at: null,
     metadata,
     tenant_id: tenantId,

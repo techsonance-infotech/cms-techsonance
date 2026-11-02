@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { withApiHandler } from '@/server/http/handler';
 import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
-import { BadRequestError, NotFoundError } from '@/server/http/errors';
+import { BadRequestError, ForbiddenError, NotFoundError } from '@/server/http/errors';
 import { apiSuccess } from '@/server/http/response';
 
 export const GET = withApiHandler(async (_request, context) => {
@@ -123,6 +123,12 @@ export const GET = withApiHandler(async (_request, context) => {
 }, { requireAuth: true, roles: ['Employee'] });
 
 export const PUT = withApiHandler(async (request, context) => {
+  const userRole = (context.auth?.user?.role || '').toLowerCase();
+  const canRestructure = ['admin', 'super_admin', 'owner', 'ceo', 'cto', 'business_owner', 'hr_manager'].includes(userRole);
+  if (!canRestructure) {
+    throw new ForbiddenError('Access Denied: Only administrators and HR managers have permission to restructure the organization hierarchy');
+  }
+
   const payload = await request.json();
   const { employeeId, parentEmployeeId } = payload;
 

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { withApiHandler } from '@/server/http/handler';
 import { BadRequestError, NotFoundError } from '@/server/http/errors';
 import { getAdminRouteSupabase, getCurrentSupabaseActor } from '@/server/supabase/route-helpers';
@@ -30,7 +31,7 @@ export const GET = withApiHandler(async (request, context) => {
   const { data, error } = await query.order('created_at', { ascending: false });
   if (error) throw error;
 
-  const mappedData = (data || []).map(r => ({
+  const mappedData = (data || []).map((r: any) => ({
     ...r,
     ai_fraud_check: r.ai_fraud_check ?? r.metadata?.ai_fraud_check,
     requested_time_in: r.requested_time_in ?? r.metadata?.requested_time_in,
@@ -273,7 +274,7 @@ export const PATCH = withApiHandler(async (request, context) => {
           tag_uid: null,
           location_latitude: attendanceRequest.gps_latitude ?? null,
           location_longitude: attendanceRequest.gps_longitude ?? null,
-          idempotency_key: null,
+          idempotency_key: crypto.randomUUID(),
           synced_at: null,
           metadata: { 
             ...attendanceRequest.metadata, 

@@ -12,6 +12,7 @@ import {
   Loader2, Award, Check, X, Search, Filter, Sparkles, 
   Clock, IndianRupee, RefreshCw, CheckCircle2, AlertCircle 
 } from 'lucide-react';
+import { getStoredSessionToken } from '@/lib/client-session';
 import {
   Dialog,
   DialogContent,
@@ -39,7 +40,11 @@ export default function OvertimeTab({ tenantId }: OvertimeTabProps) {
   const fetchOvertimeRequests = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/attendance/overtime');
+      const token = getStoredSessionToken();
+      const response = await fetch('/api/attendance/overtime', {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        credentials: 'include'
+      });
       if (response.ok) {
         const data = await response.json();
         if (Array.isArray(data) && data.length > 0) {
@@ -68,9 +73,14 @@ export default function OvertimeTab({ tenantId }: OvertimeTabProps) {
         payload.approvedHours = approvedHours ? Number(approvedHours) : null;
       }
 
+      const token = getStoredSessionToken();
       const response = await fetch('/api/attendance/overtime', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        credentials: 'include',
         body: JSON.stringify(payload),
       });
 

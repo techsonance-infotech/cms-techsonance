@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { withApiHandler } from '@/server/http/handler';
 import { ConflictError, NotFoundError } from '@/server/http/errors';
 import { apiSuccess } from '@/server/http/response';
@@ -66,7 +67,7 @@ export const POST = withApiHandler(async (request, context) => {
     tag_uid: null,
     location_latitude: null,
     location_longitude: null,
-    idempotency_key: null,
+    idempotency_key: crypto.randomUUID(),
     synced_at: null,
     metadata,
     tenant_id: tenantId,

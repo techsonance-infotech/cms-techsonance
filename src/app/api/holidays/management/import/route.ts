@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { withApiHandler } from '@/server/http/handler';
-import { BadRequestError } from '@/server/http/errors';
+import { BadRequestError, ForbiddenError } from '@/server/http/errors';
 import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
 import { logger } from '@/server/logging/logger';
 
@@ -13,6 +13,11 @@ export const POST = withApiHandler(async (request, context) => {
   const { holidaysList = [] } = payload;
 
   const user = context.auth!.user;
+  const role = (user.role || '').toLowerCase();
+  const isAdminOrManager = ['admin', 'super_admin', 'owner', 'ceo', 'cto', 'business_owner', 'hr_manager'].includes(role);
+  if (!isAdminOrManager) {
+    throw new ForbiddenError('Access Denied: Only administrators and HR managers can import holiday calendars');
+  }
   const tenantId = user.tenantId;
 
   if (!tenantId) throw new BadRequestError('Tenant ID missing');

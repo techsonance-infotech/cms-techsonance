@@ -16,8 +16,9 @@ import {
   Calendar, Globe, Landmark, Building2, Layers, GitMerge, Sparkles,
   Plus, Download, Upload, Bell, BarChart3, TrendingUp, CheckCircle2,
   RefreshCw, SendHorizontal, AlertCircle, Filter, Check, Search, Award,
-  Gift, Sun, Plane, Clock, Inbox, Trash2
+  Gift, Sun, Plane, Clock, Inbox, Trash2, ShieldAlert
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
 // Define the 11 Scope Types
@@ -50,8 +51,10 @@ export interface HolidayRecord {
 }
 
 export default function HolidayManagementPage() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState('master');
   const [loading, setLoading] = useState(true);
+  const [isForbidden, setIsForbidden] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [broadcasting, setBroadcasting] = useState(false);
@@ -96,6 +99,11 @@ export default function HolidayManagementPage() {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       });
 
+      if (res.status === 403) {
+        setIsForbidden(true);
+        return;
+      }
+
       if (res.ok) {
         const data = await res.json();
         if (data.summaryStats) setSummaryStats(data.summaryStats);
@@ -112,6 +120,21 @@ export default function HolidayManagementPage() {
   };
 
   useEffect(() => {
+    try {
+      const stored = localStorage.getItem('user');
+      if (stored) {
+        const u = JSON.parse(stored);
+        const role = (u.role || '').toLowerCase();
+        const isAdmin = ['admin', 'super_admin', 'owner', 'ceo', 'cto', 'business_owner', 'hr_manager'].includes(role);
+        if (!isAdmin) {
+          setIsForbidden(true);
+          setLoading(false);
+          return;
+        }
+      }
+    } catch {
+      // ignore
+    }
     loadHolidayDataFromApi();
   }, []);
 
@@ -257,6 +280,28 @@ export default function HolidayManagementPage() {
         <div className="grid grid-cols-12 gap-6">
           <div className="col-span-8 h-96 bg-slate-200 dark:bg-zinc-800 rounded-3xl" />
           <div className="col-span-4 h-96 bg-slate-200 dark:bg-zinc-800 rounded-3xl" />
+        </div>
+      </div>
+    );
+  }
+
+  if (isForbidden) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 text-center max-w-lg mx-auto">
+        <div className="w-16 h-16 rounded-2xl bg-rose-500/10 flex items-center justify-center text-rose-500 mb-4 shadow-sm border border-rose-500/20">
+          <ShieldAlert className="w-8 h-8" />
+        </div>
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">Access Restricted</h2>
+        <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+          The Holiday Calendar & Policy Management module is restricted to Administrators and HR Managers. Normal users and employees do not have access to this section.
+        </p>
+        <div className="flex items-center gap-3 mt-6">
+          <Button variant="outline" onClick={() => router.push('/dashboard')}>
+            Return to Dashboard
+          </Button>
+          <Button className="bg-[#F87941] hover:bg-[#e06632] text-white" onClick={() => router.push('/dashboard/leaves')}>
+            View My Leaves & Holidays
+          </Button>
         </div>
       </div>
     );

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { withApiHandler } from '@/server/http/handler';
 import { BadRequestError } from '@/server/http/errors';
 import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
-import { getDashboardType, type UserRole } from '@/lib/permissions';
+import { isEmployeeRole, type UserRole } from '@/lib/permissions';
 
 // GET handler: Relational queries joining employees, users, WFH requests, hybrid schedules, equipment & compliance
 export const GET = withApiHandler(async (request, context) => {
@@ -10,6 +10,11 @@ export const GET = withApiHandler(async (request, context) => {
   const tenantId = user.tenantId;
 
   if (!tenantId) throw new BadRequestError('Tenant ID missing');
+
+  const userRole = (user.role || 'employee').toLowerCase().replace(/[\s-]+/g, '_') as UserRole;
+  const isEmployee = isEmployeeRole(userRole);
+  const canApprove = !isEmployee;
+  const currentUserId = user.providerUserId || String(user.id);
 
   const supabase = getAdminRouteSupabase();
 
@@ -59,7 +64,7 @@ export const GET = withApiHandler(async (request, context) => {
 
   if (employeeRoster.length === 0 || !employeeRoster.some(e => e.id === user.id || e.id === user.providerUserId)) {
     employeeRoster.unshift({
-      id: user.providerUserId || user.id,
+      id: currentUserId,
       employeeTableId: (user as any).employeeRecordId || 1,
       name: `${user.firstName || 'User'} ${user.lastName || ''}`.trim(),
       email: user.email || '',
@@ -85,7 +90,7 @@ export const GET = withApiHandler(async (request, context) => {
     console.warn('WFH requests DB query info:', err);
   }
 
-  const wfhRequests = dbRequests.map((r: any) => {
+  const allWfhRequests = dbRequests.map((r: any) => {
     const targetUser = userMap.get(r.user_id);
     const empName = targetUser ? `${targetUser.first_name || ''} ${targetUser.last_name || ''}`.trim() : 'Employee';
     const empEmail = targetUser?.email || '';
@@ -111,6 +116,16 @@ export const GET = withApiHandler(async (request, context) => {
       createdAt: r.created_at
     };
   });
+
+  const myRequests = allWfhRequests.filter((r: any) =>
+    r.userId === currentUserId ||
+    (user.providerUserId && r.userId === user.providerUserId) ||
+    (user.email && r.employeeEmail.toLowerCase() === user.email.toLowerCase())
+  );
+
+  // For employees: only return their own requests in the primary list
+  // For managers/admins: return full queue
+  const wfhRequests = isEmployee ? myRequests : allWfhRequests;
 
   // 3. Query Hybrid Schedules from DB `wfh_hybrid_schedules`
   let dbSchedules: any[] = [];
@@ -164,8 +179,10 @@ export const GET = withApiHandler(async (request, context) => {
   }
 
   // AI Productivity Insights & Summary Metrics
-  const activeWfhCount = wfhRequests.filter((r: any) => r.status === 'Approved').length;
-  const pendingApprovalsCount = wfhRequests.filter((r: any) => r.status === 'Pending').length;
+  const activeWfhCount = allWfhRequests.filter((r: any) => r.status === 'Approved').length;
+  const pendingApprovalsCount = isEmployee
+    ? myRequests.filter((r: any) => r.status === 'Pending').length
+    : allWfhRequests.filter((r: any) => r.status === 'Pending').length;
 
   const aiInsights = {
     teamProductivityIndex: '94.2%',
@@ -178,17 +195,73 @@ export const GET = withApiHandler(async (request, context) => {
     ]
   };
 
+  const clientIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '127.0.0.1';
+  const matchingEmp = employees.find((e: any) =>
+    e.user_id === currentUserId ||
+    (user.providerUserId && e.user_id === user.providerUserId) ||
+    String(e.user_id) === String(user.id)
+  );
+  const employeeRecordId = (user as any).employeeRecordId || (matchingEmp ? matchingEmp.id : null);
+
+  let todayAttendanceRecord: any = null;
+  if (employeeRecordId) {
+    try {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const { data: attData } = await supabase
+        .from('attendance_records')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('employee_id', employeeRecordId)
+        .eq('date', todayStr)
+        .order('time_in', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (attData) todayAttendanceRecord = attData;
+    } catch (err) {
+      console.warn('Today attendance query info:', err);
+    }
+  }
+
   return NextResponse.json({
     success: true,
+    clientIp,
+    currentUser: {
+      id: currentUserId,
+      providerUserId: user.providerUserId || null,
+      employeeRecordId,
+      name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
+      email: user.email || '',
+      role: user.role || 'Employee',
+      department: (user as any).department || 'Engineering',
+      isEmployee,
+      canApprove
+    },
+    todayAttendance: todayAttendanceRecord,
     employeeRoster,
     summaryStats: {
-      totalRequests: wfhRequests.length,
+      totalRequests: isEmployee ? myRequests.length : allWfhRequests.length,
       activeWfhToday: activeWfhCount,
       pendingApprovals: pendingApprovalsCount,
       equipmentAssigned: equipmentList.length,
       compliancePassRate: '96.8%'
     },
+    calendarEvents: allWfhRequests
+      .filter((r: any) => r.status === 'Approved')
+      .map((r: any) => ({
+        id: r.id,
+        userId: r.userId,
+        employeeName: r.employeeName,
+        employeeEmail: r.employeeEmail,
+        startDate: r.startDate,
+        endDate: r.endDate,
+        daysCount: r.daysCount,
+        requestType: r.requestType,
+        workLocationCity: r.workLocationCity,
+        status: r.status
+      })),
     wfhRequests,
+    myRequests,
+    managerQueue: canApprove ? allWfhRequests : [],
     hybridSchedules: dbSchedules,
     equipmentList,
     complianceList: dbCompliance,
@@ -205,21 +278,28 @@ export const POST = withApiHandler(async (request, context) => {
     startDate,
     endDate,
     reason,
-    workLocationCity = 'Remote Home Office',
-    workLocationCountry = 'United States',
+    workLocationCity = 'Home Office',
+    workLocationCountry = 'India',
     geoLat = 37.7749,
     geoLng = -122.4194,
     ipAddress = '192.168.1.100'
   } = payload;
 
-  if (!userId || !startDate || !endDate || !reason) {
-    throw new BadRequestError('User ID, Start Date, End Date, and Reason are required');
-  }
-
   const user = context.auth!.user;
   const tenantId = user.tenantId;
 
   if (!tenantId) throw new BadRequestError('Tenant ID missing');
+
+  const userRole = (user.role || 'employee').toLowerCase().replace(/[\s-]+/g, '_') as UserRole;
+  const isEmployee = isEmployeeRole(userRole);
+  const currentUserId = user.providerUserId || String(user.id);
+
+  // If user is employee, always lock request to their own account
+  const targetUserId = isEmployee ? currentUserId : (userId || currentUserId);
+
+  if (!targetUserId || !startDate || !endDate || !reason) {
+    throw new BadRequestError('User ID, Start Date, End Date, and Reason are required');
+  }
 
   const supabase = getAdminRouteSupabase();
 
@@ -234,7 +314,7 @@ export const POST = withApiHandler(async (request, context) => {
   try {
     const { data } = await supabase.from('wfh_requests').insert({
       tenant_id: tenantId,
-      user_id: userId,
+      user_id: targetUserId,
       request_code: requestCode,
       request_type: requestType,
       start_date: startDate,

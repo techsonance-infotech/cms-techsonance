@@ -198,13 +198,13 @@ const categories: NavCategory[] = [
     items: [
       { name: 'Workforce Overview', href: '/dashboard/employees', icon: BarChart3, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Organization Chart', href: '/dashboard/employees/org-chart', icon: Network, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee'] },
-      { name: 'Employee Directory', href: '/dashboard/employees/directory', icon: Contact, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] },
+      { name: 'Employee Directory', href: '/dashboard/employees/directory', icon: Contact, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Add Employee', href: '/dashboard/employees/new', icon: UserPlus, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Employee Movement', href: '/dashboard/employees/movement', icon: ArrowRightLeft, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Onboarding Center', href: '/dashboard/employees/onboarding', icon: ListTodo, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Offboarding Center', href: '/dashboard/employees/offboarding', icon: Trash2, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
-      { name: 'Employee Documents', href: '/dashboard/employees/documents', icon: FileText, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee'] },
-      { name: 'Employee Assets', href: '/dashboard/employees/assets', icon: Laptop, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee'] },
+      { name: 'Employee Documents', href: '/dashboard/employees/documents', icon: FileText, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Employee Assets', href: '/dashboard/employees/assets', icon: Laptop, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Reviews & Appraisals', href: '/dashboard/employees/reviews', icon: Star, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Goals & OKRs', href: '/dashboard/employees/reviews?tab=goals', icon: Star, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Career & Succession', href: '/dashboard/employees/reviews?tab=career', icon: Award, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
@@ -236,7 +236,7 @@ const categories: NavCategory[] = [
       { name: 'Timesheet Operations', href: '/dashboard/employees/timesheets', icon: Clock, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Leaves & Time Off', href: '/dashboard/leaves', icon: Calendar, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] },
       { name: 'Work From Home', href: '/dashboard/employees/wfh', icon: Home, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] },
-      { name: 'Holiday Calendar', href: '/dashboard/employees/holidays', icon: CalendarDays, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] },
+      { name: 'Holiday Calendar', href: '/dashboard/employees/holidays', icon: CalendarDays, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Attendance Policies', href: '/dashboard/attendance/policies', icon: ScrollText, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] }
     ]
   },
@@ -530,6 +530,15 @@ export function DashboardSidebar({ user, isMobile = false, onClose, companyName:
 
             const visibleItems = cat.items.filter((item) => {
               const userPerms = (user as any).permissions;
+              if (
+                item.href === '/dashboard/employees/holidays' ||
+                item.href === '/dashboard/employees/assets' ||
+                item.href === '/dashboard/employees/documents' ||
+                item.href === '/dashboard/employees/directory'
+              ) {
+                const isAdmin = ['admin', 'super_admin', 'owner', 'ceo', 'cto', 'business_owner', 'hr_manager', 'project_manager'].includes(normalizedRole);
+                if (!isAdmin) return false;
+              }
               if (userPerms) {
                 if (item.href === '/dashboard/attendance') {
                   const ta = userPerms.time_attendance;

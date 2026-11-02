@@ -18,10 +18,11 @@ import {
   taskStoryPointOptions,
   type TaskFormValues,
 } from '@/lib/forms/schemas';
-import { Loader2, LayoutGrid, Timer, Target, AlertCircle, Info, Hash, Clock, User, Flag, Calendar as CalendarIcon, Link2 } from 'lucide-react';
+import { Loader2, LayoutGrid, Timer, Target, AlertCircle, Info, Hash, Clock, User, Flag, Calendar as CalendarIcon, Link2, CheckCircle2 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { isEmployeeRole, type UserRole } from '@/lib/permissions';
+import { getStoredSessionToken } from '@/lib/client-session';
 
 interface TaskDialogProps {
   open: boolean;
@@ -155,9 +156,10 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
 
   const fetchProjectTasks = async (pId: number) => {
     try {
-      const token = localStorage.getItem('session_token');
+      const token = getStoredSessionToken();
       const res = await fetch(`/api/tasks?projectId=${pId}&limit=1000`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include'
       });
       if (res.ok) {
         const data = await res.json();
@@ -172,9 +174,10 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
 
   const fetchProjectMembers = async (pId: number) => {
     try {
-      const token = localStorage.getItem('session_token');
+      const token = getStoredSessionToken();
       const res = await fetch(`/api/project-members?projectId=${pId}&limit=1000`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include'
       });
       if (res.ok) {
         const data = await res.json();
@@ -188,16 +191,20 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
   const fetchData = async () => {
     setLoadingData(true);
     try {
-      const token = localStorage.getItem('session_token');
+      const token = getStoredSessionToken();
+      const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
       const [projectsRes, usersRes, meRes] = await Promise.all([
         fetch('/api/projects?limit=100', {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: authHeaders,
+          credentials: 'include'
         }),
         fetch('/api/users?limit=100', {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: authHeaders,
+          credentials: 'include'
         }),
         fetch('/api/auth/me', {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: authHeaders,
+          credentials: 'include'
         }),
       ]);
 
@@ -218,7 +225,8 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
         // Filter for employees
         if (currentUser && isEmployeeRole(currentUser.role as UserRole)) {
           const membersRes = await fetch(`/api/project-members?limit=1000`, {
-            headers: { Authorization: `Bearer ${token}` }
+            headers: authHeaders,
+            credentials: 'include'
           });
           if (membersRes.ok) {
             const members = await membersRes.json();
@@ -245,11 +253,10 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
 
   const fetchSprints = async (projectId: number) => {
     try {
-      const token = localStorage.getItem('session_token');
+      const token = getStoredSessionToken();
       const response = await fetch(`/api/sprints?projectId=${projectId}&limit=100`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include'
       });
 
       if (response.ok) {
@@ -310,11 +317,14 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
       const url = task ? `/api/tasks?id=${task.id}` : '/api/tasks';
       const method = task ? 'PUT' : 'POST';
 
+      const token = getStoredSessionToken();
       const response = await fetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
+        credentials: 'include',
         body: JSON.stringify(payload),
       });
 

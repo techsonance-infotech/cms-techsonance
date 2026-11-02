@@ -11,9 +11,12 @@ import {
   ShieldAlert, RefreshCw, Share2, FileSignature, Cpu, History, User, Lock, ArrowRight, EyeOff, Shield, CheckCircle2
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
 import { getStoredSessionToken } from '@/lib/client-session';
 
 export default function DocumentVaultPage() {
+  const router = useRouter();
+  const [isForbidden, setIsForbidden] = useState(false);
   const [documents, setDocuments] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
@@ -152,6 +155,21 @@ export default function DocumentVaultPage() {
   const [scanActive, setScanActive] = useState(false);
 
   useEffect(() => {
+    try {
+      const stored = localStorage.getItem('user');
+      if (stored) {
+        const u = JSON.parse(stored);
+        const role = (u.role || '').toLowerCase();
+        const isAdminOrManager = ['admin', 'super_admin', 'owner', 'ceo', 'cto', 'business_owner', 'hr_manager'].includes(role);
+        if (!isAdminOrManager) {
+          setIsForbidden(true);
+          setLoading(false);
+          return;
+        }
+      }
+    } catch {
+      // ignore
+    }
     fetchData();
   }, []);
 
@@ -395,6 +413,28 @@ export default function DocumentVaultPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-1 h-64 bg-slate-100 dark:bg-zinc-800/50 rounded-2xl"></div>
           <div className="lg:col-span-2 h-96 bg-slate-100 dark:bg-zinc-800/50 rounded-2xl"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isForbidden) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 text-center max-w-lg mx-auto">
+        <div className="w-16 h-16 rounded-2xl bg-rose-500/10 flex items-center justify-center text-rose-500 mb-4 shadow-sm border border-rose-500/20">
+          <ShieldAlert className="w-8 h-8" />
+        </div>
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">Access Restricted</h2>
+        <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+          The Document Management System (DMS Vault) is restricted to Administrators and HR Managers. Normal users and employees do not have access to company-wide document repositories.
+        </p>
+        <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
+          <Button variant="outline" onClick={() => router.push('/dashboard')}>
+            Return to Dashboard
+          </Button>
+          <Button className="bg-[#F87941] hover:bg-[#e06632] text-white" onClick={() => router.push('/dashboard/employees/requests')}>
+            Request Official Letters & Certificates
+          </Button>
         </div>
       </div>
     );

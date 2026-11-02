@@ -145,10 +145,15 @@ export default function ProjectDetailPage() {
   const fetchEnrichedData = useCallback(async () => {
     if (!projectId || isNaN(Number(projectId))) return;
     try {
-      const token = localStorage.getItem('session_token');
+      const token = typeof window !== 'undefined' 
+        ? (sessionStorage.getItem('session_token') || localStorage.getItem('session_token')) 
+        : null;
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
       // Fetch risks
       const riskRes = await fetch(`/api/projects/risks?projectId=${projectId}`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers,
+        credentials: 'include'
       });
       if (riskRes.ok) {
         const json = await riskRes.json();
@@ -157,7 +162,8 @@ export default function ProjectDetailPage() {
 
       // Fetch contracts
       const contractRes = await fetch(`/api/psa/contracts?projectId=${projectId}`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers,
+        credentials: 'include'
       });
       if (contractRes.ok) {
         const json = await contractRes.json();
@@ -166,7 +172,8 @@ export default function ProjectDetailPage() {
 
       // Fetch tasks for Gantt
       const tasksRes = await fetch(`/api/tasks?projectId=${projectId}&limit=1000`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers,
+        credentials: 'include'
       });
       if (tasksRes.ok) {
         const json = await tasksRes.json();
@@ -184,21 +191,26 @@ export default function ProjectDetailPage() {
     }
     setLoading(true);
     try {
-      const token = localStorage.getItem('session_token');
+      const token = typeof window !== 'undefined' 
+        ? (sessionStorage.getItem('session_token') || localStorage.getItem('session_token')) 
+        : null;
+      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+
       const response = await fetch(`/api/projects?id=${projectId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        headers,
+        credentials: 'include'
       });
       if (response.ok) {
         const projectData = await response.json();
         setProject(projectData);
+        if (projectData.description) {
+          setWikiText(projectData.description);
+        }
 
         // Fetch client data
         const clientResponse = await fetch(`/api/clients?id=${projectData.clientId}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
+          headers,
+          credentials: 'include'
         });
         if (clientResponse.ok) {
           const clientData = await clientResponse.json();
@@ -214,11 +226,12 @@ export default function ProjectDetailPage() {
 
   const fetchCurrentUser = async () => {
     try {
-      const token = localStorage.getItem('session_token');
+      const token = typeof window !== 'undefined' 
+        ? (sessionStorage.getItem('session_token') || localStorage.getItem('session_token')) 
+        : null;
       const response = await fetch('/api/auth/me', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        credentials: 'include'
       });
       if (response.ok) {
         const data = await response.json();
@@ -234,15 +247,38 @@ export default function ProjectDetailPage() {
     fetchProjectData();
     fetchEnrichedData();
     
-    // Default wiki template text
+    // Load from database; fallback to localStorage if available
     const storedWiki = localStorage.getItem(`wiki_project_${projectId}`);
-    setWikiText(storedWiki || `### Project Wiki & Objectives\n\n- **Goals**: Scope client authorization portal and Recharts BI.\n- **SLA Commitment**: Response time within 4 hours.\n- **Tech Conventions**: Next.js 15, Strict TS annotations.`);
+    if (storedWiki) {
+      setWikiText(storedWiki);
+    }
   }, [projectId, fetchProjectData, fetchEnrichedData]);
 
-  const handleSaveWiki = () => {
-    localStorage.setItem(`wiki_project_${projectId}`, wikiText);
-    setIsEditingWiki(false);
-    toast.success('Project wiki saved successfully');
+  const handleSaveWiki = async () => {
+    try {
+      const token = localStorage.getItem('session_token');
+      const res = await fetch(`/api/projects?id=${projectId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          description: wikiText
+        })
+      });
+      if (res.ok) {
+        localStorage.setItem(`wiki_project_${projectId}`, wikiText);
+        setIsEditingWiki(false);
+        toast.success('Project wiki saved to database successfully');
+        fetchProjectData();
+      } else {
+        toast.error('Failed to save project wiki to database');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Error saving project wiki to database');
+    }
   };
 
   const handleCreateRisk = async (e: React.FormEvent) => {

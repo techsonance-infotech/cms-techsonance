@@ -13,9 +13,12 @@ import {
   User, ArrowRight
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
 import { getStoredSessionToken } from '@/lib/client-session';
 
 export default function AssetTrackerPage() {
+  const router = useRouter();
+  const [isForbidden, setIsForbidden] = useState(false);
   const [assets, setAssets] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
@@ -90,6 +93,21 @@ export default function AssetTrackerPage() {
   const [submittingRequisition, setSubmittingRequisition] = useState(false);
 
   useEffect(() => {
+    try {
+      const stored = localStorage.getItem('user');
+      if (stored) {
+        const u = JSON.parse(stored);
+        const role = (u.role || '').toLowerCase();
+        const isAdminOrManager = ['admin', 'super_admin', 'owner', 'ceo', 'cto', 'business_owner', 'hr_manager'].includes(role);
+        if (!isAdminOrManager) {
+          setIsForbidden(true);
+          setLoading(false);
+          return;
+        }
+      }
+    } catch {
+      // ignore
+    }
     fetchData();
   }, []);
 
@@ -375,16 +393,30 @@ export default function AssetTrackerPage() {
           <div className="h-20 bg-slate-100 dark:bg-zinc-800/50 rounded-xl"></div>
           <div className="h-20 bg-slate-100 dark:bg-zinc-800/50 rounded-xl"></div>
         </div>
-        {/* Tabs Skeleton */}
-        <div className="flex gap-2 border-b pb-2">
-          <div className="h-8 bg-slate-100 dark:bg-zinc-800/50 rounded w-28"></div>
-          <div className="h-8 bg-slate-100 dark:bg-zinc-800/50 rounded w-28"></div>
-          <div className="h-8 bg-slate-100 dark:bg-zinc-800/50 rounded w-28"></div>
+      </div>
+    );
+  }
+
+  if (isForbidden) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 text-center max-w-lg mx-auto">
+        <div className="w-16 h-16 rounded-2xl bg-rose-500/10 flex items-center justify-center text-rose-500 mb-4 shadow-sm border border-rose-500/20">
+          <ShieldAlert className="w-8 h-8" />
         </div>
-        {/* Content Skeleton */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-1 h-64 bg-slate-100 dark:bg-zinc-800/50 rounded-2xl"></div>
-          <div className="lg:col-span-2 h-96 bg-slate-100 dark:bg-zinc-800/50 rounded-2xl"></div>
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">Access Restricted</h2>
+        <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+          The Asset Lifecycle Workspace (procurement, hardware checkout, and inventory registry) is restricted to IT Administrators and HR Managers. Normal users and employees do not have access to manage organization hardware.
+        </p>
+        <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
+          <Button variant="outline" onClick={() => router.push('/dashboard')}>
+            Return to Dashboard
+          </Button>
+          <Button className="bg-[#F87941] hover:bg-[#e06632] text-white" onClick={() => router.push('/dashboard/employees/wfh')}>
+            View My WFH Assets
+          </Button>
+          <Button variant="secondary" onClick={() => router.push('/dashboard/employees/requests')}>
+            Request New Asset
+          </Button>
         </div>
       </div>
     );

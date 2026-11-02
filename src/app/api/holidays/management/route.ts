@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { withApiHandler } from '@/server/http/handler';
-import { BadRequestError } from '@/server/http/errors';
+import { BadRequestError, ForbiddenError } from '@/server/http/errors';
 import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
 import { logger } from '@/server/logging/logger';
 
@@ -8,9 +8,18 @@ import { logger } from '@/server/logging/logger';
 const isValidUuid = (val: unknown): val is string =>
   typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
 
+const checkAdminAccess = (roleStr?: string) => {
+  const role = (roleStr || '').toLowerCase();
+  const isAdminOrManager = ['admin', 'super_admin', 'owner', 'ceo', 'cto', 'business_owner', 'hr_manager'].includes(role);
+  if (!isAdminOrManager) {
+    throw new ForbiddenError('Access Denied: Only administrators and HR managers have permission to manage holiday calendars');
+  }
+};
+
 // GET handler: Relational queries for holiday master, holiday groups, impact analytics & long weekends
 export const GET = withApiHandler(async (request, context) => {
   const user = context.auth!.user;
+  checkAdminAccess(user.role);
   const tenantId = user.tenantId;
 
   if (!tenantId) throw new BadRequestError('Tenant ID missing');
@@ -180,6 +189,7 @@ export const POST = withApiHandler(async (request, context) => {
   }
 
   const user = context.auth!.user;
+  checkAdminAccess(user.role);
   const tenantId = user.tenantId;
 
   if (!tenantId) throw new BadRequestError('Tenant ID missing');
@@ -273,6 +283,7 @@ export const DELETE = withApiHandler(async (request, context) => {
   if (!id) throw new BadRequestError('Holiday ID is required');
 
   const user = context.auth!.user;
+  checkAdminAccess(user.role);
   const tenantId = user.tenantId;
 
   if (!tenantId) throw new BadRequestError('Tenant ID missing');

@@ -55,6 +55,7 @@ export default function OrgChartPage() {
   // Tab selections
   const [viewMode, setViewMode] = useState<'manager' | 'department' | 'location' | 'business_unit'>('manager');
   const [selectedNodeDetails, setSelectedNodeDetails] = useState<OrgNode | null>(null);
+  const [canManageHierarchy, setCanManageHierarchy] = useState(false);
 
   // Snapshot records
   const [showHistory, setShowHistory] = useState(false);
@@ -65,6 +66,17 @@ export default function OrgChartPage() {
   ];
 
   useEffect(() => {
+    try {
+      const stored = localStorage.getItem('user');
+      if (stored) {
+        const u = JSON.parse(stored);
+        const role = (u.role || '').toLowerCase();
+        const isAdminOrManager = ['admin', 'super_admin', 'owner', 'ceo', 'cto', 'business_owner', 'hr_manager'].includes(role);
+        setCanManageHierarchy(isAdminOrManager);
+      }
+    } catch {
+      // ignore
+    }
     fetchHierarchy();
   }, []);
 
@@ -465,9 +477,11 @@ export default function OrgChartPage() {
           </div>
           
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setShowHistory(!showHistory)} className="h-9 border-slate-200 flex items-center gap-1.5 font-semibold text-xs">
-              <History className="h-3.5 w-3.5 text-[#f87941]" /> Snapshots
-            </Button>
+            {canManageHierarchy && (
+              <Button variant="outline" size="sm" onClick={() => setShowHistory(!showHistory)} className="h-9 border-slate-200 flex items-center gap-1.5 font-semibold text-xs">
+                <History className="h-3.5 w-3.5 text-[#f87941]" /> Snapshots
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={fetchHierarchy} className="h-9 border-slate-200 flex items-center gap-1.5 font-semibold text-xs">
               <RefreshCw className="h-3.5 w-3.5 text-[#f87941]" /> Sync DB
             </Button>
@@ -525,163 +539,169 @@ export default function OrgChartPage() {
                   </div>
                 </div>
 
-                <div className="bg-[#f87941]/5 p-3 rounded-xl border border-[#f87941]/10 space-y-2">
-                  <p className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1"><Sparkles className="h-3.5 w-3.5 text-[#f87941]" /> AI Profile Metrics</p>
-                  <div className="flex justify-between items-center text-[10px]">
-                    <span className="text-slate-500">Resource Utilisation</span>
-                    <span className="font-bold text-slate-800 dark:text-slate-200">84% (Optimal)</span>
+                {canManageHierarchy && (
+                  <div className="bg-[#f87941]/5 p-3 rounded-xl border border-[#f87941]/10 space-y-2">
+                    <p className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1"><Sparkles className="h-3.5 w-3.5 text-[#f87941]" /> AI Profile Metrics</p>
+                    <div className="flex justify-between items-center text-[10px]">
+                      <span className="text-slate-500">Resource Utilisation</span>
+                      <span className="font-bold text-slate-800 dark:text-slate-200">84% (Optimal)</span>
+                    </div>
+                    <div className="flex justify-between items-center text-[10px]">
+                      <span className="text-slate-500">Burnout risk index</span>
+                      <span className="font-bold text-slate-800 dark:text-slate-200">12% (Low)</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center text-[10px]">
-                    <span className="text-slate-500">Burnout risk index</span>
-                    <span className="font-bold text-slate-800 dark:text-slate-200">12% (Low)</span>
-                  </div>
-                </div>
+                )}
 
-                <div className="flex gap-2 border-t pt-3">
-                  <a href={`/dashboard/employees/${selectedNodeDetails.id}`} className="w-full flex">
-                    <Button size="sm" className="w-full bg-[#f87941] hover:bg-[#e06634] text-white text-xs gap-1">
-                      View Profile <ExternalLink className="h-3 w-3" />
-                    </Button>
-                  </a>
-                </div>
+                {canManageHierarchy && (
+                  <div className="flex gap-2 border-t pt-3">
+                    <a href={`/dashboard/employees/${selectedNodeDetails.id}`} className="w-full flex">
+                      <Button size="sm" className="w-full bg-[#f87941] hover:bg-[#e06634] text-white text-xs gap-1">
+                        View Profile <ExternalLink className="h-3 w-3" />
+                      </Button>
+                    </a>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
 
-          {/* Hierarchy Restructure Actions Panel */}
-          <Card className="border-slate-100 dark:border-zinc-800/80 shadow-lg">
-            <CardHeader className="bg-slate-50/50 dark:bg-zinc-900/20 border-b">
-              <CardTitle className="text-md flex items-center gap-2"><Layers className="h-4.5 w-4.5 text-[#f87941]" /> Restructure Hierarchy</CardTitle>
-              <CardDescription>Instantly re-bind employee reporting managers.</CardDescription>
-            </CardHeader>
-            <CardContent className="pt-4">
-              <form onSubmit={handleRestructure} className="space-y-4 text-xs">
-                {/* Searchable Target Employee */}
-                <div className="relative">
-                  <Label htmlFor="target-emp" className="font-semibold text-slate-700 dark:text-slate-300">Target Employee</Label>
-                  <div className="relative mt-1.5">
-                    <Input
-                      type="text"
-                      placeholder="Type to search employee..."
-                      value={empSearch}
-                      onChange={(e) => {
-                        setEmpSearch(e.target.value);
-                        setShowEmpDropdown(true);
-                      }}
-                      onFocus={() => setShowEmpDropdown(true)}
-                      onBlur={() => setTimeout(() => setShowEmpDropdown(false), 250)}
-                      className="w-full text-xs h-9 pr-8 bg-white dark:bg-zinc-900"
-                    />
-                    {selectedEmpId && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedEmpId('');
-                          setEmpSearch('');
+          {/* Hierarchy Restructure Actions Panel (Restricted to Admin / Management) */}
+          {canManageHierarchy && (
+            <Card className="border-slate-100 dark:border-zinc-800/80 shadow-lg">
+              <CardHeader className="bg-slate-50/50 dark:bg-zinc-900/20 border-b">
+                <CardTitle className="text-md flex items-center gap-2"><Layers className="h-4.5 w-4.5 text-[#f87941]" /> Restructure Hierarchy</CardTitle>
+                <CardDescription>Instantly re-bind employee reporting managers.</CardDescription>
+              </CardHeader>
+              <CardContent className="pt-4">
+                <form onSubmit={handleRestructure} className="space-y-4 text-xs">
+                  {/* Searchable Target Employee */}
+                  <div className="relative">
+                    <Label htmlFor="target-emp" className="font-semibold text-slate-700 dark:text-slate-300">Target Employee</Label>
+                    <div className="relative mt-1.5">
+                      <Input
+                        type="text"
+                        placeholder="Type to search employee..."
+                        value={empSearch}
+                        onChange={(e) => {
+                          setEmpSearch(e.target.value);
+                          setShowEmpDropdown(true);
                         }}
-                        className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 text-sm"
-                      >
-                        ×
-                      </button>
-                    )}
-                  </div>
-                  {showEmpDropdown && (
-                    <div className="absolute z-30 w-full mt-1 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                      {filteredTargetEmployees.length === 0 ? (
-                        <div className="p-2 text-slate-400 text-center">No employee found</div>
-                      ) : (
-                        filteredTargetEmployees.map(n => (
-                          <div
-                            key={n.id}
-                            onMouseDown={() => {
-                              setSelectedEmpId(String(n.id));
-                              setEmpSearch(`${n.name} (${n.designation})`);
-                              setShowEmpDropdown(false);
-                            }}
-                            className={`p-2 hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer flex items-center justify-between text-xs ${
-                              selectedEmpId === String(n.id) ? 'bg-orange-50 dark:bg-orange-950/20 text-[#f87941] font-semibold' : ''
-                            }`}
-                          >
-                            <span>{n.name} <span className="text-[10px] text-slate-400 font-mono">({n.designation})</span></span>
-                            {selectedEmpId === String(n.id) && <Check className="h-3.5 w-3.5 text-[#f87941]" />}
-                          </div>
-                        ))
+                        onFocus={() => setShowEmpDropdown(true)}
+                        onBlur={() => setTimeout(() => setShowEmpDropdown(false), 250)}
+                        className="w-full text-xs h-9 pr-8 bg-white dark:bg-zinc-900"
+                      />
+                      {selectedEmpId && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedEmpId('');
+                            setEmpSearch('');
+                          }}
+                          className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 text-sm"
+                        >
+                          ×
+                        </button>
                       )}
                     </div>
-                  )}
-                </div>
-
-                {/* Searchable New Reporting Manager */}
-                <div className="relative">
-                  <Label htmlFor="target-manager" className="font-semibold text-slate-700 dark:text-slate-300">New Reporting Manager</Label>
-                  <div className="relative mt-1.5">
-                    <Input
-                      type="text"
-                      placeholder="Type to search manager..."
-                      value={managerSearch}
-                      onChange={(e) => {
-                        setManagerSearch(e.target.value);
-                        setShowManagerDropdown(true);
-                      }}
-                      onFocus={() => setShowManagerDropdown(true)}
-                      onBlur={() => setTimeout(() => setShowManagerDropdown(false), 250)}
-                      className="w-full text-xs h-9 pr-8 bg-white dark:bg-zinc-900"
-                    />
-                    {selectedManagerEmpId && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedManagerEmpId('');
-                          setManagerSearch('');
-                        }}
-                        className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 text-sm"
-                      >
-                        ×
-                      </button>
-                    )}
-                  </div>
-                  {showManagerDropdown && (
-                    <div className="absolute z-30 w-full mt-1 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                      <div
-                        onMouseDown={() => {
-                          setSelectedManagerEmpId('');
-                          setManagerSearch('No Manager (Root/CEO level)');
-                          setShowManagerDropdown(false);
-                        }}
-                        className="p-2 hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer text-xs italic text-slate-500"
-                      >
-                        No Manager (Root/CEO level)
+                    {showEmpDropdown && (
+                      <div className="absolute z-30 w-full mt-1 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                        {filteredTargetEmployees.length === 0 ? (
+                          <div className="p-2 text-slate-400 text-center">No employee found</div>
+                        ) : (
+                          filteredTargetEmployees.map(n => (
+                            <div
+                              key={n.id}
+                              onMouseDown={() => {
+                                setSelectedEmpId(String(n.id));
+                                setEmpSearch(`${n.name} (${n.designation})`);
+                                setShowEmpDropdown(false);
+                              }}
+                              className={`p-2 hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer flex items-center justify-between text-xs ${
+                                selectedEmpId === String(n.id) ? 'bg-orange-50 dark:bg-orange-950/20 text-[#f87941] font-semibold' : ''
+                              }`}
+                            >
+                              <span>{n.name} <span className="text-[10px] text-slate-400 font-mono">({n.designation})</span></span>
+                              {selectedEmpId === String(n.id) && <Check className="h-3.5 w-3.5 text-[#f87941]" />}
+                            </div>
+                          ))
+                        )}
                       </div>
-                      {filteredManagerEmployees.length === 0 ? (
-                        <div className="p-2 text-slate-400 text-center">No manager found</div>
-                      ) : (
-                        filteredManagerEmployees.map(n => (
-                          <div
-                            key={n.id}
-                            onMouseDown={() => {
-                              setSelectedManagerEmpId(String(n.id));
-                              setManagerSearch(`${n.name} (${n.designation})`);
-                              setShowManagerDropdown(false);
-                            }}
-                            className={`p-2 hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer flex items-center justify-between text-xs ${
-                              selectedManagerEmpId === String(n.id) ? 'bg-orange-50 dark:bg-orange-950/20 text-[#f87941] font-semibold' : ''
-                            }`}
-                          >
-                            <span>{n.name} <span className="text-[10px] text-slate-400 font-mono">({n.designation})</span></span>
-                            {selectedManagerEmpId === String(n.id) && <Check className="h-3.5 w-3.5 text-[#f87941]" />}
-                          </div>
-                        ))
+                    )}
+                  </div>
+
+                  {/* Searchable New Reporting Manager */}
+                  <div className="relative">
+                    <Label htmlFor="target-manager" className="font-semibold text-slate-700 dark:text-slate-300">New Reporting Manager</Label>
+                    <div className="relative mt-1.5">
+                      <Input
+                        type="text"
+                        placeholder="Type to search manager..."
+                        value={managerSearch}
+                        onChange={(e) => {
+                          setManagerSearch(e.target.value);
+                          setShowManagerDropdown(true);
+                        }}
+                        onFocus={() => setShowManagerDropdown(true)}
+                        onBlur={() => setTimeout(() => setShowManagerDropdown(false), 250)}
+                        className="w-full text-xs h-9 pr-8 bg-white dark:bg-zinc-900"
+                      />
+                      {selectedManagerEmpId && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedManagerEmpId('');
+                            setManagerSearch('');
+                          }}
+                          className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 text-sm"
+                        >
+                          ×
+                        </button>
                       )}
                     </div>
-                  )}
-                </div>
+                    {showManagerDropdown && (
+                      <div className="absolute z-30 w-full mt-1 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                        <div
+                          onMouseDown={() => {
+                            setSelectedManagerEmpId('');
+                            setManagerSearch('No Manager (Root/CEO level)');
+                            setShowManagerDropdown(false);
+                          }}
+                          className="p-2 hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer text-xs italic text-slate-500"
+                        >
+                          No Manager (Root/CEO level)
+                        </div>
+                        {filteredManagerEmployees.length === 0 ? (
+                          <div className="p-2 text-slate-400 text-center">No manager found</div>
+                        ) : (
+                          filteredManagerEmployees.map(n => (
+                            <div
+                              key={n.id}
+                              onMouseDown={() => {
+                                setSelectedManagerEmpId(String(n.id));
+                                setManagerSearch(`${n.name} (${n.designation})`);
+                                setShowManagerDropdown(false);
+                              }}
+                              className={`p-2 hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer flex items-center justify-between text-xs ${
+                                selectedManagerEmpId === String(n.id) ? 'bg-orange-50 dark:bg-orange-950/20 text-[#f87941] font-semibold' : ''
+                              }`}
+                            >
+                              <span>{n.name} <span className="text-[10px] text-slate-400 font-mono">({n.designation})</span></span>
+                              {selectedManagerEmpId === String(n.id) && <Check className="h-3.5 w-3.5 text-[#f87941]" />}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
 
-                <Button type="submit" disabled={updatingHierarchy} className="w-full bg-[#f87941] hover:bg-[#e06634] text-white font-bold h-9">
-                  {updatingHierarchy ? 'Recalculating...' : 'Commit Restructuring'}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
+                  <Button type="submit" disabled={updatingHierarchy} className="w-full bg-[#f87941] hover:bg-[#e06634] text-white font-bold h-9">
+                    {updatingHierarchy ? 'Recalculating...' : 'Commit Restructuring'}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Historical timeline snapshots */}
           {showHistory && (
