@@ -28,7 +28,7 @@ export const GET = withApiHandler(async (request, context) => {
 
   // Sort quotation items by sort_order for consistency
   if (quotations) {
-    quotations.forEach(q => {
+    quotations.forEach((q: any) => {
       if (q.quotation_items) {
         q.quotation_items.sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0));
       }
@@ -47,9 +47,9 @@ export const GET = withApiHandler(async (request, context) => {
     .select('id, alias_name, company_name, work_email, estimated_value')
     .eq('tenant_id', tenantId);
 
-  const clientMap = new Map((clients || []).map(c => [c.id, c]));
+  const clientMap = new Map<any, any>((clients || []).map((c: any) => [c.id, c]));
 
-  const mapped = (quotations || []).map(q => ({
+  const mapped = (quotations || []).map((q: any) => ({
     ...q,
     client_name: q.client_id ? (clientMap.get(q.client_id)?.company_name || clientMap.get(q.client_id)?.name || '') : '',
   }));

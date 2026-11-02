@@ -43,10 +43,10 @@ export const GET = withApiHandler(async (request, context) => {
     .select('id, name, company_name')
     .eq('tenant_id', tenantId);
 
-  const clientMap = new Map((clients || []).map(c => [c.id, c.company_name || c.name]));
+  const clientMap = new Map((clients || []).map((c: any) => [c.id, c.company_name || c.name]));
 
   // Normalize pipeline deals
-  const deals = allInquiries.map(inq => {
+  const deals = allInquiries.map((inq: any) => {
     const stage = inq.pipeline_stage || 'New Lead';
     const value = inq.estimated_value ? Number(inq.estimated_value) : 0;
     const prob = inq.probability ? parseInt(inq.probability) : 0;
@@ -83,10 +83,10 @@ export const GET = withApiHandler(async (request, context) => {
 
   // Build stage-wise pipeline statistics
   const stageStats = PIPELINE_STAGES.map(stage => {
-    const stageDeals = deals.filter(d => d.stage === stage);
-    const totalValue = stageDeals.reduce((s, d) => s + d.value, 0);
+    const stageDeals = deals.filter((d: any) => d.stage === stage);
+    const totalValue = stageDeals.reduce((s: number, d: any) => s + d.value, 0);
     const avgProb = stageDeals.length > 0
-      ? Math.round(stageDeals.reduce((s, d) => s + d.probability, 0) / stageDeals.length)
+      ? Math.round(stageDeals.reduce((s: number, d: any) => s + d.probability, 0) / stageDeals.length)
       : 0;
     return {
       stage,
@@ -98,14 +98,14 @@ export const GET = withApiHandler(async (request, context) => {
 
   // Compute KPIs
   const totalDeals = deals.length;
-  const totalPipelineValue = deals.reduce((s, d) => s + d.value, 0);
-  const wonDeals = deals.filter(d => d.stage === 'Won');
-  const lostDeals = deals.filter(d => d.stage === 'Lost');
-  const wonValue = wonDeals.reduce((s, d) => s + d.value, 0);
-  const lostValue = lostDeals.reduce((s, d) => s + d.value, 0);
-  const activeDeals = deals.filter(d => !['Won', 'Lost'].includes(d.stage));
-  const activePipelineValue = activeDeals.reduce((s, d) => s + d.value, 0);
-  const weightedPipelineValue = activeDeals.reduce((s, d) => s + (d.value * d.probability / 100), 0);
+  const totalPipelineValue = deals.reduce((s: number, d: any) => s + d.value, 0);
+  const wonDeals = deals.filter((d: any) => d.stage === 'Won');
+  const lostDeals = deals.filter((d: any) => d.stage === 'Lost');
+  const wonValue = wonDeals.reduce((s: number, d: any) => s + d.value, 0);
+  const lostValue = lostDeals.reduce((s: number, d: any) => s + d.value, 0);
+  const activeDeals = deals.filter((d: any) => !['Won', 'Lost'].includes(d.stage));
+  const activePipelineValue = activeDeals.reduce((s: number, d: any) => s + d.value, 0);
+  const weightedPipelineValue = activeDeals.reduce((s: number, d: any) => s + (d.value * d.probability / 100), 0);
   const conversionRate = totalDeals > 0 ? Math.round((wonDeals.length / totalDeals) * 100) : 0;
   const avgDealValue = totalDeals > 0 ? Math.round(totalPipelineValue / totalDeals) : 0;
 
@@ -126,9 +126,10 @@ export const GET = withApiHandler(async (request, context) => {
     Return ONLY valid JSON, no markdown.`;
 
     const groqRes = await callGroqAiEngine({ prompt, useCache: true });
-    if (groqRes?.text) {
+    const responseText = groqRes?.answer || '';
+    if (responseText) {
       try {
-        const cleaned = groqRes.text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        const cleaned = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
         aiInsights = JSON.parse(cleaned);
       } catch {
         aiInsights = { pipelineHealthScore: conversionRate, winPrediction: 'Unable to generate prediction.', riskAlerts: [], recommendations: [], revenueProjection: '—' };

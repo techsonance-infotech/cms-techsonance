@@ -6,7 +6,7 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { getRouteSupabase } from '@/server/supabase/route-helpers';
-import { fetchRoles, fetchRolePermissions } from '@/server/rbac/service';
+import { fetchRoles, fetchRolePermissions, updateRole } from '@/server/rbac/service';
 import { requireRole } from '@/server/auth/rbac';
 import { normalizeAppRole } from '@/server/auth/rbac';
 import { authenticateRequest } from '@/server/auth/session';

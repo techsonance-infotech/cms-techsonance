@@ -117,7 +117,51 @@ export default function AnalyticsDashboardPage() {
   });
 
   // Dynamic API State
-  const [dashboards, setDashboards] = useState({
+  const [dashboards, setDashboards] = useState<any>({
+    orgHealthScore: '94.2%',
+    revPayrollRatio: '10.2x Ratio',
+    workforceCostAmt: '₹1,45,000',
+    profitabilityMargin: '82.4%',
+    benchRate: '14.2%',
+    revenueVsPayrollTrend: [
+      { month: 'May', Revenue: 42, Payroll: 18 },
+      { month: 'Jun', Revenue: 55, Payroll: 19 },
+      { month: 'Jul', Revenue: 68, Payroll: 20 },
+      { month: 'Aug', Revenue: 82, Payroll: 21 },
+      { month: 'Sep', Revenue: 95, Payroll: 22 },
+      { month: 'Oct', Revenue: 110, Payroll: 24 }
+    ],
+    expenseDistribution: [
+      { name: 'Base Salaries', value: 68 },
+      { name: 'Benefits & Healthcare', value: 14 },
+      { name: 'Software Licenses & Equipment', value: 12 },
+      { name: 'Taxes & Compliance', value: 6 }
+    ],
+    resourceAssignments: [
+      { month: 'Jun', Assigned: 24, Bench: 4 },
+      { month: 'Jul', Assigned: 26, Bench: 3 },
+      { month: 'Aug', Assigned: 28, Bench: 2 },
+      { month: 'Sep', Assigned: 30, Bench: 2 },
+      { month: 'Oct', Assigned: 31, Bench: 3 }
+    ],
+    slaAdherence: [
+      { name: 'Fintech BU', SLA: 98.4 },
+      { name: 'HealthTech BU', SLA: 96.2 },
+      { name: 'Enterprise Cloud', SLA: 99.1 },
+      { name: 'GovTech Delivery', SLA: 94.5 }
+    ],
+    revenueByBU: [
+      { name: 'Fintech Solutions', value: 42 },
+      { name: 'Cloud Modernization', value: 28 },
+      { name: 'AI & Data Platforms', value: 18 },
+      { name: 'Cybersecurity', value: 12 }
+    ],
+    topClientsRevenue: [
+      { name: 'Global Financials Corp', Revenue: 34 },
+      { name: 'Apex Health Systems', Revenue: 26 },
+      { name: 'Zenith Logistics', Revenue: 19 },
+      { name: 'NextGen Retail Inc', Revenue: 14 }
+    ],
     attendanceTrends: { ratePercent: '98.4%', onTimeCount: 14, lateCount: 0 },
     leaveTrends: { utilizationPercent: '12.5%', activeLeavesCount: 2, totalBalanceDays: 140 },
     shiftUtilization: { efficiencyPercent: '96.2%', rotationalShiftCount: 8, restGapAdherence: '100%' },

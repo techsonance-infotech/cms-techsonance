@@ -19,11 +19,11 @@ export const GET = withApiHandler(async (request, context) => {
     .eq('tenant_id', tenantId);
 
   const totalLeadsCount = clients?.length || 0;
-  const activeClientsCount = clients?.filter(c => c.status === 'active' || c.status === 'won').length || 0;
+  const activeClientsCount = clients?.filter((c: any) => c.status === 'active' || c.status === 'won').length || 0;
 
   // 2. Lead Source Distribution
   const sourcesMap: Record<string, number> = {};
-  clients?.forEach(c => {
+  clients?.forEach((c: any) => {
     const src = c.lead_source || 'Referral';
     sourcesMap[src] = (sourcesMap[src] || 0) + 1;
   });
@@ -48,12 +48,12 @@ export const GET = withApiHandler(async (request, context) => {
     .eq('tenant_id', tenantId);
 
   const totalCommThreads = threads?.length || 0;
-  const resolvedThreads = threads?.filter(t => t.status === 'resolved').length || 0;
+  const resolvedThreads = threads?.filter((t: any) => t.status === 'resolved').length || 0;
   const pendingThreads = totalCommThreads - resolvedThreads;
 
   // 4. Calculate total pipeline estimated budgets
   let totalPipelineBudget = 0;
-  clients?.forEach(c => {
+  clients?.forEach((c: any) => {
     const budgetStr = c.estimated_budget || '0';
     const num = Number(budgetStr.replace(/[^0-9]/g, '')) || 0;
     totalPipelineBudget += num;

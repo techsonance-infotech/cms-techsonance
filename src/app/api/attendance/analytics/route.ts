@@ -23,7 +23,7 @@ export const GET = withApiHandler(async (request, context) => {
   if (empErr) throw empErr;
 
   const empMap = new Map<number, any>();
-  employees?.forEach(e => empMap.set(Number(e.id), e));
+  employees?.forEach((e: any) => empMap.set(Number(e.id), e));
 
   // 2. Fetch Users (for names, gender details)
   const { data: users, error: userErr } = await supabase
@@ -34,11 +34,11 @@ export const GET = withApiHandler(async (request, context) => {
   if (userErr) throw userErr;
 
   const userMap = new Map<string, any>();
-  users?.forEach(u => userMap.set(u.id, u));
+  users?.forEach((u: any) => userMap.set(u.id, u));
 
   // Construct employee ID to user data map
   const empUserDataMap = new Map<number, { name: string; department: string; location: string }>();
-  employees?.forEach(emp => {
+  employees?.forEach((emp: any) => {
     const user = userMap.get(emp.user_id);
     empUserDataMap.set(Number(emp.id), {
       name: user ? `${user.first_name} ${user.last_name}` : 'Unknown Employee',
@@ -97,10 +97,10 @@ export const GET = withApiHandler(async (request, context) => {
   // ---------------- METRICS COMPUTATION ----------------
   
   // Merge attendance
-  const nfcKeys = new Set(modernRecords?.map(r => `${r.employee_id}_${r.date}`));
+  const nfcKeys = new Set(modernRecords?.map((r: any) => `${r.employee_id}_${r.date}`));
   
   const mergedAttendance: any[] = [];
-  modernRecords?.forEach(r => {
+  modernRecords?.forEach((r: any) => {
     mergedAttendance.push({
       employeeId: Number(r.employee_id),
       date: r.date,
@@ -113,7 +113,7 @@ export const GET = withApiHandler(async (request, context) => {
     });
   });
 
-  legacyRecords?.forEach(r => {
+  legacyRecords?.forEach((r: any) => {
     const key = `${r.employee_id}_${r.date}`;
     if (!nfcKeys.has(key)) {
       const timeIn = r.check_in;
@@ -189,12 +189,12 @@ export const GET = withApiHandler(async (request, context) => {
 
   // Anomalies/Exceptions counts
   const totalExceptions = exceptions?.length || 0;
-  const geofenceViolations = exceptions?.filter(e => e.exception_type?.toLowerCase()?.includes('geofence')).length || 0;
-  const missingPunches = exceptions?.filter(e => e.exception_type?.toLowerCase()?.includes('punch') || e.exception_type?.toLowerCase()?.includes('missing')).length || 0;
+  const geofenceViolations = exceptions?.filter((e: any) => e.exception_type?.toLowerCase()?.includes('geofence')).length || 0;
+  const missingPunches = exceptions?.filter((e: any) => e.exception_type?.toLowerCase()?.includes('punch') || e.exception_type?.toLowerCase()?.includes('missing')).length || 0;
 
   // Department compliance splits
   const deptPresentMap: Record<string, { present: number; total: number }> = {};
-  employees?.forEach(e => {
+  employees?.forEach((e: any) => {
     const dept = e.department || 'General';
     if (!deptPresentMap[dept]) {
       deptPresentMap[dept] = { present: 0, total: 0 };
@@ -202,7 +202,7 @@ export const GET = withApiHandler(async (request, context) => {
   });
 
   // Calculate department metrics based on actual records
-  mergedAttendance.forEach(a => {
+  mergedAttendance.forEach((a: any) => {
     const empInfo = empMap.get(a.employeeId);
     if (empInfo) {
       const dept = empInfo.department || 'General';
@@ -221,20 +221,20 @@ export const GET = withApiHandler(async (request, context) => {
   }));
 
   // Leave utilization
-  const totalLeavesApproved = approvedLeaves?.reduce((sum, l) => sum + Number(l.actual_days || 0), 0) || 0;
+  const totalLeavesApproved = approvedLeaves?.reduce((sum: number, l: any) => sum + Number(l.actual_days || 0), 0) || 0;
 
   // Anomaly rate & employee scores
   // Calculate average compliance rating per employee
   const employeeScores: any[] = [];
-  employees?.forEach(emp => {
+  employees?.forEach((emp: any) => {
     const user = userMap.get(emp.user_id);
     const empName = user ? `${user.first_name} ${user.last_name}` : 'Unknown';
     
     // Find this employee's logs
-    const myLogs = mergedAttendance.filter(a => a.employeeId === emp.id);
-    const myPresents = myLogs.filter(a => ['present', 'on_time'].includes(a.status)).length;
-    const myLates = myLogs.filter(a => a.status === 'late').length;
-    const myAbsents = myLogs.filter(a => a.status === 'absent').length;
+    const myLogs = mergedAttendance.filter((a: any) => a.employeeId === emp.id);
+    const myPresents = myLogs.filter((a: any) => ['present', 'on_time'].includes(a.status)).length;
+    const myLates = myLogs.filter((a: any) => a.status === 'late').length;
+    const myAbsents = myLogs.filter((a: any) => a.status === 'absent').length;
     
     // Simple attendance score: starts at 100, drops 2 points per late and 5 points per absent
     let score = 100 - (myLates * 2) - (myAbsents * 5);

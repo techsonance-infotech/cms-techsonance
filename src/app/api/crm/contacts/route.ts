@@ -31,8 +31,8 @@ export const GET = withApiHandler(async (request, context) => {
   const finalContacts = contacts || [];
 
   // Map client names dynamically
-  const clientMap = new Map((clients || []).map(c => [c.id, c.company_name || c.name]));
-  const mappedContacts = finalContacts.map(c => ({
+  const clientMap = new Map((clients || []).map((c: any) => [c.id, c.company_name || c.name]));
+  const mappedContacts = finalContacts.map((c: any) => ({
     ...c,
     client_name: c.client_id ? (clientMap.get(c.client_id) || '') : ''
   }));

@@ -47,7 +47,7 @@ export const GET = withApiHandler(async (request, context) => {
       return defaultValue;
     };
 
-    const normalizedEmployees = allEmployeesRaw.map(row => {
+    const normalizedEmployees: any[] = allEmployeesRaw.map((row: any) => {
       const workMode = getField(row, 'work_mode', 'workMode', 'office');
       const salaryVal = row.salary ? Number(row.salary) : Number(getField(row, 'ctc', 'ctc', 0));
       const genderVal = getField(row, 'gender', 'gender');
@@ -70,7 +70,7 @@ export const GET = withApiHandler(async (request, context) => {
       };
     });
 
-    let allEmployees = [...normalizedEmployees];
+    let allEmployees: any[] = [...normalizedEmployees];
     if (filtersParam) {
       const filters = filtersParam.split(',');
       if (filters.includes('hq')) {
