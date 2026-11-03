@@ -66,12 +66,20 @@ export default function TravelManagementDashboard() {
   const [expenseAmount, setExpenseAmount] = useState('');
   const [receiptUrl, setReceiptUrl] = useState('');
 
+  const getAuthHeaders = (extraHeaders?: Record<string, string>): HeadersInit => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('session_token') : null;
+    const headers: Record<string, string> = { ...extraHeaders };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    return headers;
+  };
+
   const fetchTravelRequests = async () => {
     try {
       setRefreshing(true);
-      const token = localStorage.getItem('session_token');
       const res = await fetch('/api/travel/requests', {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
+        headers: getAuthHeaders()
       });
       if (res.ok) {
         const json = await res.json();
@@ -99,8 +107,7 @@ export default function TravelManagementDashboard() {
 
   const fetchItinerariesAndExpenses = async (reqId: string) => {
     try {
-      const token = localStorage.getItem('session_token');
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const headers = getAuthHeaders();
       const [itineraryRes, expenseRes] = await Promise.all([
         fetch(`/api/travel/itinerary?requestId=${reqId}`, { headers }),
         fetch(`/api/travel/expenses?requestId=${reqId}`, { headers })
@@ -143,13 +150,9 @@ export default function TravelManagementDashboard() {
     setSubmitting(true);
 
     try {
-      const token = localStorage.getItem('session_token');
       const res = await fetch('/api/travel/requests', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           destination,
           purpose,
@@ -184,13 +187,9 @@ export default function TravelManagementDashboard() {
 
   const handleStatusAction = async (requestId: string, fields: any) => {
     try {
-      const token = localStorage.getItem('session_token');
       const res = await fetch('/api/travel/requests', {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ requestId, ...fields })
       });
 
@@ -212,13 +211,9 @@ export default function TravelManagementDashboard() {
     setSubmitting(true);
 
     try {
-      const token = localStorage.getItem('session_token');
       const res = await fetch('/api/travel/itinerary', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           travelRequestId: selectedRequest.id,
           flightTrainDetails,
@@ -253,13 +248,9 @@ export default function TravelManagementDashboard() {
     setSubmitting(true);
 
     try {
-      const token = localStorage.getItem('session_token');
       const res = await fetch('/api/travel/expenses', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           travelRequestId: selectedRequest.id,
           description: expenseDesc,
