@@ -52,7 +52,6 @@ CMS_Portal_UI_Prompt.md
 
 # non-Vercel deployment & pipeline scripts (Docker, coverage, scans)
 /scripts/docker-entrypoint.sh
-/scripts/run-tests-with-coverage.mjs
 /scripts/security-scan.mjs
 
 # docs and design system references

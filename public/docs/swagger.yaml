@@ -345,6 +345,13 @@ paths:
       responses:
         200:
           description: "Successful request execution."
+    post:
+      tags:
+        - attendance
+      summary: "POST handler for /api/attendance/requests"
+      responses:
+        200:
+          description: "Successful request execution."
     patch:
       tags:
         - attendance
@@ -1838,6 +1845,13 @@ paths:
       responses:
         200:
           description: "Successful request execution."
+    post:
+      tags:
+        - finance
+      summary: "POST handler for /api/finance/executive"
+      responses:
+        200:
+          description: "Successful request execution."
   "/api/firebase/poll":
     get:
       tags:
@@ -1897,6 +1911,13 @@ paths:
       tags:
         - holidays
       summary: "POST handler for /api/holidays/management"
+      responses:
+        200:
+          description: "Successful request execution."
+    delete:
+      tags:
+        - holidays
+      summary: "DELETE handler for /api/holidays/management"
       responses:
         200:
           description: "Successful request execution."
@@ -2157,6 +2178,13 @@ paths:
       tags:
         - knowledge-base
       summary: "PUT handler for /api/knowledge-base"
+      responses:
+        200:
+          description: "Successful request execution."
+    delete:
+      tags:
+        - knowledge-base
+      summary: "DELETE handler for /api/knowledge-base"
       responses:
         200:
           description: "Successful request execution."
@@ -3214,6 +3242,13 @@ paths:
       responses:
         200:
           description: "Successful request execution."
+    put:
+      tags:
+        - recruitment
+      summary: "PUT handler for /api/recruitment/interviews"
+      responses:
+        200:
+          description: "Successful request execution."
   "/api/recruitment/offers":
     get:
       tags:
@@ -3293,6 +3328,13 @@ paths:
       tags:
         - reimbursements
       summary: "POST handler for /api/reimbursements/operations"
+      responses:
+        200:
+          description: "Successful request execution."
+    delete:
+      tags:
+        - reimbursements
+      summary: "DELETE handler for /api/reimbursements/operations"
       responses:
         200:
           description: "Successful request execution."
@@ -4131,6 +4173,22 @@ paths:
       tags:
         - wfh
       summary: "POST handler for /api/wfh/approve"
+      responses:
+        200:
+          description: "Successful request execution."
+  "/api/wfh/compliance":
+    post:
+      tags:
+        - wfh
+      summary: "POST handler for /api/wfh/compliance"
+      responses:
+        200:
+          description: "Successful request execution."
+  "/api/wfh/equipment":
+    post:
+      tags:
+        - wfh
+      summary: "POST handler for /api/wfh/equipment"
       responses:
         200:
           description: "Successful request execution."
