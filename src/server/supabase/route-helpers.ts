@@ -31,23 +31,54 @@ export async function resolveAuthUserIdFromLegacyUserId(
 }
 
 export async function resolveActorUuid(context: any, supabase?: any): Promise<string | null> {
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const providerId = context?.auth?.user?.providerUserId;
-  if (providerId && typeof providerId === 'string' && providerId.includes('-')) {
+  const tokenId = context?.auth?.tokenId;
+  const legacyId = context?.auth?.user?.id;
+  const email = context?.auth?.user?.email;
+
+  if (supabase) {
+    if (providerId && typeof providerId === 'string' && UUID_REGEX.test(providerId)) {
+      const { data: u } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', providerId)
+        .maybeSingle();
+      if (u?.id) return u.id;
+    }
+    if (tokenId && typeof tokenId === 'string' && UUID_REGEX.test(tokenId)) {
+      const { data: u } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', tokenId)
+        .maybeSingle();
+      if (u?.id) return u.id;
+    }
+    if (legacyId) {
+      const { data: u } = await supabase
+        .from('users')
+        .select('id')
+        .eq('legacy_user_id', legacyId)
+        .maybeSingle();
+      if (u?.id) return u.id;
+    }
+    if (email) {
+      const { data: u } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', email)
+        .maybeSingle();
+      if (u?.id) return u.id;
+    }
+  }
+
+  if (providerId && typeof providerId === 'string' && UUID_REGEX.test(providerId)) {
     return providerId;
   }
-  const tokenId = context?.auth?.tokenId;
-  if (tokenId && typeof tokenId === 'string' && tokenId.includes('-')) {
+  if (tokenId && typeof tokenId === 'string' && UUID_REGEX.test(tokenId)) {
     return tokenId;
   }
-  const legacyId = context?.auth?.user?.id;
-  if (legacyId && supabase) {
-    const { data: u } = await supabase
-      .from('users')
-      .select('id')
-      .eq('legacy_user_id', legacyId)
-      .maybeSingle();
-    if (u?.id) return u.id;
-  }
+
   return null;
 }
 

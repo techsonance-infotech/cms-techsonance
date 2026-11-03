@@ -1,7 +1,9 @@
+// Updated HR Service Desk API - v2
 import { NextResponse } from 'next/server';
 import { withApiHandler } from '@/server/http/handler';
 import { BadRequestError } from '@/server/http/errors';
 import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
+import { normalizeAppRole } from '@/server/auth/rbac';
 
 // Default Knowledge Base articles and FAQs
 export const DEFAULT_KB_ARTICLES = [
@@ -57,7 +59,23 @@ export const GET = withApiHandler(async (request, context) => {
   if (!tenantId) throw new BadRequestError('Tenant ID missing');
 
   const userRole = (user.role || '').toLowerCase().replace(/[^a-z0-9_]/g, '');
-  const canApprove = ['admin', 'hr_manager', 'project_manager'].includes(userRole);
+  const normalizedRole = normalizeAppRole(user.role);
+  const rawRole = (user.rawRole || user.role || '').toLowerCase().replace(/[^a-z0-9_]/g, '');
+
+  const isSuperAdmin =
+    normalizedRole === 'SuperAdmin' ||
+    ['superadmin', 'super_admin'].includes(rawRole);
+
+  const isAdmin =
+    normalizedRole === 'Admin' ||
+    ['admin', 'hr_manager', 'hr_executive', 'owner', 'tenant_owner', 'business_owner', 'cms_administrator', 'management', 'ceo', 'cto'].includes(rawRole);
+
+  const isManager =
+    normalizedRole === 'Manager' ||
+    ['manager', 'project_manager'].includes(rawRole);
+
+  const isSuperAdminOrAdmin = isSuperAdmin || isAdmin;
+  const canApprove = isSuperAdminOrAdmin || isManager;
 
   const supabase = getAdminRouteSupabase();
 
@@ -66,7 +84,7 @@ export const GET = withApiHandler(async (request, context) => {
   try {
     const { data } = await supabase
       .from('users')
-      .select('id, first_name, last_name, email, role')
+      .select('id, legacy_user_id, first_name, last_name, email, role')
       .eq('tenant_id', tenantId);
     if (data) usersList = data;
   } catch (err) {
@@ -84,12 +102,49 @@ export const GET = withApiHandler(async (request, context) => {
     console.warn('Employees fetch query info:', err);
   }
 
-  const empMap = new Map(employees.map((e: any) => [e.user_id, e]));
+  const empMap = new Map();
+  employees.forEach((e: any) => {
+    if (e.user_id) empMap.set(String(e.user_id), e);
+    if (e.id) empMap.set(String(e.id), e);
+  });
 
-  const employeeRoster = usersList.map((u: any) => {
-    const emp = empMap.get(u.id);
+  // Current logged in user lookup in usersList
+  const currentUserRecord = usersList.find((u: any) =>
+    (user.providerUserId && String(u.id) === String(user.providerUserId)) ||
+    (u.legacy_user_id && user.id && Number(u.legacy_user_id) === Number(user.id)) ||
+    (user.email && u.email?.toLowerCase() === user.email.toLowerCase()) ||
+    (user.id && String(u.id) === String(user.id))
+  );
+
+  const currentEmpData = currentUserRecord
+    ? (empMap.get(String(currentUserRecord.id)) || (currentUserRecord.legacy_user_id ? empMap.get(String(currentUserRecord.legacy_user_id)) : null))
+    : null;
+
+  interface EmployeeRosterMember {
+    id: string;
+    legacyUserId?: string | number | null;
+    name: string;
+    email: string;
+    department: string;
+    designation: string;
+  }
+
+  const currentEmployee: EmployeeRosterMember = {
+    id: currentUserRecord ? String(currentUserRecord.id) : String(user.providerUserId || user.id),
+    legacyUserId: currentUserRecord?.legacy_user_id ?? (user.id || null),
+    name: currentUserRecord
+      ? `${currentUserRecord.first_name || ''} ${currentUserRecord.last_name || ''}`.trim() || currentUserRecord.email
+      : `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || 'Current Employee',
+    email: currentUserRecord?.email || user.email || '',
+    department: currentEmpData?.department || 'General Operations',
+    designation: currentEmpData?.designation || (user.role ? String(user.role).toUpperCase() : 'Staff Member')
+  };
+
+  const employeeRoster: EmployeeRosterMember[] = usersList.map((u: any) => {
+    const emp = empMap.get(String(u.id)) || (u.legacy_user_id ? empMap.get(String(u.legacy_user_id)) : null);
     return {
-      id: u.id,
+      id: String(u.id),
+      legacyUserId: u.legacy_user_id ?? null,
       name: `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email || 'Employee',
       email: u.email || '',
       department: emp?.department || 'General Operations',
@@ -97,7 +152,18 @@ export const GET = withApiHandler(async (request, context) => {
     };
   });
 
-  const userMap = new Map(usersList.map((u: any) => [u.id, u]));
+  // Ensure current employee is present in roster
+  if (employeeRoster.length === 0 || !employeeRoster.some(e => e.id === currentEmployee.id)) {
+    employeeRoster.unshift(currentEmployee);
+  }
+
+  const userMap = new Map<string, any>();
+  usersList.forEach((u: any) => {
+    userMap.set(String(u.id), u);
+    if (u.legacy_user_id) {
+      userMap.set(String(u.legacy_user_id), u);
+    }
+  });
 
   // 2. Fetch HR Service Tickets from DB `hr_service_tickets`
   let dbTickets: any[] = [];
@@ -108,9 +174,18 @@ export const GET = withApiHandler(async (request, context) => {
       .eq('tenant_id', tenantId)
       .order('created_at', { ascending: false });
 
-    // RBAC: If regular employee, filter to tickets submitted by themselves
-    if (!canApprove) {
-      query = query.eq('user_id', user.id);
+    // RBAC: If regular employee, filter to tickets submitted by / for themselves
+    if (!isSuperAdminOrAdmin && !canApprove) {
+      const matchIds = [
+        currentUserRecord ? String(currentUserRecord.id) : null,
+        currentUserRecord?.legacy_user_id ? String(currentUserRecord.legacy_user_id) : null,
+        user.providerUserId ? String(user.providerUserId) : null,
+        user.id ? String(user.id) : null
+      ].filter(Boolean) as string[];
+
+      if (matchIds.length > 0) {
+        query = query.in('user_id', matchIds);
+      }
     }
 
     const { data } = await query;
@@ -120,9 +195,11 @@ export const GET = withApiHandler(async (request, context) => {
   }
 
   const tickets = dbTickets.map((t: any) => {
-    const targetUser = userMap.get(t.user_id);
-    const empName = targetUser ? `${targetUser.first_name || ''} ${targetUser.last_name || ''}`.trim() : 'Employee';
-    const empEmail = targetUser?.email || '';
+    const targetUser = userMap.get(String(t.user_id));
+    const empName = targetUser
+      ? `${targetUser.first_name || ''} ${targetUser.last_name || ''}`.trim() || targetUser.email
+      : (String(t.user_id) === currentEmployee.id ? currentEmployee.name : 'Employee');
+    const empEmail = targetUser?.email || (String(t.user_id) === currentEmployee.id ? currentEmployee.email : '');
 
     const assignedUser = t.assigned_to ? userMap.get(t.assigned_to) : null;
     const assignedName = assignedUser ? `${assignedUser.first_name || ''} ${assignedUser.last_name || ''}`.trim() : 'L1 HR Agent';
@@ -165,9 +242,12 @@ export const GET = withApiHandler(async (request, context) => {
 
   return NextResponse.json({
     success: true,
-    userRole,
-    currentUserId: user.id,
+    userRole: rawRole || normalizedRole.toLowerCase(),
+    normalizedRole,
+    isSuperAdminOrAdmin,
     canApprove,
+    currentUserId: currentEmployee.id,
+    currentEmployee,
     employeeRoster,
     kbArticles: DEFAULT_KB_ARTICLES,
     escalationMatrix: ESCALATION_MATRIX,
@@ -200,18 +280,44 @@ export const POST = withApiHandler(async (request, context) => {
 
   if (!tenantId) throw new BadRequestError('Tenant ID missing');
 
-  const userRole = (user.role || '').toLowerCase().replace(/[^a-z0-9_]/g, '');
-  const canApprove = ['admin', 'hr_manager', 'project_manager'].includes(userRole);
+  const normalizedRole = normalizeAppRole(user.role);
+  const rawRole = (user.rawRole || user.role || '').toLowerCase().replace(/[^a-z0-9_]/g, '');
 
-  if (!canApprove || !userId) {
-    userId = user.id;
+  const isSuperAdmin =
+    normalizedRole === 'SuperAdmin' ||
+    ['superadmin', 'super_admin'].includes(rawRole);
+
+  const isAdmin =
+    normalizedRole === 'Admin' ||
+    ['admin', 'hr_manager', 'hr_executive', 'owner', 'tenant_owner', 'business_owner', 'cms_administrator', 'management', 'ceo', 'cto'].includes(rawRole);
+
+  const isSuperAdminOrAdmin = isSuperAdmin || isAdmin;
+
+  const supabase = getAdminRouteSupabase();
+
+  // Find user's record in DB to get their persistent UUID / id
+  let currentDbUser: any = null;
+  try {
+    const { data } = await supabase
+      .from('users')
+      .select('id, legacy_user_id, email, first_name, last_name')
+      .eq('tenant_id', tenantId)
+      .or(`id.eq.${user.providerUserId || user.id},email.eq.${user.email}`);
+    if (data && data.length > 0) currentDbUser = data[0];
+  } catch (err) {
+    console.warn('Error fetching current DB user:', err);
+  }
+
+  const effectiveSelfId = currentDbUser ? String(currentDbUser.id) : String(user.providerUserId || user.id);
+
+  // If role is employee (not superadmin or admin), enforce target employee = themselves!
+  if (!isSuperAdminOrAdmin || !userId) {
+    userId = effectiveSelfId;
   }
 
   if (!subject || !description) {
     throw new BadRequestError('Subject and Description are required');
   }
-
-  const supabase = getAdminRouteSupabase();
 
   // AI Auto-Suggest Answer logic matching KB Articles
   let aiAnswer = `AI HR Copilot Recommendation for "${subject}": Please refer to company HR policy guidelines. An HR specialist has been notified.`;

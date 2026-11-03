@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { withApiHandler } from '@/server/http/handler';
 import { BadRequestError } from '@/server/http/errors';
-import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
+import { getAdminRouteSupabase, resolveActorUuid } from '@/server/supabase/route-helpers';
 
 export const GET = withApiHandler(async (request, context) => {
   const tenantId = context.auth?.user.tenantId;
@@ -27,11 +27,12 @@ export const GET = withApiHandler(async (request, context) => {
 
   // Auto-seed sample review if empty
   if (!reviews || reviews.length === 0) {
+    const reviewerUuid = await resolveActorUuid(context, supabase);
     const seeds = [
       {
         tenant_id: tenantId,
         vendor_id: vendorId,
-        reviewed_by: context.auth!.user.id,
+        reviewed_by: reviewerUuid,
         sla_score: 5,
         quality_score: 4,
         communication_score: 4,
@@ -64,13 +65,14 @@ export const POST = withApiHandler(async (request, context) => {
   }
 
   const supabase = getAdminRouteSupabase();
+  const reviewerUuid = await resolveActorUuid(context, supabase);
 
   const { data, error } = await supabase
     .from('psa_vendor_performance')
     .insert({
       tenant_id: tenantId,
       vendor_id: vendorId,
-      reviewed_by: context.auth!.user.id,
+      reviewed_by: reviewerUuid,
       sla_score: parseInt(slaScore),
       quality_score: parseInt(qualityScore),
       communication_score: parseInt(communicationScore),

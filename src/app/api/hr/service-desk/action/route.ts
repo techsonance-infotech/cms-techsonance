@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { withApiHandler } from '@/server/http/handler';
 import { BadRequestError, ForbiddenError } from '@/server/http/errors';
 import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
+import { normalizeAppRole } from '@/server/auth/rbac';
 
 export const POST = withApiHandler(async (request, context) => {
   const payload = await request.json();
@@ -24,7 +25,13 @@ export const POST = withApiHandler(async (request, context) => {
   }
 
   const userRole = (user.role || '').toLowerCase().replace(/[^a-z0-9_]/g, '');
-  const isAuthorizedManager = ['admin', 'hr_manager', 'project_manager'].includes(userRole);
+  const normalizedRole = normalizeAppRole(user.role);
+  const rawRole = (user.rawRole || user.role || '').toLowerCase().replace(/[^a-z0-9_]/g, '');
+  const isAuthorizedManager =
+    normalizedRole === 'SuperAdmin' ||
+    normalizedRole === 'Admin' ||
+    normalizedRole === 'Manager' ||
+    ['admin', 'superadmin', 'super_admin', 'hr_manager', 'project_manager', 'owner', 'tenant_owner'].includes(rawRole);
 
   const supabase = getAdminRouteSupabase();
 

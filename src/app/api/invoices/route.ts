@@ -133,7 +133,7 @@ export const POST = withApiHandler(async (request, context) => {
   }, supabase);
   if (error || !data) throw error ? new Error(error.message) : new Error('Failed to create invoice');
   return NextResponse.json(normalizeSupabaseInvoiceRow(data as Record<string, unknown>), { status: 201 });
-}, { requireAuth: true, roles: ['Manager'] });
+}, { requireAuth: true, roles: ['Employee'] });
 
 export const PUT = withApiHandler(async (request, context) => {
   const id = Number(new URL(request.url).searchParams.get('id'));
@@ -184,7 +184,7 @@ export const PUT = withApiHandler(async (request, context) => {
   .single();
   if (error || !data) throw error ? new Error(error.message) : new Error('Failed to update invoice');
   return NextResponse.json(normalizeSupabaseInvoiceRow(data));
-}, { requireAuth: true, roles: ['Manager'] });
+}, { requireAuth: true, roles: ['Employee'] });
 
 export const DELETE = withApiHandler(async (request, context) => {
   const id = Number(new URL(request.url).searchParams.get('id'));
@@ -204,4 +204,4 @@ export const DELETE = withApiHandler(async (request, context) => {
     .single();
   if (error || !data) throw new NotFoundError('Invoice not found');
   return NextResponse.json({ message: 'Invoice deleted successfully', invoice: normalizeSupabaseInvoiceRow(data) });
-}, { requireAuth: true, roles: ['Manager'] });
+}, { requireAuth: true, roles: ['Employee'] });

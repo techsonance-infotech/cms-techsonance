@@ -20,6 +20,7 @@ import {
   Bot, CornerDownRight, ThumbsUp, Eye, UserCheck
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { getStoredSessionToken, getStoredUser } from '@/lib/client-session';
 
 export const HR_CASE_CATEGORIES = [
   'Payroll & Benefits',
@@ -88,7 +89,10 @@ export default function HrServiceDeskPage() {
 
   // RBAC State
   const [canApprove, setCanApprove] = useState(false);
-  const [userRole, setUserRole] = useState('developer');
+  const [isSuperAdminOrAdmin, setIsSuperAdminOrAdmin] = useState(false);
+  const [userRole, setUserRole] = useState('employee');
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentEmployee, setCurrentEmployee] = useState<RosterEmp | null>(null);
 
   // Dynamic API State
   const [roster, setRoster] = useState<RosterEmp[]>([]);
@@ -109,6 +113,7 @@ export default function HrServiceDeskPage() {
   // Filter & Search State
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [employeeFilter, setEmployeeFilter] = useState('all');
 
   // New Case Modal State
   const [showNewCaseModal, setShowNewCaseModal] = useState(false);
@@ -133,7 +138,7 @@ export default function HrServiceDeskPage() {
   // Fetch 100% Dynamic Data from Backend API
   const loadServiceDeskDataFromApi = async () => {
     try {
-      const token = localStorage.getItem('session_token');
+      const token = getStoredSessionToken() || localStorage.getItem('session_token');
       const res = await fetch('/api/hr/service-desk', {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       });
@@ -141,15 +146,16 @@ export default function HrServiceDeskPage() {
       if (res.ok) {
         const data = await res.json();
         if (data.canApprove !== undefined) setCanApprove(data.canApprove);
+        if (data.isSuperAdminOrAdmin !== undefined) setIsSuperAdminOrAdmin(data.isSuperAdminOrAdmin);
         if (data.userRole) setUserRole(data.userRole);
+        if (data.currentEmployee) setCurrentEmployee(data.currentEmployee);
         if (data.kbArticles) setKbArticles(data.kbArticles);
         if (data.escalationMatrix) setEscalationMatrix(data.escalationMatrix);
         if (data.employeeRoster) {
           setRoster(data.employeeRoster);
-          if (data.currentUserId) {
-            setSelectedUserId(data.currentUserId);
-          } else if (data.employeeRoster.length > 0 && !selectedUserId) {
-            setSelectedUserId(data.employeeRoster[0].id);
+          const defaultEmpId = data.currentUserId || (data.currentEmployee?.id) || (data.employeeRoster.length > 0 ? data.employeeRoster[0].id : '');
+          if (defaultEmpId) {
+            setSelectedUserId(String(defaultEmpId));
           }
         }
         if (data.summaryStats) setSummaryStats(data.summaryStats);
@@ -163,13 +169,21 @@ export default function HrServiceDeskPage() {
   };
 
   useEffect(() => {
+    const stored = getStoredUser();
+    if (stored) {
+      setCurrentUser(stored);
+      const roleStr = (stored.role || '').toLowerCase();
+      const isAdminOrSuper = ['superadmin', 'super_admin', 'admin', 'hr_manager', 'owner', 'tenant_owner'].includes(roleStr);
+      setIsSuperAdminOrAdmin(isAdminOrSuper);
+    }
     loadServiceDeskDataFromApi();
   }, []);
 
   // Submit New HR Case
   const handleCreateCase = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedUserId || !subject.trim() || !description.trim()) {
+    const effectiveUserId = isSuperAdminOrAdmin ? selectedUserId : (currentEmployee?.id || selectedUserId);
+    if (!effectiveUserId || !subject.trim() || !description.trim()) {
       toast.error('Please fill in Employee, Subject, and Description');
       return;
     }
@@ -177,9 +191,9 @@ export default function HrServiceDeskPage() {
     setSubmitting(true);
 
     try {
-      const token = localStorage.getItem('session_token');
+      const token = getStoredSessionToken() || localStorage.getItem('session_token');
       const payload = {
-        userId: selectedUserId,
+        userId: effectiveUserId,
         category: selectedCategory,
         subject: subject.trim(),
         description: description.trim(),
@@ -222,7 +236,7 @@ export default function HrServiceDeskPage() {
     setActionProcessing(true);
 
     try {
-      const token = localStorage.getItem('session_token');
+      const token = getStoredSessionToken() || localStorage.getItem('session_token');
       const payload = {
         ticketIds: targetIds,
         action,
@@ -295,10 +309,11 @@ export default function HrServiceDeskPage() {
 
   const filteredTickets = tickets.filter(t => {
     const matchesCategory = categoryFilter === 'all' || t.category === categoryFilter;
+    const matchesEmployee = employeeFilter === 'all' || String(t.userId) === String(employeeFilter);
     const matchesSearch = t.ticketNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           t.employeeName.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           t.subject.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
+    return matchesCategory && matchesEmployee && matchesSearch;
   });
 
   if (loading) {
@@ -333,7 +348,7 @@ export default function HrServiceDeskPage() {
                     Enterprise HR Service Desk
                   </h1>
                   <Badge className="bg-[#f87941]/20 text-[#f87941] border border-[#f87941]/40 font-bold text-[10px]">
-                    {canApprove ? 'HR Admin & Manager Desk' : 'Employee Service Desk'}
+                    {isSuperAdminOrAdmin ? 'Super Admin / HR Desk' : (canApprove ? 'HR Manager Desk' : 'Employee Service Desk')}
                   </Badge>
                 </div>
                 <p className="text-slate-400 text-xs md:text-sm font-medium mt-0.5">
@@ -399,7 +414,14 @@ export default function HrServiceDeskPage() {
           </TabsList>
 
           <Button
-            onClick={() => setShowNewCaseModal(true)}
+            onClick={() => {
+              if (!isSuperAdminOrAdmin && currentEmployee?.id) {
+                setSelectedUserId(currentEmployee.id);
+              } else if (isSuperAdminOrAdmin && !selectedUserId && roster.length > 0) {
+                setSelectedUserId(currentEmployee?.id || roster[0]?.id);
+              }
+              setShowNewCaseModal(true);
+            }}
             className="bg-[#f87941] hover:bg-[#e06634] text-white font-extrabold text-xs h-9 px-4 rounded-xl flex items-center gap-1.5 shadow-md shadow-[#f87941]/20"
           >
             <Plus className="h-3.5 w-3.5" /> Raise New HR Case
@@ -429,6 +451,20 @@ export default function HrServiceDeskPage() {
                       ))}
                     </SelectContent>
                   </Select>
+
+                  {isSuperAdminOrAdmin && (
+                    <Select value={employeeFilter} onValueChange={setEmployeeFilter}>
+                      <SelectTrigger className="w-44 h-9 text-xs rounded-xl border-slate-200 dark:border-zinc-800">
+                        <SelectValue placeholder="All Employees" />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl max-h-60">
+                        <SelectItem value="all">All Employees ({roster.length})</SelectItem>
+                        {roster.map(e => (
+                          <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
 
                   <Input
                     placeholder="Search case #, subject..."
@@ -677,17 +713,54 @@ export default function HrServiceDeskPage() {
 
           <form onSubmit={handleCreateCase} className="space-y-4 pt-2">
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Employee Target / Applicant</label>
-              <Select value={selectedUserId} onValueChange={setSelectedUserId} disabled={!canApprove}>
-                <SelectTrigger className="rounded-xl text-xs font-semibold h-10 border-slate-200 dark:border-zinc-800">
-                  <SelectValue placeholder="Select Employee" />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl max-h-60">
-                  {roster.map(e => (
-                    <SelectItem key={e.id} value={e.id}>{e.name} ({e.department})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Employee Target / Applicant
+                </label>
+                {isSuperAdminOrAdmin ? (
+                  <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-600 border-amber-500/20 font-bold">
+                    Admin Access (All Employees)
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/20 font-bold flex items-center gap-1">
+                    <UserCheck className="h-2.5 w-2.5" /> Auto-Filled
+                  </Badge>
+                )}
+              </div>
+
+              {isSuperAdminOrAdmin ? (
+                <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                  <SelectTrigger className="rounded-xl text-xs font-semibold h-10 border-slate-200 dark:border-zinc-800">
+                    <SelectValue placeholder="Select Employee from Roster" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl max-h-60">
+                    {roster.map(e => (
+                      <SelectItem key={e.id} value={e.id}>
+                        {e.name} ({e.department}) {e.designation ? `- ${e.designation}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="relative flex items-center">
+                  <Input
+                    value={
+                      currentEmployee
+                        ? `${currentEmployee.name} (${currentEmployee.department || 'Operations'}${currentEmployee.designation ? ` - ${currentEmployee.designation}` : ''})`
+                        : (currentUser?.firstName ? `${currentUser.firstName} ${currentUser.lastName || ''} (Operations)` : (roster[0]?.name ? `${roster[0].name} (${roster[0].department})` : 'Current Employee'))
+                    }
+                    disabled
+                    readOnly
+                    className="rounded-xl text-xs font-bold h-10 border-slate-200 bg-slate-100 text-slate-800 dark:bg-zinc-800/80 dark:border-zinc-700 dark:text-zinc-200 cursor-not-allowed pl-9"
+                  />
+                  <UserCheck className="absolute left-3 h-4 w-4 text-emerald-500 pointer-events-none" />
+                </div>
+              )}
+              <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                {isSuperAdminOrAdmin
+                  ? 'As Super Admin / Admin, select any employee from the list to file a ticket on their behalf.'
+                  : 'Auto-filled with your employee profile. Tickets will be tracked under your account.'}
+              </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

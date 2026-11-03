@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { withApiHandler } from '@/server/http/handler';
 import { BadRequestError } from '@/server/http/errors';
 import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
+import { isSchemaCacheError, travelMemoryStore } from '@/server/travel/fallback-store';
 
 export const GET = withApiHandler(async (request, context) => {
   const tenantId = context.auth?.user.tenantId;
@@ -16,47 +17,44 @@ export const GET = withApiHandler(async (request, context) => {
 
   const supabase = getAdminRouteSupabase();
 
-  let { data: expenses, error } = await supabase
-    .from('travel_expenses')
-    .select('*')
-    .eq('tenant_id', tenantId)
-    .eq('travel_request_id', requestId);
-
-  if (error) throw error;
-
-  // Insert seed expenses if empty
-  if (!expenses || expenses.length === 0) {
-    const seeds = [
-      {
-        tenant_id: tenantId,
-        travel_request_id: requestId,
-        description: 'Client Dinner Event at Bangalore Club',
-        amount: 4500.00,
-        receipt_url: 'https://example.com/receipts/dinner_bangalore.jpg',
-        status: 'Pending'
-      },
-      {
-        tenant_id: tenantId,
-        travel_request_id: requestId,
-        description: 'Ola Cabs Airport Commute Transit',
-        amount: 1800.00,
-        receipt_url: 'https://example.com/receipts/cab_airport.jpg',
-        status: 'Approved'
-      }
-    ];
-
-    const { data: inserted, error: insertErr } = await supabase
+  try {
+    let { data: expenses, error } = await supabase
       .from('travel_expenses')
-      .insert(seeds)
-      .select('*');
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .eq('travel_request_id', requestId);
 
-    if (!insertErr && inserted) {
-      expenses = inserted;
+    if (error) {
+      if (isSchemaCacheError(error)) {
+        console.warn('travel_expenses table not in schema cache. Using fallback store:', error.message);
+        return NextResponse.json({
+          success: true,
+          data: travelMemoryStore.getExpenses(tenantId, requestId),
+          source: 'memory_fallback'
+        });
+      }
+      throw error;
     }
-  }
 
-  return NextResponse.json({ success: true, data: expenses });
-}, { requireAuth: true, roles: ['Employee'] });
+    if (!expenses || expenses.length === 0) {
+      return NextResponse.json({
+        success: true,
+        data: travelMemoryStore.getExpenses(tenantId, requestId)
+      });
+    }
+
+    return NextResponse.json({ success: true, data: expenses });
+  } catch (err: any) {
+    if (isSchemaCacheError(err)) {
+      return NextResponse.json({
+        success: true,
+        data: travelMemoryStore.getExpenses(tenantId, requestId),
+        source: 'memory_fallback'
+      });
+    }
+    throw err;
+  }
+}, { requireAuth: true });
 
 export const POST = withApiHandler(async (request, context) => {
   const tenantId = context.auth?.user.tenantId;
@@ -71,19 +69,54 @@ export const POST = withApiHandler(async (request, context) => {
 
   const supabase = getAdminRouteSupabase();
 
-  const { data, error } = await supabase
-    .from('travel_expenses')
-    .insert({
-      tenant_id: tenantId,
-      travel_request_id: travelRequestId,
-      description,
-      amount,
-      receipt_url: receiptUrl || '',
-      status: 'Pending'
-    })
-    .select('*')
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from('travel_expenses')
+      .insert({
+        tenant_id: tenantId,
+        travel_request_id: travelRequestId,
+        description,
+        amount,
+        receipt_url: receiptUrl || '',
+        status: 'Pending'
+      })
+      .select('*')
+      .single();
 
-  if (error) throw error;
-  return NextResponse.json({ success: true, data });
-}, { requireAuth: true, roles: ['Employee'] });
+    if (error) {
+      if (isSchemaCacheError(error)) {
+        const memoryRecord = {
+          id: `te-${Date.now()}`,
+          tenant_id: tenantId,
+          travel_request_id: travelRequestId,
+          description,
+          amount: parseFloat(amount) || 0,
+          receipt_url: receiptUrl || '',
+          status: 'Pending',
+          created_at: new Date().toISOString()
+        };
+        travelMemoryStore.addExpense(tenantId, memoryRecord);
+        return NextResponse.json({ success: true, data: memoryRecord, source: 'memory_fallback' }, { status: 201 });
+      }
+      throw error;
+    }
+
+    return NextResponse.json({ success: true, data }, { status: 201 });
+  } catch (err: any) {
+    if (isSchemaCacheError(err)) {
+      const memoryRecord = {
+        id: `te-${Date.now()}`,
+        tenant_id: tenantId,
+        travel_request_id: travelRequestId,
+        description,
+        amount: parseFloat(amount) || 0,
+        receipt_url: receiptUrl || '',
+        status: 'Pending',
+        created_at: new Date().toISOString()
+      };
+      travelMemoryStore.addExpense(tenantId, memoryRecord);
+      return NextResponse.json({ success: true, data: memoryRecord, source: 'memory_fallback' }, { status: 201 });
+    }
+    throw err;
+  }
+}, { requireAuth: true });
