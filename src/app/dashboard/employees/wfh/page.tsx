@@ -372,6 +372,16 @@ export default function WfhManagementPage() {
       return;
     }
 
+    if (endDate < startDate) {
+      toast.error('End date must be on or after start date');
+      return;
+    }
+
+    if (reason.trim().length < 10) {
+      toast.error('Business reason must be at least 10 characters long');
+      return;
+    }
+
     setSubmitting(true);
 
     try {
@@ -549,7 +559,7 @@ export default function WfhManagementPage() {
   // Handle Equipment Assignment (Admin only)
   const handleAssignEquipment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!assignForm.userId || !assignForm.assetName || !assignForm.serialNumber) {
+    if (!assignForm.userId || !assignForm.assetName?.trim() || !assignForm.serialNumber?.trim()) {
       toast.error('Please fill in Employee, Asset Name, and Serial Number');
       return;
     }

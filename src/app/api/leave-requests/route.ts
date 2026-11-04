@@ -224,6 +224,29 @@ export const POST = withApiHandler(async (request, context) => {
 
   if (!employee) throw new NotFoundError('Employee not found in this tenant');
 
+  // Check for overlapping approved or pending leave requests for this employee
+  const { data: overlappingLeaves } = await supabase
+    .from('leave_requests')
+    .select('id, start_date, end_date, status, leave_type')
+    .eq('tenant_id', tenantId)
+    .eq('employee_id', employeeId)
+    .in('status', ['approved', 'pending'])
+    .lte('start_date', endDate)
+    .gte('end_date', startDate);
+
+  if (overlappingLeaves && overlappingLeaves.length > 0) {
+    const hasApproved = overlappingLeaves.some((l: any) => l.status === 'approved');
+    const firstMatch = overlappingLeaves[0];
+    const dateRange = (firstMatch.start_date === firstMatch.end_date)
+      ? firstMatch.start_date
+      : `${firstMatch.start_date} to ${firstMatch.end_date}`;
+    throw new BadRequestError(
+      hasApproved
+        ? `You already have an approved leave request covering these dates (${dateRange}).`
+        : `You already have a pending leave request covering these dates (${dateRange}).`
+    );
+  }
+
   const now = new Date().toISOString();
   const dbCols = await getLeaveRequestsColumns(supabase);
 

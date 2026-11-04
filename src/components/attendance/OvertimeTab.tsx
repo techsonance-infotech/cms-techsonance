@@ -65,6 +65,18 @@ export default function OvertimeTab({ tenantId }: OvertimeTabProps) {
   }, []);
 
   const handleProcess = async (id: string, action: 'approve' | 'reject') => {
+    if (action === 'approve' && approvedHours) {
+      const numHours = Number(approvedHours);
+      if (isNaN(numHours) || numHours <= 0) {
+        toast.error('Approved overtime hours must be a positive number');
+        return;
+      }
+      if (numHours > 24) {
+        toast.error('Approved overtime hours cannot exceed 24 hours');
+        return;
+      }
+    }
+
     setProcessingId(id);
 
     try {

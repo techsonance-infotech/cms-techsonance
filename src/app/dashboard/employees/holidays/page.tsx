@@ -141,8 +141,8 @@ export default function HolidayManagementPage() {
   // Submit New Holiday Entry
   const handleAddHoliday = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !holidayDate) {
-      toast.error('Holiday Title and Date are required');
+    if (!title.trim() || title.trim().length < 2 || !holidayDate) {
+      toast.error('Holiday Title (at least 2 characters) and Date are required');
       return;
     }
 

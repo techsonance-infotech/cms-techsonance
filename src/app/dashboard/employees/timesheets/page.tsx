@@ -214,6 +214,38 @@ export default function TimesheetOperationsPage() {
       return;
     }
 
+    const selectedEntryDate = new Date(entryDate);
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    if (selectedEntryDate > today) {
+      toast.error('Cannot log timesheet entries for future dates');
+      return;
+    }
+
+    const numBillable = Number(billableHours) || 0;
+    const numNonBillable = Number(nonBillableHours) || 0;
+
+    if (numBillable < 0 || numNonBillable < 0) {
+      toast.error('Logged hours cannot be negative');
+      return;
+    }
+
+    const totalHours = numBillable + numNonBillable;
+    if (totalHours <= 0) {
+      toast.error('Total logged hours (billable + non-billable) must be greater than 0');
+      return;
+    }
+
+    if (totalHours > 24) {
+      toast.error('Total logged hours cannot exceed 24 hours in a single day');
+      return;
+    }
+
+    if (isLateSubmission && (!lateReason || lateReason.trim().length < 5)) {
+      toast.error('Please provide a justification for late timesheet submission (at least 5 characters)');
+      return;
+    }
+
     const effectiveTaskName = taskName.trim() || `${activityCategory || 'Development'} - ${projectName || 'Work'}`;
 
     setSubmitting(true);
@@ -536,7 +568,16 @@ export default function TimesheetOperationsPage() {
                       <Input
                         type="date"
                         value={entryDate}
-                        onChange={e => setEntryDate(e.target.value)}
+                        max={new Date().toISOString().split('T')[0]}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const todayStr = new Date().toISOString().split('T')[0];
+                          if (val && val > todayStr) {
+                            toast.error('Future dates cannot be selected for timesheets');
+                            return;
+                          }
+                          setEntryDate(val);
+                        }}
                         className="w-full rounded-xl text-xs font-semibold h-10 border-slate-200 dark:border-zinc-800"
                       />
                     </div>

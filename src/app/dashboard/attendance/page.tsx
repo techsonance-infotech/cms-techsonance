@@ -860,6 +860,11 @@ export default function AttendancePage() {
       return;
     }
 
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('CSV file size exceeds 5 MB limit');
+      return;
+    }
+
     setIsUploading(true);
     const formData = new FormData();
     formData.append('file', file);
@@ -917,6 +922,13 @@ export default function AttendancePage() {
 
   const handleUpdateAttendance = async () => {
     if (!editingAttendance) return;
+
+    if (editAttendanceForm.timeIn && editAttendanceForm.timeOut) {
+      if (editAttendanceForm.timeOut <= editAttendanceForm.timeIn) {
+        toast.error('Time out must be later than time in');
+        return;
+      }
+    }
 
     setLoading(true);
     try {
@@ -990,8 +1002,8 @@ export default function AttendancePage() {
       return;
     }
 
-    if (!holidayForm.reason || holidayForm.reason.trim() === '') {
-      toast.error('Please provide a reason');
+    if (!holidayForm.reason || holidayForm.reason.trim().length < 3) {
+      toast.error('Please provide a holiday name/reason (at least 3 characters)');
       return;
     }
 
@@ -1034,8 +1046,21 @@ export default function AttendancePage() {
       return;
     }
 
+    const selectedDate = new Date(attendanceForm.date);
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    if (selectedDate > today) {
+      toast.error('Cannot mark attendance for a future date');
+      return;
+    }
+
     if (!attendanceForm.timeIn || !attendanceForm.timeOut) {
       toast.error('Please provide both time in and time out');
+      return;
+    }
+
+    if (attendanceForm.timeOut <= attendanceForm.timeIn) {
+      toast.error('Time out must be later than time in');
       return;
     }
 
@@ -1129,6 +1154,31 @@ export default function AttendancePage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const getLeaveDaysDisplay = (leave: any) => {
+    if (leave.actualDays !== undefined && leave.actualDays !== null && !isNaN(Number(leave.actualDays))) {
+      const days = Number(leave.actualDays);
+      const formatted = Number.isInteger(days) ? String(days) : days.toFixed(2);
+      return `${formatted} ${days === 1 ? 'Day' : 'Days'}`;
+    }
+    if (leave.startDate && leave.endDate) {
+      const start = new Date(leave.startDate);
+      const end = new Date(leave.endDate);
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) return '1 Day';
+      let count = 0;
+      const cur = new Date(start);
+      while (cur <= end) {
+        const day = cur.getDay();
+        if (day !== 0 && day !== 6) {
+          count++;
+        }
+        cur.setDate(cur.getDate() + 1);
+      }
+      const days = count > 0 ? count : 1;
+      return `${days} ${days === 1 ? 'Day' : 'Days'}`;
+    }
+    return '1 Day';
   };
 
   const formatDateOrdinal = (dateStr: string) => {
@@ -2571,7 +2621,19 @@ export default function AttendancePage() {
                     <span className="text-[10px] text-primary/70 uppercase font-bold tracking-wider mb-1 block">From</span>
                     <p className="font-bold text-primary">{formatDateOrdinal(viewingLeave.startDate)}</p>
                   </div>
-                  <div className="h-10 w-px bg-primary/20 mx-4" />
+                  <div className="h-10 w-px bg-primary/20 mx-2" />
+                  <div className="space-y-1 text-center px-4 py-1.5 bg-white rounded-lg border border-primary/20 shadow-xs">
+                    <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider block">Duration</span>
+                    <p className="font-extrabold text-primary text-base">
+                      {getLeaveDaysDisplay(viewingLeave)}
+                    </p>
+                    {viewingLeave.leavePeriod && viewingLeave.leavePeriod !== 'full_day' && (
+                      <span className="text-[9px] font-semibold text-muted-foreground block capitalize">
+                        {String(viewingLeave.leavePeriod).replace(/_/g, ' ')}
+                      </span>
+                    )}
+                  </div>
+                  <div className="h-10 w-px bg-primary/20 mx-2" />
                   <div className="space-y-1 text-right">
                     <span className="text-[10px] text-primary/70 uppercase font-bold tracking-wider mb-1 block">To</span>
                     <p className="font-bold text-primary">{formatDateOrdinal(viewingLeave.endDate)}</p>

@@ -124,8 +124,30 @@ export default function ShiftManagementPage() {
   // Submit Create Shift Definition
   const handleCreateShift = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!shiftName.trim()) {
-      toast.error('Shift Name is required');
+    if (!shiftName.trim() || shiftName.trim().length < 2) {
+      toast.error('Shift Name must be at least 2 characters');
+      return;
+    }
+
+    if (!startTime || !endTime) {
+      toast.error('Please select both shift start time and end time');
+      return;
+    }
+
+    if (startTime === endTime) {
+      toast.error('Shift start time and end time cannot be identical');
+      return;
+    }
+
+    const numBreak = Number(breakMinutes);
+    if (isNaN(numBreak) || numBreak < 0) {
+      toast.error('Break duration cannot be negative');
+      return;
+    }
+
+    const numDiffPay = Number(diffPay);
+    if (isNaN(numDiffPay) || numDiffPay < 0) {
+      toast.error('Differential pay percentage cannot be negative');
       return;
     }
 
@@ -169,6 +191,16 @@ export default function ShiftManagementPage() {
   const handleExecuteBulkAssignment = async () => {
     if (selectedUserIds.length === 0) {
       toast.error('Please select at least one employee for roster assignment');
+      return;
+    }
+
+    if (!assignStartDate || !assignEndDate) {
+      toast.error('Please select both start date and end date');
+      return;
+    }
+
+    if (assignEndDate < assignStartDate) {
+      toast.error('End date must be on or after start date');
       return;
     }
 

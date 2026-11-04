@@ -135,8 +135,13 @@ export default function ReadersPage() {
   };
 
   const handleAddReader = async () => {
-    if (!newReader.readerId || !newReader.name || !newReader.location || !newReader.type) {
-      toast.error('Please fill in all required fields');
+    if (!newReader.readerId.trim() || !newReader.name.trim() || !newReader.location.trim() || !newReader.type) {
+      toast.error('Please fill in Reader ID, Name, Location, and Device Type');
+      return;
+    }
+
+    if (newReader.type === 'network' && !newReader.ipAddress.trim()) {
+      toast.error('IP Address or Hostname is required for Network readers');
       return;
     }
 

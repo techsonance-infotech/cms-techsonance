@@ -23,6 +23,7 @@ export default function DashboardLayout({
   const [licenseExpiryDate, setLicenseExpiryDate] = useState<string | null>(null);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [companyName, setCompanyName] = useState<string | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     async function checkAuth() {
@@ -69,6 +70,10 @@ export default function DashboardLayout({
               return;
             }
             setCompanyName(settings.companyName || null);
+            setLogoUrl(settings.logoUrl || settings.logo_url || null);
+            if (typeof window !== 'undefined' && (settings.logoUrl || settings.logo_url)) {
+              localStorage.setItem('tenant_logo_url', settings.logoUrl || settings.logo_url);
+            }
 
             // Enforce trial key verification
             const licenseExpiresAt = settings.tenant?.licenseExpiresAt;
@@ -92,9 +97,18 @@ export default function DashboardLayout({
       const handleUserUpdate = () => {
         void checkAuth();
       };
+      const handleLogoUpdate = (e: any) => {
+        if (e?.detail?.logoUrl) {
+          setLogoUrl(e.detail.logoUrl);
+        } else {
+          void checkAuth();
+        }
+      };
       window.addEventListener('user-updated', handleUserUpdate);
+      window.addEventListener('logo-updated', handleLogoUpdate);
       return () => {
         window.removeEventListener('user-updated', handleUserUpdate);
+        window.removeEventListener('logo-updated', handleLogoUpdate);
       };
     }
   }, [router]);
@@ -167,7 +181,7 @@ export default function DashboardLayout({
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
-      <DashboardSidebar user={user} companyName={companyName || undefined} />
+      <DashboardSidebar user={user} companyName={companyName || undefined} logoUrl={logoUrl || undefined} />
       
       {/* Mobile Sidebar Sheet Drawer */}
       <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
@@ -180,6 +194,7 @@ export default function DashboardLayout({
             isMobile 
             onClose={() => setMobileSidebarOpen(false)} 
             companyName={companyName || undefined}
+            logoUrl={logoUrl || undefined}
           />
         </SheetContent>
       </Sheet>

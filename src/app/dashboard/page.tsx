@@ -55,6 +55,7 @@ import { Progress } from '@/components/ui/progress';
 import { PerformanceCharts, FinancialRunRateChart } from '@/components/dashboard/performance-charts';
 import { DashboardAnnouncements, DashboardApprovalQueue, DashboardBroadcaster } from '@/components/dashboard/dashboard-widgets';
 import { PageHeader } from '@/components/ui/page-header';
+import { getStoredSessionToken } from '@/lib/client-session';
 
 interface DashboardStats {
   activeClients: number;
@@ -137,14 +138,14 @@ export default function DashboardPage() {
     hasInitializedRef.current = true;
 
     async function initDashboard() {
-      const token = localStorage.getItem('session_token');
-      if (!token) {
-        router.push('/login');
-        return;
-      }
+      const token = getStoredSessionToken() || localStorage.getItem('session_token');
       try {
+        const headers: Record<string, string> = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
         const response = await fetch('/api/auth/me', {
-          headers: { 'Authorization': `Bearer ${token}` },
+          credentials: 'include',
+          cache: 'no-store',
+          headers,
         });
         if (!response.ok) {
           router.push('/login');
@@ -179,10 +180,14 @@ export default function DashboardPage() {
   }, [router]);
 
   const fetchEmployeeDashboardData = async () => {
-    const token = localStorage.getItem('session_token');
+    const token = getStoredSessionToken() || localStorage.getItem('session_token');
     try {
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
       const response = await fetch('/api/dashboard/stats/employee', {
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include',
+        cache: 'no-store',
+        headers,
       });
       if (response.ok) {
         setEmployeeStats(await response.json());
@@ -191,12 +196,15 @@ export default function DashboardPage() {
       console.error('Error fetching employee stats:', error);
     }
   };
-
   const fetchAdminDashboardData = async () => {
-    const token = localStorage.getItem('session_token');
+    const token = getStoredSessionToken() || localStorage.getItem('session_token');
     try {
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
       const response = await fetch('/api/dashboard/stats/admin', {
-        headers: { Authorization: `Bearer ${token}` }
+        credentials: 'include',
+        cache: 'no-store',
+        headers,
       });
 
       if (response.ok) {

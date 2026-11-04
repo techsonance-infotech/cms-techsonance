@@ -5,31 +5,64 @@ import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
 
 export const GET = withApiHandler(async (request, context) => {
   const user = context.auth!.user;
-  const authUserId = user.id; // This is the UUID
-  const tenantId = user.tenantId;
+  const supabase = getAdminRouteSupabase();
+
+  // Resolve user UUID and tenant ID robustly
+  let authUserId = user.providerUserId || (typeof user.id === 'string' && user.id.includes('-') ? user.id : null);
+  let tenantId = user.tenantId;
+
+  if (!authUserId || !tenantId) {
+    const { data: dbUser } = await supabase
+      .from('users')
+      .select('id, tenant_id, legacy_user_id')
+      .or(`id.eq.${authUserId || user.id},email.eq.${user.email}`)
+      .maybeSingle();
+
+    if (dbUser) {
+      authUserId = authUserId || dbUser.id;
+      tenantId = tenantId || dbUser.tenant_id;
+    }
+  }
 
   if (!authUserId || !tenantId) throw new BadRequestError('User context or tenant is missing');
 
-  const supabase = getAdminRouteSupabase();
-
   // 1. Get employee ID
+  let employeeId: number | null = null;
   const { data: employee } = await supabase
     .from('employees')
-    .select('id')
+    .select('id, user_id')
     .eq('user_id', authUserId)
     .eq('tenant_id', tenantId)
     .maybeSingle();
 
-  const employeeId = employee?.id;
+  if (employee) {
+    employeeId = employee.id;
+  } else {
+    // Fallback: check if id matches legacy_user_id or user.id
+    const legacyId = typeof user.id === 'number' ? user.id : ((user as any).legacy_user_id || null);
+    if (legacyId) {
+      const { data: empByLegacy } = await supabase
+        .from('employees')
+        .select('id, user_id')
+        .eq('id', legacyId)
+        .eq('tenant_id', tenantId)
+        .maybeSingle();
+      if (empByLegacy) {
+        employeeId = empByLegacy.id;
+      }
+    }
+  }
+
   let totalHoursMonth = 0;
   let totalHoursYear = 0;
 
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const firstDayOfMonth = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`;
+  const firstDayOfYear = `${now.getFullYear()}-01-01`;
+
   if (employeeId) {
     // 2. Calculate Total Hours (Month/Year)
-    const now = new Date();
-    const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-    const firstDayOfYear = new Date(now.getFullYear(), 0, 1).toISOString().split('T')[0];
-
     const [monthHoursRes, yearHoursRes] = await Promise.all([
       supabase
         .from('attendance_records')
@@ -58,7 +91,7 @@ export const GET = withApiHandler(async (request, context) => {
     .eq('tenant_id', tenantId)
     .order('assigned_at', { ascending: false });
 
-  const projectIds = (memberRows || []).map((m: any) => m.project_id);
+  const projectIds = (memberRows || []).map((m: any) => m.project_id).filter(Boolean);
   
   let activeProjects = 0;
   let totalAssignedProjects = projectIds.length;
@@ -72,7 +105,9 @@ export const GET = withApiHandler(async (request, context) => {
       .eq('tenant_id', tenantId);
 
     if (projectsData) {
-      activeProjects = projectsData.filter((p: any) => p.status === 'in_progress').length;
+      activeProjects = projectsData.filter((p: any) => 
+        (p.status === 'in_progress' || p.status === 'planning' || p.status === 'active') && p.is_active !== false
+      ).length;
       
       // Merge with assignment date and sort
       recentProjects = (projectsData || [])
@@ -90,7 +125,7 @@ export const GET = withApiHandler(async (request, context) => {
   fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 13);
   const dateList: string[] = [];
   for (let d = new Date(fourteenDaysAgo); d <= new Date(); d.setDate(d.getDate() + 1)) {
-    dateList.push(d.toISOString().split('T')[0]);
+    dateList.push(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`);
   }
 
   // Parallel requests for activity history & pending items
@@ -102,20 +137,24 @@ export const GET = withApiHandler(async (request, context) => {
     pendingLeavesRes,
     pendingReimbursementsRes
   ] = await Promise.all([
+    employeeId
+      ? supabase
+          .from('attendance_records')
+          .select('date, duration')
+          .eq('employee_id', employeeId)
+          .gte('date', dateList[0])
+          .eq('tenant_id', tenantId)
+      : Promise.resolve({ data: [] }),
+    employeeId
+      ? supabase
+          .from('daily_reports')
+          .select('date')
+          .eq('employee_id', employeeId)
+          .gte('date', dateList[0])
+          .eq('tenant_id', tenantId)
+      : Promise.resolve({ data: [] }),
     supabase
-      .from('attendance_records')
-      .select('date, duration')
-      .eq('employee_id', employeeId)
-      .gte('date', dateList[0])
-      .eq('tenant_id', tenantId),
-    supabase
-      .from('daily_work_reports')
-      .select('date')
-      .eq('employee_id', employeeId)
-      .gte('date', dateList[0])
-      .eq('tenant_id', tenantId),
-    supabase
-      .from('project_tasks')
+      .from('tasks')
       .select('status, due_date')
       .eq('assigned_to', authUserId)
       .eq('tenant_id', tenantId),
@@ -130,7 +169,7 @@ export const GET = withApiHandler(async (request, context) => {
     ['Admin', 'SuperAdmin', 'hr_manager', 'project_manager', 'management'].includes(user.role as string)
       ? supabase
           .from('leave_requests')
-          .select('*, employees!inner(id, user_id, employees:users!inner(first_name, last_name))')
+          .select('*, employees(id, user_id)')
           .eq('status', 'pending')
           .eq('tenant_id', tenantId)
           .limit(10)
@@ -138,7 +177,7 @@ export const GET = withApiHandler(async (request, context) => {
     ['Admin', 'SuperAdmin', 'hr_manager', 'accountant', 'management'].includes(user.role as string)
       ? supabase
           .from('reimbursements')
-          .select('*, employees!inner(id, user_id, employees:users!inner(first_name, last_name))')
+          .select('*, employees(id, user_id)')
           .eq('status', 'pending')
           .eq('tenant_id', tenantId)
           .limit(10)
@@ -164,29 +203,29 @@ export const GET = withApiHandler(async (request, context) => {
   };
 
   const notifications = (notificationsRes.data || []) as any[];
-  const announcements = notifications.filter(n => n.type === 'info' || n.type === 'warning');
-  const alerts = notifications.filter(n => n.type === 'error' || n.type === 'success');
+  const announcements = notifications.filter(n => n.type === 'info' || n.type === 'warning' || n.type === 'announcement' || n.type === 'broadcast');
+  const alerts = notifications.filter(n => n.type === 'error' || n.type === 'success' || n.type === 'alert' || !['info', 'warning', 'announcement', 'broadcast'].includes(n.type));
 
   const pendingApprovals = [
     ...(pendingLeavesRes.data || []).map((l: any) => ({ 
       id: l.id, 
       type: 'leave', 
       title: 'Leave Request', 
-      employee: `${l.employees?.employees?.first_name} ${l.employees?.employees?.last_name}`,
-      details: `${l.leave_type.replace('_', ' ')}: ${l.start_date} to ${l.end_date}`,
+      employee: l.employees?.user_id || `Employee #${l.employee_id}`,
+      details: `${(l.leave_type || '').replace('_', ' ')}: ${l.start_date} to ${l.end_date}`,
       date: l.created_at 
     })),
     ...(pendingReimbursementsRes.data || []).map((r: any) => ({  
       id: r.id, 
       type: 'reimbursement', 
       title: 'Reimbursement', 
-      employee: `${r.employees?.employees?.first_name} ${r.employees?.employees?.last_name}`,
+      employee: r.employees?.user_id || `Employee #${r.employee_id}`,
       details: `Amount: ₹${r.amount} - ${r.purpose}`,
       date: r.created_at 
     }))
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
   const assignedTasksDueToday = (taskStatsRes.data || []).filter(
     (t: any) => t.due_date === todayStr
   ).length;
@@ -206,4 +245,4 @@ export const GET = withApiHandler(async (request, context) => {
     pendingApprovals,
     recentProjects,
   }, { status: 200 });
-}, { requireAuth: true, roles: ['Employee'] });
+}, { requireAuth: true });

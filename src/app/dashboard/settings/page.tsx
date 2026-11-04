@@ -1418,6 +1418,7 @@ export default function SettingsPage() {
 
   // Search & Navigation States
   const [searchTerm, setSearchTerm] = useState('');
+  const [userSearchTerm, setUserSearchTerm] = useState('');
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
@@ -1679,7 +1680,7 @@ export default function SettingsPage() {
     password: 'SecurePassword123!',
     firstName: '',
     lastName: '',
-    role: 'developer' as const,
+    role: 'Employee' as any,
     phone: '',
     username: ''
   });
@@ -1909,6 +1910,9 @@ export default function SettingsPage() {
   useEffect(() => {
     if (activeTab === 'structure') {
       fetchOrgChartData();
+    } else if (activeTab === 'users') {
+      fetchTenantUsers();
+      fetchRolesList();
     }
   }, [activeTab]);
 
@@ -1964,11 +1968,53 @@ export default function SettingsPage() {
       if (token && token !== 'null' && token !== 'undefined') {
         headers['Authorization'] = `Bearer ${token}`;
       }
-      const response = await fetch('/api/users?limit=100', { headers });
-      if (response.ok) {
-        const resJson = await response.json();
-        setUsersList(resJson.data || []);
+      
+      let users: any[] = [];
+      try {
+        const response = await fetch(`/api/users?limit=100&t=${Date.now()}`, {
+          headers,
+          credentials: 'include',
+          cache: 'no-store',
+        });
+        if (response.ok) {
+          const resJson = await response.json();
+          users = Array.isArray(resJson) ? resJson : (Array.isArray(resJson?.data) ? resJson.data : []);
+        }
+      } catch (err) {
+        console.warn('Direct users route fetch warning:', err);
       }
+
+      // If users list is empty, also fallback / enrich from employees directory
+      if (!users || users.length === 0) {
+        try {
+          const empRes = await fetch(`/api/employees?limit=100&t=${Date.now()}`, {
+            headers,
+            credentials: 'include',
+            cache: 'no-store',
+          });
+          if (empRes.ok) {
+            const empJson = await empRes.json();
+            const empList = Array.isArray(empJson) ? empJson : (Array.isArray(empJson?.data) ? empJson.data : []);
+            if (empList.length > 0) {
+              users = empList.map((emp: any) => ({
+                id: emp.userId || emp.id,
+                userId: emp.user_id || emp.userId || emp.id,
+                email: emp.email || emp.officeEmail || `${(emp.firstName || 'user').toLowerCase()}@example.com`,
+                firstName: emp.firstName || 'Employee',
+                lastName: emp.lastName || (emp.employeeId ? `(${emp.employeeId})` : ''),
+                role: (emp.designation || 'Employee').toLowerCase().replace(/\s+/g, '_'),
+                isActive: emp.status !== 'inactive' && emp.status !== 'terminated',
+                department: emp.department,
+                designation: emp.designation,
+              }));
+            }
+          }
+        } catch (e) {
+          console.warn('Employees fallback fetch error in users directory:', e);
+        }
+      }
+
+      setUsersList(users);
     } catch (err) {
       console.error('Failed to load workspace users:', err);
     } finally {
@@ -2100,9 +2146,10 @@ export default function SettingsPage() {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const response = await fetch(`/api/users?id=${user.id}`, {
+      const response = await fetch(`/api/users?id=${user.id || user.userId}`, {
         method: 'PUT',
         headers,
+        credentials: 'include',
         body: JSON.stringify({
           isActive: !user.isActive,
         }),
@@ -2122,6 +2169,12 @@ export default function SettingsPage() {
   };
 
   const handleRoleChange = async (user: any, newRole: string) => {
+    // Optimistic UI update
+    setUsersList(prev => prev.map(u => {
+      const match = (u.id && u.id === user.id) || (u.userId && u.userId === user.userId);
+      return match ? { ...u, role: newRole } : u;
+    }));
+
     toast.loading(`Updating user role to ${newRole}...`, { id: 'user-role' });
     try {
       const token = getStoredSessionToken();
@@ -2132,9 +2185,11 @@ export default function SettingsPage() {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const response = await fetch(`/api/users?id=${user.id}`, {
+      const targetId = user.legacyUserId || user.id || user.userId;
+      const response = await fetch(`/api/users?id=${targetId}&t=${Date.now()}`, {
         method: 'PUT',
         headers,
+        credentials: 'include',
         body: JSON.stringify({
           role: newRole,
         }),
@@ -2142,14 +2197,16 @@ export default function SettingsPage() {
 
       if (response.ok) {
         toast.success(`User role updated to ${newRole}!`, { id: 'user-role' });
-        fetchTenantUsers();
+        await fetchTenantUsers();
       } else {
         const errorJson = await response.json().catch(() => ({}));
         toast.error(`Failed to update role: ${errorJson.error || errorJson.message || 'Server error'}`, { id: 'user-role' });
+        await fetchTenantUsers();
       }
     } catch (err) {
       console.error(err);
       toast.error('An error occurred.', { id: 'user-role' });
+      await fetchTenantUsers();
     }
   };
 
@@ -2177,6 +2234,7 @@ export default function SettingsPage() {
       const response = await fetch('/api/users', {
         method: 'POST',
         headers,
+        credentials: 'include',
         body: JSON.stringify({
           email: inviteForm.email,
           password: inviteForm.password,
@@ -2197,7 +2255,7 @@ export default function SettingsPage() {
           password: 'SecurePassword123!',
           firstName: '',
           lastName: '',
-          role: 'developer',
+          role: 'Employee' as any,
           phone: '',
           username: ''
         });
@@ -2690,6 +2748,10 @@ export default function SettingsPage() {
         setUndoStack([]);
         setRedoStack([]);
         toast.success(`Published changes successfully: ${callsMade.join(', ')}`);
+        if (typeof window !== 'undefined' && workspaceDraft.logoUrl) {
+          localStorage.setItem('tenant_logo_url', workspaceDraft.logoUrl);
+          window.dispatchEvent(new CustomEvent('logo-updated', { detail: { logoUrl: workspaceDraft.logoUrl } }));
+        }
       } else {
         toast.error('Some updates failed to synchronize.');
       }
@@ -2783,6 +2845,10 @@ export default function SettingsPage() {
         
         if (targetField === 'logoUrl') {
           updateDraftField('logoUrl', fileUrl);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('tenant_logo_url', fileUrl);
+            window.dispatchEvent(new CustomEvent('logo-updated', { detail: { logoUrl: fileUrl } }));
+          }
         } else if (targetField === 'faviconUrl') {
           updateDraftField('faviconUrl', fileUrl);
         } else if (targetField === 'documents') {
@@ -4005,8 +4071,8 @@ export default function SettingsPage() {
                     <Input 
                       className="text-xs rounded-xl pl-9 h-10" 
                       placeholder="Search users by name, email, or role..."
-                      value={searchTerm}
-                      onChange={e => setSearchTerm(e.target.value)}
+                      value={userSearchTerm}
+                      onChange={e => setUserSearchTerm(e.target.value)}
                     />
                   </div>
 
@@ -4030,12 +4096,14 @@ export default function SettingsPage() {
                         <tbody className="divide-y divide-border">
                           {usersList
                             .filter(u => {
-                              if (!searchTerm) return true;
-                              const term = searchTerm.toLowerCase();
+                              if (!userSearchTerm.trim()) return true;
+                              const term = userSearchTerm.toLowerCase();
+                              const fullName = `${u.firstName || ''} ${u.lastName || ''}`.toLowerCase();
                               return (
                                 u.email?.toLowerCase().includes(term) ||
                                 u.firstName?.toLowerCase().includes(term) ||
                                 u.lastName?.toLowerCase().includes(term) ||
+                                fullName.includes(term) ||
                                 u.role?.toLowerCase().includes(term)
                               );
                             })
@@ -4055,18 +4123,38 @@ export default function SettingsPage() {
                                   </div>
                                 </td>
                                 <td className="py-3 px-4">
-                                  <select
-                                    className="text-xs rounded-lg border border-input bg-background px-2 py-1 focus:outline-hidden focus:ring-1 focus:ring-primary/20 font-mono"
-                                    value={user.role}
-                                    onChange={(e) => handleRoleChange(user, e.target.value)}
-                                  >
-                                    <option value="admin">admin</option>
-                                    <option value="hr_manager">hr_manager</option>
-                                    <option value="cms_administrator">cms_administrator</option>
-                                    <option value="project_manager">project_manager</option>
-                                    <option value="developer">developer</option>
-                                    <option value="intern">intern</option>
-                                  </select>
+                                  {(() => {
+                                    const availableRoleOptions = [
+                                      { value: 'Employee', label: 'Employee' },
+                                      { value: 'Admin', label: 'Admin' },
+                                      { value: 'Manager', label: 'Manager' },
+                                      { value: 'hr_manager', label: 'HR Manager' },
+                                      { value: 'cms_administrator', label: 'CMS Administrator' },
+                                      { value: 'project_manager', label: 'Project Manager' },
+                                      { value: 'developer', label: 'Developer' },
+                                      { value: 'intern', label: 'Intern' },
+                                      { value: 'Viewer', label: 'Viewer' },
+                                    ];
+
+                                    const currentRoleLower = (user.role || '').toLowerCase();
+                                    const matched = availableRoleOptions.find(opt => opt.value.toLowerCase() === currentRoleLower);
+                                    const selectValue = matched ? matched.value : (user.role || 'Employee');
+
+                                    return (
+                                      <select
+                                        className="text-xs rounded-lg border border-input bg-background px-2 py-1 focus:outline-hidden focus:ring-1 focus:ring-primary/20 font-mono font-medium"
+                                        value={selectValue}
+                                        onChange={(e) => handleRoleChange(user, e.target.value)}
+                                      >
+                                        {availableRoleOptions.map(opt => (
+                                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                        ))}
+                                        {!matched && user.role && (
+                                          <option value={user.role}>{user.role}</option>
+                                        )}
+                                      </select>
+                                    );
+                                  })()}
                                 </td>
                                 <td className="py-3 px-4 text-center">
                                   <div className="flex items-center justify-center gap-1.5">
@@ -4093,13 +4181,30 @@ export default function SettingsPage() {
                                 </td>
                               </tr>
                             ))}
-                          {usersList.length === 0 && (
+                          {usersList.length === 0 ? (
                             <tr>
                               <td colSpan={4} className="py-8 text-center text-xs text-muted-foreground border-2 border-dashed border-border/60 rounded-xl">
                                 No active users found in workspace directory.
                               </td>
                             </tr>
-                          )}
+                          ) : usersList.filter(u => {
+                              if (!userSearchTerm.trim()) return true;
+                              const term = userSearchTerm.toLowerCase();
+                              const fullName = `${u.firstName || ''} ${u.lastName || ''}`.toLowerCase();
+                              return (
+                                u.email?.toLowerCase().includes(term) ||
+                                u.firstName?.toLowerCase().includes(term) ||
+                                u.lastName?.toLowerCase().includes(term) ||
+                                fullName.includes(term) ||
+                                u.role?.toLowerCase().includes(term)
+                              );
+                            }).length === 0 ? (
+                            <tr>
+                              <td colSpan={4} className="py-8 text-center text-xs text-muted-foreground border-2 border-dashed border-border/60 rounded-xl">
+                                No users matching "{userSearchTerm}".
+                              </td>
+                            </tr>
+                          ) : null}
                         </tbody>
                       </table>
                     </div>
@@ -4412,16 +4517,19 @@ export default function SettingsPage() {
                         <div className="space-y-1">
                           <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Access Role *</Label>
                           <select
-                            className="w-full text-xs rounded-lg border border-input bg-background px-3 h-9 focus:outline-hidden focus:ring-1 focus:ring-primary/20 font-mono"
+                            className="w-full text-xs rounded-lg border border-input bg-background px-3 h-9 focus:outline-hidden focus:ring-1 focus:ring-primary/20 font-mono font-medium"
                             value={inviteForm.role}
                             onChange={e => setInviteForm(prev => ({ ...prev, role: e.target.value as any }))}
                           >
-                            <option value="admin">admin</option>
-                            <option value="hr_manager">hr_manager</option>
-                            <option value="cms_administrator">cms_administrator</option>
-                            <option value="project_manager">project_manager</option>
-                            <option value="developer">developer</option>
-                            <option value="intern">intern</option>
+                            <option value="Employee">Employee</option>
+                            <option value="Admin">Admin</option>
+                            <option value="Manager">Manager</option>
+                            <option value="hr_manager">HR Manager</option>
+                            <option value="cms_administrator">CMS Administrator</option>
+                            <option value="project_manager">Project Manager</option>
+                            <option value="developer">Developer</option>
+                            <option value="intern">Intern</option>
+                            <option value="Viewer">Viewer</option>
                           </select>
                         </div>
                       </div>

@@ -208,7 +208,7 @@ export const leaveRequestFormSchema = z
     type: z.enum(leaveTypeOptions),
     from: z.string().min(1, 'Please select a start date'),
     to: z.string().min(1, 'Please select an end date'),
-    reason: z.string().trim().min(10, 'Reason must be at least 10 characters'),
+    reason: z.string().trim().min(10, 'Reason must be at least 10 characters').max(500, 'Reason cannot exceed 500 characters'),
     attachmentUrl: z.string().optional().or(z.literal('')),
     attachmentName: z.string().optional().or(z.literal('')),
     actualHours: z.string().optional().or(z.literal('')),

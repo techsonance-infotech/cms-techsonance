@@ -20,7 +20,10 @@ async function getUsersColumns(supabase: any) {
 
 function normalizeSupabaseUser(user: Record<string, unknown>) {
   return {
-    id: Number(user.legacy_user_id),
+    id: user.legacy_user_id ? Number(user.legacy_user_id) : (user.id as string),
+    userId: user.id as string,
+    authUserId: user.id as string,
+    legacyUserId: user.legacy_user_id ? Number(user.legacy_user_id) : null,
     email: user.email,
     firstName: user.first_name,
     lastName: user.last_name,
@@ -28,7 +31,7 @@ function normalizeSupabaseUser(user: Record<string, unknown>) {
     avatarUrl: user.avatar_url ?? null,
     phone: user.phone ?? null,
     twoFactorEnabled: Boolean(user.two_factor_enabled ?? false),
-    isActive: Boolean(user.is_active),
+    isActive: user.is_active !== undefined && user.is_active !== null ? Boolean(user.is_active) : true,
     lastLogin: user.last_login ?? null,
     createdAt: user.created_at ?? null,
     updatedAt: user.updated_at ?? null,
@@ -57,10 +60,24 @@ export const GET = withApiHandler(async (request, context) => {
   const id = searchParams.get('id');
 
   const accessToken = context.auth?.accessToken;
-  const tenantId = context.auth?.user.tenantId;
-  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
-  
+  let tenantId = context.auth?.user?.tenantId;
   const supabase = getAdminRouteSupabase();
+
+  // Fallback tenant resolution if not directly on auth user
+  if (!tenantId && context.auth?.user) {
+    const userIdentifier = context.auth.user.providerUserId || context.auth.user.id;
+    if (userIdentifier) {
+      const { data: u } = await supabase
+        .from('users')
+        .select('tenant_id')
+        .or(`id.eq.${userIdentifier},legacy_user_id.eq.${typeof userIdentifier === 'number' ? userIdentifier : 0}`)
+        .maybeSingle();
+      tenantId = u?.tenant_id;
+    }
+  }
+
+  if (!accessToken && !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  if (!tenantId) throw new BadRequestError('Tenant isolation ID could not be identified');
 
   if (id) {
     let profile: any = null;
@@ -217,27 +234,42 @@ export const POST = withApiHandler(async (request, context) => {
 
 export const PUT = withApiHandler(async (request, context) => {
   const searchParams = new URL(request.url).searchParams;
-  const id = Number(searchParams.get('id'));
-  if (!Number.isInteger(id) || id <= 0) {
+  const rawId = searchParams.get('id');
+  if (!rawId) {
+    throw new BadRequestError('Valid user id is required');
+  }
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawId);
+  const isInt = Number.isInteger(Number(rawId)) && Number(rawId) > 0;
+  if (!isUuid && !isInt) {
     throw new BadRequestError('Valid user id is required');
   }
 
   const payload = updateUserSchema.parse(await request.json());
 
   const accessToken = context.auth?.accessToken;
-  const tenantId = context.auth?.user.tenantId;
-  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  let tenantId = context.auth?.user?.tenantId;
+  const supabase = getAdminRouteSupabase();
+
+  if (!tenantId && context.auth?.user) {
+    const userIdentifier = context.auth.user.providerUserId || context.auth.user.id;
+    if (userIdentifier) {
+      const { data: u } = await supabase
+        .from('users')
+        .select('tenant_id')
+        .or(`id.eq.${userIdentifier},legacy_user_id.eq.${typeof userIdentifier === 'number' ? userIdentifier : 0}`)
+        .maybeSingle();
+      tenantId = u?.tenant_id;
+    }
+  }
+
+  if (!accessToken && !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  if (!tenantId) throw new BadRequestError('Tenant isolation ID could not be identified');
   
   const admin = getSupabaseAdminClient() as any;
   let lookupError: any = null;
-  const existingUser = await getSupabaseProfileByLegacyUserId(id, { 
-    accessToken, 
-    tenantId,
-    useAdmin: true 
-  }).catch((e) => {
-    lookupError = e;
-    return null;
-  });
+  const existingUser = isUuid
+    ? await getSupabaseProfileByAuthUserId(rawId, { accessToken, tenantId, useAdmin: true }).catch((e) => { lookupError = e; return null; })
+    : await getSupabaseProfileByLegacyUserId(Number(rawId), { accessToken, tenantId, useAdmin: true }).catch((e) => { lookupError = e; return null; });
   if (!existingUser) {
     throw new NotFoundError(`User lookup failed for ID ${id}. Log: ${lookupError?.message || 'Not found'}`);
   }

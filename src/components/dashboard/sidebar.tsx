@@ -70,6 +70,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { User } from '@/lib/auth';
+import { getStoredSessionToken } from '@/lib/client-session';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import {
   DropdownMenu,
@@ -83,6 +84,7 @@ interface DashboardSidebarProps {
   isMobile?: boolean;
   onClose?: () => void;
   companyName?: string;
+  logoUrl?: string;
 }
 
 const normalizeRole = (roleStr?: string): string => {
@@ -372,7 +374,7 @@ const getModuleByCategoryName = (name: string): string => {
   }
 };
 
-export function DashboardSidebar({ user, isMobile = false, onClose, companyName: propsCompanyName }: DashboardSidebarProps) {
+export function DashboardSidebar({ user, isMobile = false, onClose, companyName: propsCompanyName, logoUrl: propsLogoUrl }: DashboardSidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const normalizedRole = normalizeRole(user.role);
@@ -380,6 +382,69 @@ export function DashboardSidebar({ user, isMobile = false, onClose, companyName:
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({});
   const [companyName, setCompanyName] = useState(propsCompanyName || 'TechSonance InfoTech');
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [displayLogo, setDisplayLogo] = useState<string | null>(propsLogoUrl || null);
+  const [logoImgError, setLogoImgError] = useState(false);
+
+  useEffect(() => {
+    if (propsLogoUrl) {
+      setDisplayLogo(propsLogoUrl);
+      setLogoImgError(false);
+    }
+  }, [propsLogoUrl]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('tenant_logo_url');
+      if (stored && !displayLogo) {
+        setDisplayLogo(stored);
+      }
+      const handleLogoUpdate = (e: any) => {
+        const newUrl = e?.detail?.logoUrl;
+        if (newUrl) {
+          setDisplayLogo(newUrl);
+          setLogoImgError(false);
+        }
+      };
+      window.addEventListener('logo-updated', handleLogoUpdate);
+      return () => {
+        window.removeEventListener('logo-updated', handleLogoUpdate);
+      };
+    }
+  }, [displayLogo]);
+
+  useEffect(() => {
+    if (!displayLogo) {
+      const fetchLogo = async () => {
+        try {
+          const res = await fetch('/api/company-settings', { credentials: 'include', cache: 'no-store' });
+          if (res.ok) {
+            const data = await res.json();
+            const url = data?.data?.logoUrl || data?.data?.logo_url;
+            if (url) {
+              setDisplayLogo(url);
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('tenant_logo_url', url);
+              }
+            }
+          }
+        } catch {}
+      };
+      fetchLogo();
+    }
+  }, [displayLogo]);
+
+  const getFileUrlWithToken = (url: string | null) => {
+    if (!url) return '';
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+      return url;
+    }
+    const token = getStoredSessionToken();
+    if (token && token !== 'null' && token !== 'undefined' && url.startsWith('/api/')) {
+      const separator = url.includes('?') ? '&' : '?';
+      return `${url}${separator}token=${encodeURIComponent(token)}`;
+    }
+    return url;
+  };
 
   // Load sidebar collapse preference on mount (only if not on mobile)
   useEffect(() => {
@@ -453,8 +518,17 @@ export function DashboardSidebar({ user, isMobile = false, onClose, companyName:
           "flex items-center bg-gradient-to-r from-[#F87941] to-[#F4662B] text-white border-b border-[#F4662B]/10 shadow-sm shrink-0 transition-all duration-300 ease-in-out h-16",
           activeCollapsed ? "px-4 justify-center" : "px-6 gap-3"
         )}>
-          <div className="relative h-9 w-9 bg-white/95 rounded-xl p-1.5 flex items-center justify-center border border-white/20 shadow-sm overflow-hidden shrink-0 transition-transform duration-200 hover:scale-[1.03]">
-            <Image src="/logo-icon.png" alt="TechSonance" fill className="object-contain p-1.5" />
+          <div className="relative h-9 w-9 bg-white/95 rounded-xl p-1 flex items-center justify-center border border-white/20 shadow-sm overflow-hidden shrink-0 transition-transform duration-200 hover:scale-[1.03]">
+            {displayLogo && !logoImgError ? (
+              <img 
+                src={getFileUrlWithToken(displayLogo)} 
+                alt={companyName || "Organization"} 
+                className="h-full w-full object-contain"
+                onError={() => setLogoImgError(true)}
+              />
+            ) : (
+              <Image src="/logo-icon.png" alt={companyName || "TechSonance"} fill className="object-contain p-1.5" />
+            )}
           </div>
           {!activeCollapsed && (
             <span className="font-bold text-sm text-white tracking-tight leading-snug flex-1 select-none animate-in fade-in duration-300 truncate">

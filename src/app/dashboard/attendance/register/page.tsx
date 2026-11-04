@@ -836,6 +836,11 @@ export default function AttendancePage() {
       return;
     }
 
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('CSV file size exceeds 5 MB limit');
+      return;
+    }
+
     setIsUploading(true);
     const formData = new FormData();
     formData.append('file', file);
@@ -893,6 +898,13 @@ export default function AttendancePage() {
 
   const handleUpdateAttendance = async () => {
     if (!editingAttendance) return;
+
+    if (editAttendanceForm.timeIn && editAttendanceForm.timeOut) {
+      if (editAttendanceForm.timeOut <= editAttendanceForm.timeIn) {
+        toast.error('Time out must be later than time in');
+        return;
+      }
+    }
 
     setLoading(true);
     try {
@@ -965,8 +977,8 @@ export default function AttendancePage() {
       return;
     }
 
-    if (!holidayForm.reason || holidayForm.reason.trim() === '') {
-      toast.error('Please provide a reason');
+    if (!holidayForm.reason || holidayForm.reason.trim().length < 3) {
+      toast.error('Please provide a holiday name/reason (at least 3 characters)');
       return;
     }
 
@@ -1009,8 +1021,21 @@ export default function AttendancePage() {
       return;
     }
 
+    const selectedDate = new Date(attendanceForm.date);
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    if (selectedDate > today) {
+      toast.error('Cannot mark attendance for a future date');
+      return;
+    }
+
     if (!attendanceForm.timeIn || !attendanceForm.timeOut) {
       toast.error('Please provide both time in and time out');
+      return;
+    }
+
+    if (attendanceForm.timeOut <= attendanceForm.timeIn) {
+      toast.error('Time out must be later than time in');
       return;
     }
 

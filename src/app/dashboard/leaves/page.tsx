@@ -31,6 +31,8 @@ interface LeaveRequest {
   status: string;
   createdAt: string;
   employeeId: number;
+  leavePeriod?: string | null;
+  actualDays?: number | null;
 }
 
 interface CompanyHoliday {
@@ -76,6 +78,34 @@ const formatDateOrdinal = (value: string | null | undefined) => {
   return `${formatted.replace(String(day), `${day}${suffix}`)}`;
 };
 
+const getLeaveDaysCount = (leave: LeaveRequest) => {
+  if (leave.actualDays !== undefined && leave.actualDays !== null && !isNaN(Number(leave.actualDays))) {
+    return Number(leave.actualDays);
+  }
+  if (leave.startDate && leave.endDate) {
+    const start = new Date(leave.startDate);
+    const end = new Date(leave.endDate);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) return 1;
+    let count = 0;
+    const cur = new Date(start);
+    while (cur <= end) {
+      const day = cur.getDay();
+      if (day !== 0 && day !== 6) { // exclude weekends
+        count++;
+      }
+      cur.setDate(cur.getDate() + 1);
+    }
+    return count > 0 ? count : 1;
+  }
+  return 1;
+};
+
+const getLeaveDaysDisplay = (leave: LeaveRequest) => {
+  const days = getLeaveDaysCount(leave);
+  const formatted = Number.isInteger(days) ? String(days) : days.toFixed(2);
+  return `${formatted} ${days === 1 ? 'Day' : 'Days'}`;
+};
+
 const getLeaveStatusBadge = (status: string) => {
   const normalized = status.toLowerCase();
   if (normalized === 'approved') return <Badge className="bg-emerald-100 text-emerald-700">Approved</Badge>;
@@ -114,6 +144,7 @@ export default function LeavesPage() {
   const [approvingLeave, setApprovingLeave] = useState<LeaveRequest | null>(null);
   const [rejectingLeave, setRejectingLeave] = useState<LeaveRequest | null>(null);
   const [deletingLeave, setDeletingLeave] = useState<LeaveRequest | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     fetchCurrentUser();
@@ -304,6 +335,7 @@ export default function LeavesPage() {
   };
 
   const updateLeaveStatus = async (id: number, status: string, isApproval: boolean) => {
+    setActionLoading(true);
     try {
       const token = localStorage.getItem('session_token');
       const res = await fetch(`/api/leave-requests/${id}`, {
@@ -320,15 +352,18 @@ export default function LeavesPage() {
         throw new Error(error.error || error.message || 'Update failed');
       }
       toast.success(`Leave request ${isApproval ? 'approved' : 'rejected'}`);
-      fetchAllLeaveRequests();
+      await fetchAllLeaveRequests();
       setApprovingLeave(null);
       setRejectingLeave(null);
     } catch (err: any) {
       toast.error(err.message || 'Failed to update leave request');
+    } finally {
+      setActionLoading(false);
     }
   };
 
   const handleLeaveDelete = async (id: number) => {
+    setActionLoading(true);
     try {
       const token = localStorage.getItem('session_token');
       const res = await fetch(`/api/leave-requests/${id}`, {
@@ -341,10 +376,12 @@ export default function LeavesPage() {
         throw new Error(error.error || error.message || 'Deletion failed');
       }
       toast.success('Leave request deleted');
-      fetchAllLeaveRequests();
+      await fetchAllLeaveRequests();
       setDeletingLeave(null);
     } catch (err: any) {
       toast.error(err.message || 'Failed to delete leave request');
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -480,6 +517,7 @@ export default function LeavesPage() {
                         <TableHead>Type</TableHead>
                         <TableHead>From Date</TableHead>
                         <TableHead>To Date</TableHead>
+                        <TableHead>Days</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
@@ -498,6 +536,11 @@ export default function LeavesPage() {
                             <TableCell className="capitalize">{leave.leaveType.replace(/_/g, ' ')}</TableCell>
                             <TableCell className="whitespace-nowrap">{formatDateOrdinal(leave.startDate)}</TableCell>
                             <TableCell className="whitespace-nowrap">{formatDateOrdinal(leave.endDate)}</TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              <Badge variant="outline" className="font-bold text-slate-800 bg-slate-50 border-slate-200">
+                                {getLeaveDaysDisplay(leave)}
+                              </Badge>
+                            </TableCell>
                             <TableCell>{getLeaveStatusBadge(leave.status)}</TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end gap-2">
@@ -585,6 +628,7 @@ export default function LeavesPage() {
                       <TableHead>Type</TableHead>
                       <TableHead>From Date</TableHead>
                       <TableHead>To Date</TableHead>
+                      <TableHead>Days</TableHead>
                       <TableHead>Applied On</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
@@ -609,6 +653,11 @@ export default function LeavesPage() {
                           <TableCell className="font-medium capitalize">{leave.leaveType.replace(/_/g, ' ')}</TableCell>
                           <TableCell className="whitespace-nowrap">{formatDateOrdinal(leave.startDate)}</TableCell>
                           <TableCell className="whitespace-nowrap">{formatDateOrdinal(leave.endDate)}</TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            <Badge variant="outline" className="font-bold text-slate-800 bg-slate-50 border-slate-200">
+                              {getLeaveDaysDisplay(leave)}
+                            </Badge>
+                          </TableCell>
                           <TableCell className="whitespace-nowrap">{formatDateOrdinal(leave.createdAt)}</TableCell>
                           <TableCell>{getLeaveStatusBadge(leave.status)}</TableCell>
                           <TableCell className="text-right">
@@ -762,6 +811,12 @@ export default function LeavesPage() {
           {viewingLeave && (
             <div className="space-y-6 py-6">
               <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                {isFullAccessUser && (
+                  <div className="space-y-1 col-span-2 sm:col-span-1">
+                    <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Employee</span>
+                    <p className="font-semibold text-sm">{getEmployeeName(viewingLeave.employeeId)}</p>
+                  </div>
+                )}
                 <div className="space-y-1">
                   <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Leave Type</span>
                   <p className="font-semibold text-sm capitalize">{viewingLeave.leaveType.replace(/_/g, ' ')}</p>
@@ -769,6 +824,17 @@ export default function LeavesPage() {
                 <div className="space-y-1">
                   <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Status</span>
                   <div>{getLeaveStatusBadge(viewingLeave.status)}</div>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Total Leave Days</span>
+                  <p className="font-bold text-sm text-primary">
+                    {getLeaveDaysDisplay(viewingLeave)}
+                    {viewingLeave.leavePeriod && viewingLeave.leavePeriod !== 'full_day' && (
+                      <span className="text-xs font-normal text-muted-foreground ml-1 capitalize">
+                        ({viewingLeave.leavePeriod.replace(/_/g, ' ')})
+                      </span>
+                    )}
+                  </p>
                 </div>
                 <div className="space-y-1">
                   <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Applied On</span>
@@ -782,7 +848,19 @@ export default function LeavesPage() {
                     <span className="text-[10px] text-primary/70 uppercase font-bold tracking-wider mb-1 block">From</span>
                     <p className="font-bold text-primary">{formatDateOrdinal(viewingLeave.startDate)}</p>
                   </div>
-                  <div className="h-10 w-px bg-primary/20 mx-4" />
+                  <div className="h-10 w-px bg-primary/20 mx-2" />
+                  <div className="space-y-1 text-center px-4 py-1.5 bg-white rounded-lg border border-primary/20 shadow-xs">
+                    <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider block">Duration</span>
+                    <p className="font-extrabold text-primary text-base">
+                      {getLeaveDaysDisplay(viewingLeave)}
+                    </p>
+                    {viewingLeave.leavePeriod && viewingLeave.leavePeriod !== 'full_day' && (
+                      <span className="text-[9px] font-semibold text-muted-foreground block capitalize">
+                        {viewingLeave.leavePeriod.replace(/_/g, ' ')}
+                      </span>
+                    )}
+                  </div>
+                  <div className="h-10 w-px bg-primary/20 mx-2" />
                   <div className="space-y-1 text-right">
                     <span className="text-[10px] text-primary/70 uppercase font-bold tracking-wider mb-1 block">To</span>
                     <p className="font-bold text-primary">{formatDateOrdinal(viewingLeave.endDate)}</p>
@@ -808,7 +886,7 @@ export default function LeavesPage() {
       </Dialog>
 
       {/* Admin Action Dialogs */}
-      <Dialog open={approvingLeave !== null} onOpenChange={() => setApprovingLeave(null)}>
+      <Dialog open={approvingLeave !== null} onOpenChange={(open) => !actionLoading && setApprovingLeave(open ? approvingLeave : null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Approve Leave Request</DialogTitle>
@@ -817,13 +895,25 @@ export default function LeavesPage() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setApprovingLeave(null)}>Cancel</Button>
-            <Button onClick={() => approvingLeave && updateLeaveStatus(approvingLeave.id, 'approved', true)}>Approve Request</Button>
+            <Button variant="outline" disabled={actionLoading} onClick={() => setApprovingLeave(null)}>Cancel</Button>
+            <Button
+              disabled={actionLoading}
+              onClick={() => approvingLeave && updateLeaveStatus(approvingLeave.id, 'approved', true)}
+            >
+              {actionLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Approving...
+                </>
+              ) : (
+                'Approve Request'
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={rejectingLeave !== null} onOpenChange={() => setRejectingLeave(null)}>
+      <Dialog open={rejectingLeave !== null} onOpenChange={(open) => !actionLoading && setRejectingLeave(open ? rejectingLeave : null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Reject Leave Request</DialogTitle>
@@ -832,13 +922,26 @@ export default function LeavesPage() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRejectingLeave(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => rejectingLeave && updateLeaveStatus(rejectingLeave.id, 'rejected', false)}>Reject Request</Button>
+            <Button variant="outline" disabled={actionLoading} onClick={() => setRejectingLeave(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={actionLoading}
+              onClick={() => rejectingLeave && updateLeaveStatus(rejectingLeave.id, 'rejected', false)}
+            >
+              {actionLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Rejecting...
+                </>
+              ) : (
+                'Reject Request'
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={deletingLeave !== null} onOpenChange={() => setDeletingLeave(null)}>
+      <Dialog open={deletingLeave !== null} onOpenChange={(open) => !actionLoading && setDeletingLeave(open ? deletingLeave : null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete Leave Record</DialogTitle>
@@ -847,8 +950,21 @@ export default function LeavesPage() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeletingLeave(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => deletingLeave && handleLeaveDelete(deletingLeave.id)}>Confirm Delete</Button>
+            <Button variant="outline" disabled={actionLoading} onClick={() => setDeletingLeave(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={actionLoading}
+              onClick={() => deletingLeave && handleLeaveDelete(deletingLeave.id)}
+            >
+              {actionLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Confirm Delete'
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

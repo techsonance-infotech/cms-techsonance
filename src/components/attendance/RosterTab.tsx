@@ -143,6 +143,14 @@ export default function RosterTab({ tenantId, isFullAccess, employees }: RosterT
       toast.error('Please select a colleague to swap with');
       return;
     }
+    if (!swapForm.requesterDate || !swapForm.targetDate) {
+      toast.error('Please select both your shift date and colleague shift date');
+      return;
+    }
+    if (!swapForm.reason || swapForm.reason.trim().length < 5) {
+      toast.error('Please provide a reason for the shift swap (at least 5 characters)');
+      return;
+    }
     setSubmittingSwap(true);
     try {
       const targetEmp = employees.find((emp) => String(emp.id) === swapForm.targetUserId || String(emp.userId) === swapForm.targetUserId);

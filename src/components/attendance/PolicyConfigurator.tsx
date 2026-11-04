@@ -174,6 +174,26 @@ export default function PolicyConfigurator({ tenantId }: PolicyConfiguratorProps
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!form.name || form.name.trim().length < 3) {
+      toast.error('Policy name must be at least 3 characters');
+      return;
+    }
+    if (form.gracePeriodMinutes !== undefined && Number(form.gracePeriodMinutes) < 0) {
+      toast.error('Grace period cannot be negative');
+      return;
+    }
+    if (form.halfDayThresholdHours !== undefined && Number(form.halfDayThresholdHours) <= 0) {
+      toast.error('Half day threshold must be greater than 0');
+      return;
+    }
+    if (form.fullDayHours !== undefined && form.halfDayThresholdHours !== undefined && Number(form.fullDayHours) <= Number(form.halfDayThresholdHours)) {
+      toast.error('Full day minimum hours must be greater than half day threshold');
+      return;
+    }
+    if (form.overtimeEligibility && form.overtimeMinMinutes !== undefined && Number(form.overtimeMinMinutes) < 0) {
+      toast.error('Overtime minimum minutes cannot be negative');
+      return;
+    }
     setSaving(true);
     try {
       const url = selectedPolicy ? `/api/attendance/policies?id=${selectedPolicy.id}` : '/api/attendance/policies';

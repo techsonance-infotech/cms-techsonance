@@ -97,6 +97,31 @@ export default function RegularizationTab({ tenantId, isFullAccess, employeeId, 
       return;
     }
 
+    if (!form.date) {
+      toast.error('Please select a date for regularization');
+      return;
+    }
+
+    const selectedDate = new Date(form.date);
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    if (selectedDate > today) {
+      toast.error('Cannot submit regularization for a future date');
+      return;
+    }
+
+    if (form.requestedTimeIn && form.requestedTimeOut) {
+      if (form.requestedTimeOut <= form.requestedTimeIn) {
+        toast.error('Requested Time Out must be later than Time In');
+        return;
+      }
+    }
+
+    if (!form.notes || form.notes.trim().length < 5) {
+      toast.error('Please provide a detailed justification (at least 5 characters)');
+      return;
+    }
+
     setSubmitting(true);
     try {
       const formattedTimeIn = form.requestedTimeIn ? new Date(`${form.date}T${form.requestedTimeIn}:00+05:30`).toISOString() : `${form.date}T09:00:00+05:30`;
@@ -111,7 +136,7 @@ export default function RegularizationTab({ tenantId, isFullAccess, employeeId, 
           timeIn: formattedTimeIn,
           timeOut: formattedTimeOut,
           reasonType: form.reasonType,
-          notes: form.notes,
+          notes: form.notes.trim(),
           locationLatitude: form.gpsLatitude ? Number(form.gpsLatitude) : null,
           locationLongitude: form.gpsLongitude ? Number(form.gpsLongitude) : null,
           attachmentUrl: form.attachmentUrl,
@@ -134,11 +159,16 @@ export default function RegularizationTab({ tenantId, isFullAccess, employeeId, 
   };
 
   const handleProcessRequest = async (id: string, action: 'approve' | 'reject') => {
+    if (action === 'reject' && !rejectionReason.trim()) {
+      toast.error('Please specify a rejection reason before declining');
+      return;
+    }
+
     setProcessingId(id);
     try {
       const payload: any = { id, action };
       if (action === 'reject') {
-        payload.rejection_reason = rejectionReason;
+        payload.rejection_reason = rejectionReason.trim();
       }
 
       const response = await fetch('/api/attendance/requests', {
@@ -353,7 +383,16 @@ export default function RegularizationTab({ tenantId, isFullAccess, employeeId, 
                         <Input
                           type="date"
                           value={form.date}
-                          onChange={(e) => setForm({ ...form, date: e.target.value })}
+                          max={new Date().toISOString().split('T')[0]}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            const todayStr = new Date().toISOString().split('T')[0];
+                            if (val && val > todayStr) {
+                              toast.error('Future dates cannot be selected for attendance regularization');
+                              return;
+                            }
+                            setForm({ ...form, date: val });
+                          }}
                           className="bg-white dark:bg-[#1E1F22] border-slate-200 dark:border-slate-800 h-9 text-xs"
                           required
                         />
