@@ -45,10 +45,30 @@ export async function GET(request: Request) {
 
     // Fetch permissions for each role
     const rolesWithPermissions = await Promise.all(
-      roles.map(async (role: any) => ({
-        ...role,
-        permissions: await fetchRolePermissions(supabase, tenantId, role.id),
-      }))
+      roles.map(async (role: any) => {
+        const rawPerms = role.permissions || {};
+        const normalizedPerms: Record<string, string[]> = {};
+        if (rawPerms && typeof rawPerms === 'object') {
+          Object.keys(rawPerms).forEach((modKey) => {
+            const val = rawPerms[modKey];
+            if (Array.isArray(val)) {
+              normalizedPerms[modKey] = val;
+            } else if (val && typeof val === 'object') {
+              normalizedPerms[modKey] = Object.keys(val).filter((action) => Boolean(val[action]));
+            } else {
+              normalizedPerms[modKey] = [];
+            }
+          });
+        }
+
+        const booleanPerms = await fetchRolePermissions(supabase, tenantId, role.id);
+
+        return {
+          ...role,
+          permissions: normalizedPerms,
+          module_permissions: booleanPerms,
+        };
+      })
     );
 
     return NextResponse.json({
@@ -89,10 +109,26 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Role ID is required' }, { status: 400 });
     }
 
+    // Normalize incoming permissions so storage is always Record<string, string[]>
+    let normalizedPermissions: Record<string, string[]> | undefined = undefined;
+    if (permissions && typeof permissions === 'object') {
+      normalizedPermissions = {};
+      Object.keys(permissions).forEach((modKey) => {
+        const val = permissions[modKey];
+        if (Array.isArray(val)) {
+          normalizedPermissions![modKey] = val;
+        } else if (val && typeof val === 'object') {
+          normalizedPermissions![modKey] = Object.keys(val).filter((action) => Boolean(val[action]));
+        } else {
+          normalizedPermissions![modKey] = [];
+        }
+      });
+    }
+
     const supabase = getRouteSupabase(auth.accessToken);
 
     const updated = await updateRole(supabase, tenantId, roleId, {
-      ...(permissions ? { permissions } : {}),
+      ...(normalizedPermissions ? { permissions: normalizedPermissions } : {}),
       ...(name ? { name } : {}),
       ...(description ? { description } : {}),
       ...(level !== undefined ? { level } : {}),

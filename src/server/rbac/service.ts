@@ -434,7 +434,12 @@ export async function fetchRolePermissions(
       export: false
     };
     
-    const actList = role.permissions[m] || [];
+    const rawList = role.permissions ? role.permissions[m] : [];
+    const actList: string[] = Array.isArray(rawList)
+      ? rawList
+      : (rawList && typeof rawList === 'object'
+        ? Object.keys(rawList).filter(k => Boolean(rawList[k]))
+        : []);
     // Map both standard and extended permissions
     actList.forEach(act => {
       if (act === 'read') modulePerms[m].read = true;
@@ -465,7 +470,12 @@ export async function checkRolePermissionInDB(
   // SuperAdmin gets everything automatically
   if (role.role_key === 'super_admin') return true;
 
-  const allowedActions = role.permissions[moduleName] || [];
+  const rawActions = role.permissions ? role.permissions[moduleName] : [];
+  const allowedActions: string[] = Array.isArray(rawActions)
+    ? rawActions
+    : (rawActions && typeof rawActions === 'object'
+      ? Object.keys(rawActions).filter(k => Boolean(rawActions[k]))
+      : []);
   return allowedActions.includes(action);
 }
 
@@ -581,7 +591,12 @@ export async function assignPermissionToRole(
   const role = await fetchRole(supabase, tenantId, roleId);
   if (!role) return null;
 
-  const currentPerms = role.permissions[moduleName] || [];
+  const rawPerms = role.permissions ? role.permissions[moduleName] : [];
+  const currentPerms: string[] = Array.isArray(rawPerms)
+    ? [...rawPerms]
+    : (rawPerms && typeof rawPerms === 'object'
+      ? Object.keys(rawPerms).filter(k => Boolean(rawPerms[k]))
+      : []);
   if (!currentPerms.includes(action)) {
     role.permissions[moduleName] = [...currentPerms, action];
     return await updateRole(supabase, tenantId, roleId, { permissions: role.permissions });
@@ -603,7 +618,12 @@ export async function removePermissionFromRole(
   const role = await fetchRole(supabase, tenantId, roleId);
   if (!role) return false;
 
-  const currentPerms = role.permissions[moduleName] || [];
+  const rawPerms = role.permissions ? role.permissions[moduleName] : [];
+  const currentPerms: string[] = Array.isArray(rawPerms)
+    ? [...rawPerms]
+    : (rawPerms && typeof rawPerms === 'object'
+      ? Object.keys(rawPerms).filter(k => Boolean(rawPerms[k]))
+      : []);
   if (currentPerms.includes(action)) {
     role.permissions[moduleName] = currentPerms.filter(a => a !== action);
     await updateRole(supabase, tenantId, roleId, { permissions: role.permissions });

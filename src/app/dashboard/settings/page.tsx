@@ -1984,10 +1984,38 @@ export default function SettingsPage() {
       if (token && token !== 'null' && token !== 'undefined') {
         headers['Authorization'] = `Bearer ${token}`;
       }
-      const response = await fetch('/api/rbac/roles', { headers });
+      const response = await fetch(`/api/rbac/roles?t=${Date.now()}`, {
+        headers,
+        credentials: 'include',
+        cache: 'no-store'
+      });
       if (response.ok) {
         const resJson = await response.json();
-        setRolesList(resJson.data || []);
+        const rawRoles = resJson.data || [];
+        const normalized = rawRoles.map((r: any) => {
+          const perms = r.permissions || {};
+          const normPerms: Record<string, string[]> = {};
+          if (perms && typeof perms === 'object') {
+            Object.keys(perms).forEach(k => {
+              const val = perms[k];
+              if (Array.isArray(val)) {
+                normPerms[k] = val;
+              } else if (val && typeof val === 'object') {
+                normPerms[k] = Object.keys(val).filter(actionKey => Boolean(val[actionKey]));
+              } else {
+                normPerms[k] = [];
+              }
+            });
+          }
+          return {
+            ...r,
+            permissions: normPerms
+          };
+        });
+        setRolesList(normalized);
+        if (normalized.length > 0 && !selectedRoleId) {
+          setSelectedRoleId(normalized[0].role_key || normalized[0].id);
+        }
       }
     } catch (err) {
       console.error('Failed to load roles list:', err);
@@ -2000,8 +2028,13 @@ export default function SettingsPage() {
     setRolesList(prev => prev.map(role => {
       if (role.role_key !== roleId && role.id !== roleId) return role;
       
-      const rolePerms = { ...role.permissions };
-      const currentActions = rolePerms[moduleName] || [];
+      const rolePerms = { ...(role.permissions || {}) };
+      const rawActions = rolePerms[moduleName];
+      const currentActions: string[] = Array.isArray(rawActions)
+        ? [...rawActions]
+        : (rawActions && typeof rawActions === 'object'
+          ? Object.keys(rawActions).filter(k => Boolean(rawActions[k]))
+          : []);
       
       let updatedActions: string[];
       if (currentActions.includes(action)) {
@@ -2034,6 +2067,7 @@ export default function SettingsPage() {
       const response = await fetch('/api/rbac/roles', {
         method: 'PUT',
         headers,
+        credentials: 'include',
         body: JSON.stringify({
           roleId: role.id || role.role_key,
           permissions: role.permissions
@@ -2048,7 +2082,8 @@ export default function SettingsPage() {
         toast.error(`Failed to save: ${errJson.error || 'Unknown error'}`, { id: 'save-perms' });
       }
     } catch (err: any) {
-      toast.error(`Failed to save: ${err?.message || err}`, { id: 'save-perms' });
+      console.error('Failed to save permissions:', err);
+      toast.error('Failed to save permissions configuration', { id: 'save-perms' });
     } finally {
       setSavingPermissions(false);
     }
@@ -4193,7 +4228,7 @@ export default function SettingsPage() {
                       No roles loaded. Make sure the database is configured.
                     </div>
                   ) : (() => {
-                    const activeRole = rolesList.find(r => r.role_key === selectedRoleId || r.id === selectedRoleId);
+                    const activeRole = rolesList.find(r => r.role_key === selectedRoleId || r.id === selectedRoleId) || rolesList[0];
                     if (!activeRole) return <div className="p-5 text-xs text-muted-foreground">Select a role above</div>;
                     
                     const modulesMapping = [
@@ -4251,7 +4286,12 @@ export default function SettingsPage() {
                             </thead>
                             <tbody className="divide-y divide-border">
                               {modulesMapping.map(mod => {
-                                const allowedActions = activeRole.permissions[mod.key] || [];
+                                const rawActions = activeRole?.permissions?.[mod.key];
+                                const allowedActions: string[] = Array.isArray(rawActions)
+                                  ? rawActions
+                                  : (rawActions && typeof rawActions === 'object'
+                                    ? Object.keys(rawActions).filter(k => Boolean(rawActions[k]))
+                                    : []);
                                 return (
                                   <tr key={mod.key} className="hover:bg-slate-50/30 dark:hover:bg-zinc-900/10 transition-colors">
                                     <td className="py-3 px-4 font-semibold text-foreground">{mod.label}</td>
