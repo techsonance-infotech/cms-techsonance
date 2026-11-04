@@ -17,28 +17,19 @@ export const POST = withApiHandler(async (request, context) => {
   const validActorUuid = (actorUuid && UUID_REGEX.test(actorUuid)) ? actorUuid : null;
 
   const parsedInqId = Number(inquiryId);
-  let inquiry: any = null;
-
-  if (!isNaN(parsedInqId)) {
-    const { data } = await supabase
-      .from('inquiries')
-      .select('*')
-      .eq('id', parsedInqId)
-      .eq('tenant_id', tenantId)
-      .maybeSingle();
-    inquiry = data;
+  if (isNaN(parsedInqId)) {
+    throw new BadRequestError('Invalid inquiry ID');
   }
 
-  if (!inquiry) {
-    inquiry = {
-      id: inquiryId,
-      alias_name: name || 'Sarah Chen',
-      contact_person: name || 'Sarah Chen',
-      company_name: 'BrightSun Group',
-      work_email: 'sarah.chen@brightsun.com',
-      estimated_value: estimatedValue ? Number(estimatedValue) : 450000,
-      project_overview_requirements: description || 'Converted lead from CRM inbox'
-    };
+  const { data: inquiry, error: fetchErr } = await supabase
+    .from('inquiries')
+    .select('*')
+    .eq('id', parsedInqId)
+    .eq('tenant_id', tenantId)
+    .single();
+
+  if (fetchErr || !inquiry) {
+    throw new BadRequestError('Inquiry not found');
   }
 
   const cleanName = name || inquiry.alias_name || 'Converted Lead';
@@ -47,25 +38,21 @@ export const POST = withApiHandler(async (request, context) => {
   try {
     if (type === 'opportunity') {
       // 1. Convert to CRM Opportunity with tenant protection
-      let data = inquiry;
-      if (!isNaN(parsedInqId)) {
-        const { data: updated, error } = await supabase
-          .from('inquiries')
-          .update({
-            status: 'Proposal',
-            pipeline_stage: 'Proposal',
-            estimated_value: estimatedValue ? Number(estimatedValue) : (inquiry.estimated_value || 150000),
-            opportunity_status: 'Open',
-            internal_notes: `Converted to active opportunity. ${inquiry.internal_notes || ''}`
-          })
-          .eq('id', parsedInqId)
-          .eq('tenant_id', tenantId)
-          .select('*')
-          .maybeSingle();
+      const { data, error } = await supabase
+        .from('inquiries')
+        .update({
+          status: 'Proposal',
+          pipeline_stage: 'Proposal',
+          estimated_value: estimatedValue ? Number(estimatedValue) : (inquiry.estimated_value || 150000),
+          opportunity_status: 'Open',
+          internal_notes: `Converted to active opportunity. ${inquiry.internal_notes || ''}`
+        })
+        .eq('id', parsedInqId)
+        .eq('tenant_id', tenantId)
+        .select('*')
+        .single();
 
-        if (error) throw error;
-        if (updated) data = updated;
-      }
+      if (error) throw error;
       return apiSuccess(data, 'Successfully converted inquiry to active Opportunity');
 
     } else if (type === 'client') {

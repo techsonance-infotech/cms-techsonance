@@ -501,7 +501,11 @@ export default function CRMInboxPage() {
             );
           })}
           {filteredThreads.length === 0 && (
-            <p className="p-6 text-center text-xs text-muted-foreground italic">No threads matching query.</p>
+            <div className="p-8 text-center text-xs text-muted-foreground space-y-2">
+              <MessageSquare className="h-8 w-8 mx-auto text-muted-foreground/30" />
+              <p className="font-bold text-foreground">No conversations</p>
+              <p className="text-[11px] text-muted-foreground">Inbound inquiries from WhatsApp, Email, and forms will appear here.</p>
+            </div>
           )}
         </div>
       </section>
@@ -646,8 +650,20 @@ export default function CRMInboxPage() {
           </div>
         </main>
       ) : (
-        <div className="flex-1 flex items-center justify-center text-muted-foreground italic text-xs">
-          Select a lead conversation to read feeds.
+        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-accent/5">
+          <div className="h-16 w-16 rounded-3xl bg-primary/10 flex items-center justify-center text-primary mb-4 shadow-sm">
+            <MessageSquare className="h-8 w-8 text-primary" />
+          </div>
+          <h3 className="text-base font-bold text-foreground mb-1">CRM Inbox is Empty</h3>
+          <p className="text-xs text-muted-foreground max-w-sm mb-5 leading-relaxed">
+            There are currently no active communication threads for this workspace. As new leads or customer inquiries are registered, you can track and manage discussions here with AI Copilot assistance.
+          </p>
+          <Button 
+            onClick={() => router.push('/dashboard/crm')}
+            className="text-xs font-bold rounded-xl h-9 px-4 gap-2"
+          >
+            <Plus className="h-3.5 w-3.5" /> Go to CRM Leads & Pipeline
+          </Button>
         </div>
       )}
 
