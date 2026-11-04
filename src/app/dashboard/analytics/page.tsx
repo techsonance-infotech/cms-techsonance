@@ -10,7 +10,7 @@ import {
   BarChart3, TrendingUp, Clock, CalendarDays, RefreshCw, Laptop,
   MessageSquare, CheckCircle2, IndianRupee, ShieldCheck,
   Zap, Users, Activity, Star, Sparkles, Filter, PieChart as PieChartIcon,
-  Bot, AlertTriangle, Layers, Sliders, LineChart as LineChartIcon, Loader2, X, FolderKanban, Briefcase, UserCheck, Download
+  Bot, AlertTriangle, Layers, Sliders, LineChart as LineChartIcon, Loader2, X, FolderKanban, Briefcase, UserCheck, Download, Inbox
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -103,8 +103,7 @@ export default function AnalyticsDashboardPage() {
   // Custom Report Builder States
   const [dataModule, setDataModule] = useState('employees');
   const [chartType, setChartType] = useState('bar');
-  const [generatedReportName, setGeneratedReportName] = useState('Q3 Active Staffing Summary');
-  const [runningSim, setRunningSim] = useState(false);
+  const [generatedReportName, setGeneratedReportName] = useState('Active Staffing Summary');
   const [syncing, setSyncing] = useState(false);
 
   // Filter criteria
@@ -116,131 +115,112 @@ export default function AnalyticsDashboardPage() {
     parityInsight: 'Auditing salary parity thresholds...'
   });
 
-  // Dynamic API State
+  // Dynamic API State initialized to clean live zero/empty defaults
   const [dashboards, setDashboards] = useState<any>({
-    orgHealthScore: '94.2%',
-    revPayrollRatio: '10.2x Ratio',
-    workforceCostAmt: '₹1,45,000',
-    profitabilityMargin: '82.4%',
-    benchRate: '14.2%',
-    revenueVsPayrollTrend: [
-      { month: 'May', Revenue: 42, Payroll: 18 },
-      { month: 'Jun', Revenue: 55, Payroll: 19 },
-      { month: 'Jul', Revenue: 68, Payroll: 20 },
-      { month: 'Aug', Revenue: 82, Payroll: 21 },
-      { month: 'Sep', Revenue: 95, Payroll: 22 },
-      { month: 'Oct', Revenue: 110, Payroll: 24 }
-    ],
-    expenseDistribution: [
-      { name: 'Base Salaries', value: 68 },
-      { name: 'Benefits & Healthcare', value: 14 },
-      { name: 'Software Licenses & Equipment', value: 12 },
-      { name: 'Taxes & Compliance', value: 6 }
-    ],
-    resourceAssignments: [
-      { month: 'Jun', Assigned: 24, Bench: 4 },
-      { month: 'Jul', Assigned: 26, Bench: 3 },
-      { month: 'Aug', Assigned: 28, Bench: 2 },
-      { month: 'Sep', Assigned: 30, Bench: 2 },
-      { month: 'Oct', Assigned: 31, Bench: 3 }
-    ],
-    slaAdherence: [
-      { name: 'Fintech BU', SLA: 98.4 },
-      { name: 'HealthTech BU', SLA: 96.2 },
-      { name: 'Enterprise Cloud', SLA: 99.1 },
-      { name: 'GovTech Delivery', SLA: 94.5 }
-    ],
-    revenueByBU: [
-      { name: 'Fintech Solutions', value: 42 },
-      { name: 'Cloud Modernization', value: 28 },
-      { name: 'AI & Data Platforms', value: 18 },
-      { name: 'Cybersecurity', value: 12 }
-    ],
-    topClientsRevenue: [
-      { name: 'Global Financials Corp', Revenue: 34 },
-      { name: 'Apex Health Systems', Revenue: 26 },
-      { name: 'Zenith Logistics', Revenue: 19 },
-      { name: 'NextGen Retail Inc', Revenue: 14 }
-    ],
-    attendanceTrends: { ratePercent: '98.4%', onTimeCount: 14, lateCount: 0 },
-    leaveTrends: { utilizationPercent: '12.5%', activeLeavesCount: 2, totalBalanceDays: 140 },
-    shiftUtilization: { efficiencyPercent: '96.2%', rotationalShiftCount: 8, restGapAdherence: '100%' },
-    wfhAnalysis: { remotePercentage: '28.5%', homeOfficeCompliance: '98.5%' },
-    employeeRequests: { totalVolume: 28, pendingCount: 4, processedCount: 24 },
-    approvalSla: { avgHours: '4.2h', adherencePercent: '96.8%' },
-    hrTicketSla: { firstResponseTime: '14 mins', resolutionRate: '98.5%' },
-    expenseTrends: { monthlyTotalRupees: '₹1,45,000', auditPassRate: '99.2%' },
-    complianceScore: { scorePercent: '97.8%', penaltiesIncurred: '₹0 Penalties' },
-    hrProductivity: { efficiencyScore: '99.2%', tasksAutomatedMonth: 1482 },
-    managerResponsiveness: { indexScore: '94.5%', avgTurnaroundHours: '3.8h' },
-    operationalKpis: { systemUptime: '99.99%', activeUsersCount: 14 },
-    employeeSatisfaction: { csatScore: '4.8 / 5.0 Rating', moraleIndex: '88% Positive' },
+    orgHealthScore: '0.0%',
+    revPayrollRatio: '0.0x Ratio',
+    workforceCostAmt: '₹0',
+    profitabilityMargin: '0.0%',
+    benchRate: '0.0%',
+    revenueVsPayrollTrend: [],
+    expenseDistribution: [],
+    resourceAssignments: [],
+    slaAdherence: [],
+    revenueByBU: [],
+    topClientsRevenue: [],
+    attendanceTrends: { ratePercent: '0.0%', onTimeCount: 0, lateCount: 0 },
+    leaveTrends: { utilizationPercent: '0.0%', activeLeavesCount: 0, totalBalanceDays: 0 },
+    shiftUtilization: { efficiencyPercent: '0.0%', rotationalShiftCount: 0, restGapAdherence: '0%' },
+    wfhAnalysis: { remotePercentage: '0%', homeOfficeCompliance: '0%' },
+    employeeRequests: { totalVolume: 0, pendingCount: 0, processedCount: 0 },
+    approvalSla: { avgHours: '0h', adherencePercent: '0%' },
+    hrTicketSla: { firstResponseTime: '0h', resolutionRate: '0.0%' },
+    expenseTrends: { monthlyTotalRupees: '₹0', auditPassRate: '100%' },
+    complianceScore: { scorePercent: '0.0%', penaltiesIncurred: '₹0 Penalties' },
+    hrProductivity: { efficiencyScore: '0%', tasksAutomatedMonth: 0 },
+    managerResponsiveness: { indexScore: '0.0%', avgTurnaroundHours: '0h' },
+    operationalKpis: { systemUptime: '100%', activeUsersCount: 0 },
+    employeeSatisfaction: { csatScore: 'N/A', moraleIndex: 'N/A' },
     dailyOperationsSummary: '',
     demographics: {
-      gender: [
-        { name: 'Male', value: 58.4 },
-        { name: 'Female', value: 40.2 },
-        { name: 'Others', value: 1.4 }
-      ],
-      age: [
-        { name: '21 - 30 yrs (Gen Z/Y)', value: 46 },
-        { name: '31 - 40 yrs', value: 38 },
-        { name: '40+ yrs', value: 16 }
-      ],
-      location: [
-        { name: 'Office (HQ Surat)', value: 62 },
-        { name: 'Hybrid Model', value: 24 },
-        { name: 'Remote Work', value: 14 }
-      ]
+      gender: [],
+      age: [],
+      location: []
     },
     aiForecasting: {
-      hiringDemand: '+8.4 Full Time Hires',
-      attritionRisk: '4.2% Risk Level',
-      aiActionRecommendation: 'Launch retention packages for critical design specialists. Overutilization has reached critical capacity limits.'
+      hiringDemand: '+0 Full Time Hires',
+      attritionRisk: '0.0% Risk Level',
+      aiActionRecommendation: 'No critical operational interventions required.'
     },
-    trainingCompletionRate: 85.0,
-    successionReadyCount: 3
+    trainingCompletionRate: 0,
+    successionReadyCount: 0
   });
 
-  // Simulated reports list
+  // Curated reports list based on modules
   const reports = [
     { name: 'Monthly Workforce Cost Summary', module: 'Payroll', author: 'System Job', format: 'PDF, CSV' },
-    { name: 'Onboarding Progression Matrix', module: 'HR Operations', author: 'HR Bot', format: 'Excel' },
-    { name: 'Billable Utilization Audit', module: 'PSA & Projects', author: 'Delivery Head', format: 'CSV' },
-    { name: 'Quarterly Attrition and Exit Review', module: 'Compliance', author: 'AI Insights', format: 'PDF' }
+    { name: 'Onboarding Progression Matrix', module: 'HR Operations', author: 'HR Service Desk', format: 'CSV' },
+    { name: 'Billable Utilization & Project SLA Audit', module: 'PSA & Projects', author: 'Delivery PMO', format: 'CSV' },
+    { name: 'Quarterly Attrition and Exit Review', module: 'Compliance', author: 'Executive BI', format: 'PDF, CSV' }
   ];
 
   const handleExport = (reportName: string, format: string) => {
     toast.success(`Exporting ${reportName} in ${format}...`);
-    
+
     let exportData: any[] = [];
     if (reportName.includes('Workforce Cost')) {
+      if (dashboards.expenseDistribution && dashboards.expenseDistribution.length > 0) {
+        exportData = dashboards.expenseDistribution.map((exp: any) => ({
+          Category: exp.name,
+          'Share (%)': `${exp.value}%`,
+          'Total Workforce Cost': dashboards.workforceCostAmt,
+          'Rev/Payroll Ratio': dashboards.revPayrollRatio,
+          'Profitability Margin': dashboards.profitabilityMargin
+        }));
+      } else {
+        exportData = [
+          { Metric: 'Total Workforce Cost', Value: dashboards.workforceCostAmt },
+          { Metric: 'Total Claims & Expenses', Value: dashboards.expenseTrends?.monthlyTotalRupees || '₹0' },
+          { Metric: 'Profitability Margin', Value: dashboards.profitabilityMargin },
+          { Metric: 'Rev/Payroll Ratio', Value: dashboards.revPayrollRatio },
+          { Metric: 'Active Headcount', Value: dashboards.operationalKpis?.activeUsersCount || 0 }
+        ];
+      }
+    } else if (reportName.includes('Onboarding') || reportName.includes('Compliance')) {
       exportData = [
-        { Department: 'Engineering', Headcount: dashboards.operationalKpis.activeUsersCount || 12, 'Avg CTC': '₹18,50,000', 'Total Payroll': dashboards.expenseTrends.monthlyTotalRupees },
-        { Department: 'HR Operations', Headcount: 2, 'Avg CTC': '₹8,50,000', 'Total Payroll': '₹1,41,666' },
-        { Department: 'Finance & Accounts', Headcount: 1, 'Avg CTC': '₹12,00,000', 'Total Payroll': '₹1,00,000' }
+        { Metric: 'Active Workforce Count', Value: dashboards.operationalKpis?.activeUsersCount || 0 },
+        { Metric: 'Compliance Score', Value: dashboards.complianceScore?.scorePercent || '0%' },
+        { Metric: 'Training Completion Rate', Value: `${dashboards.trainingCompletionRate || 0}%` },
+        { Metric: 'Succession Ready Count', Value: dashboards.successionReadyCount || 0 },
+        { Metric: 'Penalties Incurred', Value: dashboards.complianceScore?.penaltiesIncurred || '₹0 Penalties' }
       ];
-    } else if (reportName.includes('Onboarding')) {
-      exportData = [
-        { 'Employee Name': 'Priyanka Sharma', Department: 'Engineering', 'Joining Date': '2026-07-15', 'Onboarding Status': '100% Completed', 'Docs Verified': 'True' },
-        { 'Employee Name': 'Amit Verma', Department: 'HR Operations', 'Joining Date': '2026-07-20', 'Onboarding Status': '90% Progress', 'Docs Verified': 'True' },
-        { 'Employee Name': 'Rahul Sen', Department: 'Finance', 'Joining Date': '2026-07-28', 'Onboarding Status': '60% Progress', 'Docs Verified': 'False' }
-      ];
-    } else if (reportName.includes('Utilization')) {
-      exportData = [
-        { Project: 'TechSonance ERP', 'Assigned Resources': 6, 'Billing Utilization': '94.2%', 'Project Manager': 'Admin User' },
-        { Project: 'CMS Portal Integration', 'Assigned Resources': 3, 'Billing Utilization': '96.8%', 'Project Manager': 'HR Manager' }
-      ];
+    } else if (reportName.includes('Utilization') || reportName.includes('Project') || reportName.includes('Delivery')) {
+      if (dashboards.slaAdherence && dashboards.slaAdherence.length > 0) {
+        exportData = dashboards.slaAdherence.map((item: any) => ({
+          Project: item.name,
+          'Delivery SLA': `${item.SLA}%`,
+          'Active Bench Rate': dashboards.benchRate
+        }));
+      } else {
+        exportData = [
+          { Metric: 'Active Bench Rate', Value: dashboards.benchRate },
+          { Metric: 'Assigned Resources', Value: dashboards.resourceAssignments?.[0]?.Assigned || 0 },
+          { Metric: 'Bench Count', Value: dashboards.resourceAssignments?.[0]?.Bench || 0 }
+        ];
+      }
     } else {
-      // Attrition review
+      // Attrition / Org Health review
       exportData = [
-        { Department: 'Engineering', 'Morale Score': '88%', 'Attrition Risk': dashboards.aiForecasting.attritionRisk, 'Target Action': dashboards.aiForecasting.aiActionRecommendation },
-        { Department: 'Sales & BD', 'Morale Score': '92%', 'Attrition Risk': '2.5%', 'Target Action': 'No immediate attrition threat identified.' }
+        { Metric: 'Organization Health Score', Value: dashboards.orgHealthScore },
+        { Metric: 'Attrition Risk Level', Value: dashboards.aiForecasting?.attritionRisk || '0%' },
+        { Metric: 'Forecasted Hiring Demand', Value: dashboards.aiForecasting?.hiringDemand || '+0' },
+        { Metric: 'Strategic AI Recommendation', Value: dashboards.aiForecasting?.aiActionRecommendation || 'N/A' },
+        { Metric: 'Attendance Adherence', Value: dashboards.attendanceTrends?.ratePercent || '0%' }
       ];
     }
 
     const headers = Object.keys(exportData[0]).join(',');
-    const rows = exportData.map(row => 
+    const rows = exportData.map(row =>
       Object.values(row).map(val => {
         const str = String(val).replace(/"/g, '""');
         return `"${str}"`;
@@ -329,8 +309,10 @@ export default function AnalyticsDashboardPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-black tracking-tight text-slate-800 dark:text-slate-100">{dashboards.orgHealthScore || '94.2%'}</div>
-            <span className="text-[10px] text-emerald-500 font-bold">Excellent Health</span>
+            <div className="text-2xl font-black tracking-tight text-slate-800 dark:text-slate-100">{dashboards.orgHealthScore || '0.0%'}</div>
+            <span className="text-[10px] text-emerald-500 font-bold">
+              {parseFloat(dashboards.orgHealthScore || '0') >= 75 ? 'Healthy Organization' : 'Attention Required'}
+            </span>
           </CardContent>
         </Card>
 
@@ -343,8 +325,8 @@ export default function AnalyticsDashboardPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-black tracking-tight text-slate-800 dark:text-slate-100">{dashboards.revPayrollRatio || '10.2x Ratio'}</div>
-            <span className="text-[10px] text-muted-foreground">Target limit 8.0x</span>
+            <div className="text-2xl font-black tracking-tight text-slate-800 dark:text-slate-100">{dashboards.revPayrollRatio || '0.0x Ratio'}</div>
+            <span className="text-[10px] text-muted-foreground">Operating Ratio</span>
           </CardContent>
         </Card>
 
@@ -357,7 +339,7 @@ export default function AnalyticsDashboardPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-black tracking-tight text-slate-800 dark:text-slate-100">{dashboards.workforceCostAmt || '₹1,45,000'}</div>
+            <div className="text-2xl font-black tracking-tight text-slate-800 dark:text-slate-100">{dashboards.workforceCostAmt || '₹0'}</div>
             <span className="text-[10px] text-emerald-500 font-bold">Approved claims & salaries</span>
           </CardContent>
         </Card>
@@ -371,8 +353,8 @@ export default function AnalyticsDashboardPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-black tracking-tight text-slate-800 dark:text-slate-100">{dashboards.profitabilityMargin || '82.4%'}</div>
-            <span className="text-[10px] text-amber-500 font-bold">Target Margin exceeded</span>
+            <div className="text-2xl font-black tracking-tight text-slate-800 dark:text-slate-100">{dashboards.profitabilityMargin || '0.0%'}</div>
+            <span className="text-[10px] text-amber-500 font-bold">Net Operational Margin</span>
           </CardContent>
         </Card>
 
@@ -385,8 +367,8 @@ export default function AnalyticsDashboardPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-black tracking-tight text-slate-800 dark:text-slate-100">{dashboards.benchRate || '14.2%'}</div>
-            <span className="text-[10px] text-purple-500 font-bold">Ready for deployment</span>
+            <div className="text-2xl font-black tracking-tight text-slate-800 dark:text-slate-100">{dashboards.benchRate || '0.0%'}</div>
+            <span className="text-[10px] text-purple-500 font-bold">Available Resource Pool</span>
           </CardContent>
         </Card>
       </div>
@@ -438,17 +420,24 @@ export default function AnalyticsDashboardPage() {
                 <CardTitle className="text-xs font-black uppercase text-muted-foreground">Revenue vs Payroll Cost Trend</CardTitle>
               </CardHeader>
               <CardContent className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={dashboards.revenueVsPayrollTrend || []}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="month" stroke="#888888" fontSize={9} />
-                    <YAxis stroke="#888888" fontSize={9} />
-                    <ChartTooltip />
-                    <Legend />
-                    <Bar dataKey="Revenue" fill="#F87941" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="Payroll" fill="#37383E" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                {dashboards.revenueVsPayrollTrend && dashboards.revenueVsPayrollTrend.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={dashboards.revenueVsPayrollTrend}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="month" stroke="#888888" fontSize={9} />
+                      <YAxis stroke="#888888" fontSize={9} />
+                      <ChartTooltip />
+                      <Legend />
+                      <Bar dataKey="Revenue" fill="#F87941" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="Payroll" fill="#37383E" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-xs text-muted-foreground gap-2">
+                    <Inbox className="h-6 w-6 text-muted-foreground/40" />
+                    <span>No financial trend records found</span>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -457,14 +446,21 @@ export default function AnalyticsDashboardPage() {
                 <CardTitle className="text-xs font-black uppercase text-muted-foreground">Workforce Expense Distribution</CardTitle>
               </CardHeader>
               <CardContent className="h-72 flex justify-center items-center">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={dashboards.expenseDistribution || []} cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={3} dataKey="value">
-                      {COLORS.map((color, idx) => <Cell key={idx} fill={color} />)}
-                    </Pie>
-                    <ChartTooltip />
-                  </PieChart>
-                </ResponsiveContainer>
+                {dashboards.expenseDistribution && dashboards.expenseDistribution.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={dashboards.expenseDistribution} cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={3} dataKey="value">
+                        {COLORS.map((color, idx) => <Cell key={idx} fill={color} />)}
+                      </Pie>
+                      <ChartTooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-xs text-muted-foreground gap-2">
+                    <Inbox className="h-6 w-6 text-muted-foreground/40" />
+                    <span>No expense or payroll distributions logged</span>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -478,16 +474,23 @@ export default function AnalyticsDashboardPage() {
                 <CardTitle className="text-xs font-black uppercase text-muted-foreground">Resource Assignments & Bench Rate</CardTitle>
               </CardHeader>
               <CardContent className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={dashboards.resourceAssignments || []}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="month" stroke="#888888" fontSize={9} />
-                    <YAxis stroke="#888888" fontSize={9} />
-                    <ChartTooltip />
-                    <Bar dataKey="Assigned" fill="#F87941" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="Bench" fill="#B1B1B1" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                {dashboards.resourceAssignments && dashboards.resourceAssignments.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={dashboards.resourceAssignments}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="month" stroke="#888888" fontSize={9} />
+                      <YAxis stroke="#888888" fontSize={9} />
+                      <ChartTooltip />
+                      <Bar dataKey="Assigned" fill="#F87941" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="Bench" fill="#B1B1B1" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-xs text-muted-foreground gap-2">
+                    <Inbox className="h-6 w-6 text-muted-foreground/40" />
+                    <span>No resource assignments found</span>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -496,15 +499,22 @@ export default function AnalyticsDashboardPage() {
                 <CardTitle className="text-xs font-black uppercase text-muted-foreground">SLA Adherence by Delivery Units</CardTitle>
               </CardHeader>
               <CardContent className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={dashboards.slaAdherence || []} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis type="number" stroke="#888888" fontSize={9} />
-                    <YAxis dataKey="name" type="category" stroke="#888888" fontSize={9} width={90} />
-                    <ChartTooltip />
-                    <Bar dataKey="SLA" fill="#F87941" radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                {dashboards.slaAdherence && dashboards.slaAdherence.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={dashboards.slaAdherence} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis type="number" stroke="#888888" fontSize={9} />
+                      <YAxis dataKey="name" type="category" stroke="#888888" fontSize={9} width={90} />
+                      <ChartTooltip />
+                      <Bar dataKey="SLA" fill="#F87941" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-xs text-muted-foreground gap-2">
+                    <Inbox className="h-6 w-6 text-muted-foreground/40" />
+                    <span>No active delivery units or projects found</span>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -517,15 +527,22 @@ export default function AnalyticsDashboardPage() {
               <CardHeader>
                 <CardTitle className="text-xs font-black uppercase text-muted-foreground">Revenue by Business Units</CardTitle>
               </CardHeader>
-              <CardContent className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={dashboards.revenueByBU || []} cx="50%" cy="50%" innerRadius={50} outerRadius={75} dataKey="value">
-                      {COLORS.map((color, idx) => <Cell key={idx} fill={color} />)}
-                    </Pie>
-                    <ChartTooltip />
-                  </PieChart>
-                </ResponsiveContainer>
+              <CardContent className="h-72 flex justify-center items-center">
+                {dashboards.revenueByBU && dashboards.revenueByBU.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={dashboards.revenueByBU} cx="50%" cy="50%" innerRadius={50} outerRadius={75} dataKey="value">
+                        {COLORS.map((color, idx) => <Cell key={idx} fill={color} />)}
+                      </Pie>
+                      <ChartTooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-xs text-muted-foreground gap-2">
+                    <Inbox className="h-6 w-6 text-muted-foreground/40" />
+                    <span>No business unit revenue recorded</span>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -534,15 +551,22 @@ export default function AnalyticsDashboardPage() {
                 <CardTitle className="text-xs font-black uppercase text-muted-foreground">Top Clients Revenue Splits</CardTitle>
               </CardHeader>
               <CardContent className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={dashboards.topClientsRevenue || []}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="name" stroke="#888888" fontSize={9} />
-                    <YAxis stroke="#888888" fontSize={9} />
-                    <ChartTooltip />
-                    <Bar dataKey="Revenue" fill="#F87941" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                {dashboards.topClientsRevenue && dashboards.topClientsRevenue.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={dashboards.topClientsRevenue}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="name" stroke="#888888" fontSize={9} />
+                      <YAxis stroke="#888888" fontSize={9} />
+                      <ChartTooltip />
+                      <Bar dataKey="Revenue" fill="#F87941" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-xs text-muted-foreground gap-2">
+                    <Inbox className="h-6 w-6 text-muted-foreground/40" />
+                    <span>No client revenue recorded</span>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
