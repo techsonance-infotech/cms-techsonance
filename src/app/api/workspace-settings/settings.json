@@ -1,1 +1,55 @@
-{}
+{
+  "4bb9f8db-2854-4d2f-884e-50a3cb9cf6e7": {
+    "language": "English",
+    "country": "",
+    "officeHours": "",
+    "notifyEmail": true,
+    "notifySms": false,
+    "notifyWhatsapp": false,
+    "notifySlack": false,
+    "aiModel": "gemini-1.5-pro",
+    "aiTemperature": 0.2,
+    "aiPromptTemplate": "",
+    "aiAssistantName": "AI Assistant",
+    "uploadedDocuments": [],
+    "costCenters": [],
+    "grades": [],
+    "bands": [],
+    "designations": [],
+    "jobLevels": [],
+    "employmentTypes": [
+      "Full-Time",
+      "Part-Time",
+      "Contractor",
+      "Intern"
+    ],
+    "workModes": [
+      "Work From Office",
+      "Work From Home (Remote)",
+      "Hybrid"
+    ],
+    "shifts": [
+      "General Shift",
+      "Morning Shift",
+      "Night Shift"
+    ],
+    "teams": [],
+    "themeMode": "Follow System Settings",
+    "secondaryColor": "#F9B095",
+    "sidebarStyle": "Classic Sidebar",
+    "navigationStyle": "Left Side Navigation",
+    "dashboardLayout": "Standard Grid Layout",
+    "widgetConfig": "Default Analytics Layout",
+    "cardDensity": "Cozy (Standard padding)",
+    "compactMode": false,
+    "logoUrl": "/api/upload?fileId=be930ebb-24cf-4799-9272-973f239e96ff",
+    "loginScreenStyle": "Modern Glassmorphic",
+    "registerScreenStyle": "Classic Elegant",
+    "emailTemplateStyle": "Corporate Minimalist",
+    "pdfBrandingStyle": "Modern Signature",
+    "invoiceBrandingStyle": "Clean Minimalist",
+    "primaryFont": "Inter (Default)",
+    "borderRadius": "12px",
+    "animationsEnabled": true
+  }
+}

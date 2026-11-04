@@ -1699,6 +1699,67 @@ export default function SettingsPage() {
   const [activeCategoryFilter, setActiveCategoryFilter] = useState('All');
   const [onboardingUploadTarget, setOnboardingUploadTarget] = useState<'gst' | 'pan' | 'reg' | null>(null);
 
+  const buildOrgTree = (nodes: any[]): any[] => {
+    if (!nodes || !nodes.length) return [];
+
+    const idMap = new Map<string, any>();
+    const aliasToId = new Map<string, string>();
+
+    nodes.forEach(node => {
+      const orgNode = { ...node, children: [] };
+      const internalId = String(node.id);
+      idMap.set(internalId, orgNode);
+
+      aliasToId.set(internalId, internalId);
+      if (node.userId) aliasToId.set(String(node.userId), internalId);
+      if (node.employeeId) aliasToId.set(String(node.employeeId), internalId);
+    });
+
+    const roots: any[] = [];
+    const childIds = new Set<string>();
+
+    nodes.forEach(node => {
+      const current = idMap.get(String(node.id));
+      if (!current) return;
+
+      let parentId: string | null = null;
+      if (node.managerId) {
+        parentId = aliasToId.get(String(node.managerId)) || null;
+      }
+
+      // Avoid self-reporting cycles
+      if (parentId && parentId === String(node.id)) {
+        parentId = null;
+      }
+
+      if (parentId && idMap.has(parentId)) {
+        const parent = idMap.get(parentId)!;
+        if (!parent.children.some((c: any) => String(c.id) === String(node.id))) {
+          parent.children.push(current);
+          childIds.add(String(node.id));
+        }
+      } else {
+        roots.push(current);
+      }
+    });
+
+    // In case all nodes were assigned into a cycle or no root found
+    if (roots.length === 0 && nodes.length > 0) {
+      nodes.forEach(n => {
+        if (!childIds.has(String(n.id))) {
+          const nodeObj = idMap.get(String(n.id));
+          if (nodeObj) roots.push(nodeObj);
+        }
+      });
+      if (roots.length === 0) {
+        const first = idMap.get(String(nodes[0].id));
+        if (first) roots.push(first);
+      }
+    }
+
+    return roots;
+  };
+
   const fetchOrgChartData = async () => {
     setOrgLoading(true);
     try {
@@ -1707,12 +1768,59 @@ export default function SettingsPage() {
       if (token && token !== 'null' && token !== 'undefined') {
         headers['Authorization'] = `Bearer ${token}`;
       }
-      const res = await fetch('/api/org-chart', { headers });
-      if (!res.ok) throw new Error('Failed to load organization chart');
-      const resJson = await res.json();
-      if (resJson.success && Array.isArray(resJson.data)) {
-        setOrgNodes(resJson.data);
+
+      let nodes: any[] = [];
+
+      try {
+        const res = await fetch(`/api/org-chart?t=${Date.now()}`, {
+          headers,
+          credentials: 'include',
+          cache: 'no-store',
+        });
+        if (res.ok) {
+          const resJson = await res.json();
+          if (Array.isArray(resJson)) {
+            nodes = resJson;
+          } else if (Array.isArray(resJson?.data)) {
+            nodes = resJson.data;
+          }
+        }
+      } catch (err) {
+        console.warn('Direct org-chart route fetch warning:', err);
       }
+
+      // If org-chart returned empty or failed, fetch from workforce employees directory API
+      if (!nodes || nodes.length === 0) {
+        try {
+          const empRes = await fetch(`/api/employees?limit=1000&t=${Date.now()}`, {
+            headers,
+            credentials: 'include',
+            cache: 'no-store',
+          });
+          if (empRes.ok) {
+            const empJson = await empRes.json();
+            const empList = Array.isArray(empJson) ? empJson : (Array.isArray(empJson?.data) ? empJson.data : []);
+            if (empList.length > 0) {
+              nodes = empList.map((emp: any) => ({
+                id: Number(emp.id),
+                employeeId: emp.employeeId || emp.employee_id || `EMP-${emp.id}`,
+                userId: emp.userId || emp.user_id || `temp-${emp.id}`,
+                managerId: emp.managerId || emp.manager_id || null,
+                name: emp.name || (emp.firstName ? `${emp.firstName} ${emp.lastName || ''}`.trim() : null) || (emp.first_name ? `${emp.first_name} ${emp.last_name || ''}`.trim() : null) || emp.preferredName || `Employee ${emp.employeeId || emp.id}`,
+                designation: emp.designation || 'Staff',
+                department: emp.department || 'General',
+                costCenter: emp.costCenter || emp.cost_center || null,
+                office: emp.office || emp.workLocation || emp.branchName || 'Gandhinagar',
+                avatarUrl: emp.avatarUrl || emp.avatar_url || null,
+              }));
+            }
+          }
+        } catch (e) {
+          console.warn('Employees directory fallback fetch error:', e);
+        }
+      }
+
+      setOrgNodes(nodes);
     } catch (err: any) {
       console.error(err);
       toast.error('Could not load reporting structure');
@@ -1762,6 +1870,7 @@ export default function SettingsPage() {
       const res = await fetch('/api/org-chart', {
         method: 'PUT',
         headers,
+        credentials: 'include',
         body: JSON.stringify({ employeeId: droppedNodeId, parentEmployeeId: targetNodeId }),
       });
       const resJson = await res.json();
@@ -1833,7 +1942,8 @@ export default function SettingsPage() {
         fetchCurrentUser(),
         fetchSettingsFromBackend(),
         fetchTenantUsers(),
-        fetchRolesList()
+        fetchRolesList(),
+        fetchOrgChartData()
       ]);
       if (userRes && !hasFullAccess(userRes.role)) {
         // Will render Access Denied view securely
@@ -3486,12 +3596,11 @@ export default function SettingsPage() {
                     /* Live dynamic Org Chart Renderer with Drag & Drop */
                     <div className="overflow-x-auto p-4 bg-slate-50 dark:bg-zinc-900/30 rounded-2xl border border-border min-h-[400px]">
                       <div className="flex flex-col items-center min-w-[700px] py-6">
-                        {/* Roots (nodes with no manager or manager not in list) */}
-                        {orgNodes
-                          .filter(node => !node.managerId || !orgNodes.some(n => n.userId === node.managerId))
-                          .map(rootNode => {
+                        {/* Render live workforce reporting tree */}
+                        <div className="flex flex-wrap justify-center gap-8 w-full">
+                          {buildOrgTree(orgNodes).map(rootNode => {
                             const renderNodeTree = (node: any) => {
-                              const children = orgNodes.filter(n => n.managerId === node.userId);
+                              const children = node.children || [];
                               return (
                                 <div key={node.id} className="flex flex-col items-center">
                                   {/* Draggable Card Node */}
@@ -3513,15 +3622,15 @@ export default function SettingsPage() {
                                       {node.avatarUrl ? (
                                         <img src={node.avatarUrl} alt={node.name} className="h-full w-full rounded-full object-cover" />
                                       ) : (
-                                        node.name.substring(0, 2)
+                                        (node.name || 'AP').split(' ').map((n: string) => n[0]).join('').slice(0, 2)
                                       )}
                                     </div>
                                     <h4 className="text-xs font-bold text-foreground text-center mt-2 truncate w-full">{node.name}</h4>
                                     <span className="text-[10px] text-primary font-bold text-center mt-0.5 truncate w-full">{node.designation}</span>
                                     <span className="text-[9px] text-muted-foreground text-center mt-0.5 truncate w-full">{node.department}</span>
-                                    {node.costCenter && (
+                                    {(node.office || node.costCenter) && (
                                       <span className="mt-2 text-[8px] font-mono bg-muted text-muted-foreground px-1.5 py-0.5 rounded-md">
-                                        {node.costCenter}
+                                        {node.office || node.costCenter}
                                       </span>
                                     )}
                                   </div>
@@ -3533,7 +3642,7 @@ export default function SettingsPage() {
                                       <div className="relative flex justify-center w-full">
                                         <div className="absolute top-0 left-0 right-0 h-[2px] bg-border w-[90%] mx-auto" />
                                         <div className="flex gap-8 pt-6 relative">
-                                          {children.map(child => renderNodeTree(child))}
+                                          {children.map((child: any) => renderNodeTree(child))}
                                         </div>
                                       </div>
                                     </>
@@ -3543,6 +3652,7 @@ export default function SettingsPage() {
                             };
                             return renderNodeTree(rootNode);
                           })}
+                        </div>
                       </div>
                       <div className="mt-4 flex items-center justify-center gap-2 text-[10px] text-muted-foreground font-semibold text-center border-t border-border/60 pt-4">
                         <Sparkles className="h-3.5 w-3.5 text-primary animate-pulse" />

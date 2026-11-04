@@ -168,6 +168,10 @@ async function getOrCreateTenantSettings(tenantId: string, supabase: any): Promi
     const modes = Array.from(new Set(dbEmployees.map((e: any) => e.work_mode).filter(Boolean)));
     if (modes.length > 0) merged.workModes = modes;
   }
+  if ((!merged.teams || merged.teams.length === 0) && dbEmployees.length > 0) {
+    const teams = Array.from(new Set(dbEmployees.map((e: any) => e.department).filter(Boolean)));
+    if (teams.length > 0) merged.teams = teams;
+  }
 
   if (company) {
     if (company.legal_name !== undefined && company.legal_name !== null) merged.legalName = company.legal_name;
