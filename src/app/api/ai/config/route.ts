@@ -29,24 +29,16 @@ export const GET = withApiHandler(async (request, context) => {
 
   if (kbError) throw kbError;
 
-  // Mock token logs analytics
-  const tokenLogs = [
-    { id: 'log-1', feature: 'AI Search', tokensUsed: 1204, creditsCost: 0.024, prompt: 'How do I submit travel requests?', timestamp: new Date(Date.now() - 3600000).toLocaleString() },
-    { id: 'log-2', feature: 'Resume Parser', tokensUsed: 4208, creditsCost: 0.084, prompt: 'Parse resume_john_doe.pdf', timestamp: new Date(Date.now() - 7200000).toLocaleString() },
-    { id: 'log-3', feature: 'AI Employee Review', tokensUsed: 890, creditsCost: 0.017, prompt: 'Generate performance summary', timestamp: new Date(Date.now() - 14400000).toLocaleString() },
-    { id: 'log-4', feature: 'AI Payroll Assistant', tokensUsed: 3120, creditsCost: 0.062, prompt: 'Verify payroll anomalies', timestamp: new Date(Date.now() - 86400000).toLocaleString() },
-  ];
-
   return NextResponse.json({
     success: true,
     data: {
-      settings: company || { ai_model: 'gemini-1.5-pro', ai_temperature: 0.7, ai_prompt_template: '', ai_assistant_name: 'Antigravity Assistant' },
+      settings: company || { ai_model: 'gemini-1.5-pro', ai_temperature: 0.7, ai_prompt_template: '', ai_assistant_name: 'AI Workspace Assistant' },
       kbFiles: kbFiles || [],
-      tokenLogs,
+      tokenLogs: [],
       usage: {
         limit: 100000,
-        used: 12422,
-        creditsRemaining: 15.80
+        used: 0,
+        creditsRemaining: 0
       }
     }
   });

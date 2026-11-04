@@ -8,64 +8,78 @@ import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
 const SETTINGS_FILE_PATH = path.join(process.cwd(), 'src/app/api/workspace-settings/settings.json');
 
 const INITIAL_DEFAULT_CONFIG = {
-  legalName: 'TechSonance Infotech Private Limited',
-  workspaceName: 'techsonance-main',
-  orgCode: 'TS-IND-01',
+  legalName: '',
+  workspaceName: '',
+  orgCode: '',
   businessType: 'Private Limited',
-  industry: 'Software Development & IT Consultancy',
-  timezone: 'Asia/Kolkata (GMT+5:30)',
-  language: 'English (India)',
-  country: 'India',
-  currency: 'INR (₹)',
-  fiscalYear: 'April to March',
+  industry: '',
+  timezone: 'UTC (GMT+0:00)',
+  language: 'English',
+  country: '',
+  currency: 'USD ($)',
+  fiscalYear: 'January to December',
 
-  cinNumber: 'L72200DL2026PLC123456',
-  msmeNumber: 'UDYAM-DL-01-0012345',
-  supportEmail: 'support@techsonance.com',
-  supportPhone: '+91 98765 43211',
-  officeHours: '09:00 AM - 06:00 PM',
-  emergencyContact: 'HR Helpline: +91 98765 43219',
+  cinNumber: '',
+  msmeNumber: '',
+  supportEmail: '',
+  supportPhone: '',
+  officeHours: '',
+  emergencyContact: '',
 
   defaultProbation: 6,
-  noticePeriod: 90,
-  empIdPrefix: 'TS-',
+  noticePeriod: 30,
+  empIdPrefix: 'EMP-',
   usernamePattern: 'first.last',
-  emailPattern: 'username@techsonance.com',
-  leavePolicy: 'Standard Privilege Leaves (24 days)',
-  shiftDefault: 'General Engineering Shift (09:30 AM - 06:30 PM)',
+  emailPattern: '',
+  leavePolicy: '',
+  shiftDefault: '',
   joiningWorkflow: 'Standard Paperless Onboarding',
   confirmationWorkflow: 'Manager Review required',
   autoEmpId: true,
-  workingHours: 9,
+  workingHours: 8,
   weekendRules: 'Saturday & Sunday Off',
-  passwordPolicy: 'High Security (Minimum 12 chars, alphanumeric)',
-  devicePolicy: 'Unrestricted personal and corporate devices allowed',
-  loginRestrictions: 'Allowed at all times from trusted locations',
+  passwordPolicy: 'Minimum 8 characters',
+  devicePolicy: '',
+  loginRestrictions: '',
 
-  mfaEnforced: true,
+  mfaEnforced: false,
   sessionTimeout: 60,
   passwordMinLength: 8,
-  ipWhitelist: '192.168.1.1/32, 103.241.12.0/24',
-  allowedDomains: 'techsonance.com, techsonanceinfotech.com',
+  ipWhitelist: '',
+  allowedDomains: '',
 
   notifyEmail: true,
   notifySms: false,
-  notifyWhatsapp: true,
-  notifySlack: true,
+  notifyWhatsapp: false,
+  notifySlack: false,
+  notifyPush: false,
+  notifyTeams: false,
+  notifyDiscord: false,
+  notifyWebhook: false,
+  notifyBrowser: false,
+  slackWebhookUrl: '',
+  teamsWebhookUrl: '',
+  discordWebhookUrl: '',
+  webhookEndpointUrl: '',
+  notificationTemplates: [],
+  escalationRules: [],
+  reminderRules: [],
+  digestEmails: false,
+  digestFrequency: 'weekly',
 
-  invoicePrefix: 'TS-INV-',
+  invoicePrefix: 'INV-',
   invoiceNumberStart: 1,
-  quotationPrefix: 'TS-QTN-',
-  purchasePrefix: 'TS-PO-',
-  creditNotePrefix: 'TS-CN-',
+  quotationPrefix: 'QTN-',
+  purchasePrefix: 'PO-',
+  creditNotePrefix: 'CN-',
   gstEnabled: false,
   gstRateDefault: 18.00,
   taxConfiguration: [],
   invoiceDecimal: 2,
-  invoiceFooter: 'Thank you for your business!',
-  invoiceTerms: '1. Please pay within 15 days of invoice date. 2. Late payments incur a 1.5% fee.',
-  defaultPaymentTerms: 'Net 15',
-  paymentGateway: 'stripe',
+  invoiceFooter: '',
+  invoiceTerms: '',
+  defaultPaymentTerms: 'Net 30',
+  paymentGateway: '',
   paymentGatewayConfig: {},
   qrCodeEnabled: false,
   qrCodeUrl: '',
@@ -77,13 +91,19 @@ const INITIAL_DEFAULT_CONFIG = {
 
   aiModel: 'gemini-1.5-pro',
   aiTemperature: 0.2,
-  aiPromptTemplate: 'Act as a secure enterprise coding assistant. Follow strict compliance protocols...',
-  aiAssistantName: 'Antigravity Workspace Engine',
+  aiPromptTemplate: '',
+  aiAssistantName: 'AI Assistant',
 
-  uploadedDocuments: [
-    { name: 'GST Certificate.pdf', size: '2.4 MB', type: 'Tax Identification', fileUrl: '', expiry: 'Permanent' },
-    { name: 'Incorporation Deed.pdf', size: '15.2 MB', type: 'Legal Registries', fileUrl: '', expiry: 'Permanent' }
-  ]
+  uploadedDocuments: [],
+  costCenters: [],
+  grades: [],
+  bands: [],
+  designations: [],
+  jobLevels: [],
+  employmentTypes: ['Full-Time', 'Part-Time', 'Contractor', 'Intern'],
+  workModes: ['Work From Office', 'Work From Home (Remote)', 'Hybrid'],
+  shifts: [],
+  teams: []
 };
 
 // Initialize settings.json and fetch map
@@ -102,27 +122,52 @@ async function getOrCreateTenantSettings(tenantId: string, supabase: any): Promi
   const allSettings = await getOrCreateAllSettings();
   const jsonSettings = allSettings[tenantId] || {};
 
-  // Fetch database settings
-  const { data: company } = await supabase
-    .from('company_settings')
-    .select('*')
-    .eq('tenant_id', tenantId)
-    .maybeSingle();
+  // Fetch live database settings and structure for this tenant
+  const [companyRes, tenantRes, costCentersRes, shiftsRes, employeesRes] = await Promise.allSettled([
+    supabase.from('company_settings').select('*').eq('tenant_id', tenantId).maybeSingle(),
+    supabase.from('tenants').select('name, slug').eq('id', tenantId).maybeSingle(),
+    supabase.from('cost_centers').select('code, name').eq('tenant_id', tenantId),
+    supabase.from('shift_definitions').select('name').eq('tenant_id', tenantId),
+    supabase.from('employees').select('designation, department, work_mode').eq('tenant_id', tenantId)
+  ]);
 
-  const { data: tenant } = await supabase
-    .from('tenants')
-    .select('name, slug')
-    .eq('id', tenantId)
-    .maybeSingle();
+  const company = companyRes.status === 'fulfilled' ? companyRes.value.data : null;
+  const tenant = tenantRes.status === 'fulfilled' ? tenantRes.value.data : null;
+  const dbCostCenters = costCentersRes.status === 'fulfilled' && costCentersRes.value.data ? costCentersRes.value.data : [];
+  const dbShifts = shiftsRes.status === 'fulfilled' && shiftsRes.value.data ? shiftsRes.value.data : [];
+  const dbEmployees = employeesRes.status === 'fulfilled' && employeesRes.value.data ? employeesRes.value.data : [];
 
   const codePrefix = tenant?.name
     ? tenant.name.split(' ').map((w: string) => w[0]).join('').toUpperCase()
-    : 'TS';
+    : 'EMP';
 
-  const merged = {
+  const merged: Record<string, any> = {
     ...INITIAL_DEFAULT_CONFIG,
     ...jsonSettings,
   };
+
+  if (tenant?.name) {
+    if (!merged.legalName) merged.legalName = tenant.name;
+    if (!merged.orgCode) merged.orgCode = `${codePrefix}-01`;
+  }
+  if (tenant?.slug) {
+    if (!merged.workspaceName) merged.workspaceName = tenant.slug;
+  }
+
+  // Populate dynamic structure from live database if not explicitly customized
+  if ((!merged.costCenters || merged.costCenters.length === 0) && dbCostCenters.length > 0) {
+    merged.costCenters = dbCostCenters.map((c: any) => c.code || c.name);
+  }
+  if ((!merged.shifts || merged.shifts.length === 0) && dbShifts.length > 0) {
+    merged.shifts = dbShifts.map((s: any) => s.name);
+  }
+  if ((!merged.designations || merged.designations.length === 0) && dbEmployees.length > 0) {
+    merged.designations = Array.from(new Set(dbEmployees.map((e: any) => e.designation).filter(Boolean)));
+  }
+  if ((!merged.workModes || merged.workModes.length === 0) && dbEmployees.length > 0) {
+    const modes = Array.from(new Set(dbEmployees.map((e: any) => e.work_mode).filter(Boolean)));
+    if (modes.length > 0) merged.workModes = modes;
+  }
 
   if (company) {
     if (company.legal_name !== undefined && company.legal_name !== null) merged.legalName = company.legal_name;
@@ -200,13 +245,6 @@ async function getOrCreateTenantSettings(tenantId: string, supabase: any): Promi
     if (company.multi_currency_enabled !== undefined && company.multi_currency_enabled !== null) merged.multiCurrencyEnabled = Boolean(company.multi_currency_enabled);
     if (company.supported_currencies !== undefined && company.supported_currencies !== null) merged.supportedCurrencies = company.supported_currencies;
   }
-
-  // Ensure fallback defaults if empty
-  if (!merged.workspaceName && tenant?.slug) merged.workspaceName = tenant.slug;
-  if (!merged.legalName && company?.company_name) merged.legalName = company.company_name;
-  if (!merged.orgCode) merged.orgCode = `${codePrefix}-IND-01`;
-  if (!merged.supportEmail && company?.email) merged.supportEmail = company.email;
-  if (!merged.supportPhone && company?.phone) merged.supportPhone = company.phone;
 
   return merged;
 }
@@ -409,7 +447,6 @@ export const PUT = withApiHandler(async (request, context) => {
     if (dbErr) {
       console.warn('DB sync warning: trying schema fallback without defaults columns:', dbErr.message);
       dbWriteSucceededWithDefaults = false;
-      // Fallback: Remove the new fields and retry with core columns only
       const coreDbFields: Record<string, any> = {};
       const coreKeys = [
         'legal_name', 'workspace_name', 'org_code', 'industry', 'business_type', 
@@ -454,8 +491,6 @@ export const PUT = withApiHandler(async (request, context) => {
     'emergencyContact', 'supportEmail', 'supportPhone', 'faviconUrl'
   ];
 
-  // If the database successfully stored defaults & security, delete them from settings.json.
-  // Otherwise, we must KEEP them in settings.json to prevent settings loss!
   if (dbWriteSucceededWithDefaults) {
     dbFieldKeys.push(
       'defaultProbation', 'noticePeriod', 'empIdPrefix', 'usernamePattern', 'emailPattern',

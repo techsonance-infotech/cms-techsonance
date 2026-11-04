@@ -97,59 +97,15 @@ export const GET = withApiHandler(async (_request, context) => {
   }
 
   // 3. Fetch billing invoices (SaaS invoices for this tenant)
-  let { data: invoices, error: invError } = await supabase
+  const { data: invoices } = await supabase
     .from('saas_invoices')
     .select('*')
     .eq('tenant_id', tenantId)
     .order('billing_date', { ascending: false });
 
-  // Create mock invoices if empty to represent billing history
-  if (!invoices || invoices.length === 0) {
-    const mockInvoices = [
-      {
-        id: '1',
-        invoice_number: 'TS-BLL-2026-07',
-        amount: 49990.00,
-        currency: 'INR',
-        status: 'paid',
-        billing_date: '2026-07-01',
-        due_date: '2026-07-05',
-        pdf_url: '#',
-      },
-      {
-        id: '2',
-        invoice_number: 'TS-BLL-2026-06',
-        amount: 49990.00,
-        currency: 'INR',
-        status: 'paid',
-        billing_date: '2026-06-01',
-        due_date: '2026-06-05',
-        pdf_url: '#',
-      }
-    ];
-
-    if (subscription.id !== 'temp-sub-id' && (!invoices || invoices.length === 0)) {
-      const inserts = mockInvoices.map(inv => ({
-        tenant_id: tenantId,
-        invoice_number: inv.invoice_number,
-        amount: inv.amount,
-        currency: inv.currency,
-        status: inv.status,
-        billing_date: inv.billing_date,
-        due_date: inv.due_date,
-        pdf_url: inv.pdf_url,
-      }));
-      const { data: dbInvoices } = await supabase.from('saas_invoices').insert(inserts).select('*');
-      if (dbInvoices) invoices = dbInvoices;
-      else invoices = mockInvoices;
-    } else {
-      invoices = mockInvoices;
-    }
-  }
-
   return apiSuccess({
     subscription: normalizeSubscription(subscription),
-    invoices: invoices.map((inv: any) => ({
+    invoices: (invoices || []).map((inv: any) => ({
       id: inv.id,
       invoiceNumber: inv.invoice_number,
       amount: Number(inv.amount),
@@ -270,7 +226,7 @@ export const POST = withApiHandler(async (request, context) => {
       if (error || !updated) throw error ?? new Error('Plan migration failed');
 
       // Create new SaaS billing invoice
-      const invoiceNumber = `TS-BLL-${Date.now().toString().slice(-6)}`;
+      const invoiceNumber = `INV-SUB-${Date.now().toString().slice(-6)}`;
       await supabase
         .from('saas_invoices')
         .insert({

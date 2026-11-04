@@ -20,19 +20,13 @@ export const GET = withApiHandler(async (request, context) => {
     throw companyError;
   }
 
-  // Mock Cron jobs
-  const cronJobs = [
-    { id: 'cron-1', name: 'Sync Employee Leave Entitlements', schedule: '0 0 1 * *', lastRun: '2026-07-01 00:00:00', status: 'success' },
-    { id: 'cron-2', name: 'Generate Monthly Invoices', schedule: '0 0 28 * *', lastRun: '2026-06-28 00:00:00', status: 'success' },
-    { id: 'cron-3', name: 'Flushing Expired Cache Keys', schedule: '*/30 * * * *', lastRun: new Date(Date.now() - 900000).toLocaleString(), status: 'success' }
-  ];
+  const cronJobs: any[] = [];
 
-  // Mock Queue statistics
   const queues = {
     pending: 0,
     active: 0,
-    completed: 4529,
-    failed: 2
+    completed: 0,
+    failed: 0
   };
 
   return NextResponse.json({

@@ -196,76 +196,76 @@ interface WorkspaceState {
 }
 
 const DEFAULT_WORKSPACE_STATE: WorkspaceState = {
-  companyName: 'TechSonance Infotech',
-  email: 'admin@techsonance.com',
-  phone: '9876543210',
-  address: '404 Corporate Suite, Sector 62, Noida, UP, India',
-  website: 'https://techsonance.com',
+  companyName: '',
+  email: '',
+  phone: '',
+  address: '',
+  website: '',
   primaryColor: '#F87941',
   secondaryColor: '#F9B095',
   logoUrl: '',
   faviconUrl: '',
-  smtpHost: 'smtp.gmail.com',
+  smtpHost: '',
   smtpPort: 587,
-  smtpUser: 'relay@techsonance.com',
+  smtpUser: '',
   smtpPassword: '',
 
-  businessName: 'TechSonance Infotech LLP',
-  businessEmail: 'billing@techsonance.com',
-  businessPhone: '9876543210',
-  businessAddress: '404 Corporate Suite, Sector 62, Noida, UP, India',
-  gstNo: '09AAAAA1111A1Z1',
-  pan: 'ABCDE1234F',
-  tan: 'MUMB12345C',
-  registrationNo: 'U72900MH2026PTC123456',
-  termsAndConditions: 'All invoices are payable within 30 days of generation.',
-  notes: 'HDFC Bank - A/C: 50200012345678 - IFSC: HDFC0001234',
-  paymentTerms: 'Net 30',
+  businessName: '',
+  businessEmail: '',
+  businessPhone: '',
+  businessAddress: '',
+  gstNo: '',
+  pan: '',
+  tan: '',
+  registrationNo: '',
+  termsAndConditions: '',
+  notes: '',
+  paymentTerms: '',
 
-  legalName: 'TechSonance Infotech Private Limited',
-  workspaceName: 'techsonance-main',
-  orgCode: 'TS-IND-01',
-  businessType: 'Private Limited',
-  industry: 'Software Development & IT Consultancy',
-  timezone: 'Asia/Kolkata (GMT+5:30)',
-  language: 'English (India)',
-  country: 'India',
+  legalName: '',
+  workspaceName: '',
+  orgCode: '',
+  businessType: '',
+  industry: '',
+  timezone: 'UTC',
+  language: 'English',
+  country: '',
   currency: 'INR (₹)',
-  fiscalYear: 'April to March',
+  fiscalYear: '',
 
-  cinNumber: 'L72200DL2026PLC123456',
-  msmeNumber: 'UDYAM-DL-01-0012345',
-  supportEmail: 'support@techsonance.com',
-  supportPhone: '+91 98765 43211',
-  officeHours: '09:00 AM - 06:00 PM',
-  emergencyContact: 'HR Helpline: +91 98765 43219',
+  cinNumber: '',
+  msmeNumber: '',
+  supportEmail: '',
+  supportPhone: '',
+  officeHours: '',
+  emergencyContact: '',
 
-  defaultProbation: 6,
-  noticePeriod: 90,
-  empIdPrefix: 'TS-',
+  defaultProbation: 0,
+  noticePeriod: 0,
+  empIdPrefix: 'EMP-',
   usernamePattern: 'first.last',
-  emailPattern: 'username@techsonance.com',
-  leavePolicy: 'Standard Privilege Leaves (24 days)',
-  shiftDefault: 'General Engineering Shift (09:30 AM - 06:30 PM)',
-  joiningWorkflow: 'Standard Paperless Onboarding',
-  confirmationWorkflow: 'Manager Review required',
-  autoEmpId: true,
-  workingHours: 9,
+  emailPattern: '',
+  leavePolicy: '',
+  shiftDefault: '',
+  joiningWorkflow: '',
+  confirmationWorkflow: '',
+  autoEmpId: false,
+  workingHours: 8,
   weekendRules: 'Saturday & Sunday Off',
-  passwordPolicy: 'High Security (Minimum 12 chars, alphanumeric)',
-  devicePolicy: 'Unrestricted personal and corporate devices allowed',
-  loginRestrictions: 'Allowed at all times from trusted locations',
+  passwordPolicy: '',
+  devicePolicy: '',
+  loginRestrictions: '',
 
-  mfaEnforced: true,
+  mfaEnforced: false,
   sessionTimeout: 60,
   passwordMinLength: 8,
-  ipWhitelist: '192.168.1.1/32, 103.241.12.0/24',
-  allowedDomains: 'techsonance.com, techsonanceinfotech.com',
+  ipWhitelist: '',
+  allowedDomains: '',
 
   notifyEmail: true,
   notifySms: false,
-  notifyWhatsapp: true,
-  notifySlack: true,
+  notifyWhatsapp: false,
+  notifySlack: false,
   notifyPush: false,
   notifyTeams: false,
   notifyDiscord: false,
@@ -275,32 +275,25 @@ const DEFAULT_WORKSPACE_STATE: WorkspaceState = {
   teamsWebhookUrl: '',
   discordWebhookUrl: '',
   webhookEndpointUrl: '',
-  notificationTemplates: [
-    { id: '1', name: 'Employee Onboarded Greeting', trigger: 'employee_joined', channels: ['email', 'slack'], template: 'Welcome to the team, {{firstName}}!' },
-    { id: '2', name: 'Task Overdue Notification', trigger: 'task_overdue', channels: ['email', 'push'], template: 'Warning: The task {{taskName}} has passed its due date.' }
-  ],
-  escalationRules: [
-    { id: '1', name: 'Unresolved High Ticket Escalation', condition: 'Ticket status is Open for > 24 hours', action: 'Notify Department Head' }
-  ],
-  reminderRules: [
-    { id: '1', name: 'Daily Timesheet Reminder', condition: 'Timesheet not logged by 6:00 PM', action: 'Send Slack Notification to Employee' }
-  ],
+  notificationTemplates: [],
+  escalationRules: [],
+  reminderRules: [],
   digestEmails: false,
   digestFrequency: 'weekly',
 
-  invoicePrefix: 'TS-INV-',
+  invoicePrefix: 'INV-',
   invoiceDecimal: 2,
   invoiceNumberStart: 1,
-  quotationPrefix: 'TS-QTN-',
-  purchasePrefix: 'TS-PO-',
-  creditNotePrefix: 'TS-CN-',
+  quotationPrefix: 'QTN-',
+  purchasePrefix: 'PO-',
+  creditNotePrefix: 'CN-',
   gstEnabled: false,
   gstRateDefault: 18.00,
   taxConfiguration: [],
-  invoiceFooter: 'Thank you for your business!',
-  invoiceTerms: '1. Please pay within 15 days of invoice date. 2. Late payments incur a 1.5% fee.',
-  defaultPaymentTerms: 'Net 15',
-  paymentGateway: 'stripe',
+  invoiceFooter: '',
+  invoiceTerms: '',
+  defaultPaymentTerms: '',
+  paymentGateway: '',
   paymentGatewayConfig: {},
   qrCodeEnabled: false,
   qrCodeUrl: '',
@@ -311,9 +304,9 @@ const DEFAULT_WORKSPACE_STATE: WorkspaceState = {
   supportedCurrencies: [],
 
   aiModel: 'gemini-1.5-pro',
-  aiTemperature: 0.2,
-  aiPromptTemplate: 'Act as a secure enterprise coding assistant. Follow strict compliance protocols...',
-  aiAssistantName: 'Antigravity Workspace Engine',
+  aiTemperature: 0.7,
+  aiPromptTemplate: '',
+  aiAssistantName: 'AI Workspace Assistant',
 
   uploadedDocuments: [],
   registrationCertificateUrl: null,
@@ -338,15 +331,15 @@ const DEFAULT_WORKSPACE_STATE: WorkspaceState = {
   animationsEnabled: true,
 
   // Registry defaults
-  costCenters: ['CC-ENG-01', 'CC-QA-02', 'CC-MKT-03', 'CC-HR-04'],
-  grades: ['G1', 'G2', 'G3', 'G4', 'G5'],
-  bands: ['Band A', 'Band B', 'Band C'],
-  designations: ['Software Engineer', 'Product Manager', 'QA Engineer', 'HR Associate', 'CEO'],
-  jobLevels: ['L1 (Junior)', 'L2 (Mid)', 'L3 (Senior)', 'L4 (Lead)', 'L5 (Director)'],
-  employmentTypes: ['Full-Time', 'Part-Time', 'Contractor', 'Intern'],
-  workModes: ['Work From Office', 'Work From Home (Remote)', 'Hybrid (2 days office)'],
-  shifts: ['General engineering Shift', 'US Night Shift', 'UK Afternoon Shift'],
-  teams: ['Engineering Core', 'QA Core', 'Product Design', 'People Operations']
+  costCenters: [],
+  grades: [],
+  bands: [],
+  designations: [],
+  jobLevels: [],
+  employmentTypes: [],
+  workModes: [],
+  shifts: [],
+  teams: []
 };
 
 // Keyword mapping for Smart Settings Search
@@ -2132,154 +2125,155 @@ export default function SettingsPage() {
       let backendBusiness = businessJson.data || {};
       let backendWorkspace = workspaceJson.data || {};
 
-      // Merge DB states with the extended configurations loaded dynamically
+      // Merge DB states with live tenant data (clean zero-state fallbacks, no mock data)
       const merged: WorkspaceState = {
         // Company
-        companyName: backendCompany.companyName || DEFAULT_WORKSPACE_STATE.companyName,
-        email: backendCompany.email || DEFAULT_WORKSPACE_STATE.email,
-        phone: backendCompany.phone || DEFAULT_WORKSPACE_STATE.phone,
-        address: backendCompany.address || DEFAULT_WORKSPACE_STATE.address,
-        website: backendCompany.website || DEFAULT_WORKSPACE_STATE.website,
-        primaryColor: backendCompany.primaryColor || DEFAULT_WORKSPACE_STATE.primaryColor,
-        secondaryColor: backendCompany.secondaryColor || DEFAULT_WORKSPACE_STATE.secondaryColor,
-        logoUrl: backendCompany.logoUrl || DEFAULT_WORKSPACE_STATE.logoUrl,
-        faviconUrl: backendWorkspace.faviconUrl || DEFAULT_WORKSPACE_STATE.faviconUrl,
-        smtpHost: backendCompany.smtpHost || DEFAULT_WORKSPACE_STATE.smtpHost,
-        smtpPort: backendCompany.smtpPort || DEFAULT_WORKSPACE_STATE.smtpPort,
-        smtpUser: backendCompany.smtpUser || DEFAULT_WORKSPACE_STATE.smtpUser,
+        companyName: backendCompany.companyName || backendCompany.tenant?.name || '',
+        email: backendCompany.email || '',
+        phone: backendCompany.phone || '',
+        address: backendCompany.address || '',
+        website: backendCompany.website || '',
+        primaryColor: backendCompany.primaryColor || '#F87941',
+        secondaryColor: backendCompany.secondaryColor || '#F9B095',
+        logoUrl: backendCompany.logoUrl || '',
+        faviconUrl: backendWorkspace.faviconUrl || backendCompany.faviconUrl || '',
+        smtpHost: backendCompany.smtpHost || '',
+        smtpPort: backendCompany.smtpPort || 587,
+        smtpUser: backendCompany.smtpUser || '',
+        smtpPassword: backendCompany.smtpPassword || '',
 
         // Business
-        businessName: backendBusiness.businessName || backendCompany.companyName || DEFAULT_WORKSPACE_STATE.businessName,
-        businessEmail: backendBusiness.businessEmail || backendBusiness.email || backendCompany.email || DEFAULT_WORKSPACE_STATE.businessEmail,
-        businessPhone: backendBusiness.businessPhone || backendBusiness.phone || backendCompany.phone || DEFAULT_WORKSPACE_STATE.businessPhone,
-        businessAddress: backendBusiness.businessAddress || backendBusiness.address || backendCompany.address || DEFAULT_WORKSPACE_STATE.businessAddress,
-        gstNo: backendBusiness.gstNo || backendCompany.gstin || DEFAULT_WORKSPACE_STATE.gstNo,
-        pan: backendBusiness.pan || backendCompany.pan || DEFAULT_WORKSPACE_STATE.pan,
-        tan: backendBusiness.tan || DEFAULT_WORKSPACE_STATE.tan,
-        registrationNo: backendBusiness.registrationNo || DEFAULT_WORKSPACE_STATE.registrationNo,
-        termsAndConditions: backendBusiness.termsAndConditions || DEFAULT_WORKSPACE_STATE.termsAndConditions,
-        notes: backendBusiness.notes || DEFAULT_WORKSPACE_STATE.notes,
-        paymentTerms: backendBusiness.paymentTerms || DEFAULT_WORKSPACE_STATE.paymentTerms,
+        businessName: backendBusiness.businessName || backendCompany.companyName || backendCompany.tenant?.name || '',
+        businessEmail: backendBusiness.businessEmail || backendBusiness.email || backendCompany.email || '',
+        businessPhone: backendBusiness.businessPhone || backendBusiness.phone || backendCompany.phone || '',
+        businessAddress: backendBusiness.businessAddress || backendBusiness.address || backendCompany.address || '',
+        gstNo: backendBusiness.gstNo || backendCompany.gstin || '',
+        pan: backendBusiness.pan || backendCompany.pan || '',
+        tan: backendBusiness.tan || '',
+        registrationNo: backendBusiness.registrationNo || '',
+        termsAndConditions: backendBusiness.termsAndConditions || '',
+        notes: backendBusiness.notes || '',
+        paymentTerms: backendBusiness.paymentTerms || '',
 
         // Extended
-        legalName: backendWorkspace.legalName || backendCompany.companyName || DEFAULT_WORKSPACE_STATE.legalName,
-        workspaceName: backendWorkspace.workspaceName || backendCompany.tenant?.slug || DEFAULT_WORKSPACE_STATE.workspaceName,
-        orgCode: backendWorkspace.orgCode || (backendCompany.tenant?.name ? backendCompany.tenant.name.split(' ').map((w: string) => w[0]).join('').toUpperCase() + '-IND-01' : DEFAULT_WORKSPACE_STATE.orgCode),
-        businessType: backendWorkspace.businessType || DEFAULT_WORKSPACE_STATE.businessType,
-        industry: backendWorkspace.industry || DEFAULT_WORKSPACE_STATE.industry,
-        timezone: backendWorkspace.timezone || DEFAULT_WORKSPACE_STATE.timezone,
-        language: backendWorkspace.language || DEFAULT_WORKSPACE_STATE.language,
-        country: backendWorkspace.country || DEFAULT_WORKSPACE_STATE.country,
-        currency: backendWorkspace.currency || DEFAULT_WORKSPACE_STATE.currency,
-        fiscalYear: backendWorkspace.fiscalYear || DEFAULT_WORKSPACE_STATE.fiscalYear,
+        legalName: backendWorkspace.legalName || backendCompany.legalName || backendCompany.companyName || backendCompany.tenant?.name || '',
+        workspaceName: backendWorkspace.workspaceName || backendCompany.workspaceName || backendCompany.tenant?.slug || '',
+        orgCode: backendWorkspace.orgCode || backendCompany.orgCode || '',
+        businessType: backendWorkspace.businessType || backendCompany.businessType || '',
+        industry: backendWorkspace.industry || backendCompany.industry || '',
+        timezone: backendWorkspace.timezone || backendCompany.timezone || 'UTC',
+        language: backendWorkspace.language || 'English',
+        country: backendWorkspace.country || '',
+        currency: backendWorkspace.currency || backendCompany.currency || 'INR (₹)',
+        fiscalYear: backendWorkspace.fiscalYear || backendCompany.fiscalYear || '',
 
-        cinNumber: backendWorkspace.cinNumber || DEFAULT_WORKSPACE_STATE.cinNumber,
-        msmeNumber: backendWorkspace.msmeNumber || DEFAULT_WORKSPACE_STATE.msmeNumber,
-        supportEmail: backendWorkspace.supportEmail || DEFAULT_WORKSPACE_STATE.supportEmail,
-        supportPhone: backendWorkspace.supportPhone || DEFAULT_WORKSPACE_STATE.supportPhone,
-        officeHours: backendWorkspace.officeHours || DEFAULT_WORKSPACE_STATE.officeHours,
-        emergencyContact: backendWorkspace.emergencyContact || DEFAULT_WORKSPACE_STATE.emergencyContact,
+        cinNumber: backendWorkspace.cinNumber || backendCompany.cinNumber || '',
+        msmeNumber: backendWorkspace.msmeNumber || backendCompany.msmeNumber || '',
+        supportEmail: backendWorkspace.supportEmail || backendCompany.supportEmail || '',
+        supportPhone: backendWorkspace.supportPhone || backendCompany.supportPhone || '',
+        officeHours: backendWorkspace.officeHours || '',
+        emergencyContact: backendWorkspace.emergencyContact || backendCompany.emergencyContact || '',
 
-        defaultProbation: backendWorkspace.defaultProbation !== undefined ? backendWorkspace.defaultProbation : DEFAULT_WORKSPACE_STATE.defaultProbation,
-        noticePeriod: backendWorkspace.noticePeriod !== undefined ? backendWorkspace.noticePeriod : DEFAULT_WORKSPACE_STATE.noticePeriod,
-        empIdPrefix: backendWorkspace.empIdPrefix || DEFAULT_WORKSPACE_STATE.empIdPrefix,
-        usernamePattern: backendWorkspace.usernamePattern || DEFAULT_WORKSPACE_STATE.usernamePattern,
-        emailPattern: backendWorkspace.emailPattern || DEFAULT_WORKSPACE_STATE.emailPattern,
-        leavePolicy: backendWorkspace.leavePolicy || DEFAULT_WORKSPACE_STATE.leavePolicy,
-        shiftDefault: backendWorkspace.shiftDefault || DEFAULT_WORKSPACE_STATE.shiftDefault,
-        joiningWorkflow: backendWorkspace.joiningWorkflow || DEFAULT_WORKSPACE_STATE.joiningWorkflow,
-        confirmationWorkflow: backendWorkspace.confirmationWorkflow || DEFAULT_WORKSPACE_STATE.confirmationWorkflow,
-        autoEmpId: backendWorkspace.autoEmpId !== undefined ? backendWorkspace.autoEmpId : DEFAULT_WORKSPACE_STATE.autoEmpId,
-        workingHours: backendWorkspace.workingHours !== undefined ? backendWorkspace.workingHours : DEFAULT_WORKSPACE_STATE.workingHours,
-        weekendRules: backendWorkspace.weekendRules || DEFAULT_WORKSPACE_STATE.weekendRules,
-        passwordPolicy: backendWorkspace.passwordPolicy || DEFAULT_WORKSPACE_STATE.passwordPolicy,
-        devicePolicy: backendWorkspace.devicePolicy || DEFAULT_WORKSPACE_STATE.devicePolicy,
-        loginRestrictions: backendWorkspace.loginRestrictions || DEFAULT_WORKSPACE_STATE.loginRestrictions,
+        defaultProbation: backendWorkspace.defaultProbation !== undefined ? backendWorkspace.defaultProbation : (backendCompany.defaultProbation || 0),
+        noticePeriod: backendWorkspace.noticePeriod !== undefined ? backendWorkspace.noticePeriod : (backendCompany.noticePeriod || 0),
+        empIdPrefix: backendWorkspace.empIdPrefix || backendCompany.empIdPrefix || 'EMP-',
+        usernamePattern: backendWorkspace.usernamePattern || 'first.last',
+        emailPattern: backendWorkspace.emailPattern || '',
+        leavePolicy: backendWorkspace.leavePolicy || '',
+        shiftDefault: backendWorkspace.shiftDefault || '',
+        joiningWorkflow: backendWorkspace.joiningWorkflow || '',
+        confirmationWorkflow: backendWorkspace.confirmationWorkflow || '',
+        autoEmpId: backendWorkspace.autoEmpId !== undefined ? backendWorkspace.autoEmpId : false,
+        workingHours: backendWorkspace.workingHours !== undefined ? backendWorkspace.workingHours : 8,
+        weekendRules: backendWorkspace.weekendRules || 'Saturday & Sunday Off',
+        passwordPolicy: backendWorkspace.passwordPolicy || '',
+        devicePolicy: backendWorkspace.devicePolicy || '',
+        loginRestrictions: backendWorkspace.loginRestrictions || '',
 
-        mfaEnforced: backendWorkspace.mfaEnforced !== undefined ? backendWorkspace.mfaEnforced : DEFAULT_WORKSPACE_STATE.mfaEnforced,
-        sessionTimeout: backendWorkspace.sessionTimeout !== undefined ? backendWorkspace.sessionTimeout : DEFAULT_WORKSPACE_STATE.sessionTimeout,
-        passwordMinLength: backendWorkspace.passwordMinLength !== undefined ? backendWorkspace.passwordMinLength : DEFAULT_WORKSPACE_STATE.passwordMinLength,
-        ipWhitelist: backendWorkspace.ipWhitelist || DEFAULT_WORKSPACE_STATE.ipWhitelist,
-        allowedDomains: backendWorkspace.allowedDomains || DEFAULT_WORKSPACE_STATE.allowedDomains,
+        mfaEnforced: backendWorkspace.mfaEnforced !== undefined ? backendWorkspace.mfaEnforced : false,
+        sessionTimeout: backendWorkspace.sessionTimeout !== undefined ? backendWorkspace.sessionTimeout : 60,
+        passwordMinLength: backendWorkspace.passwordMinLength !== undefined ? backendWorkspace.passwordMinLength : 8,
+        ipWhitelist: backendWorkspace.ipWhitelist || backendCompany.ipWhitelist || '',
+        allowedDomains: backendWorkspace.allowedDomains || backendCompany.allowedDomains || '',
 
-        notifyEmail: backendWorkspace.notifyEmail !== undefined ? backendWorkspace.notifyEmail : DEFAULT_WORKSPACE_STATE.notifyEmail,
-        notifySms: backendWorkspace.notifySms !== undefined ? backendWorkspace.notifySms : DEFAULT_WORKSPACE_STATE.notifySms,
-        notifyWhatsapp: backendWorkspace.notifyWhatsapp !== undefined ? backendWorkspace.notifyWhatsapp : DEFAULT_WORKSPACE_STATE.notifyWhatsapp,
-        notifySlack: backendWorkspace.notifySlack !== undefined ? backendWorkspace.notifySlack : DEFAULT_WORKSPACE_STATE.notifySlack,
-        notifyPush: backendWorkspace.notifyPush !== undefined ? backendWorkspace.notifyPush : DEFAULT_WORKSPACE_STATE.notifyPush,
-        notifyTeams: backendWorkspace.notifyTeams !== undefined ? backendWorkspace.notifyTeams : DEFAULT_WORKSPACE_STATE.notifyTeams,
-        notifyDiscord: backendWorkspace.notifyDiscord !== undefined ? backendWorkspace.notifyDiscord : DEFAULT_WORKSPACE_STATE.notifyDiscord,
-        notifyWebhook: backendWorkspace.notifyWebhook !== undefined ? backendWorkspace.notifyWebhook : DEFAULT_WORKSPACE_STATE.notifyWebhook,
-        notifyBrowser: backendWorkspace.notifyBrowser !== undefined ? backendWorkspace.notifyBrowser : DEFAULT_WORKSPACE_STATE.notifyBrowser,
-        slackWebhookUrl: backendWorkspace.slackWebhookUrl || DEFAULT_WORKSPACE_STATE.slackWebhookUrl,
-        teamsWebhookUrl: backendWorkspace.teamsWebhookUrl || DEFAULT_WORKSPACE_STATE.teamsWebhookUrl,
-        discordWebhookUrl: backendWorkspace.discordWebhookUrl || DEFAULT_WORKSPACE_STATE.discordWebhookUrl,
-        webhookEndpointUrl: backendWorkspace.webhookEndpointUrl || DEFAULT_WORKSPACE_STATE.webhookEndpointUrl,
-        notificationTemplates: backendWorkspace.notificationTemplates || DEFAULT_WORKSPACE_STATE.notificationTemplates,
-        escalationRules: backendWorkspace.escalationRules || DEFAULT_WORKSPACE_STATE.escalationRules,
-        reminderRules: backendWorkspace.reminderRules || DEFAULT_WORKSPACE_STATE.reminderRules,
-        digestEmails: backendWorkspace.digestEmails !== undefined ? backendWorkspace.digestEmails : DEFAULT_WORKSPACE_STATE.digestEmails,
-        digestFrequency: backendWorkspace.digestFrequency || DEFAULT_WORKSPACE_STATE.digestFrequency,
+        notifyEmail: backendWorkspace.notifyEmail !== undefined ? backendWorkspace.notifyEmail : true,
+        notifySms: backendWorkspace.notifySms !== undefined ? backendWorkspace.notifySms : false,
+        notifyWhatsapp: backendWorkspace.notifyWhatsapp !== undefined ? backendWorkspace.notifyWhatsapp : false,
+        notifySlack: backendWorkspace.notifySlack !== undefined ? backendWorkspace.notifySlack : false,
+        notifyPush: backendWorkspace.notifyPush !== undefined ? backendWorkspace.notifyPush : false,
+        notifyTeams: backendWorkspace.notifyTeams !== undefined ? backendWorkspace.notifyTeams : false,
+        notifyDiscord: backendWorkspace.notifyDiscord !== undefined ? backendWorkspace.notifyDiscord : false,
+        notifyWebhook: backendWorkspace.notifyWebhook !== undefined ? backendWorkspace.notifyWebhook : false,
+        notifyBrowser: backendWorkspace.notifyBrowser !== undefined ? backendWorkspace.notifyBrowser : false,
+        slackWebhookUrl: backendWorkspace.slackWebhookUrl || '',
+        teamsWebhookUrl: backendWorkspace.teamsWebhookUrl || '',
+        discordWebhookUrl: backendWorkspace.discordWebhookUrl || '',
+        webhookEndpointUrl: backendWorkspace.webhookEndpointUrl || '',
+        notificationTemplates: Array.isArray(backendWorkspace.notificationTemplates) ? backendWorkspace.notificationTemplates : (Array.isArray(backendCompany.notificationTemplates) ? backendCompany.notificationTemplates : []),
+        escalationRules: Array.isArray(backendWorkspace.escalationRules) ? backendWorkspace.escalationRules : (Array.isArray(backendCompany.escalationRules) ? backendCompany.escalationRules : []),
+        reminderRules: Array.isArray(backendWorkspace.reminderRules) ? backendWorkspace.reminderRules : (Array.isArray(backendCompany.reminderRules) ? backendCompany.reminderRules : []),
+        digestEmails: backendWorkspace.digestEmails !== undefined ? backendWorkspace.digestEmails : false,
+        digestFrequency: backendWorkspace.digestFrequency || 'weekly',
 
-        invoicePrefix: backendWorkspace.invoicePrefix || DEFAULT_WORKSPACE_STATE.invoicePrefix,
-        invoiceDecimal: backendWorkspace.invoiceDecimal !== undefined ? backendWorkspace.invoiceDecimal : DEFAULT_WORKSPACE_STATE.invoiceDecimal,
-        invoiceNumberStart: backendWorkspace.invoiceNumberStart !== undefined ? backendWorkspace.invoiceNumberStart : DEFAULT_WORKSPACE_STATE.invoiceNumberStart,
-        quotationPrefix: backendWorkspace.quotationPrefix || DEFAULT_WORKSPACE_STATE.quotationPrefix,
-        purchasePrefix: backendWorkspace.purchasePrefix || DEFAULT_WORKSPACE_STATE.purchasePrefix,
-        creditNotePrefix: backendWorkspace.creditNotePrefix || DEFAULT_WORKSPACE_STATE.creditNotePrefix,
-        gstEnabled: backendWorkspace.gstEnabled !== undefined ? backendWorkspace.gstEnabled : DEFAULT_WORKSPACE_STATE.gstEnabled,
-        gstRateDefault: backendWorkspace.gstRateDefault !== undefined ? backendWorkspace.gstRateDefault : DEFAULT_WORKSPACE_STATE.gstRateDefault,
-        taxConfiguration: backendWorkspace.taxConfiguration || DEFAULT_WORKSPACE_STATE.taxConfiguration,
-        invoiceFooter: backendWorkspace.invoiceFooter || DEFAULT_WORKSPACE_STATE.invoiceFooter,
-        invoiceTerms: backendWorkspace.invoiceTerms || DEFAULT_WORKSPACE_STATE.invoiceTerms,
-        defaultPaymentTerms: backendWorkspace.defaultPaymentTerms || DEFAULT_WORKSPACE_STATE.defaultPaymentTerms,
-        paymentGateway: backendWorkspace.paymentGateway || DEFAULT_WORKSPACE_STATE.paymentGateway,
-        paymentGatewayConfig: backendWorkspace.paymentGatewayConfig || DEFAULT_WORKSPACE_STATE.paymentGatewayConfig,
-        qrCodeEnabled: backendWorkspace.qrCodeEnabled !== undefined ? backendWorkspace.qrCodeEnabled : DEFAULT_WORKSPACE_STATE.qrCodeEnabled,
-        qrCodeUrl: backendWorkspace.qrCodeUrl || DEFAULT_WORKSPACE_STATE.qrCodeUrl,
-        digitalSignatureEnabled: backendWorkspace.digitalSignatureEnabled !== undefined ? backendWorkspace.digitalSignatureEnabled : DEFAULT_WORKSPACE_STATE.digitalSignatureEnabled,
-        digitalSignatureUrl: backendWorkspace.digitalSignatureUrl || DEFAULT_WORKSPACE_STATE.digitalSignatureUrl,
-        invoiceTemplate: backendWorkspace.invoiceTemplate || DEFAULT_WORKSPACE_STATE.invoiceTemplate,
-        multiCurrencyEnabled: backendWorkspace.multiCurrencyEnabled !== undefined ? backendWorkspace.multiCurrencyEnabled : DEFAULT_WORKSPACE_STATE.multiCurrencyEnabled,
-        supportedCurrencies: backendWorkspace.supportedCurrencies || DEFAULT_WORKSPACE_STATE.supportedCurrencies,
+        invoicePrefix: backendWorkspace.invoicePrefix || backendCompany.invoicePrefix || 'INV-',
+        invoiceDecimal: backendWorkspace.invoiceDecimal !== undefined ? backendWorkspace.invoiceDecimal : (backendCompany.invoiceDecimal !== undefined ? backendCompany.invoiceDecimal : 2),
+        invoiceNumberStart: backendWorkspace.invoiceNumberStart !== undefined ? backendWorkspace.invoiceNumberStart : (backendCompany.invoiceNumberStart !== undefined ? backendCompany.invoiceNumberStart : 1),
+        quotationPrefix: backendWorkspace.quotationPrefix || backendCompany.quotationPrefix || 'QTN-',
+        purchasePrefix: backendWorkspace.purchasePrefix || backendCompany.purchasePrefix || 'PO-',
+        creditNotePrefix: backendWorkspace.creditNotePrefix || backendCompany.creditNotePrefix || 'CN-',
+        gstEnabled: backendWorkspace.gstEnabled !== undefined ? backendWorkspace.gstEnabled : (backendCompany.gstEnabled !== undefined ? backendCompany.gstEnabled : false),
+        gstRateDefault: backendWorkspace.gstRateDefault !== undefined ? backendWorkspace.gstRateDefault : (backendCompany.gstRateDefault !== undefined ? backendCompany.gstRateDefault : 18.00),
+        taxConfiguration: Array.isArray(backendWorkspace.taxConfiguration) ? backendWorkspace.taxConfiguration : (Array.isArray(backendCompany.taxConfiguration) ? backendCompany.taxConfiguration : []),
+        invoiceFooter: backendWorkspace.invoiceFooter || backendCompany.invoiceFooter || '',
+        invoiceTerms: backendWorkspace.invoiceTerms || backendCompany.invoiceTerms || '',
+        defaultPaymentTerms: backendWorkspace.defaultPaymentTerms || backendCompany.defaultPaymentTerms || '',
+        paymentGateway: backendWorkspace.paymentGateway || backendCompany.paymentGateway || '',
+        paymentGatewayConfig: backendWorkspace.paymentGatewayConfig || backendCompany.paymentGatewayConfig || {},
+        qrCodeEnabled: backendWorkspace.qrCodeEnabled !== undefined ? backendWorkspace.qrCodeEnabled : (backendCompany.qrCodeEnabled !== undefined ? backendCompany.qrCodeEnabled : false),
+        qrCodeUrl: backendWorkspace.qrCodeUrl || backendCompany.qrCodeUrl || '',
+        digitalSignatureEnabled: backendWorkspace.digitalSignatureEnabled !== undefined ? backendWorkspace.digitalSignatureEnabled : (backendCompany.digitalSignatureEnabled !== undefined ? backendCompany.digitalSignatureEnabled : false),
+        digitalSignatureUrl: backendWorkspace.digitalSignatureUrl || backendCompany.digitalSignatureUrl || '',
+        invoiceTemplate: backendWorkspace.invoiceTemplate || 'modern',
+        multiCurrencyEnabled: backendWorkspace.multiCurrencyEnabled !== undefined ? backendWorkspace.multiCurrencyEnabled : false,
+        supportedCurrencies: Array.isArray(backendWorkspace.supportedCurrencies) ? backendWorkspace.supportedCurrencies : [],
 
-        aiModel: backendWorkspace.aiModel || DEFAULT_WORKSPACE_STATE.aiModel,
-        aiTemperature: backendWorkspace.aiTemperature !== undefined ? backendWorkspace.aiTemperature : DEFAULT_WORKSPACE_STATE.aiTemperature,
-        aiPromptTemplate: backendWorkspace.aiPromptTemplate || DEFAULT_WORKSPACE_STATE.aiPromptTemplate,
-        aiAssistantName: backendWorkspace.aiAssistantName || DEFAULT_WORKSPACE_STATE.aiAssistantName,
+        aiModel: backendWorkspace.aiModel || backendCompany.aiModel || 'gemini-1.5-pro',
+        aiTemperature: backendWorkspace.aiTemperature !== undefined ? backendWorkspace.aiTemperature : (backendCompany.aiTemperature !== undefined ? backendCompany.aiTemperature : 0.7),
+        aiPromptTemplate: backendWorkspace.aiPromptTemplate || backendCompany.aiPromptTemplate || '',
+        aiAssistantName: backendWorkspace.aiAssistantName || backendCompany.aiAssistantName || 'AI Workspace Assistant',
 
-        uploadedDocuments: backendWorkspace.uploadedDocuments || DEFAULT_WORKSPACE_STATE.uploadedDocuments,
+        uploadedDocuments: Array.isArray(backendWorkspace.uploadedDocuments) ? backendWorkspace.uploadedDocuments : [],
         registrationCertificateUrl: backendCompany.registrationCertificateUrl || null,
         panCardUrl: backendCompany.panCardUrl || null,
         gstCertificateUrl: backendCompany.gstCertificateUrl || null,
 
         // Appearance
-        themeMode: backendWorkspace.themeMode || DEFAULT_WORKSPACE_STATE.themeMode,
-        sidebarStyle: backendWorkspace.sidebarStyle || DEFAULT_WORKSPACE_STATE.sidebarStyle,
-        navigationStyle: backendWorkspace.navigationStyle || DEFAULT_WORKSPACE_STATE.navigationStyle,
-        dashboardLayout: backendWorkspace.dashboardLayout || DEFAULT_WORKSPACE_STATE.dashboardLayout,
-        widgetConfig: backendWorkspace.widgetConfig || DEFAULT_WORKSPACE_STATE.widgetConfig,
-        cardDensity: backendWorkspace.cardDensity || DEFAULT_WORKSPACE_STATE.cardDensity,
-        compactMode: backendWorkspace.compactMode !== undefined ? backendWorkspace.compactMode : DEFAULT_WORKSPACE_STATE.compactMode,
-        loginScreenStyle: backendWorkspace.loginScreenStyle || DEFAULT_WORKSPACE_STATE.loginScreenStyle,
-        registerScreenStyle: backendWorkspace.registerScreenStyle || DEFAULT_WORKSPACE_STATE.registerScreenStyle,
-        emailTemplateStyle: backendWorkspace.emailTemplateStyle || DEFAULT_WORKSPACE_STATE.emailTemplateStyle,
-        pdfBrandingStyle: backendWorkspace.pdfBrandingStyle || DEFAULT_WORKSPACE_STATE.pdfBrandingStyle,
-        invoiceBrandingStyle: backendWorkspace.invoiceBrandingStyle || DEFAULT_WORKSPACE_STATE.invoiceBrandingStyle,
-        primaryFont: backendWorkspace.primaryFont || DEFAULT_WORKSPACE_STATE.primaryFont,
-        borderRadius: backendWorkspace.borderRadius || DEFAULT_WORKSPACE_STATE.borderRadius,
-        animationsEnabled: backendWorkspace.animationsEnabled !== undefined ? backendWorkspace.animationsEnabled : DEFAULT_WORKSPACE_STATE.animationsEnabled,
+        themeMode: backendWorkspace.themeMode || 'Follow System Settings',
+        sidebarStyle: backendWorkspace.sidebarStyle || 'Classic Sidebar',
+        navigationStyle: backendWorkspace.navigationStyle || 'Left Side Navigation',
+        dashboardLayout: backendWorkspace.dashboardLayout || 'Standard Grid Layout',
+        widgetConfig: backendWorkspace.widgetConfig || 'Default Analytics Layout',
+        cardDensity: backendWorkspace.cardDensity || 'Cozy (Standard padding)',
+        compactMode: backendWorkspace.compactMode !== undefined ? backendWorkspace.compactMode : false,
+        loginScreenStyle: backendWorkspace.loginScreenStyle || 'Modern Glassmorphic',
+        registerScreenStyle: backendWorkspace.registerScreenStyle || 'Classic Elegant',
+        emailTemplateStyle: backendWorkspace.emailTemplateStyle || 'Corporate Minimalist',
+        pdfBrandingStyle: backendWorkspace.pdfBrandingStyle || 'Modern Signature',
+        invoiceBrandingStyle: backendWorkspace.invoiceBrandingStyle || 'Clean Minimalist',
+        primaryFont: backendWorkspace.primaryFont || 'Inter (Default)',
+        borderRadius: backendWorkspace.borderRadius || '12px',
+        animationsEnabled: backendWorkspace.animationsEnabled !== undefined ? backendWorkspace.animationsEnabled : true,
 
         // Structure Registries
-        costCenters: backendWorkspace.costCenters || DEFAULT_WORKSPACE_STATE.costCenters,
-        grades: backendWorkspace.grades || DEFAULT_WORKSPACE_STATE.grades,
-        bands: backendWorkspace.bands || DEFAULT_WORKSPACE_STATE.bands,
-        designations: backendWorkspace.designations || DEFAULT_WORKSPACE_STATE.designations,
-        jobLevels: backendWorkspace.jobLevels || DEFAULT_WORKSPACE_STATE.jobLevels,
-        employmentTypes: backendWorkspace.employmentTypes || DEFAULT_WORKSPACE_STATE.employmentTypes,
-        workModes: backendWorkspace.workModes || DEFAULT_WORKSPACE_STATE.workModes,
-        shifts: backendWorkspace.shifts || DEFAULT_WORKSPACE_STATE.shifts,
-        teams: backendWorkspace.teams || DEFAULT_WORKSPACE_STATE.teams,
+        costCenters: Array.isArray(backendWorkspace.costCenters) ? backendWorkspace.costCenters : [],
+        grades: Array.isArray(backendWorkspace.grades) ? backendWorkspace.grades : [],
+        bands: Array.isArray(backendWorkspace.bands) ? backendWorkspace.bands : [],
+        designations: Array.isArray(backendWorkspace.designations) ? backendWorkspace.designations : [],
+        jobLevels: Array.isArray(backendWorkspace.jobLevels) ? backendWorkspace.jobLevels : [],
+        employmentTypes: Array.isArray(backendWorkspace.employmentTypes) ? backendWorkspace.employmentTypes : [],
+        workModes: Array.isArray(backendWorkspace.workModes) ? backendWorkspace.workModes : [],
+        shifts: Array.isArray(backendWorkspace.shifts) ? backendWorkspace.shifts : [],
+        teams: Array.isArray(backendWorkspace.teams) ? backendWorkspace.teams : [],
       };
 
       setSavedWorkspace(merged);
@@ -3005,8 +2999,6 @@ export default function SettingsPage() {
     return keywords.some(k => k.includes(q));
   };
 
-  // Local state elements for visuals (interactive Org Chart list mockups)
-  const currentCostCenters = ['CC-ENG-01', 'CC-QA-02', 'CC-MKT-03', 'CC-HR-04'];
 
   if (loading) {
     return (
@@ -3481,39 +3473,14 @@ export default function SettingsPage() {
                       <span className="text-xs text-muted-foreground font-semibold">Resolving employee hierarchy...</span>
                     </div>
                   ) : orgNodes.length === 0 ? (
-                    /* Elegant placeholder tree when no employee rows exist */
-                    <div className="flex flex-col items-center justify-center p-6 bg-slate-50 dark:bg-zinc-900/30 rounded-2xl border border-border min-h-[350px]">
-                      <div className="p-3.5 bg-primary text-white font-extrabold rounded-2xl text-xs shadow-md mb-6 transition-all hover:scale-105">
-                        Board of Directors (CEO / CTO)
+                    <div className="flex flex-col items-center justify-center p-12 bg-slate-50 dark:bg-zinc-900/30 rounded-2xl border border-dashed border-border min-h-[350px] text-center">
+                      <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-3">
+                        <Network className="h-6 w-6 text-primary" />
                       </div>
-                      
-                      <div className="w-[2px] h-8 bg-border" />
-
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-2xl mt-4">
-                        <div className="flex flex-col items-center bg-card border border-border p-4 rounded-2xl shadow-sm">
-                          <span className="text-xs font-bold text-foreground">Engineering BU</span>
-                          <span className="text-[10px] text-muted-foreground mt-1">Cost Center: CC-ENG-01</span>
-                        </div>
-
-                        <div className="flex flex-col items-center bg-card border border-border p-4 rounded-2xl shadow-sm">
-                          <span className="text-xs font-bold text-foreground">Product & Design</span>
-                          <span className="text-[10px] text-muted-foreground mt-1">Cost Center: CC-QA-02</span>
-                        </div>
-
-                        <div className="flex flex-col items-center bg-card border border-border p-4 rounded-2xl shadow-sm">
-                          <span className="text-xs font-bold text-foreground">Sales & Marketing</span>
-                          <span className="text-[10px] text-muted-foreground mt-1">Cost Center: CC-MKT-03</span>
-                        </div>
-                      </div>
-
-                      <div className="mt-8 flex flex-col items-center gap-2 text-center">
-                        <Badge variant="outline" className="text-primary border-primary/30 bg-primary/5 uppercase font-bold text-[10px] tracking-wider px-2 py-0.5">
-                          Visual Mockup Mode
-                        </Badge>
-                        <p className="text-[11px] text-muted-foreground max-w-sm">
-                          No active employee profiles found in this tenant database yet. Add employees in the workforce module to activate the live reporting hierarchy.
-                        </p>
-                      </div>
+                      <h4 className="font-bold text-sm text-foreground">No Organization Hierarchy Found</h4>
+                      <p className="text-xs text-muted-foreground max-w-md mt-1">
+                        No employee profiles or reporting lines have been configured for this tenant yet. Add employees in the workforce module to automatically generate the live organization tree.
+                      </p>
                     </div>
                   ) : (
                     /* Live dynamic Org Chart Renderer with Drag & Drop */
@@ -3791,7 +3758,7 @@ export default function SettingsPage() {
                           value={workspaceDraft.emailPattern}
                           onChange={e => updateDraftField('emailPattern', e.target.value)}
                         >
-                          <option value="username@techsonance.com">username@techsonance.com</option>
+                          <option value="username@domain.com">username@domain.com</option>
                           <option value="first.last@company.com">first.last@company.com</option>
                           <option value="flast@company.com">flast@company.com</option>
                         </select>
@@ -5180,7 +5147,7 @@ export default function SettingsPage() {
                     <div className="space-y-1.5">
                       <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Redirect URI / Webhook Destination URL</Label>
                       <Input 
-                        placeholder="e.g. https://api.techsonance.com/v1/webhook"
+                        placeholder="e.g. https://api.yourdomain.com/v1/webhook"
                         className="text-xs rounded-xl"
                         value={integrationConfigInput.webhookUrl}
                         onChange={e => setIntegrationConfigInput({ ...integrationConfigInput, webhookUrl: e.target.value })}
@@ -5386,7 +5353,7 @@ export default function SettingsPage() {
                       <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Quotation Prefix</Label>
                       <Input 
                         className="text-xs rounded-xl"
-                        value={workspaceDraft.quotationPrefix || 'TS-QTN-'}
+                        value={workspaceDraft.quotationPrefix || 'QTN-'}
                         onChange={e => updateDraftField('quotationPrefix', e.target.value)}
                       />
                     </div>
@@ -5394,7 +5361,7 @@ export default function SettingsPage() {
                       <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Purchase Order Prefix</Label>
                       <Input 
                         className="text-xs rounded-xl"
-                        value={workspaceDraft.purchasePrefix || 'TS-PO-'}
+                        value={workspaceDraft.purchasePrefix || 'PO-'}
                         onChange={e => updateDraftField('purchasePrefix', e.target.value)}
                       />
                     </div>
@@ -5402,7 +5369,7 @@ export default function SettingsPage() {
                       <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Credit Note Prefix</Label>
                       <Input 
                         className="text-xs rounded-xl"
-                        value={workspaceDraft.creditNotePrefix || 'TS-CN-'}
+                        value={workspaceDraft.creditNotePrefix || 'CN-'}
                         onChange={e => updateDraftField('creditNotePrefix', e.target.value)}
                       />
                     </div>
@@ -6624,15 +6591,23 @@ export default function SettingsPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
-                        {tokenLogs.map((log: any) => (
-                          <tr key={log.id} className="hover:bg-slate-50/50 dark:hover:bg-zinc-900/10">
-                            <td className="p-3 font-bold">{log.feature}</td>
-                            <td className="p-3 text-muted-foreground max-w-xs truncate">{log.prompt}</td>
-                            <td className="p-3 font-mono">{log.tokensUsed.toLocaleString()}</td>
-                            <td className="p-3 font-mono">₹{log.creditsCost.toFixed(3)}</td>
-                            <td className="p-3 text-muted-foreground">{log.timestamp}</td>
+                        {tokenLogs.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="p-8 text-center text-xs text-muted-foreground">
+                              No AI prompt token logs found for this tenant.
+                            </td>
                           </tr>
-                        ))}
+                        ) : (
+                          tokenLogs.map((log: any) => (
+                            <tr key={log.id} className="hover:bg-slate-50/50 dark:hover:bg-zinc-900/10">
+                              <td className="p-3 font-bold">{log.feature}</td>
+                              <td className="p-3 text-muted-foreground max-w-xs truncate">{log.prompt}</td>
+                              <td className="p-3 font-mono">{log.tokensUsed.toLocaleString()}</td>
+                              <td className="p-3 font-mono">₹{log.creditsCost.toFixed(3)}</td>
+                              <td className="p-3 text-muted-foreground">{log.timestamp}</td>
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -6814,21 +6789,29 @@ export default function SettingsPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
-                        {loginHistoryList.map((log: any) => (
-                          <tr key={log.id} className="hover:bg-slate-50/50 dark:hover:bg-zinc-900/10">
-                            <td className="p-3 font-bold">{log.email}</td>
-                            <td className="p-3">
-                              {log.status === 'success' ? (
-                                <Badge className="bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 font-bold border-none text-[8px] rounded-md">Success</Badge>
-                              ) : (
-                                <Badge className="bg-red-100 dark:bg-red-950/30 text-red-700 dark:text-red-400 font-bold border-none text-[8px] rounded-md">Failed</Badge>
-                              )}
+                        {loginHistoryList.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="p-8 text-center text-xs text-muted-foreground">
+                              No login activity recorded for this tenant yet.
                             </td>
-                            <td className="p-3 font-mono">{log.ip_address}</td>
-                            <td className="p-3 text-muted-foreground">{log.user_agent} ({log.device_info})</td>
-                            <td className="p-3 text-muted-foreground">{new Date(log.created_at).toLocaleString()}</td>
                           </tr>
-                        ))}
+                        ) : (
+                          loginHistoryList.map((log: any) => (
+                            <tr key={log.id} className="hover:bg-slate-50/50 dark:hover:bg-zinc-900/10">
+                              <td className="p-3 font-bold">{log.email}</td>
+                              <td className="p-3">
+                                {log.status === 'success' ? (
+                                  <Badge className="bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 font-bold border-none text-[8px] rounded-md">Success</Badge>
+                                ) : (
+                                  <Badge className="bg-red-100 dark:bg-red-950/30 text-red-700 dark:text-red-400 font-bold border-none text-[8px] rounded-md">Failed</Badge>
+                                )}
+                              </td>
+                              <td className="p-3 font-mono">{log.ip_address}</td>
+                              <td className="p-3 text-muted-foreground">{log.user_agent} ({log.device_info})</td>
+                              <td className="p-3 text-muted-foreground">{new Date(log.created_at).toLocaleString()}</td>
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -7328,30 +7311,38 @@ export default function SettingsPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
-                        {saasInvoices.map((inv: any) => (
-                          <tr key={inv.id} className="hover:bg-slate-50/50 dark:hover:bg-zinc-900/10">
-                            <td className="p-4 font-bold">{inv.invoiceNumber}</td>
-                            <td className="p-4 text-muted-foreground">{inv.billingDate}</td>
-                            <td className="p-4 font-bold">{inv.currency} {inv.amount.toLocaleString()}</td>
-                            <td className="p-4">
-                              <Badge className="bg-green-100 dark:bg-green-950/30 text-green-700 dark:text-green-400 font-bold border-none text-[9px] capitalize rounded-md">
-                                {inv.status}
-                              </Badge>
-                            </td>
-                            <td className="p-4 text-right">
-                              <Button 
-                                size="sm" 
-                                variant="ghost" 
-                                className="h-8 text-[10px] font-bold text-primary hover:bg-primary/5 rounded-lg px-3"
-                                onClick={() => {
-                                  toast.info(`Simulated PDF download for invoice ${inv.invoiceNumber}`);
-                                }}
-                              >
-                                <Download className="h-3.5 w-3.5 mr-1" /> PDF
-                              </Button>
+                        {saasInvoices.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="p-8 text-center text-xs text-muted-foreground">
+                              No subscription billing invoices found for this tenant.
                             </td>
                           </tr>
-                        ))}
+                        ) : (
+                          saasInvoices.map((inv: any) => (
+                            <tr key={inv.id} className="hover:bg-slate-50/50 dark:hover:bg-zinc-900/10">
+                              <td className="p-4 font-bold">{inv.invoiceNumber}</td>
+                              <td className="p-4 text-muted-foreground">{inv.billingDate}</td>
+                              <td className="p-4 font-bold">{inv.currency} {inv.amount.toLocaleString()}</td>
+                              <td className="p-4">
+                                <Badge className="bg-green-100 dark:bg-green-950/30 text-green-700 dark:text-green-400 font-bold border-none text-[9px] capitalize rounded-md">
+                                  {inv.status}
+                                </Badge>
+                              </td>
+                              <td className="p-4 text-right">
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  className="h-8 text-[10px] font-bold text-primary hover:bg-primary/5 rounded-lg px-3"
+                                  onClick={() => {
+                                    toast.info(`Simulated PDF download for invoice ${inv.invoiceNumber}`);
+                                  }}
+                                >
+                                  <Download className="h-3.5 w-3.5 mr-1" /> PDF
+                                </Button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -7389,22 +7380,28 @@ export default function SettingsPage() {
 
                   {/* Keys list */}
                   <div className="space-y-2 max-w-xl">
-                    {developerApiKeys.map((key: any) => (
-                      <div key={key.id} className="flex justify-between items-center p-3 bg-slate-50 dark:bg-zinc-900/10 border border-border rounded-xl font-sans text-xs">
-                        <div>
-                          <h5 className="font-bold text-xs">{key.key_name}</h5>
-                          <p className="text-[10px] font-mono text-muted-foreground mt-0.5">{key.prefix}••••••••••••••••••••</p>
-                        </div>
-                        <Button 
-                          size="sm" 
-                          variant="ghost" 
-                          className="h-7 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg px-2 text-[10px] font-bold"
-                          onClick={() => handleDeleteApiKey(key.id)}
-                        >
-                          Revoke Key
-                        </Button>
+                    {developerApiKeys.length === 0 ? (
+                      <div className="py-4 text-center text-xs text-muted-foreground border border-dashed border-border rounded-xl">
+                        No active API keys found. Generate a key above to get started.
                       </div>
-                    ))}
+                    ) : (
+                      developerApiKeys.map((key: any) => (
+                        <div key={key.id} className="flex justify-between items-center p-3 bg-slate-50 dark:bg-zinc-900/10 border border-border rounded-xl font-sans text-xs">
+                          <div>
+                            <h5 className="font-bold text-xs">{key.key_name}</h5>
+                            <p className="text-[10px] font-mono text-muted-foreground mt-0.5">{key.prefix}••••••••••••••••••••</p>
+                          </div>
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            className="h-7 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg px-2 text-[10px] font-bold"
+                            onClick={() => handleDeleteApiKey(key.id)}
+                          >
+                            Revoke Key
+                          </Button>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -7443,22 +7440,28 @@ export default function SettingsPage() {
 
                   {/* Webhooks list */}
                   <div className="space-y-2 max-w-xl">
-                    {developerWebhooks.map((wh: any) => (
-                      <div key={wh.id} className="p-3 bg-slate-50 dark:bg-zinc-900/10 border border-border rounded-xl font-sans text-xs space-y-2">
-                        <div className="flex justify-between items-center">
-                          <span className="font-bold font-mono text-[10px] truncate max-w-xs">{wh.url}</span>
-                          <Button 
-                            size="sm" 
-                            variant="ghost" 
-                            className="h-6 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg px-2 text-[9px] font-bold"
-                            onClick={() => handleDeleteWebhook(wh.id)}
-                          >
-                            Remove
-                          </Button>
-                        </div>
-                        <p className="text-[9px] text-muted-foreground font-mono">Signing Secret: <span className="font-bold">{wh.secret}</span></p>
+                    {developerWebhooks.length === 0 ? (
+                      <div className="py-4 text-center text-xs text-muted-foreground border border-dashed border-border rounded-xl">
+                        No webhooks registered.
                       </div>
-                    ))}
+                    ) : (
+                      developerWebhooks.map((wh: any) => (
+                        <div key={wh.id} className="p-3 bg-slate-50 dark:bg-zinc-900/10 border border-border rounded-xl font-sans text-xs space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="font-bold font-mono text-[10px] truncate max-w-xs">{wh.url}</span>
+                            <Button 
+                              size="sm" 
+                              variant="ghost" 
+                              className="h-6 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg px-2 text-[9px] font-bold"
+                              onClick={() => handleDeleteWebhook(wh.id)}
+                            >
+                              Remove
+                            </Button>
+                          </div>
+                          <p className="text-[9px] text-muted-foreground font-mono">Signing Secret: <span className="font-bold">{wh.secret}</span></p>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -7470,19 +7473,25 @@ export default function SettingsPage() {
                   <CardDescription>Authorize secure tenant SSO logins for custom external dashboards.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {developerOAuthApps.map((app: any) => (
-                    <div key={app.id} className="p-4 border border-border rounded-2xl bg-slate-50/20 space-y-2 font-sans text-xs">
-                      <h5 className="font-bold text-xs flex justify-between items-center">
-                        <span>{app.name}</span>
-                        <Badge className="bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-none font-bold text-[8px] rounded-md">Active</Badge>
-                      </h5>
-                      <p className="text-[10px] text-muted-foreground">Redirect URI: <span className="font-mono">{app.redirectUri}</span></p>
-                      <div className="grid gap-2 md:grid-cols-2 pt-1 font-mono text-[9px] text-muted-foreground">
-                        <div>Client ID: <span className="font-bold">{app.clientId}</span></div>
-                        <div>Client Secret: <span className="font-bold">{app.clientSecret}</span></div>
-                      </div>
+                  {developerOAuthApps.length === 0 ? (
+                    <div className="py-6 text-center text-xs text-muted-foreground border-2 border-dashed border-border/80 rounded-xl">
+                      No OAuth applications registered for this tenant.
                     </div>
-                  ))}
+                  ) : (
+                    developerOAuthApps.map((app: any) => (
+                      <div key={app.id} className="p-4 border border-border rounded-2xl bg-slate-50/20 space-y-2 font-sans text-xs">
+                        <h5 className="font-bold text-xs flex justify-between items-center">
+                          <span>{app.name}</span>
+                          <Badge className="bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-none font-bold text-[8px] rounded-md">Active</Badge>
+                        </h5>
+                        <p className="text-[10px] text-muted-foreground">Redirect URI: <span className="font-mono">{app.redirectUri}</span></p>
+                        <div className="grid gap-2 md:grid-cols-2 pt-1 font-mono text-[9px] text-muted-foreground">
+                          <div>Client ID: <span className="font-bold">{app.clientId}</span></div>
+                          <div>Client Secret: <span className="font-bold">{app.clientSecret}</span></div>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </CardContent>
               </Card>
 
@@ -8183,16 +8192,24 @@ export default function SettingsPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
-                        {cronJobs.map((job: any) => (
-                          <tr key={job.id} className="hover:bg-slate-50/50 dark:hover:bg-zinc-900/10">
-                            <td className="p-3 font-bold">{job.name}</td>
-                            <td className="p-3 font-mono">{job.schedule}</td>
-                            <td className="p-3 text-muted-foreground">{job.lastRun}</td>
-                            <td className="p-3">
-                              <Badge className="bg-green-100 dark:bg-green-950/30 text-green-700 dark:text-green-400 font-bold border-none text-[8px] rounded-md">{job.status}</Badge>
+                        {cronJobs.length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="p-8 text-center text-xs text-muted-foreground">
+                              No automated cron jobs registered for this tenant.
                             </td>
                           </tr>
-                        ))}
+                        ) : (
+                          cronJobs.map((job: any) => (
+                            <tr key={job.id} className="hover:bg-slate-50/50 dark:hover:bg-zinc-900/10">
+                              <td className="p-3 font-bold">{job.name}</td>
+                              <td className="p-3 font-mono">{job.schedule}</td>
+                              <td className="p-3 text-muted-foreground">{job.lastRun}</td>
+                              <td className="p-3">
+                                <Badge className="bg-green-100 dark:bg-green-950/30 text-green-700 dark:text-green-400 font-bold border-none text-[8px] rounded-md">{job.status}</Badge>
+                              </td>
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -8360,7 +8377,7 @@ export default function SettingsPage() {
               <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-zinc-900/50 border border-border text-[11px] leading-relaxed text-muted-foreground">
                 {activeTab === 'overview' && 'Overview helps adjust global workspace names, timezones, and corporate fiscal cycles.'}
                 {activeTab === 'company' && 'Company profiles are attached to official documents and GSTIN registries.'}
-                {activeTab === 'invoice' && 'Invoicing controls prefix patterns like TS-INV-001 decimal calculations.'}
+                {activeTab === 'invoice' && 'Invoicing controls prefix patterns like INV-001 and decimal calculations.'}
                 {activeTab === 'security' && 'Security center dictates MFA restrictions and session logout timeouts.'}
                 {!['overview', 'company', 'invoice', 'security'].includes(activeTab) && 'Configure settings parameters. Tab adjustments save to local memory draft layers instantly.'}
               </div>
