@@ -137,7 +137,7 @@ export const POST = withApiHandler(async (request, context) => {
   }
 
   return NextResponse.json({ success: true, data }, { status: 201 });
-}, { requireAuth: true, roles: ['Employee'] });
+}, { requireAuth: true, roles: ['Manager'] });
 
 export const PUT = withApiHandler(async (request, context) => {
   const tenantId = context.auth?.user.tenantId;
@@ -205,7 +205,7 @@ export const PUT = withApiHandler(async (request, context) => {
   }
 
   return NextResponse.json({ success: true, data });
-}, { requireAuth: true, roles: ['Employee'] });
+}, { requireAuth: true, roles: ['Manager'] });
 
 export const DELETE = withApiHandler(async (request, context) => {
   const tenantId = context.auth?.user.tenantId;
@@ -237,4 +237,4 @@ export const DELETE = withApiHandler(async (request, context) => {
   }
 
   return NextResponse.json({ success: true, message: 'Document deleted successfully' });
-}, { requireAuth: true, roles: ['Employee'] });
+}, { requireAuth: true, roles: ['Manager'] });

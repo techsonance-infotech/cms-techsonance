@@ -416,11 +416,19 @@ export default function DashboardPage() {
                 <CardTitle>{isClientRole ? 'My Active Projects' : 'Recent Projects'}</CardTitle>
                 <CardDescription>{isClientRole ? 'Current software project delivery milestones' : 'Your latest project assignments'}</CardDescription>
               </div>
-              <Link href="/dashboard/projects">
-                <Button variant="ghost" size="sm" className="text-[#f87941] hover:text-[#f4662b] hover:bg-[#f87941]/10">
-                  View All <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
+              {currentUser && ['super_admin', 'superadmin', 'admin', 'hr_manager', 'finance', 'owner', 'manager', 'project_manager', 'ceo', 'cto', 'business_owner'].includes(String(currentUser.role || '').toLowerCase()) ? (
+                <Link href="/dashboard/projects">
+                  <Button variant="ghost" size="sm" className="text-[#f87941] hover:text-[#f4662b] hover:bg-[#f87941]/10">
+                    View All <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </Link>
+              ) : (
+                <Link href="/dashboard/tasks">
+                  <Button variant="ghost" size="sm" className="text-[#f87941] hover:text-[#f4662b] hover:bg-[#f87941]/10">
+                    Task Board <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </Link>
+              )}
             </CardHeader>
             <CardContent>
               <div className="space-y-1">
@@ -1239,7 +1247,7 @@ export default function DashboardPage() {
                     <Users className="h-5 w-5 text-[#f87941]" />
                     Workforce Hub
                   </CardTitle>
-                  <CardDescription>Today's attendance and compliance overview</CardDescription>
+                  <CardDescription>Today&apos;s attendance and compliance overview</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-zinc-900/50 rounded-xl">

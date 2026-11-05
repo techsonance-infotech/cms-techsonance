@@ -229,11 +229,21 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
             credentials: 'include'
           });
           if (membersRes.ok) {
-            const members = await membersRes.json();
-            const assignedProjectIds = members
-              .filter((m: any) => m.userId === currentUser.id)
+            const membersResult = await membersRes.json();
+            const membersList: any[] = Array.isArray(membersResult) ? membersResult : (membersResult.data ?? []);
+            const assignedProjectIds = membersList
+              .filter((m: any) => 
+                m.userId === currentUser.id || 
+                String(m.userId) === String(currentUser.id) ||
+                (currentUser.legacy_user_id && m.userId === currentUser.legacy_user_id)
+              )
               .map((m: any) => m.projectId);
-            availableProjects = availableProjects.filter(p => assignedProjectIds.includes(p.id));
+            if (assignedProjectIds.length > 0) {
+              const memberFiltered = availableProjects.filter(p => assignedProjectIds.includes(p.id));
+              if (memberFiltered.length > 0) {
+                availableProjects = memberFiltered;
+              }
+            }
           }
         }
         setProjects(availableProjects);
@@ -357,28 +367,73 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
     }
   };
 
+  const formErrors = form.formState.errors;
+  const hasGeneralErrors = !!(formErrors.projectId || formErrors.title || formErrors.assignedTo || formErrors.status || formErrors.priority || formErrors.dueDate || formErrors.description);
+  const hasProductivityErrors = !!(formErrors.storyPoints || formErrors.estimatedHours || formErrors.loggedHours || formErrors.blockedById);
+  const hasChecklistErrors = !!(formErrors.taskType || formErrors.severity || formErrors.parentTaskId);
+
+  const handleFormInvalid = (errors: any) => {
+    if (errors.projectId || errors.title || errors.assignedTo || errors.status || errors.priority || errors.dueDate || errors.description) {
+      setActiveTab('general');
+      if (errors.projectId) toast.error('Please select a project');
+      else if (errors.title) toast.error(errors.title.message || 'Task title must be between 3 and 100 characters');
+      else if (errors.assignedTo) toast.error('Please assign this task to a team member');
+      else if (errors.description) toast.error(errors.description.message || 'Description exceeds character limit');
+      else toast.error('Please complete all required fields on the General tab');
+    } else if (errors.storyPoints || errors.estimatedHours || errors.loggedHours || errors.blockedById) {
+      setActiveTab('productivity');
+      if (errors.estimatedHours) toast.error(errors.estimatedHours.message || 'Estimated hours must be between 0 and 1,000');
+      else if (errors.loggedHours) toast.error(errors.loggedHours.message || 'Logged hours must be between 0 and 1,000');
+      else toast.error('Please check values on the Productivity tab');
+    } else if (errors.taskType || errors.severity || errors.parentTaskId) {
+      setActiveTab('checklists');
+      toast.error('Please check values on the Checklists tab');
+    }
+  };
+
+  const handleAddCheckItem = () => {
+    const trimmed = newCheckItem.trim();
+    if (!trimmed) {
+      toast.error('Checklist item cannot be empty');
+      return;
+    }
+    if (trimmed.length < 2) {
+      toast.error('Checklist item must be at least 2 characters');
+      return;
+    }
+    if (trimmed.length > 150) {
+      toast.error('Checklist item cannot exceed 150 characters');
+      return;
+    }
+    setChecklist(prev => [...prev, { id: Math.random().toString(), text: trimmed, checked: false }]);
+    setNewCheckItem('');
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{task ? 'Edit Task' : 'Create New Task'}</DialogTitle>
           <DialogDescription>
-            {task ? 'Update task details' : 'Add a new task to the board'}. Fields marked with * are required.
+            {task ? 'Update task details' : 'Add a new task to the board'}. Fields marked with <span className="text-rose-500 font-bold">*</span> are required.
           </DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit, () => toast.error('Please fix the validation errors'))} className="space-y-6">
+          <form onSubmit={form.handleSubmit(handleSubmit, handleFormInvalid)} className="space-y-6">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="grid w-full grid-cols-3 bg-muted/50 p-1">
-                <TabsTrigger value="general" className="gap-2">
+                <TabsTrigger value="general" className="gap-2 relative">
                   <LayoutGrid className="h-4 w-4" /> General
+                  {hasGeneralErrors && <span className="h-2 w-2 rounded-full bg-rose-500 animate-pulse ml-1" />}
                 </TabsTrigger>
-                <TabsTrigger value="productivity" className="gap-2">
+                <TabsTrigger value="productivity" className="gap-2 relative">
                   <Timer className="h-4 w-4" /> Productivity
+                  {hasProductivityErrors && <span className="h-2 w-2 rounded-full bg-rose-500 animate-pulse ml-1" />}
                 </TabsTrigger>
-                <TabsTrigger value="checklists" className="gap-2">
+                <TabsTrigger value="checklists" className="gap-2 relative">
                   <CheckCircle2 className="h-4 w-4" /> Checklists
+                  {hasChecklistErrors && <span className="h-2 w-2 rounded-full bg-rose-500 animate-pulse ml-1" />}
                 </TabsTrigger>
               </TabsList>
 
@@ -391,7 +446,7 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
                       render={({ field }) => (
                         <FormItem className="min-w-0">
                           <Label className="flex items-center gap-1.5 peer-disabled:opacity-70 text-xs font-bold uppercase tracking-wider text-muted-foreground/80 mb-2">
-                            <Target className="h-3 w-3" /> Project *
+                            <Target className="h-3 w-3" /> Project <span className="text-rose-500 font-bold text-sm leading-none ml-0.5">*</span>
                           </Label>
                           <Select
                             value={field.value}
@@ -454,18 +509,25 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
                     name="title"
                     render={({ field }) => (
                       <FormItem>
-                        <Label className="flex items-center gap-1.5 peer-disabled:opacity-70 text-xs font-bold uppercase tracking-wider text-muted-foreground/80 mb-2">
-                          <Info className="h-3 w-3" /> Task Title *
-                        </Label>
+                        <div className="flex justify-between items-center mb-1">
+                          <Label className="flex items-center gap-1.5 peer-disabled:opacity-70 text-xs font-bold uppercase tracking-wider text-muted-foreground/80">
+                            <Info className="h-3 w-3" /> Task Title <span className="text-rose-500 font-bold text-sm leading-none ml-0.5">*</span>
+                          </Label>
+                          <span className={`text-[10px] font-semibold ${(field.value?.length || 0) > 90 ? 'text-amber-500 font-bold' : 'text-muted-foreground/60'}`}>
+                            {field.value?.length || 0}/100
+                          </span>
+                        </div>
                         <FormControl>
                           <Input
                             {...field}
                             disabled={loading}
-                            placeholder="e.g., Design System Refactor"
-                            className="bg-background/50"
+                            minLength={3}
+                            maxLength={100}
+                            placeholder="e.g., Design System Refactor (3-100 characters)"
+                            className={`bg-background/50 ${formErrors.title ? 'border-rose-500 ring-1 ring-rose-500/30' : ''}`}
                           />
                         </FormControl>
-                        <FormMessage className="text-[10px]" />
+                        <FormMessage className="text-[10px] text-rose-500 font-semibold" />
                       </FormItem>
                     )}
                   />
@@ -475,18 +537,24 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
                     name="description"
                     render={({ field }) => (
                       <FormItem>
-                        <Label className="flex items-center gap-1.5 peer-disabled:opacity-70 text-xs font-bold uppercase tracking-wider text-muted-foreground/80 mb-2">
-                           Detail View
-                        </Label>
+                        <div className="flex justify-between items-center mb-1">
+                          <Label className="flex items-center gap-1.5 peer-disabled:opacity-70 text-xs font-bold uppercase tracking-wider text-muted-foreground/80">
+                            Detail View
+                          </Label>
+                          <span className={`text-[10px] font-semibold ${(field.value?.length || 0) > 1800 ? 'text-amber-500 font-bold' : 'text-muted-foreground/60'}`}>
+                            {field.value?.length || 0}/2000
+                          </span>
+                        </div>
                         <FormControl>
                           <Textarea
                             {...field}
                             disabled={loading}
-                            placeholder="Provide deep context for this task..."
-                            className="bg-background/50 min-h-[100px]"
+                            maxLength={2000}
+                            placeholder="Provide deep context for this task (max 2,000 characters)..."
+                            className={`bg-background/50 min-h-[100px] ${formErrors.description ? 'border-rose-500 ring-1 ring-rose-500/30' : ''}`}
                           />
                         </FormControl>
-                        <FormMessage className="text-[10px]" />
+                        <FormMessage className="text-[10px] text-rose-500 font-semibold" />
                       </FormItem>
                     )}
                   />
@@ -504,7 +572,7 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
                         return (
                           <FormItem className="min-w-0">
                             <Label className="flex items-center gap-1.5 peer-disabled:opacity-70 text-xs font-bold uppercase tracking-wider text-muted-foreground/80 mb-2">
-                              <User className="h-3 w-3" /> Assigned To *
+                              <User className="h-3 w-3" /> Assigned To <span className="text-rose-500 font-bold text-sm leading-none ml-0.5">*</span>
                             </Label>
                             <Select
                               value={field.value}
@@ -687,20 +755,24 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
                       render={({ field }) => (
                         <FormItem className="min-w-0">
                           <Label className="flex items-center gap-1.5 peer-disabled:opacity-70 text-xs font-bold uppercase tracking-wider text-muted-foreground/80 mb-2">
-                             Est. Hours
+                             Est. Hours (0 - 1000)
                           </Label>
                           <FormControl>
                             <div className="relative">
                               <Input
                                 {...field}
                                 type="number"
+                                min="0"
+                                max="1000"
+                                step="0.5"
                                 disabled={loading}
                                 placeholder="0.0"
-                                className="bg-background/50 pl-8"
+                                className={`bg-background/50 pl-8 ${formErrors.estimatedHours ? 'border-rose-500 ring-1 ring-rose-500/30' : ''}`}
                               />
                               <Clock className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground/50" />
                             </div>
                           </FormControl>
+                          <FormMessage className="text-[10px] text-rose-500 font-semibold" />
                         </FormItem>
                       )}
                     />
@@ -711,20 +783,24 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
                       render={({ field }) => (
                         <FormItem className="min-w-0">
                           <Label className="flex items-center gap-1.5 peer-disabled:opacity-70 text-xs font-bold uppercase tracking-wider text-muted-foreground/80 mb-2">
-                             Logged Hours
+                             Logged Hours (0 - 1000)
                           </Label>
                           <FormControl>
                             <div className="relative">
                               <Input
                                 {...field}
                                 type="number"
+                                min="0"
+                                max="1000"
+                                step="0.5"
                                 disabled={loading}
                                 placeholder="0.0"
-                                className={`bg-background/50 pl-8 ${form.watch('status') === 'done' && (!field.value || parseFloat(field.value) <= 0) ? 'border-rose-500' : ''}`}
+                                className={`bg-background/50 pl-8 ${(formErrors.loggedHours || (form.watch('status') === 'done' && (!field.value || parseFloat(field.value) <= 0))) ? 'border-rose-500 ring-1 ring-rose-500/30' : ''}`}
                               />
                               <Clock className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground/50" />
                             </div>
                           </FormControl>
+                          <FormMessage className="text-[10px] text-rose-500 font-semibold" />
                           {form.watch('status') === 'done' && (!field.value || parseFloat(field.value) <= 0) && (
                             <p className="text-[10px] font-bold text-rose-500 mt-1 animate-pulse">Required for completion</p>
                           )}
@@ -843,19 +919,20 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
 
                   {/* Checklist Manager */}
                   <div className="space-y-3">
-                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground/80">Definition Checklist Items</Label>
+                    <div className="flex justify-between items-center">
+                      <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground/80">Definition Checklist Items</Label>
+                      <span className="text-[10px] font-semibold text-muted-foreground/60">{newCheckItem.length}/150</span>
+                    </div>
                     <div className="flex gap-2">
                       <Input
-                        placeholder="Add acceptance criteria checklist item..."
+                        placeholder="Add acceptance criteria checklist item (2-150 chars)..."
                         value={newCheckItem}
+                        maxLength={150}
                         onChange={e => setNewCheckItem(e.target.value)}
                         onKeyDown={e => {
                           if (e.key === 'Enter') {
                             e.preventDefault();
-                            if (newCheckItem.trim()) {
-                              setChecklist(prev => [...prev, { id: Math.random().toString(), text: newCheckItem.trim(), checked: false }]);
-                              setNewCheckItem('');
-                            }
+                            handleAddCheckItem();
                           }
                         }}
                         className="h-9 bg-background/50"
@@ -863,12 +940,7 @@ export function TaskDialog({ open, onOpenChange, onSuccess, projectId, sprintId,
                       <Button
                         type="button"
                         size="sm"
-                        onClick={() => {
-                          if (newCheckItem.trim()) {
-                            setChecklist(prev => [...prev, { id: Math.random().toString(), text: newCheckItem.trim(), checked: false }]);
-                            setNewCheckItem('');
-                          }
-                        }}
+                        onClick={handleAddCheckItem}
                       >
                         Add
                       </Button>

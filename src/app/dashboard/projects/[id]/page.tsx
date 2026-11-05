@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { getStoredUser } from '@/lib/client-session';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -96,6 +98,15 @@ function getTimelineProgress(project: Project): { percent: number; color: string
   if (pct > 60) return { percent: pct, color: 'bg-amber-500' };
   return { percent: pct, color: 'bg-emerald-500' };
 }
+
+const hasManagerOrAdminAccess = (roleStr?: string) => {
+  if (!roleStr) return false;
+  const r = roleStr.toLowerCase().replace(/[^a-z0-9_]/g, '');
+  return [
+    'admin', 'super_admin', 'superadmin', 'owner', 'tenant_owner', 'business_owner',
+    'ceo', 'cto', 'director', 'manager', 'project_manager'
+  ].includes(r);
+};
 
 export default function ProjectDetailPage() {
   const params = useParams();
@@ -243,15 +254,45 @@ export default function ProjectDetailPage() {
   };
 
   useEffect(() => {
-    fetchCurrentUser();
-    fetchProjectData();
-    fetchEnrichedData();
-    
-    // Load from database; fallback to localStorage if available
-    const storedWiki = localStorage.getItem(`wiki_project_${projectId}`);
-    if (storedWiki) {
-      setWikiText(storedWiki);
-    }
+    const init = async () => {
+      const stored = getStoredUser();
+      if (stored) {
+        setCurrentUser(stored);
+        if (!hasManagerOrAdminAccess(stored.role)) {
+          setLoading(false);
+          return;
+        }
+      }
+      try {
+        const token = typeof window !== 'undefined' 
+          ? (sessionStorage.getItem('session_token') || localStorage.getItem('session_token')) 
+          : null;
+        const response = await fetch('/api/auth/me', {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+          credentials: 'include'
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setCurrentUser(data.user);
+          if (!hasManagerOrAdminAccess(data.user?.role)) {
+            setLoading(false);
+            return;
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching current user:', error);
+      }
+
+      fetchProjectData();
+      fetchEnrichedData();
+      
+      const storedWiki = localStorage.getItem(`wiki_project_${projectId}`);
+      if (storedWiki) {
+        setWikiText(storedWiki);
+      }
+    };
+
+    init();
   }, [projectId, fetchProjectData, fetchEnrichedData]);
 
   const handleSaveWiki = async () => {
@@ -341,6 +382,34 @@ export default function ProjectDetailPage() {
 
   if (loading) {
     return <DetailedPageSkeleton />;
+  }
+
+  if (currentUser && !hasManagerOrAdminAccess(currentUser.role)) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 bg-card border border-border rounded-2xl shadow-xs space-y-4 max-w-xl mx-auto my-8">
+        <div className="p-4 bg-destructive/10 text-destructive rounded-full">
+          <ShieldAlert className="h-10 w-10 text-destructive" />
+        </div>
+        <div className="space-y-1">
+          <h3 className="text-xl font-black text-foreground">Access Restricted</h3>
+          <p className="text-xs text-muted-foreground max-w-md mt-2 leading-relaxed">
+            Project configuration and delivery details are restricted to Administrators and Project Managers. Regular employees can view and track their assigned tasks on the Task Board.
+          </p>
+        </div>
+        <div className="flex items-center gap-3 mt-4">
+          <Link href="/dashboard">
+            <Button variant="outline" className="rounded-xl px-5 text-xs font-bold h-10 border-border">
+              Return to Dashboard
+            </Button>
+          </Link>
+          <Link href="/dashboard/tasks">
+            <Button className="bg-primary text-white hover:bg-primary/90 rounded-xl px-5 text-xs font-bold h-10">
+              Go to Task Board
+            </Button>
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   if (!project) {

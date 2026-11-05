@@ -5,6 +5,8 @@ import { BadRequestError } from '@/server/http/errors';
 import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
 import { normalizeAppRole } from '@/server/auth/rbac';
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // Default Knowledge Base articles and FAQs
 export const DEFAULT_KB_ARTICLES = [
   {
@@ -176,15 +178,19 @@ export const GET = withApiHandler(async (request, context) => {
 
     // RBAC: If regular employee, filter to tickets submitted by / for themselves
     if (!isSuperAdminOrAdmin && !canApprove) {
-      const matchIds = [
-        currentUserRecord ? String(currentUserRecord.id) : null,
-        currentUserRecord?.legacy_user_id ? String(currentUserRecord.legacy_user_id) : null,
+      const candidates = [
+        currentUserRecord?.id ? String(currentUserRecord.id) : null,
+        currentEmpData?.user_id ? String(currentEmpData.user_id) : null,
         user.providerUserId ? String(user.providerUserId) : null,
-        user.id ? String(user.id) : null
-      ].filter(Boolean) as string[];
+        typeof user.id === 'string' && UUID_REGEX.test(user.id) ? user.id : null
+      ];
+      // hr_service_tickets.user_id is a UUID column; filter out non-UUID values to prevent PostgreSQL syntax errors
+      const matchIds = Array.from(new Set(candidates.filter((id): id is string => Boolean(id && UUID_REGEX.test(id)))));
 
       if (matchIds.length > 0) {
         query = query.in('user_id', matchIds);
+      } else {
+        query = query.eq('user_id', '00000000-0000-0000-0000-000000000000');
       }
     }
 
@@ -298,20 +304,37 @@ export const POST = withApiHandler(async (request, context) => {
   // Find user's record in DB to get their persistent UUID / id
   let currentDbUser: any = null;
   try {
-    const { data } = await supabase
+    let uQuery = supabase
       .from('users')
       .select('id, legacy_user_id, email, first_name, last_name')
-      .eq('tenant_id', tenantId)
-      .or(`id.eq.${user.providerUserId || user.id},email.eq.${user.email}`);
-    if (data && data.length > 0) currentDbUser = data[0];
+      .eq('tenant_id', tenantId);
+
+    const userUuid = (user.providerUserId && UUID_REGEX.test(user.providerUserId))
+      ? user.providerUserId
+      : (typeof user.id === 'string' && UUID_REGEX.test(user.id) ? user.id : null);
+
+    if (userUuid && user.email) {
+      uQuery = uQuery.or(`id.eq.${userUuid},email.eq.${user.email}`);
+    } else if (userUuid) {
+      uQuery = uQuery.eq('id', userUuid);
+    } else if (user.email) {
+      uQuery = uQuery.eq('email', user.email);
+    } else if (user.id && !isNaN(Number(user.id))) {
+      uQuery = uQuery.eq('legacy_user_id', Number(user.id));
+    }
+
+    const { data } = await uQuery.maybeSingle();
+    if (data) currentDbUser = data;
   } catch (err) {
     console.warn('Error fetching current DB user:', err);
   }
 
-  const effectiveSelfId = currentDbUser ? String(currentDbUser.id) : String(user.providerUserId || user.id);
+  const effectiveSelfId = currentDbUser?.id
+    ? String(currentDbUser.id)
+    : (user.providerUserId && UUID_REGEX.test(user.providerUserId) ? user.providerUserId : null);
 
   // If role is employee (not superadmin or admin), enforce target employee = themselves!
-  if (!isSuperAdminOrAdmin || !userId) {
+  if (!isSuperAdminOrAdmin || !userId || !UUID_REGEX.test(userId)) {
     userId = effectiveSelfId;
   }
 

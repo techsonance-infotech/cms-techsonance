@@ -11,6 +11,9 @@ import {
   RefreshCw, BarChart3, PieChart as PieChartIcon, ShieldCheck, AlertTriangle, Users, Calendar
 } from 'lucide-react';
 import { toast } from 'sonner';
+import Link from 'next/link';
+import { ShieldAlert } from 'lucide-react';
+import { getStoredUser } from '@/lib/client-session';
 import {
   ResponsiveContainer,
   BarChart,
@@ -66,7 +69,14 @@ function ProjectSkeleton() {
   );
 }
 
+const hasAnalyticsAccess = (roleStr?: string) => {
+  if (!roleStr) return false;
+  const r = roleStr.toLowerCase().replace(/[^a-z0-9_]/g, '');
+  return ['admin', 'super_admin', 'superadmin', 'owner', 'tenant_owner', 'business_owner', 'ceo', 'cto', 'director', 'manager', 'project_manager'].includes(r);
+};
+
 export default function ProjectAnalyticsPage() {
+  const [canAccess, setCanAccess] = useState<boolean | null>(null);
   const [activeTab, setActiveTab] = useState('backlog');
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
@@ -106,7 +116,18 @@ export default function ProjectAnalyticsPage() {
   };
 
   useEffect(() => {
-    fetchAnalytics();
+    const user = getStoredUser();
+    if (user) {
+      const allowed = hasAnalyticsAccess(user.role);
+      setCanAccess(allowed);
+      if (allowed) {
+        fetchAnalytics();
+      } else {
+        setLoading(false);
+      }
+    } else {
+      fetchAnalytics();
+    }
   }, []);
 
   const handleExportCSV = (reportName: string, exportData: any[]) => {
@@ -117,7 +138,7 @@ export default function ProjectAnalyticsPage() {
     const headers = Object.keys(exportData[0]).join(',');
     const rows = exportData.map(row => 
       Object.values(row).map(val => {
-        const str = String(val).replace(/"/g, '""');
+        const str = String(val).replaceAll('"', '""');
         return `"${str}"`;
       }).join(',')
     );
@@ -147,7 +168,35 @@ export default function ProjectAnalyticsPage() {
     );
   }
 
-  if (loading || !data) {
+  if (canAccess === false) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 bg-card border border-border rounded-2xl shadow-xs space-y-4 max-w-xl mx-auto my-8">
+        <div className="p-4 bg-destructive/10 text-destructive rounded-full">
+          <ShieldAlert className="h-10 w-10 text-destructive" />
+        </div>
+        <div className="space-y-1">
+          <h3 className="text-xl font-black text-foreground">Access Restricted</h3>
+          <p className="text-xs text-muted-foreground max-w-md mt-2 leading-relaxed">
+            Project Analytics and BI reporting are restricted to Management and Administrators.
+          </p>
+        </div>
+        <div className="flex items-center gap-3 mt-4">
+          <Link href="/dashboard">
+            <Button variant="outline" className="rounded-xl px-5 text-xs font-bold h-10 border-border">
+              Return to Dashboard
+            </Button>
+          </Link>
+          <Link href="/dashboard/tasks">
+            <Button className="bg-primary text-white hover:bg-primary/90 rounded-xl px-5 text-xs font-bold h-10">
+              Go to Task Board
+            </Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+    if (loading || !data) {
     return <ProjectSkeleton />;
   }
 

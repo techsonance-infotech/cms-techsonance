@@ -83,16 +83,43 @@ export const GET = withApiHandler(async (request, context) => {
   }
 
   // 3. Project Metrics
-  // Get all project IDs where user is a member
-  const { data: memberRows } = await supabase
-    .from('project_members')
-    .select('project_id, assigned_at')
-    .eq('user_id', authUserId)
-    .eq('tenant_id', tenantId)
-    .order('assigned_at', { ascending: false });
+  // Get all project IDs where user is a member or has tasks assigned
+  const memberConditions: string[] = [];
+  if (authUserId) memberConditions.push(`user_id.eq.${authUserId}`);
+  if (user?.id && String(user.id) !== String(authUserId)) memberConditions.push(`user_id.eq.${user.id}`);
+  if (employeeId) memberConditions.push(`user_id.eq.${employeeId}`);
 
-  const projectIds = (memberRows || []).map((m: any) => m.project_id).filter(Boolean);
-  
+  let memberRows: any[] = [];
+  try {
+    const { data } = await supabase
+      .from('project_members')
+      .select('project_id, assigned_at')
+      .eq('tenant_id', tenantId)
+      .or(memberConditions.join(','))
+      .order('assigned_at', { ascending: false });
+    if (data) memberRows = data;
+  } catch (err) {
+    console.warn('Project members query info:', err);
+  }
+
+  let taskProjectRows: any[] = [];
+  try {
+    const taskConditions = memberConditions.map(c => c.replace('user_id.', 'assigned_to.'));
+    const { data } = await supabase
+      .from('tasks')
+      .select('project_id, created_at')
+      .eq('tenant_id', tenantId)
+      .or(taskConditions.join(','));
+    if (data) taskProjectRows = data;
+  } catch (err) {
+    console.warn('Tasks projects query info:', err);
+  }
+
+  const projectIds = Array.from(new Set([
+    ...memberRows.map((m: any) => Number(m.project_id)),
+    ...taskProjectRows.map((t: any) => Number(t.project_id))
+  ])).filter(pId => Boolean(pId) && !isNaN(pId));
+
   let activeProjects = 0;
   let totalAssignedProjects = projectIds.length;
   let recentProjects: any[] = [];
@@ -113,7 +140,9 @@ export const GET = withApiHandler(async (request, context) => {
       recentProjects = (projectsData || [])
         .map((p: any) => ({
           ...p,
-          assignedAt: memberRows?.find((m: any) => m.project_id === p.id)?.assigned_at || p.created_at
+          assignedAt: memberRows.find((m: any) => Number(m.project_id) === Number(p.id))?.assigned_at || 
+                      taskProjectRows.find((t: any) => Number(t.project_id) === Number(p.id))?.created_at || 
+                      p.created_at
         }))
         .sort((a: any, b: any) => new Date(b.assignedAt).getTime() - new Date(a.assignedAt).getTime())
         .slice(0, 5);
@@ -145,14 +174,12 @@ export const GET = withApiHandler(async (request, context) => {
           .gte('date', dateList[0])
           .eq('tenant_id', tenantId)
       : Promise.resolve({ data: [] }),
-    employeeId
-      ? supabase
-          .from('daily_reports')
-          .select('date')
-          .eq('employee_id', employeeId)
-          .gte('date', dateList[0])
-          .eq('tenant_id', tenantId)
-      : Promise.resolve({ data: [] }),
+    supabase
+      .from('daily_reports')
+      .select('date')
+      .eq('user_id', authUserId)
+      .gte('date', dateList[0])
+      .eq('tenant_id', tenantId),
     supabase
       .from('tasks')
       .select('status, due_date')
@@ -185,15 +212,21 @@ export const GET = withApiHandler(async (request, context) => {
   ]);
 
   const attendanceMap = new Map((historyAttendanceRes.data || []).map((r: any) => [r.date, (r.duration || 0) / 60]));
-  const reportsSet = new Set((historyReportsRes.data || []).map((r: any) => r.date));
+  const reportsSet = new Set(
+    (historyReportsRes.data || []).map((r: any) => {
+      if (!r?.date) return '';
+      const d = String(r.date);
+      return d.includes('T') ? d.split('T')[0] : d;
+    }).filter(Boolean)
+  );
 
   const performance = {
     attendanceHistory: dateList.map(date => ({
-      date: new Date(date).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' }),
+      date: new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' }),
       hours: Math.round(((attendanceMap.get(date) as number) || 0) * 10) / 10
     })),
     reportHistory: dateList.map(date => ({
-      date: new Date(date).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' }),
+      date: new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' }),
       submitted: reportsSet.has(date) ? 1 : 0
     })),
     taskDistribution: (taskStatsRes.data || []).reduce((acc: any, t: any) => {

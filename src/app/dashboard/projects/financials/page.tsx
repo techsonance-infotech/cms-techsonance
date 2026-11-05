@@ -38,6 +38,9 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import Link from 'next/link';
+import { ShieldAlert } from 'lucide-react';
+import { getStoredUser } from '@/lib/client-session';
 
 interface PsaContract {
   id: string;
@@ -66,7 +69,14 @@ interface ProjectOption {
   status: string;
 }
 
+const hasFinancialAccess = (roleStr?: string) => {
+  if (!roleStr) return false;
+  const r = roleStr.toLowerCase().replace(/[^a-z0-9_]/g, '');
+  return ['admin', 'super_admin', 'superadmin', 'owner', 'tenant_owner', 'business_owner', 'ceo', 'cto', 'director', 'manager', 'project_manager', 'accountant', 'finance'].includes(r);
+};
+
 export default function ProjectFinancialsPage() {
+  const [canAccess, setCanAccess] = useState<boolean | null>(null);
   const [contracts, setContracts] = useState<PsaContract[]>([]);
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -122,7 +132,18 @@ export default function ProjectFinancialsPage() {
   }, []);
 
   useEffect(() => {
-    fetchFinancialData();
+    const user = getStoredUser();
+    if (user) {
+      const allowed = hasFinancialAccess(user.role);
+      setCanAccess(allowed);
+      if (allowed) {
+        fetchFinancialData();
+      } else {
+        setLoading(false);
+      }
+    } else {
+      fetchFinancialData();
+    }
   }, [fetchFinancialData]);
 
   const handleOpenDialog = (existing?: PsaContract) => {

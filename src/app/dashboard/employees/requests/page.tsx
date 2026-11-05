@@ -90,7 +90,10 @@ export default function EmployeeRequestCenterPage() {
   });
 
   // Filter & Create Modal State
+  const [currentUserId, setCurrentUserId] = useState('');
   const [groupFilter, setGroupFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('Attendance Correction');
@@ -98,6 +101,7 @@ export default function EmployeeRequestCenterPage() {
   const [subject, setSubject] = useState('');
   const [details, setDetails] = useState('');
   const [priority, setPriority] = useState('Normal');
+  const [formTouched, setFormTouched] = useState({ subject: false, details: false });
 
   // Fetch 100% Dynamic Data & RBAC Permissions from Backend API
   const loadRequestCenterDataFromApi = async () => {
@@ -112,11 +116,13 @@ export default function EmployeeRequestCenterPage() {
         if (data.canApprove !== undefined) setCanApprove(data.canApprove);
         if (data.userRole) setUserRole(data.userRole);
         if (data.catalog) setCatalog(data.catalog);
+        if (data.currentUserId) {
+          setCurrentUserId(data.currentUserId);
+          setSelectedUserId(prev => prev || data.currentUserId);
+        }
         if (data.employeeRoster) {
           setRoster(data.employeeRoster);
-          if (data.currentUserId) {
-            setSelectedUserId(data.currentUserId);
-          } else if (data.employeeRoster.length > 0 && !selectedUserId) {
+          if (!selectedUserId && data.employeeRoster.length > 0) {
             setSelectedUserId(data.employeeRoster[0].id);
           }
         }
@@ -134,11 +140,27 @@ export default function EmployeeRequestCenterPage() {
     loadRequestCenterDataFromApi();
   }, []);
 
-  // Submit New Request Ticket
+  // Submit New Request Ticket with Field-Level Validation
   const handleCreateRequest = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedUserId || !subject.trim() || !details.trim()) {
-      toast.error('Please specify Employee, Subject, and Details');
+    setFormTouched({ subject: true, details: true });
+
+    const applicantId = selectedUserId || currentUserId;
+    if (!applicantId) {
+      toast.error('Please select an applicant employee');
+      return;
+    }
+
+    const trimmedSubject = subject.trim();
+    const trimmedDetails = details.trim();
+
+    if (trimmedSubject.length < 5) {
+      toast.error('Subject must be at least 5 characters');
+      return;
+    }
+
+    if (trimmedDetails.length < 10) {
+      toast.error('Reason / Specification must be at least 10 characters');
       return;
     }
 
@@ -147,10 +169,10 @@ export default function EmployeeRequestCenterPage() {
     try {
       const token = localStorage.getItem('session_token');
       const payload = {
-        userId: selectedUserId,
+        userId: applicantId,
         category: selectedCategory,
-        subject: subject.trim(),
-        details: details.trim(),
+        subject: trimmedSubject,
+        details: trimmedDetails,
         priority
       };
 
@@ -170,6 +192,8 @@ export default function EmployeeRequestCenterPage() {
       setShowCreateModal(false);
       setSubject('');
       setDetails('');
+      setFormTouched({ subject: false, details: false });
+      setActiveTab('queue');
       await loadRequestCenterDataFromApi();
     } catch (err: any) {
       console.error(err);
@@ -179,14 +203,16 @@ export default function EmployeeRequestCenterPage() {
     }
   };
 
-  // 1-Click Bulk Approvals / Fulfillments with RBAC enforcement
-  const handleBulkAction = async (action: 'approve' | 'fulfill' | 'reject') => {
+  // 1-Click Approvals / Fulfillments / Rejections with RBAC enforcement (supports both row-level and bulk selection)
+  const handleAction = async (action: 'approve' | 'fulfill' | 'reject', explicitIds?: string[]) => {
     if (!canApprove) {
       toast.error('Insufficient permissions. Approvals require Manager or HR Admin access.');
       return;
     }
 
-    if (selectedRequestIds.length === 0) {
+    const idsToProcess = explicitIds && explicitIds.length > 0 ? explicitIds : selectedRequestIds;
+
+    if (idsToProcess.length === 0) {
       toast.error('Please select at least one request ticket from the table');
       return;
     }
@@ -202,24 +228,30 @@ export default function EmployeeRequestCenterPage() {
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
         body: JSON.stringify({
-          requestIds: selectedRequestIds,
+          requestIds: idsToProcess,
           action,
-          resolutionNotes: `Processed via Bulk ${action.toUpperCase()} action.`
+          resolutionNotes: `Processed via ${action.toUpperCase()} action.`
         })
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Bulk action failed');
+      if (!res.ok) throw new Error(data.error || `${action} action failed`);
 
-      toast.success(data.message || `Bulk ${action} completed!`);
-      setSelectedRequestIds([]);
+      toast.success(data.message || `Request ${action}d successfully!`);
+      if (explicitIds && explicitIds.length > 0) {
+        setSelectedRequestIds(prev => prev.filter(id => !explicitIds.includes(id)));
+      } else {
+        setSelectedRequestIds([]);
+      }
       await loadRequestCenterDataFromApi();
     } catch (err: any) {
-      toast.error(err.message || 'Error processing bulk action');
+      toast.error(err.message || `Error processing ${action} action`);
     } finally {
       setBulkProcessing(false);
     }
   };
+
+  const handleBulkAction = (action: 'approve' | 'fulfill' | 'reject') => handleAction(action);
 
   const toggleSelectRequest = (id: string) => {
     if (selectedRequestIds.includes(id)) {
@@ -239,14 +271,29 @@ export default function EmployeeRequestCenterPage() {
 
   // Group items by Group Type for Catalog Grid
   const groups = Array.from(new Set(catalog.map(c => c.groupType)));
+  const availableCategories = Array.from(new Set(requests.map(r => r.category))).filter(Boolean);
 
   const filteredRequests = requests.filter(r => {
+    // Strict employee scoping: Regular employees ONLY see their own submitted requests
+    if (!canApprove && currentUserId && r.userId && r.userId !== currentUserId) {
+      return false;
+    }
+
     const matchesGroup = groupFilter === 'all' || r.groupType === groupFilter;
-    const matchesSearch = r.requestNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          r.employeeName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          r.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          r.category.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesGroup && matchesSearch;
+    const matchesCategory = categoryFilter === 'all' || r.category === categoryFilter;
+    const rawStatus = (r.status || '').toLowerCase();
+    const matchesStatus = statusFilter === 'all'
+      || (statusFilter === 'Pending' && (rawStatus === 'pending' || rawStatus === 'in_progress' || rawStatus === 'open'))
+      || (statusFilter === 'Approved' && (rawStatus === 'approved' || rawStatus === 'fulfilled' || rawStatus === 'resolved'))
+      || (statusFilter === 'Rejected' && (rawStatus === 'rejected' || rawStatus === 'closed'));
+    const q = searchQuery.toLowerCase().trim();
+    const matchesSearch = !q ||
+                          r.requestNumber.toLowerCase().includes(q) ||
+                          r.employeeName.toLowerCase().includes(q) ||
+                          r.subject.toLowerCase().includes(q) ||
+                          r.category.toLowerCase().includes(q) ||
+                          r.details.toLowerCase().includes(q);
+    return matchesGroup && matchesCategory && matchesStatus && matchesSearch;
   });
 
   if (loading) {
@@ -291,40 +338,42 @@ export default function EmployeeRequestCenterPage() {
             </div>
           </div>
 
-          {/* Quick Metrics Bar */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Total Tickets</div>
-              <div className="text-xl font-black text-white mt-0.5">{summaryStats.totalRequests}</div>
-              <div className="text-[10px] text-emerald-400 flex items-center justify-center gap-0.5 mt-0.5">
-                <CheckCircle2 className="h-2.5 w-2.5" /> Live Data
+          {/* Quick Metrics Bar - Visible to Managers / Admins only; hidden for regular employees */}
+          {canApprove && (
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
+                <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Total Tickets</div>
+                <div className="text-xl font-black text-white mt-0.5">{summaryStats.totalRequests}</div>
+                <div className="text-[10px] text-emerald-400 flex items-center justify-center gap-0.5 mt-0.5">
+                  <CheckCircle2 className="h-2.5 w-2.5" /> Live Data
+                </div>
+              </div>
+
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
+                <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Pending Review</div>
+                <div className="text-xl font-black text-amber-400 mt-0.5">{summaryStats.pendingCount}</div>
+                <div className="text-[10px] text-amber-400/80 mt-0.5">In Queue</div>
+              </div>
+
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
+                <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Fulfilled / Approved</div>
+                <div className="text-xl font-black text-emerald-400 mt-0.5">{summaryStats.approvedCount}</div>
+                <div className="text-[10px] text-emerald-400/80 mt-0.5">Resolved</div>
+              </div>
+
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
+                <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">SLA Adherence</div>
+                <div className="text-xl font-black text-cyan-400 mt-0.5">{summaryStats.slaCompliancePercent}</div>
+                <div className="text-[10px] text-cyan-400/80 mt-0.5">Target Compliance</div>
+              </div>
+
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
+                <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Avg Turnaround</div>
+                <div className="text-xl font-black text-purple-400 mt-0.5">{summaryStats.avgResolutionHours}</div>
+                <div className="text-[10px] text-purple-400/80 mt-0.5">Resolution Time</div>
               </div>
             </div>
-
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Pending Review</div>
-              <div className="text-xl font-black text-amber-400 mt-0.5">{summaryStats.pendingCount}</div>
-              <div className="text-[10px] text-amber-400/80 mt-0.5">In Queue</div>
-            </div>
-
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Fulfilled / Approved</div>
-              <div className="text-xl font-black text-emerald-400 mt-0.5">{summaryStats.approvedCount}</div>
-              <div className="text-[10px] text-emerald-400/80 mt-0.5">Resolved</div>
-            </div>
-
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">SLA Adherence</div>
-              <div className="text-xl font-black text-cyan-400 mt-0.5">{summaryStats.slaCompliancePercent}</div>
-              <div className="text-[10px] text-cyan-400/80 mt-0.5">Target Compliance</div>
-            </div>
-
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Avg Turnaround</div>
-              <div className="text-xl font-black text-purple-400 mt-0.5">{summaryStats.avgResolutionHours}</div>
-              <div className="text-[10px] text-purple-400/80 mt-0.5">Resolution Time</div>
-            </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -333,19 +382,24 @@ export default function EmployeeRequestCenterPage() {
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-zinc-800 pb-2">
           <TabsList className="bg-slate-100 dark:bg-zinc-900/80 p-1 rounded-2xl border border-slate-200 dark:border-zinc-800 flex flex-wrap h-auto">
             <TabsTrigger value="catalog" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-[#f87941] data-[state=active]:text-white">
-              <Layers className="h-3.5 w-3.5" /> Request Catalog & New Ticket ({catalog.length})
+              <Layers className="h-3.5 w-3.5" /> Request Catalog ({catalog.length})
             </TabsTrigger>
             <TabsTrigger value="queue" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-[#f87941] data-[state=active]:text-white">
-              <MessageSquare className="h-3.5 w-3.5" /> My Request Tickets ({requests.length})
+              <MessageSquare className="h-3.5 w-3.5" /> {canApprove ? `All Request Tickets (${requests.length})` : `My Request Tickets (${requests.length})`}
             </TabsTrigger>
             {canApprove && (
               <TabsTrigger value="approvals" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-[#f87941] data-[state=active]:text-white">
-                <CheckCircle2 className="h-3.5 w-3.5" /> Manager Approval Workspace
+                <CheckCircle2 className="h-3.5 w-3.5" /> Manager Approval Workspace ({requests.filter(r => {
+                  const s = (r.status || '').toLowerCase();
+                  return s === 'pending' || s === 'open' || s === 'in_progress';
+                }).length})
               </TabsTrigger>
             )}
-            <TabsTrigger value="analytics" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-[#f87941] data-[state=active]:text-white">
-              <BarChart3 className="h-3.5 w-3.5" /> SLA Compliance & Health Index
-            </TabsTrigger>
+            {canApprove && (
+              <TabsTrigger value="analytics" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-[#f87941] data-[state=active]:text-white">
+                <BarChart3 className="h-3.5 w-3.5" /> SLA Compliance & Health Index
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <Button
@@ -376,6 +430,9 @@ export default function EmployeeRequestCenterPage() {
                         key={cat.name}
                         onClick={() => {
                           setSelectedCategory(cat.name);
+                          if (!selectedUserId && currentUserId) {
+                            setSelectedUserId(currentUserId);
+                          }
                           setShowCreateModal(true);
                         }}
                         className="rounded-3xl border-slate-200 dark:border-zinc-800 shadow-sm hover:shadow-md hover:border-[#f87941]/50 cursor-pointer transition-all duration-200"
@@ -407,17 +464,64 @@ export default function EmployeeRequestCenterPage() {
         <TabsContent value="queue" className="space-y-6 m-0">
           <Card className="rounded-3xl border-slate-200 dark:border-zinc-800 shadow-md">
             <CardHeader className="pb-3 border-b">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <CardTitle className="text-base font-black flex items-center gap-2">
-                  <MessageSquare className="h-4.5 w-4.5 text-[#f87941]" /> Submitted Request Tickets & Status Tracking
-                </CardTitle>
-                <div className="flex items-center gap-2">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div>
+                  <CardTitle className="text-base font-black flex items-center gap-2">
+                    <MessageSquare className="h-4.5 w-4.5 text-[#f87941]" />
+                    {canApprove ? 'All Employee Request Tickets & Status Tracking' : 'My Submitted Request Tickets & Status Tracking'}
+                  </CardTitle>
+                  <p className="text-slate-500 text-xs mt-0.5">
+                    {canApprove
+                      ? 'Live consolidated stream of all WFH, Leave, Attendance, HR Cases, and Service requests'
+                      : 'Live tracking of your submitted WFH, Leave, Attendance, HR Cases, and Service requests'}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
                   <Input
-                    placeholder="Search ticket number, subject..."
+                    placeholder="Search ticket #, employee, subject..."
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
-                    className="w-48 h-9 text-xs rounded-xl"
+                    className="w-48 sm:w-56 h-9 text-xs rounded-xl"
                   />
+                  {availableCategories.length > 0 && (
+                    <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                      <SelectTrigger className="w-36 h-9 text-xs rounded-xl border-slate-200 dark:border-zinc-800">
+                        <SelectValue placeholder="All Categories" />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl max-h-60">
+                        <SelectItem value="all">All Categories</SelectItem>
+                        {availableCategories.map(cat => (
+                          <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-32 h-9 text-xs rounded-xl border-slate-200 dark:border-zinc-800">
+                      <SelectValue placeholder="All Statuses" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl">
+                      <SelectItem value="all">All Statuses</SelectItem>
+                      <SelectItem value="Pending">Pending</SelectItem>
+                      <SelectItem value="Approved">Approved</SelectItem>
+                      <SelectItem value="Rejected">Rejected</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {(searchQuery || categoryFilter !== 'all' || statusFilter !== 'all' || groupFilter !== 'all') && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setSearchQuery('');
+                        setCategoryFilter('all');
+                        setStatusFilter('all');
+                        setGroupFilter('all');
+                      }}
+                      className="h-9 px-2 text-xs font-semibold text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                    >
+                      Clear
+                    </Button>
+                  )}
                 </div>
               </div>
             </CardHeader>
@@ -574,17 +678,23 @@ export default function EmployeeRequestCenterPage() {
                             </td>
 
                             <td className="p-4 text-right pr-6">
-                              {r.status === 'Pending' && (
-                                <div className="flex items-center justify-end gap-2">
+                              {(r.status === 'Pending' || r.status === 'In_Progress' || r.status === 'Open') && (
+                                <div className="flex items-center justify-end gap-1.5">
                                   <Button
                                     size="sm"
-                                    onClick={() => {
-                                      setSelectedRequestIds([r.id]);
-                                      handleBulkAction('approve');
-                                    }}
+                                    disabled={bulkProcessing}
+                                    onClick={() => handleAction('approve', [r.id])}
                                     className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[10px] h-7 px-3 rounded-lg"
                                   >
                                     Approve
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    disabled={bulkProcessing}
+                                    onClick={() => handleAction('reject', [r.id])}
+                                    className="bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-[10px] h-7 px-3 rounded-lg"
+                                  >
+                                    Reject
                                   </Button>
                                 </div>
                               )}
@@ -651,9 +761,14 @@ export default function EmployeeRequestCenterPage() {
 
       </Tabs>
 
-      {/* Create Request Modal Dialog */}
-      <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
-        <DialogContent className="rounded-3xl max-w-lg border-slate-200 dark:border-zinc-800">
+      {/* Create Request Modal Dialog with Validation & Overflow Wrap */}
+      <Dialog open={showCreateModal} onOpenChange={(open) => {
+        setShowCreateModal(open);
+        if (!open) {
+          setFormTouched({ subject: false, details: false });
+        }
+      }}>
+        <DialogContent className="rounded-3xl max-w-lg w-full overflow-hidden border-slate-200 dark:border-zinc-800 shadow-2xl p-6">
           <DialogHeader>
             <DialogTitle className="text-base font-black">Submit Employee Request Ticket</DialogTitle>
             <DialogDescription className="text-xs">
@@ -661,11 +776,13 @@ export default function EmployeeRequestCenterPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleCreateRequest} className="space-y-4 pt-2">
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Employee Target / Applicant</label>
-              <Select value={selectedUserId} onValueChange={setSelectedUserId} disabled={!canApprove}>
-                <SelectTrigger className="rounded-xl text-xs font-semibold h-10 border-slate-200 dark:border-zinc-800">
+          <form onSubmit={handleCreateRequest} className="space-y-4 pt-2 w-full max-w-full min-w-0 overflow-hidden">
+            <div className="space-y-1.5 w-full max-w-full min-w-0">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                Employee Target / Applicant <span className="text-rose-500">*</span>
+              </label>
+              <Select value={selectedUserId || currentUserId} onValueChange={setSelectedUserId} disabled={!canApprove}>
+                <SelectTrigger className="rounded-xl text-xs font-semibold h-10 w-full max-w-full border-slate-200 dark:border-zinc-800">
                   <SelectValue placeholder="Select Employee" />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl max-h-60">
@@ -676,11 +793,13 @@ export default function EmployeeRequestCenterPage() {
               </Select>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Request Category (23 Types)</label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-full min-w-0">
+              <div className="space-y-1.5 w-full max-w-full min-w-0">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Request Category (23 Types) <span className="text-rose-500">*</span>
+                </label>
                 <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                  <SelectTrigger className="rounded-xl text-xs font-semibold h-10 border-slate-200 dark:border-zinc-800">
+                  <SelectTrigger className="rounded-xl text-xs font-semibold h-10 w-full max-w-full border-slate-200 dark:border-zinc-800">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="rounded-xl max-h-60">
@@ -691,10 +810,12 @@ export default function EmployeeRequestCenterPage() {
                 </Select>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Priority Level</label>
+              <div className="space-y-1.5 w-full max-w-full min-w-0">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Priority Level <span className="text-rose-500">*</span>
+                </label>
                 <Select value={priority} onValueChange={setPriority}>
-                  <SelectTrigger className="rounded-xl text-xs font-semibold h-10 border-slate-200 dark:border-zinc-800">
+                  <SelectTrigger className="rounded-xl text-xs font-semibold h-10 w-full max-w-full border-slate-200 dark:border-zinc-800">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="rounded-xl">
@@ -707,35 +828,102 @@ export default function EmployeeRequestCenterPage() {
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Subject / Brief Title</label>
+            {/* Subject / Brief Title with Character Counter & Validation */}
+            <div className="space-y-1.5 w-full max-w-full min-w-0">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Subject / Brief Title <span className="text-rose-500">*</span>
+                </label>
+                <span className={`text-[10px] font-semibold transition-colors ${
+                  subject.length > 0 && subject.trim().length < 5 ? 'text-rose-500' : 'text-slate-400'
+                }`}>
+                  {subject.length} / 100 characters
+                </span>
+              </div>
               <Input
                 value={subject}
-                onChange={e => setSubject(e.target.value)}
-                placeholder="e.g. Attendance punch correction for July 26th..."
-                className="rounded-xl text-xs font-semibold h-10 border-slate-200 dark:border-zinc-800"
+                maxLength={100}
+                onChange={e => {
+                  setSubject(e.target.value);
+                  if (!formTouched.subject) setFormTouched(prev => ({ ...prev, subject: true }));
+                }}
+                onBlur={() => setFormTouched(prev => ({ ...prev, subject: true }))}
+                placeholder="e.g. Attendance punch correction for July 26th (min 5 chars)..."
+                className={`rounded-xl text-xs font-semibold h-10 w-full max-w-full min-w-0 border transition-all ${
+                  formTouched.subject && (subject.trim().length === 0 || subject.trim().length < 5)
+                    ? 'border-rose-500 focus-visible:ring-rose-500/20'
+                    : 'border-slate-200 dark:border-zinc-800'
+                }`}
               />
+              {formTouched.subject && subject.trim().length === 0 && (
+                <p className="text-[11px] text-rose-500 font-medium mt-0.5">Subject is required (minimum 5 characters)</p>
+              )}
+              {formTouched.subject && subject.trim().length > 0 && subject.trim().length < 5 && (
+                <p className="text-[11px] text-rose-500 font-medium mt-0.5">
+                  Subject must be at least 5 characters (currently {subject.trim().length}/100)
+                </p>
+              )}
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Detailed Reason / Specification</label>
+            {/* Detailed Reason / Specification with Overflow Wrap, Character Counter & Validation */}
+            <div className="space-y-1.5 w-full max-w-full min-w-0">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Detailed Reason / Specification <span className="text-rose-500">*</span>
+                </label>
+                <span className={`text-[10px] font-semibold transition-colors ${
+                  details.length > 0 && details.trim().length < 10 ? 'text-rose-500' : 'text-slate-400'
+                }`}>
+                  {details.length} / 500 characters
+                </span>
+              </div>
               <Textarea
-                rows={3}
+                rows={4}
+                maxLength={500}
                 value={details}
-                onChange={e => setDetails(e.target.value)}
-                placeholder="Specify justification, date range, or required letter format..."
-                className="rounded-2xl text-xs p-3 border-slate-200 dark:border-zinc-800"
+                onChange={e => {
+                  setDetails(e.target.value);
+                  if (!formTouched.details) setFormTouched(prev => ({ ...prev, details: true }));
+                }}
+                onBlur={() => setFormTouched(prev => ({ ...prev, details: true }))}
+                placeholder="Specify justification, date range, or required letter format (10 to 500 characters)..."
+                style={{ fieldSizing: 'normal' } as any}
+                className={`rounded-2xl text-xs p-3 w-full max-w-full min-w-0 resize-y break-words [overflow-wrap:anywhere] border transition-all ${
+                  formTouched.details && (details.trim().length === 0 || details.trim().length < 10)
+                    ? 'border-rose-500 focus-visible:ring-rose-500/20'
+                    : 'border-slate-200 dark:border-zinc-800'
+                }`}
               />
+              {formTouched.details && details.trim().length === 0 && (
+                <p className="text-[11px] text-rose-500 font-medium mt-0.5">Reason / Specification is required (minimum 10 characters)</p>
+              )}
+              {formTouched.details && details.trim().length > 0 && details.trim().length < 10 && (
+                <p className="text-[11px] text-rose-500 font-medium mt-0.5">
+                  Reason must be at least 10 characters (currently {details.trim().length}/500)
+                </p>
+              )}
             </div>
 
-            <DialogFooter>
-              <Button variant="outline" type="button" onClick={() => setShowCreateModal(false)} className="rounded-xl text-xs font-bold">
+            <DialogFooter className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2">
+              <Button
+                variant="outline"
+                type="button"
+                onClick={() => {
+                  setShowCreateModal(false);
+                  setFormTouched({ subject: false, details: false });
+                }}
+                className="rounded-xl text-xs font-bold"
+              >
                 Cancel
               </Button>
               <Button
                 type="submit"
-                disabled={submitting}
-                className="bg-[#f87941] hover:bg-[#e06634] text-white font-bold text-xs rounded-xl"
+                disabled={submitting || subject.trim().length < 5 || details.trim().length < 10}
+                className={`text-white font-extrabold text-xs rounded-xl h-9 px-4 transition-all flex items-center gap-1.5 ${
+                  subject.trim().length < 5 || details.trim().length < 10
+                    ? 'bg-slate-300 dark:bg-zinc-700 text-slate-500 cursor-not-allowed opacity-60'
+                    : 'bg-[#f87941] hover:bg-[#e06634] shadow-md shadow-[#f87941]/20'
+                }`}
               >
                 {submitting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <SendHorizontal className="h-4 w-4" />}
                 Submit Request Ticket

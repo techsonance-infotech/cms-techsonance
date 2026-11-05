@@ -9,11 +9,12 @@ import {
   Filter, ArrowUpDown, GripVertical, ChevronsUp, ChevronUp, Minus,
   MoreVertical, CheckCircle2, Lightbulb, ArrowRight,
   Plus, Target, Clock, BarChart3, TrendingUp, Sparkles, HelpCircle,
-  AlertTriangle, Play
+  AlertTriangle, Play, ShieldAlert
 } from 'lucide-react';
+import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { getStoredSessionToken } from '@/lib/client-session';
+import { getStoredSessionToken, getStoredUser } from '@/lib/client-session';
 import { PageHeaderSkeleton, StatsSkeleton } from '@/components/ui/dashboard-skeleton';
 import { PageHeader } from '@/components/ui/page-header';
 import {
@@ -73,6 +74,7 @@ export default function SprintPlanningBacklog() {
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [selectedSprintId, setSelectedSprintId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [canAccess, setCanAccess] = useState<boolean | null>(null);
   const [search, setSearch] = useState('');
 
   // Sprints and tasks state triggers
@@ -156,7 +158,22 @@ export default function SprintPlanningBacklog() {
   };
 
   useEffect(() => {
-    fetchInitialData();
+    const user = getStoredUser();
+    if (user) {
+      const r = (user.role || '').toLowerCase().replace(/[^a-z0-9_]/g, '');
+      const hasAccess = [
+        'admin', 'super_admin', 'superadmin', 'owner', 'tenant_owner', 'business_owner',
+        'ceo', 'cto', 'director', 'manager', 'project_manager'
+      ].includes(r);
+      setCanAccess(hasAccess);
+      if (hasAccess) {
+        fetchInitialData();
+      } else {
+        setLoading(false);
+      }
+    } else {
+      fetchInitialData();
+    }
   }, []);
 
   useEffect(() => {
@@ -313,6 +330,34 @@ export default function SprintPlanningBacklog() {
       <div className="space-y-6 max-w-7xl mx-auto p-4">
         <PageHeaderSkeleton />
         <StatsSkeleton count={4} />
+      </div>
+    );
+  }
+
+  if (canAccess === false) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 bg-card border border-border rounded-2xl shadow-xs space-y-4 max-w-xl mx-auto my-8">
+        <div className="p-4 bg-destructive/10 text-destructive rounded-full">
+          <ShieldAlert className="h-10 w-10 text-destructive" />
+        </div>
+        <div className="space-y-1">
+          <h3 className="text-xl font-black text-foreground">Access Restricted</h3>
+          <p className="text-xs text-muted-foreground max-w-md mt-2 leading-relaxed">
+            Sprint Planning and Backlog Management are restricted to Project Managers and Administrators. Team members can view and update their assigned sprint tasks directly on the Task Board.
+          </p>
+        </div>
+        <div className="flex items-center gap-3 mt-4">
+          <Link href="/dashboard">
+            <Button variant="outline" className="rounded-xl px-5 text-xs font-bold h-10 border-border">
+              Return to Dashboard
+            </Button>
+          </Link>
+          <Link href="/dashboard/tasks">
+            <Button className="bg-primary text-white hover:bg-primary/90 rounded-xl px-5 text-xs font-bold h-10">
+              Go to Task Board
+            </Button>
+          </Link>
+        </div>
       </div>
     );
   }

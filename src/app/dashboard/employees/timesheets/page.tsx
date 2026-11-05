@@ -19,6 +19,7 @@ import {
   Bell, Award, Sparkles, Inbox, HelpCircle, BarChart3
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 export interface RosterEmployee {
   id: string;
@@ -76,15 +77,16 @@ export default function TimesheetOperationsPage() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [entryDate, setEntryDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [projectName, setProjectName] = useState('Enterprise SaaS Portal');
+  const [projectName, setProjectName] = useState('');
   const [taskName, setTaskName] = useState('');
   const [activityCategory, setActivityCategory] = useState('Development');
-  const [billableHours, setBillableHours] = useState<number>(6);
-  const [nonBillableHours, setNonBillableHours] = useState<number>(2);
+  const [billableHours, setBillableHours] = useState<number | string>(6);
+  const [nonBillableHours, setNonBillableHours] = useState<number | string>(2);
   const [billingRate, setBillingRate] = useState<number>(85);
   const [isLateSubmission, setIsLateSubmission] = useState(false);
   const [lateReason, setLateReason] = useState('');
   const [projectsList, setProjectsList] = useState<any[]>([]);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   // Correction Request State
   const [showCorrectionDialog, setShowCorrectionDialog] = useState(false);
@@ -157,7 +159,12 @@ export default function TimesheetOperationsPage() {
         const projects = Array.isArray(payload) ? payload : (payload.data || []);
         setProjectsList(projects);
         if (projects.length > 0) {
-          setProjectName(projects[0].name);
+          setProjectName(prev => {
+            const match = projects.find((p: any) => p.name === prev);
+            return match ? match.name : projects[0].name;
+          });
+        } else {
+          setProjectName('');
         }
       }
     } catch (err) {
@@ -195,6 +202,105 @@ export default function TimesheetOperationsPage() {
     (currentUser?.id && String(e.id) === String(currentUser.id))
   ) || effectiveRoster[0];
 
+  // Validation for Timesheet Logging Form
+  const validateForm = () => {
+    const errors: Record<string, string> = {};
+
+    if (isManagerOrAdmin && !selectedUserId && !activeEmployee?.id) {
+      errors.employee = 'Please select an employee';
+    }
+
+    if (!entryDate || entryDate.trim() === '') {
+      errors.entryDate = 'Timesheet date is required';
+    } else {
+      const selectedDate = new Date(entryDate);
+      const today = new Date();
+      today.setHours(23, 59, 59, 999);
+      if (isNaN(selectedDate.getTime())) {
+        errors.entryDate = 'Please select a valid date';
+      } else if (selectedDate > today) {
+        errors.entryDate = 'Cannot log timesheet entries for future dates';
+      }
+    }
+
+    if (!projectName || projectName.trim() === '') {
+      errors.projectName = 'Target project is required';
+    }
+
+    if (!activityCategory || activityCategory.trim() === '') {
+      errors.activityCategory = 'Activity category is required';
+    }
+
+    if (!taskName || taskName.trim().length === 0) {
+      errors.taskName = 'Task description is required';
+    } else if (taskName.trim().length < 3) {
+      errors.taskName = 'Task description must be at least 3 characters';
+    } else if (taskName.length > 200) {
+      errors.taskName = 'Task description cannot exceed 200 characters';
+    }
+
+    const bStr = String(billableHours).trim();
+    const nbStr = String(nonBillableHours).trim();
+
+    if (!isManagerOrAdmin) {
+      if (bStr === '') {
+        errors.billableHours = 'Hours worked is required (min: 0.5 hrs)';
+      } else {
+        const numB = Number(bStr);
+        if (isNaN(numB) || numB <= 0) {
+          errors.billableHours = 'Hours worked must be greater than 0';
+        } else if (numB > 24) {
+          errors.billableHours = 'Hours worked cannot exceed 24 hours per day';
+        }
+      }
+    } else {
+      if (bStr === '') {
+        errors.billableHours = 'Billable hours is required (min: 0)';
+      } else {
+        const numB = Number(bStr);
+        if (isNaN(numB) || numB < 0) {
+          errors.billableHours = 'Billable hours cannot be negative';
+        } else if (numB > 24) {
+          errors.billableHours = 'Billable hours cannot exceed 24';
+        }
+      }
+
+      if (nbStr !== '') {
+        const numNB = Number(nbStr);
+        if (isNaN(numNB) || numNB < 0) {
+          errors.nonBillableHours = 'Non-billable hours cannot be negative';
+        } else if (numNB > 24) {
+          errors.nonBillableHours = 'Non-billable hours cannot exceed 24';
+        }
+      }
+
+      const numBillable = Number(billableHours) || 0;
+      const numNonBillable = Number(nonBillableHours) || 0;
+      const totalHours = numBillable + numNonBillable;
+
+      if (!errors.billableHours && !errors.nonBillableHours) {
+        if (totalHours <= 0) {
+          errors.hours = 'Total logged hours (billable + non-billable) must be greater than 0';
+        } else if (totalHours > 24) {
+          errors.hours = 'Total daily logged hours cannot exceed 24 hours';
+        }
+      }
+    }
+
+    if (isLateSubmission) {
+      if (!lateReason || lateReason.trim().length === 0) {
+        errors.lateReason = 'Justification is required for late submissions';
+      } else if (lateReason.trim().length < 5) {
+        errors.lateReason = 'Justification must be at least 5 characters (min: 5)';
+      } else if (lateReason.length > 300) {
+        errors.lateReason = 'Justification cannot exceed 300 characters (max: 300)';
+      }
+    }
+
+    setFormErrors(errors);
+    return errors;
+  };
+
   // Submit Daily/Weekly Timesheet Entry
   const handleSubmitTimesheetEntry = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -203,46 +309,16 @@ export default function TimesheetOperationsPage() {
       return;
     }
 
+    const errors = validateForm();
+    if (Object.keys(errors).length > 0) {
+      const firstErrorMessage = Object.values(errors)[0];
+      toast.error(firstErrorMessage);
+      return;
+    }
+
     const effectiveUserId = selectedUserId || activeEmployee?.id || currentUser?.providerUserId || (currentUser?.id ? String(currentUser.id) : '');
     if (!effectiveUserId) {
       toast.error('Please specify an active employee for timesheet logging');
-      return;
-    }
-
-    if (!entryDate) {
-      toast.error('Please specify a valid timesheet date');
-      return;
-    }
-
-    const selectedEntryDate = new Date(entryDate);
-    const today = new Date();
-    today.setHours(23, 59, 59, 999);
-    if (selectedEntryDate > today) {
-      toast.error('Cannot log timesheet entries for future dates');
-      return;
-    }
-
-    const numBillable = Number(billableHours) || 0;
-    const numNonBillable = Number(nonBillableHours) || 0;
-
-    if (numBillable < 0 || numNonBillable < 0) {
-      toast.error('Logged hours cannot be negative');
-      return;
-    }
-
-    const totalHours = numBillable + numNonBillable;
-    if (totalHours <= 0) {
-      toast.error('Total logged hours (billable + non-billable) must be greater than 0');
-      return;
-    }
-
-    if (totalHours > 24) {
-      toast.error('Total logged hours cannot exceed 24 hours in a single day');
-      return;
-    }
-
-    if (isLateSubmission && (!lateReason || lateReason.trim().length < 5)) {
-      toast.error('Please provide a justification for late timesheet submission (at least 5 characters)');
       return;
     }
 
@@ -258,9 +334,9 @@ export default function TimesheetOperationsPage() {
         taskName: effectiveTaskName,
         activityCategory,
         entryDate,
-        billableHours: Number(billableHours),
-        nonBillableHours: Number(nonBillableHours),
-        billingRate: Number(billingRate),
+        billableHours: Number(billableHours) || 0,
+        nonBillableHours: Number(nonBillableHours) || 0,
+        billingRate: Number(billingRate) || 85,
         isLateSubmission,
         lateSubmissionReason: isLateSubmission ? lateReason : ''
       };
@@ -284,6 +360,8 @@ export default function TimesheetOperationsPage() {
       await loadTimesheetDataFromApi();
       setTaskName('');
       setLateReason('');
+      setIsLateSubmission(false);
+      setFormErrors({});
     } catch (err: any) {
       console.error(err);
       toast.error(err.message || 'Error submitting timesheet');
@@ -427,42 +505,44 @@ export default function TimesheetOperationsPage() {
             </div>
           </div>
 
-          {/* Quick Metrics Bar */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Total Logged</div>
-              <div className="text-xl font-black text-white mt-0.5">{summaryStats.totalLoggedHours} hrs</div>
-              <div className="text-[10px] text-emerald-400 flex items-center justify-center gap-0.5 mt-0.5">
-                <CheckCircle2 className="h-2.5 w-2.5" /> API Connected
+          {/* Quick Metrics Bar - Visible only to Managers & Admins */}
+          {isManagerOrAdmin && (
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
+                <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Total Logged</div>
+                <div className="text-xl font-black text-white mt-0.5">{summaryStats.totalLoggedHours} hrs</div>
+                <div className="text-[10px] text-emerald-400 flex items-center justify-center gap-0.5 mt-0.5">
+                  <CheckCircle2 className="h-2.5 w-2.5" /> API Connected
+                </div>
+              </div>
+
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
+                <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Billable Hours</div>
+                <div className="text-xl font-black text-emerald-400 mt-0.5">{summaryStats.billableHours} hrs</div>
+                <div className="text-[10px] text-emerald-400/80 mt-0.5">{summaryStats.billablePercentage} Billable</div>
+              </div>
+
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
+                <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Overtime (1.5x)</div>
+                <div className="text-xl font-black text-rose-400 mt-0.5">{summaryStats.overtimeHours} hrs</div>
+                <div className="text-[10px] text-rose-400/80 mt-0.5">Auto-Calculated</div>
+              </div>
+
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
+                <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Pending Approvals</div>
+                <div className="text-xl font-black text-amber-400 mt-0.5">{summaryStats.pendingApprovals}</div>
+                <div className="text-[10px] text-amber-400/80 mt-0.5">Manager Review</div>
+              </div>
+
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
+                <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Period Lock</div>
+                <div className="text-xl font-black mt-0.5">
+                  {periodLocked ? <span className="text-rose-500 flex items-center justify-center gap-1"><Lock className="h-4 w-4" /> Locked</span> : <span className="text-emerald-400 flex items-center justify-center gap-1"><Unlock className="h-4 w-4" /> Open</span>}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5">Pay Cycle Ledger</div>
               </div>
             </div>
-
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Billable Hours</div>
-              <div className="text-xl font-black text-emerald-400 mt-0.5">{summaryStats.billableHours} hrs</div>
-              <div className="text-[10px] text-emerald-400/80 mt-0.5">{summaryStats.billablePercentage} Billable</div>
-            </div>
-
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Overtime (1.5x)</div>
-              <div className="text-xl font-black text-rose-400 mt-0.5">{summaryStats.overtimeHours} hrs</div>
-              <div className="text-[10px] text-rose-400/80 mt-0.5">Auto-Calculated</div>
-            </div>
-
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Pending Approvals</div>
-              <div className="text-xl font-black text-amber-400 mt-0.5">{summaryStats.pendingApprovals}</div>
-              <div className="text-[10px] text-amber-400/80 mt-0.5">Manager Review</div>
-            </div>
-
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Period Lock</div>
-              <div className="text-xl font-black mt-0.5">
-                {periodLocked ? <span className="text-rose-500 flex items-center justify-center gap-1"><Lock className="h-4 w-4" /> Locked</span> : <span className="text-emerald-400 flex items-center justify-center gap-1"><Unlock className="h-4 w-4" /> Open</span>}
-              </div>
-              <div className="text-[10px] text-slate-400 mt-0.5">Pay Cycle Ledger</div>
-            </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -478,9 +558,11 @@ export default function TimesheetOperationsPage() {
                 <CheckCircle2 className="h-3.5 w-3.5" /> Manager Approvals & Bulk Action Hub ({timesheetEntries.length})
               </TabsTrigger>
             )}
-            <TabsTrigger value="analytics" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-[#f87941] data-[state=active]:text-white">
-              <BarChart3 className="h-3.5 w-3.5" /> Project & Billable Analytics
-            </TabsTrigger>
+            {isManagerOrAdmin && (
+              <TabsTrigger value="analytics" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-[#f87941] data-[state=active]:text-white">
+                <BarChart3 className="h-3.5 w-3.5" /> Project & Billable Analytics
+              </TabsTrigger>
+            )}
             {isManagerOrAdmin && (
               <TabsTrigger value="compliance" className="rounded-xl font-bold text-xs px-4 py-2 flex items-center gap-2 data-[state=active]:bg-[#f87941] data-[state=active]:text-white">
                 <ShieldCheck className="h-3.5 w-3.5" /> Period Locking & FLSA Compliance
@@ -502,14 +584,16 @@ export default function TimesheetOperationsPage() {
               </Button>
             )}
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => toast.success('Timesheet Register CSV exported!')}
-              className="rounded-xl text-xs font-bold border-slate-200 dark:border-zinc-800 flex items-center gap-1.5"
-            >
-              <Download className="h-3.5 w-3.5" /> Export Register
-            </Button>
+            {isManagerOrAdmin && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => toast.success('Timesheet Register CSV exported!')}
+                className="rounded-xl text-xs font-bold border-slate-200 dark:border-zinc-800 flex items-center gap-1.5"
+              >
+                <Download className="h-3.5 w-3.5" /> Export Register
+              </Button>
+            )}
           </div>
         </div>
 
@@ -537,23 +621,45 @@ export default function TimesheetOperationsPage() {
                 <CardContent className="pt-4 space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Employee</label>
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                        Employee {isManagerOrAdmin && <span className="text-rose-500 font-bold ml-0.5">*</span>}
+                      </label>
                       {isManagerOrAdmin ? (
-                        <Select 
-                          value={selectedUserId || activeEmployee?.id || undefined} 
-                          onValueChange={setSelectedUserId}
-                        >
-                          <SelectTrigger className="w-full rounded-xl text-xs font-semibold h-10 border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs">
-                            <SelectValue placeholder="Select Employee">
-                              {activeEmployee ? `${activeEmployee.name} (${activeEmployee.department})` : undefined}
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent className="rounded-xl max-h-72">
-                            {effectiveRoster.map(e => (
-                              <SelectItem key={e.id} value={e.id}>{e.name} ({e.department})</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <div>
+                          <Select 
+                            value={selectedUserId || activeEmployee?.id || undefined} 
+                            onValueChange={val => {
+                              setSelectedUserId(val);
+                              if (formErrors.employee) {
+                                setFormErrors(prev => {
+                                  const next = { ...prev };
+                                  delete next.employee;
+                                  return next;
+                                });
+                              }
+                            }}
+                          >
+                            <SelectTrigger className={cn(
+                              "w-full rounded-xl text-xs font-semibold h-10 bg-white dark:bg-zinc-900 shadow-xs",
+                              formErrors.employee ? "border-rose-500 ring-1 ring-rose-500/20 text-rose-950 dark:text-rose-200" : "border-slate-200 dark:border-zinc-800"
+                            )}>
+                              <SelectValue placeholder="Select Employee">
+                                {activeEmployee ? `${activeEmployee.name} (${activeEmployee.department})` : undefined}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl max-h-72">
+                              {effectiveRoster.map(e => (
+                                <SelectItem key={e.id} value={e.id}>{e.name} ({e.department})</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {formErrors.employee && (
+                            <p className="text-[11px] font-semibold text-rose-500 flex items-center gap-1 mt-1">
+                              <AlertCircle className="h-3 w-3 shrink-0" />
+                              {formErrors.employee}
+                            </p>
+                          )}
+                        </div>
                       ) : (
                         <Input
                           value={activeEmployee?.name || (currentUser?.firstName ? `${currentUser.firstName} ${currentUser.lastName || ''}`.trim() : 'My Profile')}
@@ -564,31 +670,65 @@ export default function TimesheetOperationsPage() {
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Timesheet Date</label>
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                        Timesheet Date <span className="text-rose-500 font-bold ml-0.5">*</span>
+                      </label>
                       <Input
                         type="date"
                         value={entryDate}
                         max={new Date().toISOString().split('T')[0]}
                         onChange={(e) => {
                           const val = e.target.value;
+                          setEntryDate(val);
+                          if (formErrors.entryDate) {
+                            setFormErrors(prev => {
+                              const next = { ...prev };
+                              delete next.entryDate;
+                              return next;
+                            });
+                          }
                           const todayStr = new Date().toISOString().split('T')[0];
                           if (val && val > todayStr) {
-                            toast.error('Future dates cannot be selected for timesheets');
-                            return;
+                            setFormErrors(prev => ({ ...prev, entryDate: 'Cannot log timesheet entries for future dates' }));
                           }
-                          setEntryDate(val);
                         }}
-                        className="w-full rounded-xl text-xs font-semibold h-10 border-slate-200 dark:border-zinc-800"
+                        className={cn(
+                          "w-full rounded-xl text-xs font-semibold h-10",
+                          formErrors.entryDate ? "border-rose-500 ring-1 ring-rose-500/20 text-rose-950 dark:text-rose-200" : "border-slate-200 dark:border-zinc-800"
+                        )}
                       />
+                      {formErrors.entryDate && (
+                        <p className="text-[11px] font-semibold text-rose-500 flex items-center gap-1 mt-1">
+                          <AlertCircle className="h-3 w-3 shrink-0" />
+                          {formErrors.entryDate}
+                        </p>
+                      )}
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Target Project</label>
-                      <Select value={projectName} onValueChange={setProjectName}>
-                        <SelectTrigger className="w-full rounded-xl text-xs font-semibold h-10 border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs">
-                          <SelectValue placeholder="Select Project" />
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                        Target Project <span className="text-rose-500 font-bold ml-0.5">*</span>
+                      </label>
+                      <Select 
+                        value={projectName} 
+                        onValueChange={val => {
+                          setProjectName(val);
+                          if (formErrors.projectName) {
+                            setFormErrors(prev => {
+                              const next = { ...prev };
+                              delete next.projectName;
+                              return next;
+                            });
+                          }
+                        }}
+                      >
+                        <SelectTrigger className={cn(
+                          "w-full rounded-xl text-xs font-semibold h-10 bg-white dark:bg-zinc-900 shadow-xs",
+                          formErrors.projectName ? "border-rose-500 ring-1 ring-rose-500/20 text-rose-950 dark:text-rose-200" : "border-slate-200 dark:border-zinc-800"
+                        )}>
+                          <SelectValue placeholder={projectsList.length > 0 ? "Select Project" : "No Assigned Projects"} />
                         </SelectTrigger>
                         <SelectContent className="rounded-xl max-h-72">
                           {projectsList.length > 0 ? (
@@ -598,22 +738,41 @@ export default function TimesheetOperationsPage() {
                               </SelectItem>
                             ))
                           ) : (
-                            <>
-                              <SelectItem value="Enterprise SaaS Portal">Enterprise SaaS Portal</SelectItem>
-                              <SelectItem value="AI Workflow Engine">AI Workflow Engine</SelectItem>
-                              <SelectItem value="Mobile Banking App">Mobile Banking App</SelectItem>
-                              <SelectItem value="Cloud Infrastructure Upgrade">Cloud Infrastructure Upgrade</SelectItem>
-                              <SelectItem value="Internal Operations">Internal Operations & Admin</SelectItem>
-                            </>
+                            <div className="p-3 text-xs text-slate-400 text-center font-medium">
+                              No assigned projects available
+                            </div>
                           )}
                         </SelectContent>
                       </Select>
+                      {formErrors.projectName && (
+                        <p className="text-[11px] font-semibold text-rose-500 flex items-center gap-1 mt-1">
+                          <AlertCircle className="h-3 w-3 shrink-0" />
+                          {formErrors.projectName}
+                        </p>
+                      )}
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Activity Category</label>
-                      <Select value={activityCategory} onValueChange={setActivityCategory}>
-                        <SelectTrigger className="w-full rounded-xl text-xs font-semibold h-10 border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs">
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                        Activity Category <span className="text-rose-500 font-bold ml-0.5">*</span>
+                      </label>
+                      <Select 
+                        value={activityCategory} 
+                        onValueChange={val => {
+                          setActivityCategory(val);
+                          if (formErrors.activityCategory) {
+                            setFormErrors(prev => {
+                              const next = { ...prev };
+                              delete next.activityCategory;
+                              return next;
+                            });
+                          }
+                        }}
+                      >
+                        <SelectTrigger className={cn(
+                          "w-full rounded-xl text-xs font-semibold h-10 bg-white dark:bg-zinc-900 shadow-xs",
+                          formErrors.activityCategory ? "border-rose-500 ring-1 ring-rose-500/20 text-rose-950 dark:text-rose-200" : "border-slate-200 dark:border-zinc-800"
+                        )}>
                           <SelectValue placeholder="Select Category" />
                         </SelectTrigger>
                         <SelectContent className="rounded-xl max-h-72">
@@ -624,59 +783,246 @@ export default function TimesheetOperationsPage() {
                           <SelectItem value="Training">Training & Research</SelectItem>
                         </SelectContent>
                       </Select>
+                      {formErrors.activityCategory && (
+                        <p className="text-[11px] font-semibold text-rose-500 flex items-center gap-1 mt-1">
+                          <AlertCircle className="h-3 w-3 shrink-0" />
+                          {formErrors.activityCategory}
+                        </p>
+                      )}
                     </div>
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      Task Description / Ticket Details <span className="text-slate-400 font-normal">(Optional — defaults to Activity Category)</span>
-                    </label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                        Task Description / Ticket Details <span className="text-rose-500 font-bold ml-0.5">*</span>
+                      </label>
+                      <span className={cn(
+                        "text-[10px] font-mono font-semibold transition-colors",
+                        taskName.length > 200 ? "text-rose-500 font-bold" : taskName.length > 180 ? "text-amber-500" : "text-slate-400"
+                      )}>
+                        {taskName.length}/200
+                      </span>
+                    </div>
                     <Input
+                      maxLength={200}
                       value={taskName}
-                      onChange={e => setTaskName(e.target.value)}
+                      onChange={e => {
+                        setTaskName(e.target.value);
+                        if (formErrors.taskName) {
+                          setFormErrors(prev => {
+                            const next = { ...prev };
+                            delete next.taskName;
+                            return next;
+                          });
+                        }
+                      }}
                       placeholder="e.g. Implement OAuth2 API Authentication & unit tests..."
-                      className="rounded-xl text-xs font-semibold h-10 border-slate-200 dark:border-zinc-800"
+                      className={cn(
+                        "rounded-xl text-xs font-semibold h-10",
+                        formErrors.taskName ? "border-rose-500 ring-1 ring-rose-500/20 text-rose-950 dark:text-rose-200" : "border-slate-200 dark:border-zinc-800"
+                      )}
                     />
+                    {formErrors.taskName && (
+                      <p className="text-[11px] font-semibold text-rose-500 flex items-center gap-1 mt-1">
+                        <AlertCircle className="h-3 w-3 shrink-0" />
+                        {formErrors.taskName}
+                      </p>
+                    )}
                   </div>
 
-                  {/* Hours Breakdown */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-2xl bg-slate-50 dark:bg-zinc-900/50 border">
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-emerald-600">Billable Hours</label>
-                      <Input
-                        type="number"
-                        step="0.5"
-                        value={billableHours}
-                        onChange={e => setBillableHours(Number(e.target.value))}
-                        className="rounded-xl text-xs font-mono font-bold h-9 border-emerald-500/30"
-                      />
-                    </div>
+                  {/* Hours Input: Simple 'Hours Worked' for Developers; Billable vs Non-Billable split for Managers/Admins */}
+                  {isManagerOrAdmin ? (
+                    <div className={cn(
+                      "p-4 rounded-2xl border transition-colors",
+                      formErrors.hours ? "bg-rose-50/50 dark:bg-rose-950/10 border-rose-300 dark:border-rose-900/50" : "bg-slate-50 dark:bg-zinc-900/50 border-slate-200 dark:border-zinc-800"
+                    )}>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center">
+                            Billable Hours <span className="text-rose-500 font-bold ml-0.5">*</span>
+                          </label>
+                          <Input
+                            type="number"
+                            step="0.5"
+                            min="0"
+                            max="24"
+                            value={billableHours}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setBillableHours(val === '' ? '' : Number(val));
+                              if (formErrors.billableHours || formErrors.hours) {
+                                setFormErrors(prev => {
+                                  const next = { ...prev };
+                                  delete next.billableHours;
+                                  delete next.hours;
+                                  return next;
+                                });
+                              }
+                            }}
+                            className={cn(
+                              "rounded-xl text-xs font-mono font-bold h-9 bg-white dark:bg-zinc-900",
+                              formErrors.billableHours ? "border-rose-500 ring-1 ring-rose-500/20" : "border-emerald-500/30"
+                            )}
+                          />
+                          {formErrors.billableHours && (
+                            <p className="text-[10px] font-semibold text-rose-500 flex items-center gap-1 mt-0.5">
+                              <AlertCircle className="h-3 w-3 shrink-0" />
+                              {formErrors.billableHours}
+                            </p>
+                          )}
+                        </div>
 
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-slate-500">Non-Billable Hours</label>
-                      <Input
-                        type="number"
-                        step="0.5"
-                        value={nonBillableHours}
-                        onChange={e => setNonBillableHours(Number(e.target.value))}
-                        className="rounded-xl text-xs font-mono font-bold h-9 border-slate-200 dark:border-zinc-800"
-                      />
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400">Non-Billable Hours</label>
+                          <Input
+                            type="number"
+                            step="0.5"
+                            min="0"
+                            max="24"
+                            value={nonBillableHours}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setNonBillableHours(val === '' ? '' : Number(val));
+                              if (formErrors.nonBillableHours || formErrors.hours) {
+                                setFormErrors(prev => {
+                                  const next = { ...prev };
+                                  delete next.nonBillableHours;
+                                  delete next.hours;
+                                  return next;
+                                });
+                              }
+                            }}
+                            className={cn(
+                              "rounded-xl text-xs font-mono font-bold h-9 bg-white dark:bg-zinc-900",
+                              formErrors.nonBillableHours ? "border-rose-500 ring-1 ring-rose-500/20" : "border-slate-200 dark:border-zinc-800"
+                            )}
+                          />
+                          {formErrors.nonBillableHours && (
+                            <p className="text-[10px] font-semibold text-rose-500 flex items-center gap-1 mt-0.5">
+                              <AlertCircle className="h-3 w-3 shrink-0" />
+                              {formErrors.nonBillableHours}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      {formErrors.hours && (
+                        <p className="text-[11px] font-semibold text-rose-500 flex items-center gap-1 mt-2 pt-2 border-t border-rose-200 dark:border-rose-900/40">
+                          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                          {formErrors.hours}
+                        </p>
+                      )}
                     </div>
-                  </div>
+                  ) : (
+                    <div className={cn(
+                      "p-4 rounded-2xl border transition-colors",
+                      (formErrors.hours || formErrors.billableHours) ? "bg-rose-50/50 dark:bg-rose-950/10 border-rose-300 dark:border-rose-900/50" : "bg-slate-50 dark:bg-zinc-900/50 border-slate-200 dark:border-zinc-800"
+                    )}>
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center">
+                            Hours Worked <span className="text-rose-500 font-bold ml-0.5">*</span>
+                          </label>
+                          <span className="text-[10px] text-slate-400 font-medium">Max 24 hrs/day</span>
+                        </div>
+                        <Input
+                          type="number"
+                          step="0.5"
+                          min="0.5"
+                          max="24"
+                          placeholder="e.g. 8"
+                          value={billableHours}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setBillableHours(val === '' ? '' : Number(val));
+                            setNonBillableHours(0);
+                            if (formErrors.billableHours || formErrors.hours) {
+                              setFormErrors(prev => {
+                                const next = { ...prev };
+                                delete next.billableHours;
+                                delete next.hours;
+                                return next;
+                              });
+                            }
+                          }}
+                          className={cn(
+                            "rounded-xl text-xs font-mono font-bold h-10 bg-white dark:bg-zinc-900",
+                            (formErrors.billableHours || formErrors.hours) ? "border-rose-500 ring-1 ring-rose-500/20 text-rose-950 dark:text-rose-200" : "border-slate-200 dark:border-zinc-800"
+                          )}
+                        />
+                        {(formErrors.billableHours || formErrors.hours) && (
+                          <p className="text-[11px] font-semibold text-rose-500 flex items-center gap-1 mt-1">
+                            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                            {formErrors.billableHours || formErrors.hours}
+                          </p>
+                        )}
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                          Log the total hours spent on this task. Billable vs non-billable classification is managed by your project manager.
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Late Submission Grace & Reason */}
                   <div className="space-y-2 pt-1 border-t">
                     <div className="flex items-center justify-between text-xs">
                       <span className="font-bold text-slate-700 dark:text-slate-300">Is this a Late Timesheet Submission?</span>
-                      <Switch checked={isLateSubmission} onCheckedChange={setIsLateSubmission} />
+                      <Switch 
+                        checked={isLateSubmission} 
+                        onCheckedChange={checked => {
+                          setIsLateSubmission(checked);
+                          if (!checked) {
+                            setLateReason('');
+                            if (formErrors.lateReason) {
+                              setFormErrors(prev => {
+                                const next = { ...prev };
+                                delete next.lateReason;
+                                return next;
+                              });
+                            }
+                          }
+                        }} 
+                      />
                     </div>
                     {isLateSubmission && (
-                      <Input
-                        value={lateReason}
-                        onChange={e => setLateReason(e.target.value)}
-                        placeholder="Reason for late submission (e.g. Travel, illness, client outage)..."
-                        className="rounded-xl text-xs font-semibold h-9 border-amber-500/40"
-                      />
+                      <div className="space-y-1.5 pt-1">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center">
+                            Late Submission Justification <span className="text-rose-500 font-bold ml-0.5">*</span>
+                          </label>
+                          <span className={cn(
+                            "text-[10px] font-mono font-semibold transition-colors",
+                            lateReason.length > 300 ? "text-rose-500 font-bold" : lateReason.length > 270 ? "text-amber-500" : "text-slate-400"
+                          )}>
+                            {lateReason.length}/300
+                          </span>
+                        </div>
+                        <Input
+                          maxLength={300}
+                          value={lateReason}
+                          onChange={e => {
+                            setLateReason(e.target.value);
+                            if (formErrors.lateReason) {
+                              setFormErrors(prev => {
+                                const next = { ...prev };
+                                delete next.lateReason;
+                                return next;
+                              });
+                            }
+                          }}
+                          placeholder="Reason for late submission (e.g. Travel, illness, client outage — min 5 chars)..."
+                          className={cn(
+                            "rounded-xl text-xs font-semibold h-9",
+                            formErrors.lateReason ? "border-rose-500 ring-1 ring-rose-500/20 text-rose-950 dark:text-rose-200" : "border-amber-500/40"
+                          )}
+                        />
+                        {formErrors.lateReason && (
+                          <p className="text-[11px] font-semibold text-rose-500 flex items-center gap-1 mt-1">
+                            <AlertCircle className="h-3 w-3 shrink-0" />
+                            {formErrors.lateReason}
+                          </p>
+                        )}
+                      </div>
                     )}
                   </div>
                 </CardContent>
@@ -787,12 +1133,14 @@ export default function TimesheetOperationsPage() {
                               {weekTotalLogged.toFixed(1)} Hours
                             </span>
                           </div>
-                          <div className="flex justify-between">
-                            <span className="text-slate-400">Weekly Billable Hours:</span>
-                            <span className="font-mono font-black text-emerald-500">
-                              {weekBillable.toFixed(1)} Hours (${weekBillableAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
-                            </span>
-                          </div>
+                          {isManagerOrAdmin && (
+                            <div className="flex justify-between">
+                              <span className="text-slate-400">Weekly Billable Hours:</span>
+                              <span className="font-mono font-black text-emerald-500">
+                                {weekBillable.toFixed(1)} Hours (${weekBillableAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                              </span>
+                            </div>
+                          )}
                           <div className="flex justify-between">
                             <span className="text-slate-400">Weekly Overtime (1.5x):</span>
                             <span className="font-mono font-black text-rose-500">
@@ -948,8 +1296,9 @@ export default function TimesheetOperationsPage() {
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 3: PROJECT & BILLABLE ANALYTICS */}
+        {/* TAB 3: PROJECT & BILLABLE ANALYTICS - Managers & Admins only */}
         {/* ========================================================================= */}
+        {isManagerOrAdmin && (
         <TabsContent value="analytics" className="space-y-6 m-0">
           <div className="grid grid-cols-12 gap-6">
 
@@ -1011,6 +1360,7 @@ export default function TimesheetOperationsPage() {
 
           </div>
         </TabsContent>
+        )}
 
         {/* ========================================================================= */}
         {/* TAB 4: PERIOD LOCKING & FLSA COMPLIANCE */}
@@ -1085,10 +1435,18 @@ export default function TimesheetOperationsPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3 pt-2">
-            <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Correction Notes / Reason</label>
+          <div className="space-y-2 pt-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center">
+                Correction Notes / Reason <span className="text-rose-500 font-bold ml-0.5">*</span>
+              </label>
+              <span className="text-[10px] font-mono font-semibold text-slate-400">
+                {correctionNotesInput.length}/500
+              </span>
+            </div>
             <Textarea
               rows={3}
+              maxLength={500}
               value={correctionNotesInput}
               onChange={e => setCorrectionNotesInput(e.target.value)}
               placeholder="e.g. Please update billable vs non-billable hours split..."

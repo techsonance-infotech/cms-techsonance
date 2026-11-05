@@ -138,9 +138,15 @@ export default function TasksPage() {
           const membersResult = await membersRes.json();
           const members: any[] = Array.isArray(membersResult) ? membersResult : (membersResult.data ?? []);
           const userProjectIds = members
-            .filter((m) => m.userId === user.id)
+            .filter((m) => 
+              m.userId === user.id || 
+              String(m.userId) === String(user.id) || 
+              (user as any).legacy_user_id === m.userId
+            )
             .map((m) => m.projectId);
-          const filtered = allProjects.filter((p) => userProjectIds.includes(p.id));
+          const filtered = userProjectIds.length > 0
+            ? allProjects.filter((p) => userProjectIds.includes(p.id))
+            : allProjects;
           setProjects(filtered);
           if (filtered.length > 0) {
             setSelectedProject(filtered[0].id);

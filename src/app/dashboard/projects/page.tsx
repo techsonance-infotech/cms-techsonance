@@ -245,6 +245,15 @@ export default function ProjectsPage({ defaultTab, defaultActiveFilter }: Projec
     }
   }, []);
 
+  const hasManagerOrAdminAccess = (roleStr?: string) => {
+    if (!roleStr) return false;
+    const r = roleStr.toLowerCase().replace(/[^a-z0-9_]/g, '');
+    return [
+      'admin', 'super_admin', 'superadmin', 'owner', 'tenant_owner', 'business_owner',
+      'ceo', 'cto', 'director', 'manager', 'project_manager'
+    ].includes(r);
+  };
+
   // Single guarded init: auth → projects (+ clients for admin) — runs exactly once
   useEffect(() => {
     if (initializedRef.current) return;
@@ -262,11 +271,13 @@ export default function ProjectsPage({ defaultTab, defaultActiveFilter }: Projec
           const user: User = data.user;
           setCurrentUser(user);
 
-          const fetches: Promise<void>[] = [fetchProjects(), fetchPmoData()];
+          if (hasManagerOrAdminAccess(user?.role)) {
+            const fetches: Promise<void>[] = [fetchProjects(), fetchPmoData()];
           if (user.role && hasFullAccess(user.role as UserRole)) {
             fetches.push(fetchClients());
           }
-          await Promise.all(fetches);
+            await Promise.all(fetches);
+          }
         } else {
           // If auth/me failed, still attempt to fetch projects
           await fetchProjects();
@@ -417,6 +428,34 @@ export default function ProjectsPage({ defaultTab, defaultActiveFilter }: Projec
         <ProjectSummarySkeleton />
         <div className="mt-8">
           {view === 'kanban' ? <KanbanSkeleton columns={4} /> : <TableSkeleton columns={7} rows={6} />}
+        </div>
+      </div>
+    );
+  }
+
+  if (currentUser && !hasManagerOrAdminAccess(currentUser.role)) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 bg-card border border-border rounded-2xl shadow-xs space-y-4 max-w-xl mx-auto my-8">
+        <div className="p-4 bg-destructive/10 text-destructive rounded-full">
+          <ShieldAlert className="h-10 w-10 text-destructive" />
+        </div>
+        <div className="space-y-1">
+          <h3 className="text-xl font-black text-foreground">Access Restricted</h3>
+          <p className="text-xs text-muted-foreground max-w-md mt-2 leading-relaxed">
+            Active Projects oversight is restricted to Administrators and Project Managers. Regular employees can view and track their assigned tasks on the Task Board.
+          </p>
+        </div>
+        <div className="flex items-center gap-3 mt-4">
+          <Link href="/dashboard">
+            <Button variant="outline" className="rounded-xl px-5 text-xs font-bold h-10 border-border">
+              Return to Dashboard
+            </Button>
+          </Link>
+          <Link href="/dashboard/tasks">
+            <Button className="bg-primary text-white hover:bg-primary/90 rounded-xl px-5 text-xs font-bold h-10">
+              Go to Task Board
+            </Button>
+          </Link>
         </div>
       </div>
     );

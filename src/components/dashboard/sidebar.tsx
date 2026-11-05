@@ -249,7 +249,7 @@ const categories: NavCategory[] = [
       { name: 'Operations Dashboard', href: '/dashboard/hr-operations', icon: BarChart3, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'HR Service Desk', href: '/dashboard/hr-service-desk', icon: HelpCircle, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] },
       { name: 'Employee Request Center', href: '/dashboard/employees/requests', icon: MessageSquare, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee'] },
-      { name: 'Broadcast Hub', href: '/dashboard/employees/broadcast', icon: Inbox, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Company Announcements', href: '/dashboard/employees/broadcast', icon: Inbox, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] },
       { name: 'Document Vault', href: '/dashboard/employees/documents', icon: FileText, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Asset Tracker', href: '/dashboard/employees/assets', icon: Laptop, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Training & Skills', href: '/dashboard/employees/training', icon: GraduationCap, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] },
@@ -263,10 +263,10 @@ const categories: NavCategory[] = [
     icon: FolderKanban,
     items: [
       { name: 'Project Dashboard', href: '/dashboard/projects/analytics', icon: BarChart3, roles: ['admin', 'project_manager', 'ceo', 'cto', 'business_owner'] },
-      { name: 'Active Projects', href: '/dashboard/projects', icon: FolderKanban, roles: ['admin', 'project_manager', 'developer', 'employee', 'intern', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Active Projects', href: '/dashboard/projects', icon: FolderKanban, roles: ['admin', 'project_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Project Portfolio', href: '/dashboard/projects?tab=portfolio', icon: Layers, roles: ['admin', 'project_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Task Board', href: '/dashboard/tasks', icon: Kanban, roles: ['admin', 'project_manager', 'developer', 'employee', 'intern', 'ceo', 'cto', 'business_owner'] },
-      { name: 'Sprint Planner', href: '/dashboard/tasks/sprint-planning', icon: Kanban, roles: ['admin', 'project_manager', 'developer', 'employee', 'intern', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Sprint Planner', href: '/dashboard/tasks/sprint-planning', icon: Kanban, roles: ['admin', 'project_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Resource Planner', href: '/dashboard/employees/resource-allocation', icon: ClipboardList, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Capacity Planner', href: '/dashboard/employees/resource-allocation?tab=forecasting', icon: Activity, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'PSA Planner', href: '/dashboard/employees/resource-allocation?tab=psa', icon: ClipboardList, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
@@ -608,7 +608,9 @@ export function DashboardSidebar({ user, isMobile = false, onClose, companyName:
                 item.href === '/dashboard/employees/holidays' ||
                 item.href === '/dashboard/employees/assets' ||
                 item.href === '/dashboard/employees/documents' ||
-                item.href === '/dashboard/employees/directory'
+                item.href === '/dashboard/employees/directory' ||
+                item.href === '/dashboard/projects' ||
+                item.href === '/dashboard/tasks/sprint-planning'
               ) {
                 const isAdmin = ['admin', 'super_admin', 'owner', 'ceo', 'cto', 'business_owner', 'hr_manager', 'project_manager'].includes(normalizedRole);
                 if (!isAdmin) return false;
