@@ -350,3 +350,21 @@ export function normalizeSupabaseTaskRecord(
     epicId: row.epic_id === null ? null : Number(row.epic_id),
   };
 }
+
+export async function resolveTenantId(context: any, supabase?: any): Promise<string | null> {
+  let tenantId = context?.auth?.user?.tenantId;
+  if (!tenantId && context?.auth?.user) {
+    const userIdentifier = context.auth.user.providerUserId || context.auth.user.id;
+    const client = supabase || getAdminRouteSupabase();
+    if (userIdentifier && client) {
+      const { data: u } = await client
+        .from('users')
+        .select('tenant_id')
+        .or(`id.eq.${userIdentifier},legacy_user_id.eq.${typeof userIdentifier === 'number' ? userIdentifier : 0}`)
+        .maybeSingle();
+      tenantId = u?.tenant_id || null;
+    }
+  }
+  return tenantId || null;
+}
+
