@@ -26,4 +26,4 @@ export const GET = withApiHandler(async (request, context) => {
   if (error) throw error;
 
   return NextResponse.json({ success: true, data: versions });
-}, { requireAuth: true, roles: ['Employee'] });
+}, { requireAuth: true, roles: ['Manager'] });

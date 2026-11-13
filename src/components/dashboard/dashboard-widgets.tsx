@@ -1,9 +1,10 @@
 'use client';
 
+import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Megaphone, Bell, CheckCircle2, Clock, AlertTriangle, FileText, IndianRupee } from 'lucide-react';
+import { Megaphone, Bell, CheckCircle2, Clock, AlertTriangle, FileText, IndianRupee, ArrowRight, ExternalLink } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 interface Announcement {
@@ -35,9 +36,17 @@ export function DashboardAnnouncements({ announcements, alerts }: { announcement
             </CardTitle>
             <CardDescription>Stay updated with company & system notices</CardDescription>
           </div>
-          <Badge variant="outline" className="bg-secondary text-primary border-primary/20">
-            {announcements.length + alerts.length} New
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Link 
+              href="/dashboard/employees/broadcast?view=employee"
+              className="text-xs font-bold text-[#f87941] hover:text-[#f4662b] flex items-center gap-1 hover:underline transition-colors px-2 py-1 rounded-md hover:bg-[#f87941]/10"
+            >
+              Notice Hub <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+            <Badge variant="outline" className="bg-secondary text-primary border-primary/20">
+              {announcements.length + alerts.length} New
+            </Badge>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="pt-0">
@@ -54,14 +63,18 @@ export function DashboardAnnouncements({ announcements, alerts }: { announcement
             
             {/* Company Announcements */}
             {announcements.map((item) => (
-              <div key={`ann-${item.id}`} className="group relative flex gap-4 p-3 rounded-xl border border-primary-light/10 bg-primary-light/5 hover:bg-primary-light/10 transition-colors">
+              <Link 
+                key={`ann-${item.id}`} 
+                href="/dashboard/employees/broadcast?view=employee"
+                className="group relative flex gap-4 p-3 rounded-xl border border-primary-light/10 bg-primary-light/5 hover:bg-primary-light/10 transition-colors block cursor-pointer"
+              >
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-primary">
                   <Megaphone className="h-5 w-5" />
                 </div>
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1 flex-1">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-semibold">{item.title}</span>
-                    <span className="text-[10px] text-muted-foreground font-medium">
+                    <span className="text-sm font-semibold group-hover:text-[#f87941] transition-colors">{item.title}</span>
+                    <span className="text-[10px] text-muted-foreground font-medium shrink-0">
                       {formatDistanceToNow(new Date(item.created_at), { addSuffix: true })}
                     </span>
                   </div>
@@ -69,19 +82,23 @@ export function DashboardAnnouncements({ announcements, alerts }: { announcement
                     {item.message}
                   </p>
                 </div>
-              </div>
+              </Link>
             ))}
 
             {/* System Alerts */}
             {alerts.map((item) => (
-              <div key={`alert-${item.id}`} className="group relative flex gap-4 p-3 rounded-xl border border-rose-100 bg-rose-50/30 hover:bg-rose-50 transition-colors">
+              <Link 
+                key={`alert-${item.id}`} 
+                href="/dashboard/employees/broadcast?view=employee"
+                className="group relative flex gap-4 p-3 rounded-xl border border-rose-100 bg-rose-50/30 hover:bg-rose-50 transition-colors block cursor-pointer"
+              >
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-rose-100 text-rose-600">
                   <AlertTriangle className="h-5 w-5" />
                 </div>
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1 flex-1">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-semibold">{item.title}</span>
-                    <span className="text-[10px] text-muted-foreground font-medium">
+                    <span className="text-sm font-semibold group-hover:text-rose-600 transition-colors">{item.title}</span>
+                    <span className="text-[10px] text-muted-foreground font-medium shrink-0">
                       {formatDistanceToNow(new Date(item.created_at), { addSuffix: true })}
                     </span>
                   </div>
@@ -89,7 +106,7 @@ export function DashboardAnnouncements({ announcements, alerts }: { announcement
                     {item.message}
                   </p>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         </ScrollArea>

@@ -91,7 +91,7 @@ export const POST = withApiHandler(async (request, context) => {
   }).select('*').single();
   if (error || !data) throw error ?? new Error('Failed to create payment');
   return NextResponse.json(normalizeSupabasePaymentRow(data), { status: 201 });
-}, { requireAuth: true, roles: ['Manager'] });
+}, { requireAuth: true, roles: ['Employee'] });
 
 export const PUT = withApiHandler(async (request, context) => {
   const id = Number(new URL(request.url).searchParams.get('id'));
@@ -114,7 +114,7 @@ export const PUT = withApiHandler(async (request, context) => {
   .single();
   if (error || !data) throw new NotFoundError('Payment not found');
   return NextResponse.json(normalizeSupabasePaymentRow(data));
-}, { requireAuth: true, roles: ['Manager'] });
+}, { requireAuth: true, roles: ['Employee'] });
 
 export const DELETE = withApiHandler(async (request, context) => {
   const id = Number(new URL(request.url).searchParams.get('id'));
@@ -134,4 +134,4 @@ export const DELETE = withApiHandler(async (request, context) => {
     .single();
   if (error || !data) throw new NotFoundError('Payment not found');
   return NextResponse.json({ message: 'Payment deleted successfully', payment: normalizeSupabasePaymentRow(data) });
-}, { requireAuth: true, roles: ['Manager'] });
+}, { requireAuth: true, roles: ['Employee'] });

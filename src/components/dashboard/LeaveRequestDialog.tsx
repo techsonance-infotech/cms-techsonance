@@ -35,6 +35,7 @@ import {
   File,
   Trash2,
   Loader2,
+  AlertCircle,
 } from 'lucide-react';
 import { format, parseISO, isWeekend, isBefore, isAfter, addMonths, startOfMonth, differenceInYears, differenceInMonths } from 'date-fns';
 import {
@@ -105,6 +106,7 @@ function MiniCalendar({
   onSelectDate,
   holidays,
   companyHolidays,
+  existingLeaves = [],
 }: {
   month: number;
   year: number;
@@ -113,6 +115,7 @@ function MiniCalendar({
   onSelectDate: (dateStr: string) => void;
   holidays: Record<string, string>;
   companyHolidays: { date: string; reason: string }[];
+  existingLeaves?: { startDate: string; endDate: string; status: string; leaveType: string }[];
 }) {
   const firstDay = new Date(year, month, 1);
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -143,28 +146,56 @@ function MiniCalendar({
     const isEnd = selectedTo === dateStr;
     const isInRange = fromDate && toDate && !isBefore(dateObj, fromDate) && !isAfter(dateObj, toDate);
 
+    const existingLeaveForDay = existingLeaves.find(l => {
+      const s = l.startDate?.split('T')[0];
+      const e = l.endDate?.split('T')[0];
+      return s && e && dateStr >= s && dateStr <= e;
+    });
+
+    const isExistingApproved = existingLeaveForDay?.status === 'approved';
+    const isExistingPending = existingLeaveForDay?.status === 'pending';
+
     const dayCell = (
       <button
         key={day}
         type="button"
         onClick={() => onSelectDate(dateStr)}
         className={cn(
-          'p-1 rounded text-[11px] w-full aspect-square flex items-center justify-center transition-all cursor-pointer font-medium',
+          'p-1 rounded text-[11px] w-full aspect-square flex flex-col items-center justify-center transition-all cursor-pointer font-medium relative',
           isStart && 'bg-slate-900 text-white rounded-l-md font-bold ring-1 ring-slate-900',
           isEnd && !isStart && 'bg-slate-900 text-white rounded-r-md font-bold ring-1 ring-slate-900',
           isStart && isEnd && 'rounded-md',
           isInRange && !isStart && !isEnd && 'bg-slate-800/10 text-slate-900 font-semibold',
           isHoliday && !isStart && !isEnd && !isInRange && 'bg-blue-100 text-blue-700 font-semibold',
           isHoliday && isInRange && !isStart && !isEnd && 'bg-blue-200 text-blue-800 font-semibold',
-          isWknd && !isHoliday && !isStart && !isEnd && !isInRange && 'text-red-400',
-          !isHoliday && !isWknd && !isStart && !isEnd && !isInRange && 'hover:bg-slate-100 text-slate-700',
+          isExistingApproved && !isStart && !isEnd && 'border-2 border-emerald-500 bg-emerald-50 text-emerald-800 font-bold',
+          isExistingPending && !isStart && !isEnd && 'border-2 border-amber-500 bg-amber-50 text-amber-800 font-bold',
+          isWknd && !isHoliday && !isExistingApproved && !isExistingPending && !isStart && !isEnd && !isInRange && 'text-red-400',
+          !isHoliday && !isWknd && !isExistingApproved && !isExistingPending && !isStart && !isEnd && !isInRange && 'hover:bg-slate-100 text-slate-700',
         )}
       >
-        {day}
+        <span>{day}</span>
+        {(isExistingApproved || isExistingPending) && (
+          <span className={cn('h-1 w-1 rounded-full', isExistingApproved ? 'bg-emerald-600' : 'bg-amber-600')} />
+        )}
       </button>
     );
 
-    if (isHoliday && !isStart && !isEnd) {
+    if (existingLeaveForDay && !isStart && !isEnd) {
+      cells.push(
+        <TooltipProvider key={day} delayDuration={100}>
+          <Tooltip>
+            <TooltipTrigger asChild>{dayCell}</TooltipTrigger>
+            <TooltipContent side="top" className="text-xs max-w-[200px]">
+              <p className="font-semibold text-rose-600">
+                {isExistingApproved ? 'Already Approved Leave' : 'Pending Leave Request'}
+              </p>
+              <p className="text-muted-foreground capitalize">{existingLeaveForDay.leaveType} leave</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      );
+    } else if (isHoliday && !isStart && !isEnd) {
       cells.push(
         <TooltipProvider key={day} delayDuration={100}>
           <Tooltip>
@@ -202,6 +233,8 @@ export function LeaveRequestDialog({ open, onOpenChange, employeeData, userRole,
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [policies, setPolicies] = useState<LeavePolicy[]>([]);
   const [companyHolidays, setCompanyHolidays] = useState<{ date: string; reason: string }[]>([]);
+  const [existingLeaves, setExistingLeaves] = useState<{ id: number; startDate: string; endDate: string; status: string; leaveType: string }[]>([]);
+  const [companyName, setCompanyName] = useState<string>('');
 
   const form = useForm<LeaveRequestFormValues>({
     resolver: zodResolver(leaveRequestFormSchema),
@@ -252,8 +285,41 @@ export function LeaveRequestDialog({ open, onOpenChange, employeeData, userRole,
       } catch { /* ok */ }
     };
 
+    const fetchExistingLeaves = async () => {
+      try {
+        const token = localStorage.getItem('session_token');
+        const res = await fetch('/api/leave-requests?limit=100', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          const list = Array.isArray(json) ? json : json?.data ?? [];
+          setExistingLeaves(
+            list.filter((l: any) => l.status === 'approved' || l.status === 'pending')
+          );
+        }
+      } catch { /* ok */ }
+    };
+
+    const fetchCompanySettings = async () => {
+      try {
+        const token = localStorage.getItem('session_token');
+        const res = await fetch('/api/company-settings', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          cache: 'no-store',
+        });
+        if (res.ok) {
+          const json = await res.json();
+          const name = json?.data?.companyName || json?.data?.legalName || json?.data?.workspaceName || json?.companyName || '';
+          if (name) setCompanyName(name);
+        }
+      } catch { /* ok */ }
+    };
+
     fetchPolicies();
     fetchHolidays();
+    fetchExistingLeaves();
+    fetchCompanySettings();
   }, [open]);
 
   // Force intern to only see unpaid leave
@@ -294,6 +360,18 @@ export function LeaveRequestDialog({ open, onOpenChange, employeeData, userRole,
       allHolidaysMap
     );
   }, [leaveValues.from, leaveValues.to, leaveValues.period, leaveValues.actualHours, allHolidaysMap]);
+
+  // Check if selected date range overlaps with an already approved or pending leave
+  const overlappingLeave = useMemo(() => {
+    if (!leaveValues.from || !leaveValues.to) return null;
+    const from = leaveValues.from;
+    const to = leaveValues.to;
+    return existingLeaves.find(l => {
+      const lStart = l.startDate?.split('T')[0];
+      const lEnd = l.endDate?.split('T')[0];
+      return lStart && lEnd && from <= lEnd && to >= lStart;
+    });
+  }, [leaveValues.from, leaveValues.to, existingLeaves]);
 
   // Check if current leave type requires a document
   const currentTypePolicy = useMemo(() => {
@@ -423,6 +501,12 @@ export function LeaveRequestDialog({ open, onOpenChange, employeeData, userRole,
   };
 
   const handleSubmit = async (values: LeaveRequestFormValues) => {
+    // Prevent duplicate request on already approved or pending leave dates
+    if (overlappingLeave) {
+      toast.error(`Cannot request leave: You already have an ${overlappingLeave.status} leave request for these dates (${overlappingLeave.startDate} to ${overlappingLeave.endDate}).`);
+      return;
+    }
+
     // Validate document requirement
     if (requiresDocument && !values.attachmentUrl) {
       toast.error(`A supporting document is required for ${leaveValues.type} leave`);
@@ -439,7 +523,7 @@ export function LeaveRequestDialog({ open, onOpenChange, employeeData, userRole,
         method: 'POST',
         headers,
         body: JSON.stringify({
-          employeeId: employeeData.id,
+          employeeId: employeeData?.id && Number(employeeData.id) > 0 ? Number(employeeData.id) : undefined,
           leaveType: values.type,
           startDate: values.from,
           endDate: values.to,
@@ -457,8 +541,15 @@ export function LeaveRequestDialog({ open, onOpenChange, employeeData, userRole,
         handleClear();
         toast.success('Leave request submitted successfully');
       } else {
-        const error = await response.json();
-        toast.error(error.error || 'Failed to submit leave request');
+        const error = await response.json().catch(() => ({}));
+        let errorMsg = error.error || error.message || 'Failed to submit leave request';
+        if (Array.isArray(error.errors) && error.errors.length > 0) {
+          const details = error.errors
+            .map((e: any) => `${e.path?.join('.') || 'field'}: ${e.message}`)
+            .join('; ');
+          errorMsg = `${errorMsg}: ${details}`;
+        }
+        toast.error(errorMsg);
       }
     } catch {
       toast.error('Failed to submit leave request');
@@ -466,6 +557,32 @@ export function LeaveRequestDialog({ open, onOpenChange, employeeData, userRole,
       setLoading(false);
     }
   };
+
+  // Calculate live used (approved) days per leave type from database
+  const usedDaysByType = useMemo(() => {
+    const result: Record<string, number> = {};
+    for (const l of existingLeaves) {
+      if (l.status === 'approved') {
+        const type = l.leaveType;
+        const days = Number((l as any).actualDays ?? 1);
+        result[type] = (result[type] || 0) + (isNaN(days) ? 1 : days);
+      }
+    }
+    return result;
+  }, [existingLeaves]);
+
+  // Calculate live pending days per leave type from database
+  const pendingDaysByType = useMemo(() => {
+    const result: Record<string, number> = {};
+    for (const l of existingLeaves) {
+      if (l.status === 'pending') {
+        const type = l.leaveType;
+        const days = Number((l as any).actualDays ?? 1);
+        result[type] = (result[type] || 0) + (isNaN(days) ? 1 : days);
+      }
+    }
+    return result;
+  }, [existingLeaves]);
 
   // Tenure info for profile tab
   const tenureInfo = useMemo(() => {
@@ -479,8 +596,9 @@ export function LeaveRequestDialog({ open, onOpenChange, employeeData, userRole,
     };
   }, [employeeData?.dateOfJoining]);
 
-  // Get current balance for selected leave type
-  const currentTypeBalance = balances?.[leaveValues.type as keyof LeaveEntitlement] ?? 0;
+  // Get total allocated and net available balance for selected leave type (deducting already used leaves)
+  const totalAllocatedForType = balances?.[leaveValues.type as keyof LeaveEntitlement] ?? 0;
+  const currentTypeBalance = Math.max(0, totalAllocatedForType - (usedDaysByType[leaveValues.type] ?? 0));
   const balanceAfterRequest = currentTypeBalance - leaveBreakdown.actualLeaveDays;
 
   return (
@@ -539,7 +657,7 @@ export function LeaveRequestDialog({ open, onOpenChange, employeeData, userRole,
                   {/* Period + Type */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <Label className="text-slate-600 font-semibold text-xs">Leave Period</Label>
+                      <Label className="text-slate-600 font-semibold text-xs">Leave Period <span className="text-rose-500">*</span></Label>
                       <Select value={leaveValues.period} onValueChange={(v) => void form.setValue('period', v as LeaveRequestFormValues['period'], { shouldValidate: true })}>
                         <SelectTrigger className="bg-white border-slate-200">
                           <SelectValue />
@@ -555,22 +673,27 @@ export function LeaveRequestDialog({ open, onOpenChange, employeeData, userRole,
                       {form.formState.errors.period && <p className="text-xs text-destructive">{form.formState.errors.period.message}</p>}
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-slate-600 font-semibold text-xs">Leave Type</Label>
+                      <Label className="text-slate-600 font-semibold text-xs">Leave Type <span className="text-rose-500">*</span></Label>
                       <Select value={leaveValues.type} onValueChange={(v) => void form.setValue('type', v as LeaveRequestFormValues['type'], { shouldValidate: true })}>
                         <SelectTrigger className="bg-white border-slate-200">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {availableLeaveTypes.map(type => (
-                            <SelectItem key={type.id} value={type.id}>
-                              <span className="flex items-center gap-2">
-                                {type.label}
-                                <span className="text-muted-foreground text-[10px]">
-                                  ({(balances?.[type.id as keyof LeaveEntitlement] ?? 0).toFixed(2)})
+                          {availableLeaveTypes.map(type => {
+                            const total = balances?.[type.id as keyof LeaveEntitlement] ?? 0;
+                            const used = usedDaysByType[type.id] ?? 0;
+                            const remaining = Math.max(0, total - used);
+                            return (
+                              <SelectItem key={type.id} value={type.id}>
+                                <span className="flex items-center gap-2">
+                                  {type.label}
+                                  <span className="text-muted-foreground text-[10px]">
+                                    ({remaining.toFixed(2)} available)
+                                  </span>
                                 </span>
-                              </span>
-                            </SelectItem>
-                          ))}
+                              </SelectItem>
+                            );
+                          })}
                         </SelectContent>
                       </Select>
                       {form.formState.errors.type && <p className="text-xs text-destructive">{form.formState.errors.type.message}</p>}
@@ -580,7 +703,7 @@ export function LeaveRequestDialog({ open, onOpenChange, employeeData, userRole,
                   {/* Hourly Duration (conditional) */}
                   {leaveValues.period === 'hourly' && (
                     <div className="space-y-1.5">
-                      <Label className="text-slate-600 font-semibold text-xs">Actual Hours Requested</Label>
+                      <Label className="text-slate-600 font-semibold text-xs">Actual Hours Requested <span className="text-rose-500">*</span></Label>
                       <Select value={leaveValues.actualHours || ''} onValueChange={(v) => void form.setValue('actualHours', v)}>
                         <SelectTrigger className="bg-white border-slate-200">
                           <SelectValue placeholder="Select duration" />
@@ -599,7 +722,7 @@ export function LeaveRequestDialog({ open, onOpenChange, employeeData, userRole,
                   {/* Date Inputs */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <Label className="text-slate-600 font-semibold text-xs">Take Leave From</Label>
+                      <Label className="text-slate-600 font-semibold text-xs">Take Leave From <span className="text-rose-500">*</span></Label>
                       <Input
                         type="date"
                         className="bg-white border-slate-200"
@@ -609,7 +732,7 @@ export function LeaveRequestDialog({ open, onOpenChange, employeeData, userRole,
                       {form.formState.errors.from && <p className="text-xs text-destructive">{form.formState.errors.from.message}</p>}
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-slate-600 font-semibold text-xs">...up to and including</Label>
+                      <Label className="text-slate-600 font-semibold text-xs">...up to and including <span className="text-rose-500">*</span></Label>
                       <Input
                         type="date"
                         className="bg-white border-slate-200"
@@ -619,6 +742,19 @@ export function LeaveRequestDialog({ open, onOpenChange, employeeData, userRole,
                       {form.formState.errors.to && <p className="text-xs text-destructive">{form.formState.errors.to.message}</p>}
                     </div>
                   </div>
+
+                  {/* Overlap Conflict Warning Banner */}
+                  {overlappingLeave && (
+                    <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-start gap-2.5 shadow-sm">
+                      <AlertCircle className="h-4 w-4 shrink-0 text-rose-600 mt-0.5" />
+                      <div>
+                        <p className="font-bold">Leave Conflict Detected</p>
+                        <p className="text-rose-700 mt-0.5">
+                          You already have an <span className="font-semibold uppercase">{overlappingLeave.status}</span> {overlappingLeave.leaveType} leave request covering this period ({overlappingLeave.startDate} to {overlappingLeave.endDate}). A new leave cannot be requested on dates that are already booked.
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Actual Days + Clear */}
                   <div className="flex flex-col sm:flex-row gap-4 items-end">
@@ -646,7 +782,7 @@ export function LeaveRequestDialog({ open, onOpenChange, employeeData, userRole,
                     <div className="space-y-2 p-4 bg-amber-50/70 rounded-xl border border-amber-200/60">
                       <div className="flex items-center gap-2">
                         <Upload className="h-4 w-4 text-amber-600" />
-                        <Label className="text-amber-800 font-semibold text-xs">Supporting Document Required</Label>
+                        <Label className="text-amber-800 font-semibold text-xs">Supporting Document Required <span className="text-rose-500">*</span></Label>
                       </div>
                       <p className="text-[11px] text-amber-600">
                         {leaveValues.type === 'sick' && 'Please upload a medical certificate or doctor\'s note.'}
@@ -703,9 +839,15 @@ export function LeaveRequestDialog({ open, onOpenChange, employeeData, userRole,
 
                   {/* Reason/Comments */}
                   <div className="space-y-1.5">
-                    <Label className="text-slate-600 font-semibold text-xs">Comments</Label>
+                    <div className="flex items-center justify-between">
+                      <Label className="text-slate-600 font-semibold text-xs">Comments <span className="text-rose-500">*</span></Label>
+                      <span className="text-[10px] text-slate-400 font-medium">
+                        {(leaveValues.reason || '').length} / 500 characters
+                      </span>
+                    </div>
                     <Textarea
-                      placeholder="Add leave request comments here (minimum 10 characters)"
+                      maxLength={500}
+                      placeholder="Add leave request comments here (10 to 500 characters)"
                       className="min-h-[90px] bg-white border-slate-200 text-sm"
                       value={leaveValues.reason}
                       onChange={(e) => void form.setValue('reason', e.target.value, { shouldValidate: true })}
@@ -741,6 +883,7 @@ export function LeaveRequestDialog({ open, onOpenChange, employeeData, userRole,
                         onSelectDate={handleDateSelect}
                         holidays={PUBLIC_HOLIDAYS_2026}
                         companyHolidays={companyHolidays}
+                        existingLeaves={existingLeaves}
                       />
                     ))}
                   </div>
@@ -791,12 +934,28 @@ export function LeaveRequestDialog({ open, onOpenChange, employeeData, userRole,
 
                     {/* Balance Forward */}
                     <div className={cn(
-                      "p-4 rounded-xl shadow-lg text-center text-white",
+                      "p-4 rounded-xl shadow-lg text-center text-white transition-all",
                       balanceAfterRequest >= 0 ? 'bg-emerald-600 shadow-emerald-200/50' : 'bg-red-500 shadow-red-200/50'
                     )}>
                       <p className="text-[10px] font-bold uppercase tracking-wider opacity-80">Balance Carried Forward</p>
                       <p className="text-2xl font-black mt-1">{balanceAfterRequest.toFixed(2)}</p>
                       <p className="text-[9px] mt-1 opacity-70">days remaining after this request</p>
+                    </div>
+
+                    {/* Total Leave Requested Card */}
+                    <div className="p-4 rounded-xl shadow-lg text-center text-white bg-gradient-to-br from-orange-500 to-amber-600 shadow-orange-200/50 transition-all">
+                      <p className="text-[10px] font-bold uppercase tracking-wider opacity-90">Total Leave Requested</p>
+                      <p className="text-2xl font-black mt-1">
+                        {leaveBreakdown.actualLeaveDays.toFixed(2)}
+                        <span className="text-xs font-semibold uppercase tracking-wider ml-1.5 opacity-90">
+                          {leaveBreakdown.actualLeaveDays === 1 ? 'Day' : 'Days'}
+                        </span>
+                      </p>
+                      <p className="text-[9px] mt-1 opacity-85">
+                        {leaveValues.from && leaveValues.to
+                          ? `${leaveBreakdown.workDays} working ${leaveBreakdown.workDays === 1 ? 'day' : 'days'} applied`
+                          : 'Select dates to calculate'}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -805,13 +964,16 @@ export function LeaveRequestDialog({ open, onOpenChange, employeeData, userRole,
 
             {/* ═══════════════ SUMMARY TAB ═══════════════ */}
             <TabsContent value="summary" className="mt-0 outline-none">
-              <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden divide-y divide-slate-50">
+              <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden divide-y divide-slate-100">
                 {availableLeaveTypes.map(type => {
-                  const balance = balances?.[type.id as keyof LeaveEntitlement] ?? 0;
+                  const total = balances?.[type.id as keyof LeaveEntitlement] ?? 0;
+                  const used = usedDaysByType[type.id] ?? 0;
+                  const pending = pendingDaysByType[type.id] ?? 0;
+                  const available = Math.max(0, total - used - pending);
                   return (
-                    <div key={type.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                      <div className="flex items-center gap-4">
-                        <div className="h-10 w-10 rounded-full bg-slate-800 flex items-center justify-center text-white font-bold text-xs">
+                    <div key={type.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/70 transition-colors">
+                      <div className="flex items-center gap-4 min-w-[200px]">
+                        <div className="h-10 w-10 rounded-full bg-slate-800 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm">
                           {type.abbr}
                         </div>
                         <div>
@@ -819,24 +981,30 @@ export function LeaveRequestDialog({ open, onOpenChange, employeeData, userRole,
                           <p className="text-[10px] text-slate-500">Leave balances (days)</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-4 sm:gap-8">
-                        <div className="text-center">
-                          <span className="text-[9px] uppercase font-bold text-slate-400 block mb-1">Current</span>
-                          <Badge className="bg-blue-600 hover:bg-blue-700 min-w-[50px] justify-center text-[10px]">
-                            {balance.toFixed(3)}
-                          </Badge>
+                      <div className="grid grid-cols-4 gap-2 sm:gap-3 shrink-0">
+                        <div className="text-center p-2 rounded-lg bg-slate-50 border border-slate-200/70 min-w-[70px]">
+                          <span className="text-[9px] uppercase font-bold text-slate-500 block mb-0.5">Total Leave</span>
+                          <span className="font-extrabold text-xs text-slate-900 block">
+                            {total.toFixed(3)}
+                          </span>
                         </div>
-                        <div className="text-center">
-                          <span className="text-[9px] uppercase font-bold text-slate-400 block mb-1">Pending</span>
-                          <Badge variant="destructive" className="min-w-[50px] justify-center text-[10px]">
-                            0.000
-                          </Badge>
+                        <div className="text-center p-2 rounded-lg bg-amber-50/80 border border-amber-200/70 min-w-[70px]">
+                          <span className="text-[9px] uppercase font-bold text-amber-700 block mb-0.5">Used Leave</span>
+                          <span className="font-extrabold text-xs text-amber-800 block">
+                            {used.toFixed(3)}
+                          </span>
                         </div>
-                        <div className="text-center">
-                          <span className="text-[9px] uppercase font-bold text-slate-400 block mb-1">Expected</span>
-                          <Badge className="bg-emerald-600 hover:bg-emerald-700 min-w-[50px] justify-center text-[10px]">
-                            0
-                          </Badge>
+                        <div className="text-center p-2 rounded-lg bg-sky-50/80 border border-sky-200/70 min-w-[70px]">
+                          <span className="text-[9px] uppercase font-bold text-sky-700 block mb-0.5">Pending</span>
+                          <span className="font-extrabold text-xs text-sky-800 block">
+                            {pending.toFixed(3)}
+                          </span>
+                        </div>
+                        <div className="text-center p-2 rounded-lg bg-emerald-50/80 border border-emerald-200/70 min-w-[70px]">
+                          <span className="text-[9px] uppercase font-bold text-emerald-700 block mb-0.5">Available</span>
+                          <span className="font-extrabold text-xs text-emerald-800 block">
+                            {available.toFixed(3)}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -852,7 +1020,7 @@ export function LeaveRequestDialog({ open, onOpenChange, employeeData, userRole,
                 <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-200 pb-2 px-1">Leave Profile Details</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   {[
-                    { label: 'Leave Profile Name', value: tenureInfo ? `Techsonance (${tenureInfo.years}-${tenureInfo.years + 2} years)` : 'N/A' },
+                    { label: 'Leave Profile Name', value: tenureInfo ? `${companyName || 'Organization'} (${tenureInfo.years}-${tenureInfo.years + 2} years)` : 'N/A' },
                     { label: 'Staff Start Date', value: tenureInfo?.joiningDate ? format(parseISO(tenureInfo.joiningDate), 'dd MMM yyyy') : 'N/A' },
                     { label: 'Leave Profile Start Date', value: tenureInfo?.joiningDate ? format(parseISO(tenureInfo.joiningDate), 'dd MMM yyyy') : 'N/A' },
                     { label: 'Leave Profile End Date', value: tenureInfo ? format(addMonths(parseISO(tenureInfo.joiningDate), 60), 'dd MMM yyyy') : 'N/A' },

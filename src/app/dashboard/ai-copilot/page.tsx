@@ -1433,7 +1433,7 @@ export default function AiCopilotOperationsPage() {
               <h3 className="text-sm font-black text-foreground flex items-center gap-1.5">
                 <Plus className="h-4.5 w-4.5 text-primary" /> Create Reusable Prompt Template
               </h3>
-              <p className="text-[10px] text-slate-400 font-medium mt-0.5">Define structured prompt instructions using placeholder variables matching standard format `{variable}`.</p>
+              <p className="text-[10px] text-slate-400 font-medium mt-0.5">Define structured prompt instructions using placeholder variables matching standard format &apos;&#123;variable&#125;&apos;.</p>
             </div>
 
             <form onSubmit={handleCreatePrompt} className="space-y-3.5">

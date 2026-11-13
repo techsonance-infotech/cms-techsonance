@@ -22,7 +22,7 @@ export const GET = withApiHandler(async (request, context) => {
   let receivables = 0; // open invoices
   let totalInvoicesAmount = 0;
 
-  invoices?.forEach(inv => {
+  invoices?.forEach((inv: any) => {
     const amt = Number(inv.amount) || 0;
     totalInvoicesAmount += amt;
     if (inv.status === 'paid') {
@@ -40,7 +40,7 @@ export const GET = withApiHandler(async (request, context) => {
     .eq('status', 'approved');
 
   let approvedClaimsAmt = 0;
-  reimbursements?.forEach(r => {
+  reimbursements?.forEach((r: any) => {
     approvedClaimsAmt += Number(r.amount) || 0;
   });
 
@@ -51,7 +51,7 @@ export const GET = withApiHandler(async (request, context) => {
     .eq('status', 'approved');
 
   let approvedTravelAmt = 0;
-  travelExpenses?.forEach(te => {
+  travelExpenses?.forEach((te: any) => {
     approvedTravelAmt += Number(te.amount) || 0;
   });
 

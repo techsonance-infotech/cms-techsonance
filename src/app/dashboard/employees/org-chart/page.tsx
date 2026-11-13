@@ -55,6 +55,7 @@ export default function OrgChartPage() {
   // Tab selections
   const [viewMode, setViewMode] = useState<'manager' | 'department' | 'location' | 'business_unit'>('manager');
   const [selectedNodeDetails, setSelectedNodeDetails] = useState<OrgNode | null>(null);
+  const [canManageHierarchy, setCanManageHierarchy] = useState(false);
 
   // Snapshot records
   const [showHistory, setShowHistory] = useState(false);
@@ -65,6 +66,17 @@ export default function OrgChartPage() {
   ];
 
   useEffect(() => {
+    try {
+      const stored = localStorage.getItem('user');
+      if (stored) {
+        const u = JSON.parse(stored);
+        const role = (u.role || '').toLowerCase();
+        const isAdminOrManager = ['admin', 'super_admin', 'owner', 'ceo', 'cto', 'business_owner', 'hr_manager'].includes(role);
+        setCanManageHierarchy(isAdminOrManager);
+      }
+    } catch {
+      // ignore
+    }
     fetchHierarchy();
   }, []);
 
@@ -72,20 +84,41 @@ export default function OrgChartPage() {
     try {
       setLoading(true);
       const token = getStoredSessionToken();
+      const headers: Record<string, string> = {};
+      if (token && token !== 'null' && token !== 'undefined') {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const res = await fetch('/api/org-chart', {
-        headers: { Authorization: `Bearer ${token}` }
+        headers,
+        credentials: 'include',
+        cache: 'no-store',
       });
       const result = await res.json();
-      const nodes = result.data || [];
+
+      if (!res.ok) {
+        toast.error(result?.message || 'Failed to load organization hierarchy');
+        setFlatNodes([]);
+        setTreeRoots([]);
+        return;
+      }
+
+      const nodes = Array.isArray(result)
+        ? result
+        : (Array.isArray(result?.data) ? result.data : []);
+
       setFlatNodes(nodes);
 
       // Build tree
       const roots = buildTreeFromNodes(nodes);
       setTreeRoots(roots);
-      if (roots.length > 0 && !selectedNodeDetails) {
+      if (roots.length > 0) {
         setSelectedNodeDetails(roots[0]);
+      } else {
+        setSelectedNodeDetails(null);
       }
-    } catch {
+    } catch (err: any) {
+      console.error('Failed to load organization hierarchy:', err);
       toast.error('Failed to load organization hierarchy');
     } finally {
       setLoading(false);
@@ -93,22 +126,63 @@ export default function OrgChartPage() {
   };
 
   const buildTreeFromNodes = (nodes: any[]): OrgNode[] => {
-    const map = new Map<string, OrgNode>();
+    if (!nodes || !nodes.length) return [];
+
+    const idMap = new Map<string, OrgNode>();
+    const aliasToId = new Map<string, string>();
+
     nodes.forEach(node => {
-      map.set(node.userId, { ...node, children: [] });
+      const orgNode: OrgNode = { ...node, children: [] };
+      const internalId = String(node.id);
+      idMap.set(internalId, orgNode);
+
+      aliasToId.set(internalId, internalId);
+      if (node.userId) aliasToId.set(String(node.userId), internalId);
+      if (node.employeeId) aliasToId.set(String(node.employeeId), internalId);
     });
 
     const roots: OrgNode[] = [];
+    const childIds = new Set<string>();
+
     nodes.forEach(node => {
-      const mappedNode = map.get(node.userId);
-      if (mappedNode) {
-        if (node.managerId && map.has(node.managerId)) {
-          map.get(node.managerId)!.children.push(mappedNode);
-        } else {
-          roots.push(mappedNode);
+      const current = idMap.get(String(node.id));
+      if (!current) return;
+
+      let parentId: string | null = null;
+      if (node.managerId) {
+        parentId = aliasToId.get(String(node.managerId)) || null;
+      }
+
+      // Avoid self-reporting cycles
+      if (parentId && parentId === String(node.id)) {
+        parentId = null;
+      }
+
+      if (parentId && idMap.has(parentId)) {
+        const parent = idMap.get(parentId)!;
+        if (!parent.children.some(c => String(c.id) === String(node.id))) {
+          parent.children.push(current);
+          childIds.add(String(node.id));
         }
+      } else {
+        roots.push(current);
       }
     });
+
+    // In case all nodes were assigned into a cycle and no root exists:
+    if (roots.length === 0 && nodes.length > 0) {
+      nodes.forEach(n => {
+        if (!childIds.has(String(n.id))) {
+          const nodeObj = idMap.get(String(n.id));
+          if (nodeObj) roots.push(nodeObj);
+        }
+      });
+      if (roots.length === 0) {
+        const first = idMap.get(String(nodes[0].id));
+        if (first) roots.push(first);
+      }
+    }
+
     return roots;
   };
 
@@ -123,20 +197,30 @@ export default function OrgChartPage() {
     const matches = flatNodes.filter(n => 
       n.name.toLowerCase().includes(q) || 
       n.designation.toLowerCase().includes(q) ||
+      (n.employeeId && n.employeeId.toLowerCase().includes(q)) ||
       (n.department && n.department.toLowerCase().includes(q)) ||
       (n.office && n.office.toLowerCase().includes(q)) ||
       (n.skills && JSON.stringify(n.skills).toLowerCase().includes(q))
     );
 
-    const pathUserIds = new Set<string>();
+    const pathKeys = new Set<string>();
     matches.forEach(m => {
-      let current = m;
-      while (current) {
-        pathUserIds.add(current.userId);
-        current = flatNodes.find(n => n.userId === current.managerId);
+      let current: any = m;
+      let depth = 0;
+      while (current && depth < 20) {
+        depth++;
+        if (current.userId) pathKeys.add(String(current.userId));
+        pathKeys.add(String(current.id));
+        const managerId = current.managerId;
+        if (!managerId) break;
+        current = flatNodes.find(n => 
+          String(n.id) === String(managerId) ||
+          String(n.userId) === String(managerId) ||
+          String(n.employeeId) === String(managerId)
+        );
       }
     });
-    setHighlightedUserIds(pathUserIds);
+    setHighlightedUserIds(pathKeys);
   };
 
   // Submit Restructuring Change
@@ -156,12 +240,17 @@ export default function OrgChartPage() {
     try {
       setUpdatingHierarchy(true);
       const token = getStoredSessionToken();
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token && token !== 'null' && token !== 'undefined') {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const res = await fetch('/api/org-chart', {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
+        headers,
+        credentials: 'include',
         body: JSON.stringify({
           employeeId: Number(selectedEmpId),
           parentEmployeeId: parentNode ? parentNode.id : null
@@ -187,7 +276,7 @@ export default function OrgChartPage() {
   // Recursive node layout renderer
   const OrgNodeView = ({ node }: { node: OrgNode }) => {
     const [collapsed, setCollapsed] = useState(false);
-    const isHighlighted = highlightedUserIds.has(node.userId) || (searchQuery && node.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    const isHighlighted = highlightedUserIds.has(String(node.id)) || (node.userId && highlightedUserIds.has(String(node.userId))) || (searchQuery && (node.name.toLowerCase().includes(searchQuery.toLowerCase()) || node.designation.toLowerCase().includes(searchQuery.toLowerCase()) || node.employeeId.toLowerCase().includes(searchQuery.toLowerCase())));
     const isOverloaded = node.children.length > 8;
 
     return (
@@ -246,7 +335,7 @@ export default function OrgChartPage() {
             {/* Horizontal branch divider container */}
             <div className="flex gap-6 border-t border-slate-200 dark:border-zinc-800 pt-6 justify-center relative">
               {node.children.map(child => (
-                <OrgNodeView key={child.userId} node={child} />
+                <OrgNodeView key={child.id || child.userId} node={child} />
               ))}
             </div>
           </div>
@@ -388,9 +477,11 @@ export default function OrgChartPage() {
           </div>
           
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setShowHistory(!showHistory)} className="h-9 border-slate-200 flex items-center gap-1.5 font-semibold text-xs">
-              <History className="h-3.5 w-3.5 text-[#f87941]" /> Snapshots
-            </Button>
+            {canManageHierarchy && (
+              <Button variant="outline" size="sm" onClick={() => setShowHistory(!showHistory)} className="h-9 border-slate-200 flex items-center gap-1.5 font-semibold text-xs">
+                <History className="h-3.5 w-3.5 text-[#f87941]" /> Snapshots
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={fetchHierarchy} className="h-9 border-slate-200 flex items-center gap-1.5 font-semibold text-xs">
               <RefreshCw className="h-3.5 w-3.5 text-[#f87941]" /> Sync DB
             </Button>
@@ -448,163 +539,169 @@ export default function OrgChartPage() {
                   </div>
                 </div>
 
-                <div className="bg-[#f87941]/5 p-3 rounded-xl border border-[#f87941]/10 space-y-2">
-                  <p className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1"><Sparkles className="h-3.5 w-3.5 text-[#f87941]" /> AI Profile Metrics</p>
-                  <div className="flex justify-between items-center text-[10px]">
-                    <span className="text-slate-500">Resource Utilisation</span>
-                    <span className="font-bold text-slate-800 dark:text-slate-200">84% (Optimal)</span>
+                {canManageHierarchy && (
+                  <div className="bg-[#f87941]/5 p-3 rounded-xl border border-[#f87941]/10 space-y-2">
+                    <p className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1"><Sparkles className="h-3.5 w-3.5 text-[#f87941]" /> AI Profile Metrics</p>
+                    <div className="flex justify-between items-center text-[10px]">
+                      <span className="text-slate-500">Resource Utilisation</span>
+                      <span className="font-bold text-slate-800 dark:text-slate-200">84% (Optimal)</span>
+                    </div>
+                    <div className="flex justify-between items-center text-[10px]">
+                      <span className="text-slate-500">Burnout risk index</span>
+                      <span className="font-bold text-slate-800 dark:text-slate-200">12% (Low)</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center text-[10px]">
-                    <span className="text-slate-500">Burnout risk index</span>
-                    <span className="font-bold text-slate-800 dark:text-slate-200">12% (Low)</span>
-                  </div>
-                </div>
+                )}
 
-                <div className="flex gap-2 border-t pt-3">
-                  <a href={`/dashboard/employees/${selectedNodeDetails.id}`} className="w-full flex">
-                    <Button size="sm" className="w-full bg-[#f87941] hover:bg-[#e06634] text-white text-xs gap-1">
-                      View Profile <ExternalLink className="h-3 w-3" />
-                    </Button>
-                  </a>
-                </div>
+                {canManageHierarchy && (
+                  <div className="flex gap-2 border-t pt-3">
+                    <a href={`/dashboard/employees/${selectedNodeDetails.id}`} className="w-full flex">
+                      <Button size="sm" className="w-full bg-[#f87941] hover:bg-[#e06634] text-white text-xs gap-1">
+                        View Profile <ExternalLink className="h-3 w-3" />
+                      </Button>
+                    </a>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
 
-          {/* Hierarchy Restructure Actions Panel */}
-          <Card className="border-slate-100 dark:border-zinc-800/80 shadow-lg">
-            <CardHeader className="bg-slate-50/50 dark:bg-zinc-900/20 border-b">
-              <CardTitle className="text-md flex items-center gap-2"><Layers className="h-4.5 w-4.5 text-[#f87941]" /> Restructure Hierarchy</CardTitle>
-              <CardDescription>Instantly re-bind employee reporting managers.</CardDescription>
-            </CardHeader>
-            <CardContent className="pt-4">
-              <form onSubmit={handleRestructure} className="space-y-4 text-xs">
-                {/* Searchable Target Employee */}
-                <div className="relative">
-                  <Label htmlFor="target-emp" className="font-semibold text-slate-700 dark:text-slate-300">Target Employee</Label>
-                  <div className="relative mt-1.5">
-                    <Input
-                      type="text"
-                      placeholder="Type to search employee..."
-                      value={empSearch}
-                      onChange={(e) => {
-                        setEmpSearch(e.target.value);
-                        setShowEmpDropdown(true);
-                      }}
-                      onFocus={() => setShowEmpDropdown(true)}
-                      onBlur={() => setTimeout(() => setShowEmpDropdown(false), 250)}
-                      className="w-full text-xs h-9 pr-8 bg-white dark:bg-zinc-900"
-                    />
-                    {selectedEmpId && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedEmpId('');
-                          setEmpSearch('');
+          {/* Hierarchy Restructure Actions Panel (Restricted to Admin / Management) */}
+          {canManageHierarchy && (
+            <Card className="border-slate-100 dark:border-zinc-800/80 shadow-lg">
+              <CardHeader className="bg-slate-50/50 dark:bg-zinc-900/20 border-b">
+                <CardTitle className="text-md flex items-center gap-2"><Layers className="h-4.5 w-4.5 text-[#f87941]" /> Restructure Hierarchy</CardTitle>
+                <CardDescription>Instantly re-bind employee reporting managers.</CardDescription>
+              </CardHeader>
+              <CardContent className="pt-4">
+                <form onSubmit={handleRestructure} className="space-y-4 text-xs">
+                  {/* Searchable Target Employee */}
+                  <div className="relative">
+                    <Label htmlFor="target-emp" className="font-semibold text-slate-700 dark:text-slate-300">Target Employee</Label>
+                    <div className="relative mt-1.5">
+                      <Input
+                        type="text"
+                        placeholder="Type to search employee..."
+                        value={empSearch}
+                        onChange={(e) => {
+                          setEmpSearch(e.target.value);
+                          setShowEmpDropdown(true);
                         }}
-                        className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 text-sm"
-                      >
-                        ×
-                      </button>
-                    )}
-                  </div>
-                  {showEmpDropdown && (
-                    <div className="absolute z-30 w-full mt-1 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                      {filteredTargetEmployees.length === 0 ? (
-                        <div className="p-2 text-slate-400 text-center">No employee found</div>
-                      ) : (
-                        filteredTargetEmployees.map(n => (
-                          <div
-                            key={n.id}
-                            onMouseDown={() => {
-                              setSelectedEmpId(String(n.id));
-                              setEmpSearch(`${n.name} (${n.designation})`);
-                              setShowEmpDropdown(false);
-                            }}
-                            className={`p-2 hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer flex items-center justify-between text-xs ${
-                              selectedEmpId === String(n.id) ? 'bg-orange-50 dark:bg-orange-950/20 text-[#f87941] font-semibold' : ''
-                            }`}
-                          >
-                            <span>{n.name} <span className="text-[10px] text-slate-400 font-mono">({n.designation})</span></span>
-                            {selectedEmpId === String(n.id) && <Check className="h-3.5 w-3.5 text-[#f87941]" />}
-                          </div>
-                        ))
+                        onFocus={() => setShowEmpDropdown(true)}
+                        onBlur={() => setTimeout(() => setShowEmpDropdown(false), 250)}
+                        className="w-full text-xs h-9 pr-8 bg-white dark:bg-zinc-900"
+                      />
+                      {selectedEmpId && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedEmpId('');
+                            setEmpSearch('');
+                          }}
+                          className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 text-sm"
+                        >
+                          ×
+                        </button>
                       )}
                     </div>
-                  )}
-                </div>
-
-                {/* Searchable New Reporting Manager */}
-                <div className="relative">
-                  <Label htmlFor="target-manager" className="font-semibold text-slate-700 dark:text-slate-300">New Reporting Manager</Label>
-                  <div className="relative mt-1.5">
-                    <Input
-                      type="text"
-                      placeholder="Type to search manager..."
-                      value={managerSearch}
-                      onChange={(e) => {
-                        setManagerSearch(e.target.value);
-                        setShowManagerDropdown(true);
-                      }}
-                      onFocus={() => setShowManagerDropdown(true)}
-                      onBlur={() => setTimeout(() => setShowManagerDropdown(false), 250)}
-                      className="w-full text-xs h-9 pr-8 bg-white dark:bg-zinc-900"
-                    />
-                    {selectedManagerEmpId && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedManagerEmpId('');
-                          setManagerSearch('');
-                        }}
-                        className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 text-sm"
-                      >
-                        ×
-                      </button>
-                    )}
-                  </div>
-                  {showManagerDropdown && (
-                    <div className="absolute z-30 w-full mt-1 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                      <div
-                        onMouseDown={() => {
-                          setSelectedManagerEmpId('');
-                          setManagerSearch('No Manager (Root/CEO level)');
-                          setShowManagerDropdown(false);
-                        }}
-                        className="p-2 hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer text-xs italic text-slate-500"
-                      >
-                        No Manager (Root/CEO level)
+                    {showEmpDropdown && (
+                      <div className="absolute z-30 w-full mt-1 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                        {filteredTargetEmployees.length === 0 ? (
+                          <div className="p-2 text-slate-400 text-center">No employee found</div>
+                        ) : (
+                          filteredTargetEmployees.map(n => (
+                            <div
+                              key={n.id}
+                              onMouseDown={() => {
+                                setSelectedEmpId(String(n.id));
+                                setEmpSearch(`${n.name} (${n.designation})`);
+                                setShowEmpDropdown(false);
+                              }}
+                              className={`p-2 hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer flex items-center justify-between text-xs ${
+                                selectedEmpId === String(n.id) ? 'bg-orange-50 dark:bg-orange-950/20 text-[#f87941] font-semibold' : ''
+                              }`}
+                            >
+                              <span>{n.name} <span className="text-[10px] text-slate-400 font-mono">({n.designation})</span></span>
+                              {selectedEmpId === String(n.id) && <Check className="h-3.5 w-3.5 text-[#f87941]" />}
+                            </div>
+                          ))
+                        )}
                       </div>
-                      {filteredManagerEmployees.length === 0 ? (
-                        <div className="p-2 text-slate-400 text-center">No manager found</div>
-                      ) : (
-                        filteredManagerEmployees.map(n => (
-                          <div
-                            key={n.id}
-                            onMouseDown={() => {
-                              setSelectedManagerEmpId(String(n.id));
-                              setManagerSearch(`${n.name} (${n.designation})`);
-                              setShowManagerDropdown(false);
-                            }}
-                            className={`p-2 hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer flex items-center justify-between text-xs ${
-                              selectedManagerEmpId === String(n.id) ? 'bg-orange-50 dark:bg-orange-950/20 text-[#f87941] font-semibold' : ''
-                            }`}
-                          >
-                            <span>{n.name} <span className="text-[10px] text-slate-400 font-mono">({n.designation})</span></span>
-                            {selectedManagerEmpId === String(n.id) && <Check className="h-3.5 w-3.5 text-[#f87941]" />}
-                          </div>
-                        ))
+                    )}
+                  </div>
+
+                  {/* Searchable New Reporting Manager */}
+                  <div className="relative">
+                    <Label htmlFor="target-manager" className="font-semibold text-slate-700 dark:text-slate-300">New Reporting Manager</Label>
+                    <div className="relative mt-1.5">
+                      <Input
+                        type="text"
+                        placeholder="Type to search manager..."
+                        value={managerSearch}
+                        onChange={(e) => {
+                          setManagerSearch(e.target.value);
+                          setShowManagerDropdown(true);
+                        }}
+                        onFocus={() => setShowManagerDropdown(true)}
+                        onBlur={() => setTimeout(() => setShowManagerDropdown(false), 250)}
+                        className="w-full text-xs h-9 pr-8 bg-white dark:bg-zinc-900"
+                      />
+                      {selectedManagerEmpId && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedManagerEmpId('');
+                            setManagerSearch('');
+                          }}
+                          className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 text-sm"
+                        >
+                          ×
+                        </button>
                       )}
                     </div>
-                  )}
-                </div>
+                    {showManagerDropdown && (
+                      <div className="absolute z-30 w-full mt-1 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                        <div
+                          onMouseDown={() => {
+                            setSelectedManagerEmpId('');
+                            setManagerSearch('No Manager (Root/CEO level)');
+                            setShowManagerDropdown(false);
+                          }}
+                          className="p-2 hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer text-xs italic text-slate-500"
+                        >
+                          No Manager (Root/CEO level)
+                        </div>
+                        {filteredManagerEmployees.length === 0 ? (
+                          <div className="p-2 text-slate-400 text-center">No manager found</div>
+                        ) : (
+                          filteredManagerEmployees.map(n => (
+                            <div
+                              key={n.id}
+                              onMouseDown={() => {
+                                setSelectedManagerEmpId(String(n.id));
+                                setManagerSearch(`${n.name} (${n.designation})`);
+                                setShowManagerDropdown(false);
+                              }}
+                              className={`p-2 hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer flex items-center justify-between text-xs ${
+                                selectedManagerEmpId === String(n.id) ? 'bg-orange-50 dark:bg-orange-950/20 text-[#f87941] font-semibold' : ''
+                              }`}
+                            >
+                              <span>{n.name} <span className="text-[10px] text-slate-400 font-mono">({n.designation})</span></span>
+                              {selectedManagerEmpId === String(n.id) && <Check className="h-3.5 w-3.5 text-[#f87941]" />}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
 
-                <Button type="submit" disabled={updatingHierarchy} className="w-full bg-[#f87941] hover:bg-[#e06634] text-white font-bold h-9">
-                  {updatingHierarchy ? 'Recalculating...' : 'Commit Restructuring'}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
+                  <Button type="submit" disabled={updatingHierarchy} className="w-full bg-[#f87941] hover:bg-[#e06634] text-white font-bold h-9">
+                    {updatingHierarchy ? 'Recalculating...' : 'Commit Restructuring'}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Historical timeline snapshots */}
           {showHistory && (
@@ -643,7 +740,7 @@ export default function OrgChartPage() {
                 </div>
               ) : viewMode === 'manager' ? (
                 treeRoots.map(root => (
-                  <OrgNodeView key={root.userId} node={root} />
+                  <OrgNodeView key={root.id || root.userId} node={root} />
                 ))
               ) : (
                 <div className="w-full max-w-[900px] space-y-8 px-6 text-left pb-10">
@@ -655,10 +752,10 @@ export default function OrgChartPage() {
                       </h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {nodes.map(node => {
-                          const isHighlighted = highlightedUserIds.has(node.userId) || (searchQuery && node.name.toLowerCase().includes(searchQuery.toLowerCase()));
+                          const isHighlighted = highlightedUserIds.has(String(node.id)) || (node.userId && highlightedUserIds.has(String(node.userId))) || (searchQuery && (node.name.toLowerCase().includes(searchQuery.toLowerCase()) || node.designation.toLowerCase().includes(searchQuery.toLowerCase())));
                           return (
                             <div
-                              key={node.userId}
+                              key={node.id || node.userId}
                               onClick={() => setSelectedNodeDetails(node)}
                               className={`p-4 border rounded-2xl cursor-pointer shadow-sm bg-white dark:bg-zinc-900 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex items-center gap-3 ${
                                 isHighlighted ? 'ring-2 ring-[#f87941] border-[#f87941]' : 'border-slate-100 dark:border-zinc-800/80'

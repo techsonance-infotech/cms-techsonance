@@ -5,6 +5,7 @@ import { getSupabaseAdminClient } from '@/server/supabase/admin';
 
 export interface User {
   id: number;
+  providerUserId?: string | null;
   email: string;
   firstName: string;
   lastName: string;
@@ -59,6 +60,28 @@ export async function getCurrentUser(request: NextRequest): Promise<User | null>
         .is('deleted_at', null)
         .maybeSingle();
       employee = data;
+
+      // Auto-provision an employee profile if missing for this active authenticated user
+      if (!employee && auth.user.tenantId) {
+        try {
+          const { data: newEmp } = await adminDb
+            .from('employees')
+            .insert({
+              tenant_id: auth.user.tenantId,
+              user_id: providerUserId,
+              employee_id: `EMP-${Math.floor(Math.random() * 9000 + 1000)}`,
+              department: 'General',
+              designation: auth.user.role || 'Staff Member',
+              date_of_joining: new Date().toISOString().split('T')[0],
+              status: 'active'
+            })
+            .select()
+            .single();
+          if (newEmp) employee = newEmp;
+        } catch (provisionErr) {
+          console.warn('Auto-provision employee record note:', provisionErr);
+        }
+      }
     }
 
     // Parse fallback skills JSONB object if columns are missing
@@ -87,6 +110,7 @@ export async function getCurrentUser(request: NextRequest): Promise<User | null>
 
     return {
       id: auth.user.id,
+      providerUserId: auth.user.providerUserId ?? null,
       email: auth.user.email,
       firstName: auth.user.firstName,
       lastName: auth.user.lastName,

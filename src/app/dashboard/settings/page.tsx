@@ -150,6 +150,11 @@ interface WorkspaceState {
   qrCodeUrl?: string | null;
   digitalSignatureEnabled?: boolean | null;
   digitalSignatureUrl?: string | null;
+  stampUrl?: string | null;
+  signatoryName?: string | null;
+  signatoryTitle?: string | null;
+  tagline?: string | null;
+  bankDetails?: Record<string, any> | null;
   invoiceTemplate?: string | null;
   multiCurrencyEnabled?: boolean | null;
   supportedCurrencies?: string[] | null;
@@ -196,76 +201,76 @@ interface WorkspaceState {
 }
 
 const DEFAULT_WORKSPACE_STATE: WorkspaceState = {
-  companyName: 'TechSonance Infotech',
-  email: 'admin@techsonance.com',
-  phone: '9876543210',
-  address: '404 Corporate Suite, Sector 62, Noida, UP, India',
-  website: 'https://techsonance.com',
+  companyName: '',
+  email: '',
+  phone: '',
+  address: '',
+  website: '',
   primaryColor: '#F87941',
   secondaryColor: '#F9B095',
   logoUrl: '',
   faviconUrl: '',
-  smtpHost: 'smtp.gmail.com',
+  smtpHost: '',
   smtpPort: 587,
-  smtpUser: 'relay@techsonance.com',
+  smtpUser: '',
   smtpPassword: '',
 
-  businessName: 'TechSonance Infotech LLP',
-  businessEmail: 'billing@techsonance.com',
-  businessPhone: '9876543210',
-  businessAddress: '404 Corporate Suite, Sector 62, Noida, UP, India',
-  gstNo: '09AAAAA1111A1Z1',
-  pan: 'ABCDE1234F',
-  tan: 'MUMB12345C',
-  registrationNo: 'U72900MH2026PTC123456',
-  termsAndConditions: 'All invoices are payable within 30 days of generation.',
-  notes: 'HDFC Bank - A/C: 50200012345678 - IFSC: HDFC0001234',
-  paymentTerms: 'Net 30',
+  businessName: '',
+  businessEmail: '',
+  businessPhone: '',
+  businessAddress: '',
+  gstNo: '',
+  pan: '',
+  tan: '',
+  registrationNo: '',
+  termsAndConditions: '',
+  notes: '',
+  paymentTerms: '',
 
-  legalName: 'TechSonance Infotech Private Limited',
-  workspaceName: 'techsonance-main',
-  orgCode: 'TS-IND-01',
-  businessType: 'Private Limited',
-  industry: 'Software Development & IT Consultancy',
-  timezone: 'Asia/Kolkata (GMT+5:30)',
-  language: 'English (India)',
-  country: 'India',
+  legalName: '',
+  workspaceName: '',
+  orgCode: '',
+  businessType: '',
+  industry: '',
+  timezone: 'UTC',
+  language: 'English',
+  country: '',
   currency: 'INR (₹)',
-  fiscalYear: 'April to March',
+  fiscalYear: '',
 
-  cinNumber: 'L72200DL2026PLC123456',
-  msmeNumber: 'UDYAM-DL-01-0012345',
-  supportEmail: 'support@techsonance.com',
-  supportPhone: '+91 98765 43211',
-  officeHours: '09:00 AM - 06:00 PM',
-  emergencyContact: 'HR Helpline: +91 98765 43219',
+  cinNumber: '',
+  msmeNumber: '',
+  supportEmail: '',
+  supportPhone: '',
+  officeHours: '',
+  emergencyContact: '',
 
-  defaultProbation: 6,
-  noticePeriod: 90,
-  empIdPrefix: 'TS-',
+  defaultProbation: 0,
+  noticePeriod: 0,
+  empIdPrefix: 'EMP-',
   usernamePattern: 'first.last',
-  emailPattern: 'username@techsonance.com',
-  leavePolicy: 'Standard Privilege Leaves (24 days)',
-  shiftDefault: 'General Engineering Shift (09:30 AM - 06:30 PM)',
-  joiningWorkflow: 'Standard Paperless Onboarding',
-  confirmationWorkflow: 'Manager Review required',
-  autoEmpId: true,
-  workingHours: 9,
+  emailPattern: '',
+  leavePolicy: '',
+  shiftDefault: '',
+  joiningWorkflow: '',
+  confirmationWorkflow: '',
+  autoEmpId: false,
+  workingHours: 8,
   weekendRules: 'Saturday & Sunday Off',
-  passwordPolicy: 'High Security (Minimum 12 chars, alphanumeric)',
-  devicePolicy: 'Unrestricted personal and corporate devices allowed',
-  loginRestrictions: 'Allowed at all times from trusted locations',
+  passwordPolicy: '',
+  devicePolicy: '',
+  loginRestrictions: '',
 
-  mfaEnforced: true,
+  mfaEnforced: false,
   sessionTimeout: 60,
   passwordMinLength: 8,
-  ipWhitelist: '192.168.1.1/32, 103.241.12.0/24',
-  allowedDomains: 'techsonance.com, techsonanceinfotech.com',
+  ipWhitelist: '',
+  allowedDomains: '',
 
   notifyEmail: true,
   notifySms: false,
-  notifyWhatsapp: true,
-  notifySlack: true,
+  notifyWhatsapp: false,
+  notifySlack: false,
   notifyPush: false,
   notifyTeams: false,
   notifyDiscord: false,
@@ -275,45 +280,43 @@ const DEFAULT_WORKSPACE_STATE: WorkspaceState = {
   teamsWebhookUrl: '',
   discordWebhookUrl: '',
   webhookEndpointUrl: '',
-  notificationTemplates: [
-    { id: '1', name: 'Employee Onboarded Greeting', trigger: 'employee_joined', channels: ['email', 'slack'], template: 'Welcome to the team, {{firstName}}!' },
-    { id: '2', name: 'Task Overdue Notification', trigger: 'task_overdue', channels: ['email', 'push'], template: 'Warning: The task {{taskName}} has passed its due date.' }
-  ],
-  escalationRules: [
-    { id: '1', name: 'Unresolved High Ticket Escalation', condition: 'Ticket status is Open for > 24 hours', action: 'Notify Department Head' }
-  ],
-  reminderRules: [
-    { id: '1', name: 'Daily Timesheet Reminder', condition: 'Timesheet not logged by 6:00 PM', action: 'Send Slack Notification to Employee' }
-  ],
+  notificationTemplates: [],
+  escalationRules: [],
+  reminderRules: [],
   digestEmails: false,
   digestFrequency: 'weekly',
 
-  invoicePrefix: 'TS-INV-',
+  invoicePrefix: 'INV-',
   invoiceDecimal: 2,
   invoiceNumberStart: 1,
-  quotationPrefix: 'TS-QTN-',
-  purchasePrefix: 'TS-PO-',
-  creditNotePrefix: 'TS-CN-',
+  quotationPrefix: 'QTN-',
+  purchasePrefix: 'PO-',
+  creditNotePrefix: 'CN-',
   gstEnabled: false,
   gstRateDefault: 18.00,
   taxConfiguration: [],
-  invoiceFooter: 'Thank you for your business!',
-  invoiceTerms: '1. Please pay within 15 days of invoice date. 2. Late payments incur a 1.5% fee.',
-  defaultPaymentTerms: 'Net 15',
-  paymentGateway: 'stripe',
+  invoiceFooter: '',
+  invoiceTerms: '',
+  defaultPaymentTerms: '',
+  paymentGateway: '',
   paymentGatewayConfig: {},
   qrCodeEnabled: false,
   qrCodeUrl: '',
   digitalSignatureEnabled: false,
   digitalSignatureUrl: '',
+  stampUrl: '',
+  signatoryName: '',
+  signatoryTitle: '',
+  tagline: '',
+  bankDetails: {},
   invoiceTemplate: 'modern',
   multiCurrencyEnabled: false,
   supportedCurrencies: [],
 
   aiModel: 'gemini-1.5-pro',
-  aiTemperature: 0.2,
-  aiPromptTemplate: 'Act as a secure enterprise coding assistant. Follow strict compliance protocols...',
-  aiAssistantName: 'Antigravity Workspace Engine',
+  aiTemperature: 0.7,
+  aiPromptTemplate: '',
+  aiAssistantName: 'AI Workspace Assistant',
 
   uploadedDocuments: [],
   registrationCertificateUrl: null,
@@ -338,15 +341,15 @@ const DEFAULT_WORKSPACE_STATE: WorkspaceState = {
   animationsEnabled: true,
 
   // Registry defaults
-  costCenters: ['CC-ENG-01', 'CC-QA-02', 'CC-MKT-03', 'CC-HR-04'],
-  grades: ['G1', 'G2', 'G3', 'G4', 'G5'],
-  bands: ['Band A', 'Band B', 'Band C'],
-  designations: ['Software Engineer', 'Product Manager', 'QA Engineer', 'HR Associate', 'CEO'],
-  jobLevels: ['L1 (Junior)', 'L2 (Mid)', 'L3 (Senior)', 'L4 (Lead)', 'L5 (Director)'],
-  employmentTypes: ['Full-Time', 'Part-Time', 'Contractor', 'Intern'],
-  workModes: ['Work From Office', 'Work From Home (Remote)', 'Hybrid (2 days office)'],
-  shifts: ['General engineering Shift', 'US Night Shift', 'UK Afternoon Shift'],
-  teams: ['Engineering Core', 'QA Core', 'Product Design', 'People Operations']
+  costCenters: [],
+  grades: [],
+  bands: [],
+  designations: [],
+  jobLevels: [],
+  employmentTypes: [],
+  workModes: [],
+  shifts: [],
+  teams: []
 };
 
 // Keyword mapping for Smart Settings Search
@@ -1425,6 +1428,7 @@ export default function SettingsPage() {
 
   // Search & Navigation States
   const [searchTerm, setSearchTerm] = useState('');
+  const [userSearchTerm, setUserSearchTerm] = useState('');
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
@@ -1686,7 +1690,7 @@ export default function SettingsPage() {
     password: 'SecurePassword123!',
     firstName: '',
     lastName: '',
-    role: 'developer' as const,
+    role: 'Employee' as any,
     phone: '',
     username: ''
   });
@@ -1706,6 +1710,67 @@ export default function SettingsPage() {
   const [activeCategoryFilter, setActiveCategoryFilter] = useState('All');
   const [onboardingUploadTarget, setOnboardingUploadTarget] = useState<'gst' | 'pan' | 'reg' | null>(null);
 
+  const buildOrgTree = (nodes: any[]): any[] => {
+    if (!nodes || !nodes.length) return [];
+
+    const idMap = new Map<string, any>();
+    const aliasToId = new Map<string, string>();
+
+    nodes.forEach(node => {
+      const orgNode = { ...node, children: [] };
+      const internalId = String(node.id);
+      idMap.set(internalId, orgNode);
+
+      aliasToId.set(internalId, internalId);
+      if (node.userId) aliasToId.set(String(node.userId), internalId);
+      if (node.employeeId) aliasToId.set(String(node.employeeId), internalId);
+    });
+
+    const roots: any[] = [];
+    const childIds = new Set<string>();
+
+    nodes.forEach(node => {
+      const current = idMap.get(String(node.id));
+      if (!current) return;
+
+      let parentId: string | null = null;
+      if (node.managerId) {
+        parentId = aliasToId.get(String(node.managerId)) || null;
+      }
+
+      // Avoid self-reporting cycles
+      if (parentId && parentId === String(node.id)) {
+        parentId = null;
+      }
+
+      if (parentId && idMap.has(parentId)) {
+        const parent = idMap.get(parentId)!;
+        if (!parent.children.some((c: any) => String(c.id) === String(node.id))) {
+          parent.children.push(current);
+          childIds.add(String(node.id));
+        }
+      } else {
+        roots.push(current);
+      }
+    });
+
+    // In case all nodes were assigned into a cycle or no root found
+    if (roots.length === 0 && nodes.length > 0) {
+      nodes.forEach(n => {
+        if (!childIds.has(String(n.id))) {
+          const nodeObj = idMap.get(String(n.id));
+          if (nodeObj) roots.push(nodeObj);
+        }
+      });
+      if (roots.length === 0) {
+        const first = idMap.get(String(nodes[0].id));
+        if (first) roots.push(first);
+      }
+    }
+
+    return roots;
+  };
+
   const fetchOrgChartData = async () => {
     setOrgLoading(true);
     try {
@@ -1714,12 +1779,59 @@ export default function SettingsPage() {
       if (token && token !== 'null' && token !== 'undefined') {
         headers['Authorization'] = `Bearer ${token}`;
       }
-      const res = await fetch('/api/org-chart', { headers });
-      if (!res.ok) throw new Error('Failed to load organization chart');
-      const resJson = await res.json();
-      if (resJson.success && Array.isArray(resJson.data)) {
-        setOrgNodes(resJson.data);
+
+      let nodes: any[] = [];
+
+      try {
+        const res = await fetch(`/api/org-chart?t=${Date.now()}`, {
+          headers,
+          credentials: 'include',
+          cache: 'no-store',
+        });
+        if (res.ok) {
+          const resJson = await res.json();
+          if (Array.isArray(resJson)) {
+            nodes = resJson;
+          } else if (Array.isArray(resJson?.data)) {
+            nodes = resJson.data;
+          }
+        }
+      } catch (err) {
+        console.warn('Direct org-chart route fetch warning:', err);
       }
+
+      // If org-chart returned empty or failed, fetch from workforce employees directory API
+      if (!nodes || nodes.length === 0) {
+        try {
+          const empRes = await fetch(`/api/employees?limit=1000&t=${Date.now()}`, {
+            headers,
+            credentials: 'include',
+            cache: 'no-store',
+          });
+          if (empRes.ok) {
+            const empJson = await empRes.json();
+            const empList = Array.isArray(empJson) ? empJson : (Array.isArray(empJson?.data) ? empJson.data : []);
+            if (empList.length > 0) {
+              nodes = empList.map((emp: any) => ({
+                id: Number(emp.id),
+                employeeId: emp.employeeId || emp.employee_id || `EMP-${emp.id}`,
+                userId: emp.userId || emp.user_id || `temp-${emp.id}`,
+                managerId: emp.managerId || emp.manager_id || null,
+                name: emp.name || (emp.firstName ? `${emp.firstName} ${emp.lastName || ''}`.trim() : null) || (emp.first_name ? `${emp.first_name} ${emp.last_name || ''}`.trim() : null) || emp.preferredName || `Employee ${emp.employeeId || emp.id}`,
+                designation: emp.designation || 'Staff',
+                department: emp.department || 'General',
+                costCenter: emp.costCenter || emp.cost_center || null,
+                office: emp.office || emp.workLocation || emp.branchName || 'Gandhinagar',
+                avatarUrl: emp.avatarUrl || emp.avatar_url || null,
+              }));
+            }
+          }
+        } catch (e) {
+          console.warn('Employees directory fallback fetch error:', e);
+        }
+      }
+
+      setOrgNodes(nodes);
     } catch (err: any) {
       console.error(err);
       toast.error('Could not load reporting structure');
@@ -1769,6 +1881,7 @@ export default function SettingsPage() {
       const res = await fetch('/api/org-chart', {
         method: 'PUT',
         headers,
+        credentials: 'include',
         body: JSON.stringify({ employeeId: droppedNodeId, parentEmployeeId: targetNodeId }),
       });
       const resJson = await res.json();
@@ -1807,6 +1920,9 @@ export default function SettingsPage() {
   useEffect(() => {
     if (activeTab === 'structure') {
       fetchOrgChartData();
+    } else if (activeTab === 'users') {
+      fetchTenantUsers();
+      fetchRolesList();
     }
   }, [activeTab]);
 
@@ -1816,6 +1932,8 @@ export default function SettingsPage() {
   const invoiceLogoInputRef = useRef<HTMLInputElement>(null);
   const docVaultInputRef = useRef<HTMLInputElement>(null);
   const onboardingInputRef = useRef<HTMLInputElement>(null);
+  const stampInputRef = useRef<HTMLInputElement>(null);
+  const signatureInputRef = useRef<HTMLInputElement>(null);
 
   // Password Update Form State
   const [changingPassword, setChangingPassword] = useState(false);
@@ -1840,7 +1958,8 @@ export default function SettingsPage() {
         fetchCurrentUser(),
         fetchSettingsFromBackend(),
         fetchTenantUsers(),
-        fetchRolesList()
+        fetchRolesList(),
+        fetchOrgChartData()
       ]);
       if (userRes && !hasFullAccess(userRes.role)) {
         // Will render Access Denied view securely
@@ -1861,11 +1980,53 @@ export default function SettingsPage() {
       if (token && token !== 'null' && token !== 'undefined') {
         headers['Authorization'] = `Bearer ${token}`;
       }
-      const response = await fetch('/api/users?limit=100', { headers });
-      if (response.ok) {
-        const resJson = await response.json();
-        setUsersList(resJson.data || []);
+      
+      let users: any[] = [];
+      try {
+        const response = await fetch(`/api/users?limit=100&t=${Date.now()}`, {
+          headers,
+          credentials: 'include',
+          cache: 'no-store',
+        });
+        if (response.ok) {
+          const resJson = await response.json();
+          users = Array.isArray(resJson) ? resJson : (Array.isArray(resJson?.data) ? resJson.data : []);
+        }
+      } catch (err) {
+        console.warn('Direct users route fetch warning:', err);
       }
+
+      // If users list is empty, also fallback / enrich from employees directory
+      if (!users || users.length === 0) {
+        try {
+          const empRes = await fetch(`/api/employees?limit=100&t=${Date.now()}`, {
+            headers,
+            credentials: 'include',
+            cache: 'no-store',
+          });
+          if (empRes.ok) {
+            const empJson = await empRes.json();
+            const empList = Array.isArray(empJson) ? empJson : (Array.isArray(empJson?.data) ? empJson.data : []);
+            if (empList.length > 0) {
+              users = empList.map((emp: any) => ({
+                id: emp.userId || emp.id,
+                userId: emp.user_id || emp.userId || emp.id,
+                email: emp.email || emp.officeEmail || `${(emp.firstName || 'user').toLowerCase()}@example.com`,
+                firstName: emp.firstName || 'Employee',
+                lastName: emp.lastName || (emp.employeeId ? `(${emp.employeeId})` : ''),
+                role: (emp.designation || 'Employee').toLowerCase().replace(/\s+/g, '_'),
+                isActive: emp.status !== 'inactive' && emp.status !== 'terminated',
+                department: emp.department,
+                designation: emp.designation,
+              }));
+            }
+          }
+        } catch (e) {
+          console.warn('Employees fallback fetch error in users directory:', e);
+        }
+      }
+
+      setUsersList(users);
     } catch (err) {
       console.error('Failed to load workspace users:', err);
     } finally {
@@ -1881,10 +2042,38 @@ export default function SettingsPage() {
       if (token && token !== 'null' && token !== 'undefined') {
         headers['Authorization'] = `Bearer ${token}`;
       }
-      const response = await fetch('/api/rbac/roles', { headers });
+      const response = await fetch(`/api/rbac/roles?t=${Date.now()}`, {
+        headers,
+        credentials: 'include',
+        cache: 'no-store'
+      });
       if (response.ok) {
         const resJson = await response.json();
-        setRolesList(resJson.data || []);
+        const rawRoles = resJson.data || [];
+        const normalized = rawRoles.map((r: any) => {
+          const perms = r.permissions || {};
+          const normPerms: Record<string, string[]> = {};
+          if (perms && typeof perms === 'object') {
+            Object.keys(perms).forEach(k => {
+              const val = perms[k];
+              if (Array.isArray(val)) {
+                normPerms[k] = val;
+              } else if (val && typeof val === 'object') {
+                normPerms[k] = Object.keys(val).filter(actionKey => Boolean(val[actionKey]));
+              } else {
+                normPerms[k] = [];
+              }
+            });
+          }
+          return {
+            ...r,
+            permissions: normPerms
+          };
+        });
+        setRolesList(normalized);
+        if (normalized.length > 0 && !selectedRoleId) {
+          setSelectedRoleId(normalized[0].role_key || normalized[0].id);
+        }
       }
     } catch (err) {
       console.error('Failed to load roles list:', err);
@@ -1897,8 +2086,13 @@ export default function SettingsPage() {
     setRolesList(prev => prev.map(role => {
       if (role.role_key !== roleId && role.id !== roleId) return role;
       
-      const rolePerms = { ...role.permissions };
-      const currentActions = rolePerms[moduleName] || [];
+      const rolePerms = { ...(role.permissions || {}) };
+      const rawActions = rolePerms[moduleName];
+      const currentActions: string[] = Array.isArray(rawActions)
+        ? [...rawActions]
+        : (rawActions && typeof rawActions === 'object'
+          ? Object.keys(rawActions).filter(k => Boolean(rawActions[k]))
+          : []);
       
       let updatedActions: string[];
       if (currentActions.includes(action)) {
@@ -1931,6 +2125,7 @@ export default function SettingsPage() {
       const response = await fetch('/api/rbac/roles', {
         method: 'PUT',
         headers,
+        credentials: 'include',
         body: JSON.stringify({
           roleId: role.id || role.role_key,
           permissions: role.permissions
@@ -1945,7 +2140,8 @@ export default function SettingsPage() {
         toast.error(`Failed to save: ${errJson.error || 'Unknown error'}`, { id: 'save-perms' });
       }
     } catch (err: any) {
-      toast.error(`Failed to save: ${err?.message || err}`, { id: 'save-perms' });
+      console.error('Failed to save permissions:', err);
+      toast.error('Failed to save permissions configuration', { id: 'save-perms' });
     } finally {
       setSavingPermissions(false);
     }
@@ -1962,9 +2158,10 @@ export default function SettingsPage() {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const response = await fetch(`/api/users?id=${user.id}`, {
+      const response = await fetch(`/api/users?id=${user.id || user.userId}`, {
         method: 'PUT',
         headers,
+        credentials: 'include',
         body: JSON.stringify({
           isActive: !user.isActive,
         }),
@@ -1984,6 +2181,12 @@ export default function SettingsPage() {
   };
 
   const handleRoleChange = async (user: any, newRole: string) => {
+    // Optimistic UI update
+    setUsersList(prev => prev.map(u => {
+      const match = (u.id && u.id === user.id) || (u.userId && u.userId === user.userId);
+      return match ? { ...u, role: newRole } : u;
+    }));
+
     toast.loading(`Updating user role to ${newRole}...`, { id: 'user-role' });
     try {
       const token = getStoredSessionToken();
@@ -1994,9 +2197,11 @@ export default function SettingsPage() {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const response = await fetch(`/api/users?id=${user.id}`, {
+      const targetId = user.legacyUserId || user.id || user.userId;
+      const response = await fetch(`/api/users?id=${targetId}&t=${Date.now()}`, {
         method: 'PUT',
         headers,
+        credentials: 'include',
         body: JSON.stringify({
           role: newRole,
         }),
@@ -2004,14 +2209,16 @@ export default function SettingsPage() {
 
       if (response.ok) {
         toast.success(`User role updated to ${newRole}!`, { id: 'user-role' });
-        fetchTenantUsers();
+        await fetchTenantUsers();
       } else {
         const errorJson = await response.json().catch(() => ({}));
         toast.error(`Failed to update role: ${errorJson.error || errorJson.message || 'Server error'}`, { id: 'user-role' });
+        await fetchTenantUsers();
       }
     } catch (err) {
       console.error(err);
       toast.error('An error occurred.', { id: 'user-role' });
+      await fetchTenantUsers();
     }
   };
 
@@ -2039,6 +2246,7 @@ export default function SettingsPage() {
       const response = await fetch('/api/users', {
         method: 'POST',
         headers,
+        credentials: 'include',
         body: JSON.stringify({
           email: inviteForm.email,
           password: inviteForm.password,
@@ -2059,7 +2267,7 @@ export default function SettingsPage() {
           password: 'SecurePassword123!',
           firstName: '',
           lastName: '',
-          role: 'developer',
+          role: 'Employee' as any,
           phone: '',
           username: ''
         });
@@ -2132,154 +2340,155 @@ export default function SettingsPage() {
       let backendBusiness = businessJson.data || {};
       let backendWorkspace = workspaceJson.data || {};
 
-      // Merge DB states with the extended configurations loaded dynamically
+      // Merge DB states with live tenant data (clean zero-state fallbacks, no mock data)
       const merged: WorkspaceState = {
         // Company
-        companyName: backendCompany.companyName || DEFAULT_WORKSPACE_STATE.companyName,
-        email: backendCompany.email || DEFAULT_WORKSPACE_STATE.email,
-        phone: backendCompany.phone || DEFAULT_WORKSPACE_STATE.phone,
-        address: backendCompany.address || DEFAULT_WORKSPACE_STATE.address,
-        website: backendCompany.website || DEFAULT_WORKSPACE_STATE.website,
-        primaryColor: backendCompany.primaryColor || DEFAULT_WORKSPACE_STATE.primaryColor,
-        secondaryColor: backendCompany.secondaryColor || DEFAULT_WORKSPACE_STATE.secondaryColor,
-        logoUrl: backendCompany.logoUrl || DEFAULT_WORKSPACE_STATE.logoUrl,
-        faviconUrl: backendWorkspace.faviconUrl || DEFAULT_WORKSPACE_STATE.faviconUrl,
-        smtpHost: backendCompany.smtpHost || DEFAULT_WORKSPACE_STATE.smtpHost,
-        smtpPort: backendCompany.smtpPort || DEFAULT_WORKSPACE_STATE.smtpPort,
-        smtpUser: backendCompany.smtpUser || DEFAULT_WORKSPACE_STATE.smtpUser,
+        companyName: backendCompany.companyName || backendCompany.tenant?.name || '',
+        email: backendCompany.email || '',
+        phone: backendCompany.phone || '',
+        address: backendCompany.address || '',
+        website: backendCompany.website || '',
+        primaryColor: backendCompany.primaryColor || '#F87941',
+        secondaryColor: backendCompany.secondaryColor || '#F9B095',
+        logoUrl: backendCompany.logoUrl || '',
+        faviconUrl: backendWorkspace.faviconUrl || backendCompany.faviconUrl || '',
+        smtpHost: backendCompany.smtpHost || '',
+        smtpPort: backendCompany.smtpPort || 587,
+        smtpUser: backendCompany.smtpUser || '',
+        smtpPassword: backendCompany.smtpPassword || '',
 
         // Business
-        businessName: backendBusiness.businessName || backendCompany.companyName || DEFAULT_WORKSPACE_STATE.businessName,
-        businessEmail: backendBusiness.businessEmail || backendBusiness.email || backendCompany.email || DEFAULT_WORKSPACE_STATE.businessEmail,
-        businessPhone: backendBusiness.businessPhone || backendBusiness.phone || backendCompany.phone || DEFAULT_WORKSPACE_STATE.businessPhone,
-        businessAddress: backendBusiness.businessAddress || backendBusiness.address || backendCompany.address || DEFAULT_WORKSPACE_STATE.businessAddress,
-        gstNo: backendBusiness.gstNo || backendCompany.gstin || DEFAULT_WORKSPACE_STATE.gstNo,
-        pan: backendBusiness.pan || backendCompany.pan || DEFAULT_WORKSPACE_STATE.pan,
-        tan: backendBusiness.tan || DEFAULT_WORKSPACE_STATE.tan,
-        registrationNo: backendBusiness.registrationNo || DEFAULT_WORKSPACE_STATE.registrationNo,
-        termsAndConditions: backendBusiness.termsAndConditions || DEFAULT_WORKSPACE_STATE.termsAndConditions,
-        notes: backendBusiness.notes || DEFAULT_WORKSPACE_STATE.notes,
-        paymentTerms: backendBusiness.paymentTerms || DEFAULT_WORKSPACE_STATE.paymentTerms,
+        businessName: backendBusiness.businessName || backendCompany.companyName || backendCompany.tenant?.name || '',
+        businessEmail: backendBusiness.businessEmail || backendBusiness.email || backendCompany.email || '',
+        businessPhone: backendBusiness.businessPhone || backendBusiness.phone || backendCompany.phone || '',
+        businessAddress: backendBusiness.businessAddress || backendBusiness.address || backendCompany.address || '',
+        gstNo: backendBusiness.gstNo || backendCompany.gstin || '',
+        pan: backendBusiness.pan || backendCompany.pan || '',
+        tan: backendBusiness.tan || '',
+        registrationNo: backendBusiness.registrationNo || '',
+        termsAndConditions: backendBusiness.termsAndConditions || '',
+        notes: backendBusiness.notes || '',
+        paymentTerms: backendBusiness.paymentTerms || '',
 
         // Extended
-        legalName: backendWorkspace.legalName || backendCompany.companyName || DEFAULT_WORKSPACE_STATE.legalName,
-        workspaceName: backendWorkspace.workspaceName || backendCompany.tenant?.slug || DEFAULT_WORKSPACE_STATE.workspaceName,
-        orgCode: backendWorkspace.orgCode || (backendCompany.tenant?.name ? backendCompany.tenant.name.split(' ').map((w: string) => w[0]).join('').toUpperCase() + '-IND-01' : DEFAULT_WORKSPACE_STATE.orgCode),
-        businessType: backendWorkspace.businessType || DEFAULT_WORKSPACE_STATE.businessType,
-        industry: backendWorkspace.industry || DEFAULT_WORKSPACE_STATE.industry,
-        timezone: backendWorkspace.timezone || DEFAULT_WORKSPACE_STATE.timezone,
-        language: backendWorkspace.language || DEFAULT_WORKSPACE_STATE.language,
-        country: backendWorkspace.country || DEFAULT_WORKSPACE_STATE.country,
-        currency: backendWorkspace.currency || DEFAULT_WORKSPACE_STATE.currency,
-        fiscalYear: backendWorkspace.fiscalYear || DEFAULT_WORKSPACE_STATE.fiscalYear,
+        legalName: backendWorkspace.legalName || backendCompany.legalName || backendCompany.companyName || backendCompany.tenant?.name || '',
+        workspaceName: backendWorkspace.workspaceName || backendCompany.workspaceName || backendCompany.tenant?.slug || '',
+        orgCode: backendWorkspace.orgCode || backendCompany.orgCode || '',
+        businessType: backendWorkspace.businessType || backendCompany.businessType || '',
+        industry: backendWorkspace.industry || backendCompany.industry || '',
+        timezone: backendWorkspace.timezone || backendCompany.timezone || 'UTC',
+        language: backendWorkspace.language || 'English',
+        country: backendWorkspace.country || '',
+        currency: backendWorkspace.currency || backendCompany.currency || 'INR (₹)',
+        fiscalYear: backendWorkspace.fiscalYear || backendCompany.fiscalYear || '',
 
-        cinNumber: backendWorkspace.cinNumber || DEFAULT_WORKSPACE_STATE.cinNumber,
-        msmeNumber: backendWorkspace.msmeNumber || DEFAULT_WORKSPACE_STATE.msmeNumber,
-        supportEmail: backendWorkspace.supportEmail || DEFAULT_WORKSPACE_STATE.supportEmail,
-        supportPhone: backendWorkspace.supportPhone || DEFAULT_WORKSPACE_STATE.supportPhone,
-        officeHours: backendWorkspace.officeHours || DEFAULT_WORKSPACE_STATE.officeHours,
-        emergencyContact: backendWorkspace.emergencyContact || DEFAULT_WORKSPACE_STATE.emergencyContact,
+        cinNumber: backendWorkspace.cinNumber || backendCompany.cinNumber || '',
+        msmeNumber: backendWorkspace.msmeNumber || backendCompany.msmeNumber || '',
+        supportEmail: backendWorkspace.supportEmail || backendCompany.supportEmail || '',
+        supportPhone: backendWorkspace.supportPhone || backendCompany.supportPhone || '',
+        officeHours: backendWorkspace.officeHours || '',
+        emergencyContact: backendWorkspace.emergencyContact || backendCompany.emergencyContact || '',
 
-        defaultProbation: backendWorkspace.defaultProbation !== undefined ? backendWorkspace.defaultProbation : DEFAULT_WORKSPACE_STATE.defaultProbation,
-        noticePeriod: backendWorkspace.noticePeriod !== undefined ? backendWorkspace.noticePeriod : DEFAULT_WORKSPACE_STATE.noticePeriod,
-        empIdPrefix: backendWorkspace.empIdPrefix || DEFAULT_WORKSPACE_STATE.empIdPrefix,
-        usernamePattern: backendWorkspace.usernamePattern || DEFAULT_WORKSPACE_STATE.usernamePattern,
-        emailPattern: backendWorkspace.emailPattern || DEFAULT_WORKSPACE_STATE.emailPattern,
-        leavePolicy: backendWorkspace.leavePolicy || DEFAULT_WORKSPACE_STATE.leavePolicy,
-        shiftDefault: backendWorkspace.shiftDefault || DEFAULT_WORKSPACE_STATE.shiftDefault,
-        joiningWorkflow: backendWorkspace.joiningWorkflow || DEFAULT_WORKSPACE_STATE.joiningWorkflow,
-        confirmationWorkflow: backendWorkspace.confirmationWorkflow || DEFAULT_WORKSPACE_STATE.confirmationWorkflow,
-        autoEmpId: backendWorkspace.autoEmpId !== undefined ? backendWorkspace.autoEmpId : DEFAULT_WORKSPACE_STATE.autoEmpId,
-        workingHours: backendWorkspace.workingHours !== undefined ? backendWorkspace.workingHours : DEFAULT_WORKSPACE_STATE.workingHours,
-        weekendRules: backendWorkspace.weekendRules || DEFAULT_WORKSPACE_STATE.weekendRules,
-        passwordPolicy: backendWorkspace.passwordPolicy || DEFAULT_WORKSPACE_STATE.passwordPolicy,
-        devicePolicy: backendWorkspace.devicePolicy || DEFAULT_WORKSPACE_STATE.devicePolicy,
-        loginRestrictions: backendWorkspace.loginRestrictions || DEFAULT_WORKSPACE_STATE.loginRestrictions,
+        defaultProbation: backendWorkspace.defaultProbation !== undefined ? backendWorkspace.defaultProbation : (backendCompany.defaultProbation || 0),
+        noticePeriod: backendWorkspace.noticePeriod !== undefined ? backendWorkspace.noticePeriod : (backendCompany.noticePeriod || 0),
+        empIdPrefix: backendWorkspace.empIdPrefix || backendCompany.empIdPrefix || 'EMP-',
+        usernamePattern: backendWorkspace.usernamePattern || 'first.last',
+        emailPattern: backendWorkspace.emailPattern || '',
+        leavePolicy: backendWorkspace.leavePolicy || '',
+        shiftDefault: backendWorkspace.shiftDefault || '',
+        joiningWorkflow: backendWorkspace.joiningWorkflow || '',
+        confirmationWorkflow: backendWorkspace.confirmationWorkflow || '',
+        autoEmpId: backendWorkspace.autoEmpId !== undefined ? backendWorkspace.autoEmpId : false,
+        workingHours: backendWorkspace.workingHours !== undefined ? backendWorkspace.workingHours : 8,
+        weekendRules: backendWorkspace.weekendRules || 'Saturday & Sunday Off',
+        passwordPolicy: backendWorkspace.passwordPolicy || '',
+        devicePolicy: backendWorkspace.devicePolicy || '',
+        loginRestrictions: backendWorkspace.loginRestrictions || '',
 
-        mfaEnforced: backendWorkspace.mfaEnforced !== undefined ? backendWorkspace.mfaEnforced : DEFAULT_WORKSPACE_STATE.mfaEnforced,
-        sessionTimeout: backendWorkspace.sessionTimeout !== undefined ? backendWorkspace.sessionTimeout : DEFAULT_WORKSPACE_STATE.sessionTimeout,
-        passwordMinLength: backendWorkspace.passwordMinLength !== undefined ? backendWorkspace.passwordMinLength : DEFAULT_WORKSPACE_STATE.passwordMinLength,
-        ipWhitelist: backendWorkspace.ipWhitelist || DEFAULT_WORKSPACE_STATE.ipWhitelist,
-        allowedDomains: backendWorkspace.allowedDomains || DEFAULT_WORKSPACE_STATE.allowedDomains,
+        mfaEnforced: backendWorkspace.mfaEnforced !== undefined ? backendWorkspace.mfaEnforced : false,
+        sessionTimeout: backendWorkspace.sessionTimeout !== undefined ? backendWorkspace.sessionTimeout : 60,
+        passwordMinLength: backendWorkspace.passwordMinLength !== undefined ? backendWorkspace.passwordMinLength : 8,
+        ipWhitelist: backendWorkspace.ipWhitelist || backendCompany.ipWhitelist || '',
+        allowedDomains: backendWorkspace.allowedDomains || backendCompany.allowedDomains || '',
 
-        notifyEmail: backendWorkspace.notifyEmail !== undefined ? backendWorkspace.notifyEmail : DEFAULT_WORKSPACE_STATE.notifyEmail,
-        notifySms: backendWorkspace.notifySms !== undefined ? backendWorkspace.notifySms : DEFAULT_WORKSPACE_STATE.notifySms,
-        notifyWhatsapp: backendWorkspace.notifyWhatsapp !== undefined ? backendWorkspace.notifyWhatsapp : DEFAULT_WORKSPACE_STATE.notifyWhatsapp,
-        notifySlack: backendWorkspace.notifySlack !== undefined ? backendWorkspace.notifySlack : DEFAULT_WORKSPACE_STATE.notifySlack,
-        notifyPush: backendWorkspace.notifyPush !== undefined ? backendWorkspace.notifyPush : DEFAULT_WORKSPACE_STATE.notifyPush,
-        notifyTeams: backendWorkspace.notifyTeams !== undefined ? backendWorkspace.notifyTeams : DEFAULT_WORKSPACE_STATE.notifyTeams,
-        notifyDiscord: backendWorkspace.notifyDiscord !== undefined ? backendWorkspace.notifyDiscord : DEFAULT_WORKSPACE_STATE.notifyDiscord,
-        notifyWebhook: backendWorkspace.notifyWebhook !== undefined ? backendWorkspace.notifyWebhook : DEFAULT_WORKSPACE_STATE.notifyWebhook,
-        notifyBrowser: backendWorkspace.notifyBrowser !== undefined ? backendWorkspace.notifyBrowser : DEFAULT_WORKSPACE_STATE.notifyBrowser,
-        slackWebhookUrl: backendWorkspace.slackWebhookUrl || DEFAULT_WORKSPACE_STATE.slackWebhookUrl,
-        teamsWebhookUrl: backendWorkspace.teamsWebhookUrl || DEFAULT_WORKSPACE_STATE.teamsWebhookUrl,
-        discordWebhookUrl: backendWorkspace.discordWebhookUrl || DEFAULT_WORKSPACE_STATE.discordWebhookUrl,
-        webhookEndpointUrl: backendWorkspace.webhookEndpointUrl || DEFAULT_WORKSPACE_STATE.webhookEndpointUrl,
-        notificationTemplates: backendWorkspace.notificationTemplates || DEFAULT_WORKSPACE_STATE.notificationTemplates,
-        escalationRules: backendWorkspace.escalationRules || DEFAULT_WORKSPACE_STATE.escalationRules,
-        reminderRules: backendWorkspace.reminderRules || DEFAULT_WORKSPACE_STATE.reminderRules,
-        digestEmails: backendWorkspace.digestEmails !== undefined ? backendWorkspace.digestEmails : DEFAULT_WORKSPACE_STATE.digestEmails,
-        digestFrequency: backendWorkspace.digestFrequency || DEFAULT_WORKSPACE_STATE.digestFrequency,
+        notifyEmail: backendWorkspace.notifyEmail !== undefined ? backendWorkspace.notifyEmail : true,
+        notifySms: backendWorkspace.notifySms !== undefined ? backendWorkspace.notifySms : false,
+        notifyWhatsapp: backendWorkspace.notifyWhatsapp !== undefined ? backendWorkspace.notifyWhatsapp : false,
+        notifySlack: backendWorkspace.notifySlack !== undefined ? backendWorkspace.notifySlack : false,
+        notifyPush: backendWorkspace.notifyPush !== undefined ? backendWorkspace.notifyPush : false,
+        notifyTeams: backendWorkspace.notifyTeams !== undefined ? backendWorkspace.notifyTeams : false,
+        notifyDiscord: backendWorkspace.notifyDiscord !== undefined ? backendWorkspace.notifyDiscord : false,
+        notifyWebhook: backendWorkspace.notifyWebhook !== undefined ? backendWorkspace.notifyWebhook : false,
+        notifyBrowser: backendWorkspace.notifyBrowser !== undefined ? backendWorkspace.notifyBrowser : false,
+        slackWebhookUrl: backendWorkspace.slackWebhookUrl || '',
+        teamsWebhookUrl: backendWorkspace.teamsWebhookUrl || '',
+        discordWebhookUrl: backendWorkspace.discordWebhookUrl || '',
+        webhookEndpointUrl: backendWorkspace.webhookEndpointUrl || '',
+        notificationTemplates: Array.isArray(backendWorkspace.notificationTemplates) ? backendWorkspace.notificationTemplates : (Array.isArray(backendCompany.notificationTemplates) ? backendCompany.notificationTemplates : []),
+        escalationRules: Array.isArray(backendWorkspace.escalationRules) ? backendWorkspace.escalationRules : (Array.isArray(backendCompany.escalationRules) ? backendCompany.escalationRules : []),
+        reminderRules: Array.isArray(backendWorkspace.reminderRules) ? backendWorkspace.reminderRules : (Array.isArray(backendCompany.reminderRules) ? backendCompany.reminderRules : []),
+        digestEmails: backendWorkspace.digestEmails !== undefined ? backendWorkspace.digestEmails : false,
+        digestFrequency: backendWorkspace.digestFrequency || 'weekly',
 
-        invoicePrefix: backendWorkspace.invoicePrefix || DEFAULT_WORKSPACE_STATE.invoicePrefix,
-        invoiceDecimal: backendWorkspace.invoiceDecimal !== undefined ? backendWorkspace.invoiceDecimal : DEFAULT_WORKSPACE_STATE.invoiceDecimal,
-        invoiceNumberStart: backendWorkspace.invoiceNumberStart !== undefined ? backendWorkspace.invoiceNumberStart : DEFAULT_WORKSPACE_STATE.invoiceNumberStart,
-        quotationPrefix: backendWorkspace.quotationPrefix || DEFAULT_WORKSPACE_STATE.quotationPrefix,
-        purchasePrefix: backendWorkspace.purchasePrefix || DEFAULT_WORKSPACE_STATE.purchasePrefix,
-        creditNotePrefix: backendWorkspace.creditNotePrefix || DEFAULT_WORKSPACE_STATE.creditNotePrefix,
-        gstEnabled: backendWorkspace.gstEnabled !== undefined ? backendWorkspace.gstEnabled : DEFAULT_WORKSPACE_STATE.gstEnabled,
-        gstRateDefault: backendWorkspace.gstRateDefault !== undefined ? backendWorkspace.gstRateDefault : DEFAULT_WORKSPACE_STATE.gstRateDefault,
-        taxConfiguration: backendWorkspace.taxConfiguration || DEFAULT_WORKSPACE_STATE.taxConfiguration,
-        invoiceFooter: backendWorkspace.invoiceFooter || DEFAULT_WORKSPACE_STATE.invoiceFooter,
-        invoiceTerms: backendWorkspace.invoiceTerms || DEFAULT_WORKSPACE_STATE.invoiceTerms,
-        defaultPaymentTerms: backendWorkspace.defaultPaymentTerms || DEFAULT_WORKSPACE_STATE.defaultPaymentTerms,
-        paymentGateway: backendWorkspace.paymentGateway || DEFAULT_WORKSPACE_STATE.paymentGateway,
-        paymentGatewayConfig: backendWorkspace.paymentGatewayConfig || DEFAULT_WORKSPACE_STATE.paymentGatewayConfig,
-        qrCodeEnabled: backendWorkspace.qrCodeEnabled !== undefined ? backendWorkspace.qrCodeEnabled : DEFAULT_WORKSPACE_STATE.qrCodeEnabled,
-        qrCodeUrl: backendWorkspace.qrCodeUrl || DEFAULT_WORKSPACE_STATE.qrCodeUrl,
-        digitalSignatureEnabled: backendWorkspace.digitalSignatureEnabled !== undefined ? backendWorkspace.digitalSignatureEnabled : DEFAULT_WORKSPACE_STATE.digitalSignatureEnabled,
-        digitalSignatureUrl: backendWorkspace.digitalSignatureUrl || DEFAULT_WORKSPACE_STATE.digitalSignatureUrl,
-        invoiceTemplate: backendWorkspace.invoiceTemplate || DEFAULT_WORKSPACE_STATE.invoiceTemplate,
-        multiCurrencyEnabled: backendWorkspace.multiCurrencyEnabled !== undefined ? backendWorkspace.multiCurrencyEnabled : DEFAULT_WORKSPACE_STATE.multiCurrencyEnabled,
-        supportedCurrencies: backendWorkspace.supportedCurrencies || DEFAULT_WORKSPACE_STATE.supportedCurrencies,
+        invoicePrefix: backendWorkspace.invoicePrefix || backendCompany.invoicePrefix || 'INV-',
+        invoiceDecimal: backendWorkspace.invoiceDecimal !== undefined ? backendWorkspace.invoiceDecimal : (backendCompany.invoiceDecimal !== undefined ? backendCompany.invoiceDecimal : 2),
+        invoiceNumberStart: backendWorkspace.invoiceNumberStart !== undefined ? backendWorkspace.invoiceNumberStart : (backendCompany.invoiceNumberStart !== undefined ? backendCompany.invoiceNumberStart : 1),
+        quotationPrefix: backendWorkspace.quotationPrefix || backendCompany.quotationPrefix || 'QTN-',
+        purchasePrefix: backendWorkspace.purchasePrefix || backendCompany.purchasePrefix || 'PO-',
+        creditNotePrefix: backendWorkspace.creditNotePrefix || backendCompany.creditNotePrefix || 'CN-',
+        gstEnabled: backendWorkspace.gstEnabled !== undefined ? backendWorkspace.gstEnabled : (backendCompany.gstEnabled !== undefined ? backendCompany.gstEnabled : false),
+        gstRateDefault: backendWorkspace.gstRateDefault !== undefined ? backendWorkspace.gstRateDefault : (backendCompany.gstRateDefault !== undefined ? backendCompany.gstRateDefault : 18.00),
+        taxConfiguration: Array.isArray(backendWorkspace.taxConfiguration) ? backendWorkspace.taxConfiguration : (Array.isArray(backendCompany.taxConfiguration) ? backendCompany.taxConfiguration : []),
+        invoiceFooter: backendWorkspace.invoiceFooter || backendCompany.invoiceFooter || '',
+        invoiceTerms: backendWorkspace.invoiceTerms || backendCompany.invoiceTerms || '',
+        defaultPaymentTerms: backendWorkspace.defaultPaymentTerms || backendCompany.defaultPaymentTerms || '',
+        paymentGateway: backendWorkspace.paymentGateway || backendCompany.paymentGateway || '',
+        paymentGatewayConfig: backendWorkspace.paymentGatewayConfig || backendCompany.paymentGatewayConfig || {},
+        qrCodeEnabled: backendWorkspace.qrCodeEnabled !== undefined ? backendWorkspace.qrCodeEnabled : (backendCompany.qrCodeEnabled !== undefined ? backendCompany.qrCodeEnabled : false),
+        qrCodeUrl: backendWorkspace.qrCodeUrl || backendCompany.qrCodeUrl || '',
+        digitalSignatureEnabled: backendWorkspace.digitalSignatureEnabled !== undefined ? backendWorkspace.digitalSignatureEnabled : (backendCompany.digitalSignatureEnabled !== undefined ? backendCompany.digitalSignatureEnabled : false),
+        digitalSignatureUrl: backendWorkspace.digitalSignatureUrl || backendCompany.digitalSignatureUrl || '',
+        invoiceTemplate: backendWorkspace.invoiceTemplate || 'modern',
+        multiCurrencyEnabled: backendWorkspace.multiCurrencyEnabled !== undefined ? backendWorkspace.multiCurrencyEnabled : false,
+        supportedCurrencies: Array.isArray(backendWorkspace.supportedCurrencies) ? backendWorkspace.supportedCurrencies : [],
 
-        aiModel: backendWorkspace.aiModel || DEFAULT_WORKSPACE_STATE.aiModel,
-        aiTemperature: backendWorkspace.aiTemperature !== undefined ? backendWorkspace.aiTemperature : DEFAULT_WORKSPACE_STATE.aiTemperature,
-        aiPromptTemplate: backendWorkspace.aiPromptTemplate || DEFAULT_WORKSPACE_STATE.aiPromptTemplate,
-        aiAssistantName: backendWorkspace.aiAssistantName || DEFAULT_WORKSPACE_STATE.aiAssistantName,
+        aiModel: backendWorkspace.aiModel || backendCompany.aiModel || 'gemini-1.5-pro',
+        aiTemperature: backendWorkspace.aiTemperature !== undefined ? backendWorkspace.aiTemperature : (backendCompany.aiTemperature !== undefined ? backendCompany.aiTemperature : 0.7),
+        aiPromptTemplate: backendWorkspace.aiPromptTemplate || backendCompany.aiPromptTemplate || '',
+        aiAssistantName: backendWorkspace.aiAssistantName || backendCompany.aiAssistantName || 'AI Workspace Assistant',
 
-        uploadedDocuments: backendWorkspace.uploadedDocuments || DEFAULT_WORKSPACE_STATE.uploadedDocuments,
+        uploadedDocuments: Array.isArray(backendWorkspace.uploadedDocuments) ? backendWorkspace.uploadedDocuments : [],
         registrationCertificateUrl: backendCompany.registrationCertificateUrl || null,
         panCardUrl: backendCompany.panCardUrl || null,
         gstCertificateUrl: backendCompany.gstCertificateUrl || null,
 
         // Appearance
-        themeMode: backendWorkspace.themeMode || DEFAULT_WORKSPACE_STATE.themeMode,
-        sidebarStyle: backendWorkspace.sidebarStyle || DEFAULT_WORKSPACE_STATE.sidebarStyle,
-        navigationStyle: backendWorkspace.navigationStyle || DEFAULT_WORKSPACE_STATE.navigationStyle,
-        dashboardLayout: backendWorkspace.dashboardLayout || DEFAULT_WORKSPACE_STATE.dashboardLayout,
-        widgetConfig: backendWorkspace.widgetConfig || DEFAULT_WORKSPACE_STATE.widgetConfig,
-        cardDensity: backendWorkspace.cardDensity || DEFAULT_WORKSPACE_STATE.cardDensity,
-        compactMode: backendWorkspace.compactMode !== undefined ? backendWorkspace.compactMode : DEFAULT_WORKSPACE_STATE.compactMode,
-        loginScreenStyle: backendWorkspace.loginScreenStyle || DEFAULT_WORKSPACE_STATE.loginScreenStyle,
-        registerScreenStyle: backendWorkspace.registerScreenStyle || DEFAULT_WORKSPACE_STATE.registerScreenStyle,
-        emailTemplateStyle: backendWorkspace.emailTemplateStyle || DEFAULT_WORKSPACE_STATE.emailTemplateStyle,
-        pdfBrandingStyle: backendWorkspace.pdfBrandingStyle || DEFAULT_WORKSPACE_STATE.pdfBrandingStyle,
-        invoiceBrandingStyle: backendWorkspace.invoiceBrandingStyle || DEFAULT_WORKSPACE_STATE.invoiceBrandingStyle,
-        primaryFont: backendWorkspace.primaryFont || DEFAULT_WORKSPACE_STATE.primaryFont,
-        borderRadius: backendWorkspace.borderRadius || DEFAULT_WORKSPACE_STATE.borderRadius,
-        animationsEnabled: backendWorkspace.animationsEnabled !== undefined ? backendWorkspace.animationsEnabled : DEFAULT_WORKSPACE_STATE.animationsEnabled,
+        themeMode: backendWorkspace.themeMode || 'Follow System Settings',
+        sidebarStyle: backendWorkspace.sidebarStyle || 'Classic Sidebar',
+        navigationStyle: backendWorkspace.navigationStyle || 'Left Side Navigation',
+        dashboardLayout: backendWorkspace.dashboardLayout || 'Standard Grid Layout',
+        widgetConfig: backendWorkspace.widgetConfig || 'Default Analytics Layout',
+        cardDensity: backendWorkspace.cardDensity || 'Cozy (Standard padding)',
+        compactMode: backendWorkspace.compactMode !== undefined ? backendWorkspace.compactMode : false,
+        loginScreenStyle: backendWorkspace.loginScreenStyle || 'Modern Glassmorphic',
+        registerScreenStyle: backendWorkspace.registerScreenStyle || 'Classic Elegant',
+        emailTemplateStyle: backendWorkspace.emailTemplateStyle || 'Corporate Minimalist',
+        pdfBrandingStyle: backendWorkspace.pdfBrandingStyle || 'Modern Signature',
+        invoiceBrandingStyle: backendWorkspace.invoiceBrandingStyle || 'Clean Minimalist',
+        primaryFont: backendWorkspace.primaryFont || 'Inter (Default)',
+        borderRadius: backendWorkspace.borderRadius || '12px',
+        animationsEnabled: backendWorkspace.animationsEnabled !== undefined ? backendWorkspace.animationsEnabled : true,
 
         // Structure Registries
-        costCenters: backendWorkspace.costCenters || DEFAULT_WORKSPACE_STATE.costCenters,
-        grades: backendWorkspace.grades || DEFAULT_WORKSPACE_STATE.grades,
-        bands: backendWorkspace.bands || DEFAULT_WORKSPACE_STATE.bands,
-        designations: backendWorkspace.designations || DEFAULT_WORKSPACE_STATE.designations,
-        jobLevels: backendWorkspace.jobLevels || DEFAULT_WORKSPACE_STATE.jobLevels,
-        employmentTypes: backendWorkspace.employmentTypes || DEFAULT_WORKSPACE_STATE.employmentTypes,
-        workModes: backendWorkspace.workModes || DEFAULT_WORKSPACE_STATE.workModes,
-        shifts: backendWorkspace.shifts || DEFAULT_WORKSPACE_STATE.shifts,
-        teams: backendWorkspace.teams || DEFAULT_WORKSPACE_STATE.teams,
+        costCenters: Array.isArray(backendWorkspace.costCenters) ? backendWorkspace.costCenters : [],
+        grades: Array.isArray(backendWorkspace.grades) ? backendWorkspace.grades : [],
+        bands: Array.isArray(backendWorkspace.bands) ? backendWorkspace.bands : [],
+        designations: Array.isArray(backendWorkspace.designations) ? backendWorkspace.designations : [],
+        jobLevels: Array.isArray(backendWorkspace.jobLevels) ? backendWorkspace.jobLevels : [],
+        employmentTypes: Array.isArray(backendWorkspace.employmentTypes) ? backendWorkspace.employmentTypes : [],
+        workModes: Array.isArray(backendWorkspace.workModes) ? backendWorkspace.workModes : [],
+        shifts: Array.isArray(backendWorkspace.shifts) ? backendWorkspace.shifts : [],
+        teams: Array.isArray(backendWorkspace.teams) ? backendWorkspace.teams : [],
       };
 
       setSavedWorkspace(merged);
@@ -2358,6 +2567,13 @@ export default function SettingsPage() {
       workspaceDraft.pan !== savedWorkspace.pan ||
       workspaceDraft.gstCertificateUrl !== savedWorkspace.gstCertificateUrl ||
       workspaceDraft.panCardUrl !== savedWorkspace.panCardUrl ||
+      workspaceDraft.stampUrl !== savedWorkspace.stampUrl ||
+      workspaceDraft.signatoryName !== savedWorkspace.signatoryName ||
+      workspaceDraft.signatoryTitle !== savedWorkspace.signatoryTitle ||
+      workspaceDraft.tagline !== savedWorkspace.tagline ||
+      JSON.stringify(workspaceDraft.bankDetails) !== JSON.stringify(savedWorkspace.bankDetails) ||
+      workspaceDraft.digitalSignatureUrl !== savedWorkspace.digitalSignatureUrl ||
+      workspaceDraft.digitalSignatureEnabled !== savedWorkspace.digitalSignatureEnabled ||
       workspaceDraft.registrationCertificateUrl !== savedWorkspace.registrationCertificateUrl;
 
     // 2. Evaluate Invoicing / Business Settings alterations
@@ -2448,6 +2664,11 @@ export default function SettingsPage() {
       workspaceDraft.qrCodeUrl !== savedWorkspace.qrCodeUrl ||
       workspaceDraft.digitalSignatureEnabled !== savedWorkspace.digitalSignatureEnabled ||
       workspaceDraft.digitalSignatureUrl !== savedWorkspace.digitalSignatureUrl ||
+      workspaceDraft.stampUrl !== savedWorkspace.stampUrl ||
+      workspaceDraft.signatoryName !== savedWorkspace.signatoryName ||
+      workspaceDraft.signatoryTitle !== savedWorkspace.signatoryTitle ||
+      workspaceDraft.tagline !== savedWorkspace.tagline ||
+      JSON.stringify(workspaceDraft.bankDetails) !== JSON.stringify(savedWorkspace.bankDetails) ||
       workspaceDraft.invoiceTemplate !== savedWorkspace.invoiceTemplate ||
       workspaceDraft.multiCurrencyEnabled !== savedWorkspace.multiCurrencyEnabled ||
       JSON.stringify(workspaceDraft.supportedCurrencies) !== JSON.stringify(savedWorkspace.supportedCurrencies) ||
@@ -2486,6 +2707,13 @@ export default function SettingsPage() {
         registrationCertificateUrl: workspaceDraft.registrationCertificateUrl ? sanitizeStr(workspaceDraft.registrationCertificateUrl) : null,
         panCardUrl: workspaceDraft.panCardUrl ? sanitizeStr(workspaceDraft.panCardUrl) : null,
         gstCertificateUrl: workspaceDraft.gstCertificateUrl ? sanitizeStr(workspaceDraft.gstCertificateUrl) : null,
+        stampUrl: workspaceDraft.stampUrl ? sanitizeStr(workspaceDraft.stampUrl) : null,
+        signatoryName: workspaceDraft.signatoryName ? sanitizeStr(workspaceDraft.signatoryName) : null,
+        signatoryTitle: workspaceDraft.signatoryTitle ? sanitizeStr(workspaceDraft.signatoryTitle) : null,
+        tagline: workspaceDraft.tagline ? sanitizeStr(workspaceDraft.tagline) : null,
+        bankDetails: workspaceDraft.bankDetails || null,
+        digitalSignatureUrl: workspaceDraft.digitalSignatureUrl ? sanitizeStr(workspaceDraft.digitalSignatureUrl) : null,
+        digitalSignatureEnabled: Boolean(workspaceDraft.digitalSignatureEnabled),
       };
 
       promises.push(
@@ -2551,6 +2779,10 @@ export default function SettingsPage() {
         setUndoStack([]);
         setRedoStack([]);
         toast.success(`Published changes successfully: ${callsMade.join(', ')}`);
+        if (typeof window !== 'undefined' && workspaceDraft.logoUrl) {
+          localStorage.setItem('tenant_logo_url', workspaceDraft.logoUrl);
+          window.dispatchEvent(new CustomEvent('logo-updated', { detail: { logoUrl: workspaceDraft.logoUrl } }));
+        }
       } else {
         toast.error('Some updates failed to synchronize.');
       }
@@ -2582,26 +2814,30 @@ export default function SettingsPage() {
   }, [workspaceDraft, hasUnsavedChanges, undoStack, redoStack]);
 
   // File Upload Helper
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, targetField: 'logoUrl' | 'faviconUrl' | 'documents') => {
+  const handleFileUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>, 
+    targetField: 'logoUrl' | 'faviconUrl' | 'documents' | 'stampUrl' | 'digitalSignatureUrl'
+  ) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const isImage = ['image/png', 'image/jpeg', 'image/jpg'].includes(file.type) || 
+    const isImage = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'].includes(file.type) || 
                     file.name.toLowerCase().endsWith('.png') || 
                     file.name.toLowerCase().endsWith('.jpg') || 
-                    file.name.toLowerCase().endsWith('.jpeg');
+                    file.name.toLowerCase().endsWith('.jpeg') ||
+                    file.name.toLowerCase().endsWith('.webp');
 
     const isDoc = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'].includes(file.type) ||
                   file.name.toLowerCase().endsWith('.pdf') ||
                   file.name.toLowerCase().endsWith('.docx');
 
-    if (targetField === 'logoUrl' || targetField === 'faviconUrl') {
+    if (targetField === 'logoUrl' || targetField === 'faviconUrl' || targetField === 'stampUrl' || targetField === 'digitalSignatureUrl') {
       if (!isImage) {
-        toast.error('Invalid image type. Only PNG and JPG/JPEG are allowed for branding logos.');
+        toast.error('Invalid image type. Only PNG, JPG and WebP are allowed for logos, stamps, and signatures.');
         return;
       }
-      if (file.size > 1 * 1024 * 1024) {
-        toast.error('File size exceeds the 1MB limit for images.');
+      if (file.size > 2 * 1024 * 1024) {
+        toast.error('File size exceeds the 2MB limit for images.');
         return;
       }
     } else {
@@ -2626,7 +2862,7 @@ export default function SettingsPage() {
     if (token && token !== 'null' && token !== 'undefined') {
       headers['Authorization'] = `Bearer ${token}`;
     }
-    toast.info(`Uploading file: ${file.name}...`);
+    toast.info(`Uploading ${targetField === 'stampUrl' ? 'stamp' : targetField === 'digitalSignatureUrl' ? 'signature' : 'file'}: ${file.name}...`);
 
     try {
       const res = await fetch('/api/upload', {
@@ -2644,8 +2880,17 @@ export default function SettingsPage() {
         
         if (targetField === 'logoUrl') {
           updateDraftField('logoUrl', fileUrl);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('tenant_logo_url', fileUrl);
+            window.dispatchEvent(new CustomEvent('logo-updated', { detail: { logoUrl: fileUrl } }));
+          }
         } else if (targetField === 'faviconUrl') {
           updateDraftField('faviconUrl', fileUrl);
+        } else if (targetField === 'stampUrl') {
+          updateDraftField('stampUrl', fileUrl);
+        } else if (targetField === 'digitalSignatureUrl') {
+          updateDraftField('digitalSignatureUrl', fileUrl);
+          updateDraftField('digitalSignatureEnabled', true);
         } else if (targetField === 'documents') {
           // Format file size
           const formatBytes = (bytes: number) => {
@@ -2666,10 +2911,43 @@ export default function SettingsPage() {
           updateDraftField('uploadedDocuments', [...(workspaceDraft.uploadedDocuments || []), newDoc]);
         }
       } else {
-        toast.error(resJson.error || resJson.message || 'File upload failed');
+        // Fallback to FileReader for local preview if network upload endpoint fails
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64Url = reader.result as string;
+          if (targetField === 'stampUrl') {
+            updateDraftField('stampUrl', base64Url);
+            toast.success(`${file.name} loaded (client preview)`);
+          } else if (targetField === 'digitalSignatureUrl') {
+            updateDraftField('digitalSignatureUrl', base64Url);
+            updateDraftField('digitalSignatureEnabled', true);
+            toast.success(`${file.name} loaded (client preview)`);
+          } else if (targetField === 'logoUrl') {
+            updateDraftField('logoUrl', base64Url);
+            toast.success(`${file.name} loaded (client preview)`);
+          } else {
+            toast.error(resJson.error || resJson.message || 'File upload failed');
+          }
+        };
+        reader.readAsDataURL(file);
       }
     } catch {
-      toast.error('Network dispatch connection failure during upload');
+      // Fallback to FileReader on network failure
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64Url = reader.result as string;
+        if (targetField === 'stampUrl') {
+          updateDraftField('stampUrl', base64Url);
+          toast.success(`${file.name} loaded (offline preview)`);
+        } else if (targetField === 'digitalSignatureUrl') {
+          updateDraftField('digitalSignatureUrl', base64Url);
+          updateDraftField('digitalSignatureEnabled', true);
+          toast.success(`${file.name} loaded (offline preview)`);
+        } else {
+          toast.error('Network dispatch connection failure during upload');
+        }
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -3005,8 +3283,6 @@ export default function SettingsPage() {
     return keywords.some(k => k.includes(q));
   };
 
-  // Local state elements for visuals (interactive Org Chart list mockups)
-  const currentCostCenters = ['CC-ENG-01', 'CC-QA-02', 'CC-MKT-03', 'CC-HR-04'];
 
   if (loading) {
     return (
@@ -3089,6 +3365,8 @@ export default function SettingsPage() {
       <input type="file" ref={invoiceLogoInputRef} className="hidden" accept="image/png, image/jpeg, image/jpg" onChange={e => handleFileUpload(e, 'logoUrl')} />
       <input type="file" ref={docVaultInputRef} className="hidden" accept="image/png, image/jpeg, image/jpg, application/pdf" onChange={e => handleFileUpload(e, 'documents')} />
       <input type="file" ref={onboardingInputRef} className="hidden" accept="image/png, image/jpeg, image/jpg, application/pdf" onChange={handleOnboardingFileUpload} />
+      <input type="file" ref={stampInputRef} className="hidden" accept="image/png, image/jpeg, image/jpg, image/webp" onChange={e => handleFileUpload(e, 'stampUrl')} />
+      <input type="file" ref={signatureInputRef} className="hidden" accept="image/png, image/jpeg, image/jpg, image/webp" onChange={e => handleFileUpload(e, 'digitalSignatureUrl')} />
 
       {/* Settings Center Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-border pb-4">
@@ -3481,50 +3759,24 @@ export default function SettingsPage() {
                       <span className="text-xs text-muted-foreground font-semibold">Resolving employee hierarchy...</span>
                     </div>
                   ) : orgNodes.length === 0 ? (
-                    /* Elegant placeholder tree when no employee rows exist */
-                    <div className="flex flex-col items-center justify-center p-6 bg-slate-50 dark:bg-zinc-900/30 rounded-2xl border border-border min-h-[350px]">
-                      <div className="p-3.5 bg-primary text-white font-extrabold rounded-2xl text-xs shadow-md mb-6 transition-all hover:scale-105">
-                        Board of Directors (CEO / CTO)
+                    <div className="flex flex-col items-center justify-center p-12 bg-slate-50 dark:bg-zinc-900/30 rounded-2xl border border-dashed border-border min-h-[350px] text-center">
+                      <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-3">
+                        <Network className="h-6 w-6 text-primary" />
                       </div>
-                      
-                      <div className="w-[2px] h-8 bg-border" />
-
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-2xl mt-4">
-                        <div className="flex flex-col items-center bg-card border border-border p-4 rounded-2xl shadow-sm">
-                          <span className="text-xs font-bold text-foreground">Engineering BU</span>
-                          <span className="text-[10px] text-muted-foreground mt-1">Cost Center: CC-ENG-01</span>
-                        </div>
-
-                        <div className="flex flex-col items-center bg-card border border-border p-4 rounded-2xl shadow-sm">
-                          <span className="text-xs font-bold text-foreground">Product & Design</span>
-                          <span className="text-[10px] text-muted-foreground mt-1">Cost Center: CC-QA-02</span>
-                        </div>
-
-                        <div className="flex flex-col items-center bg-card border border-border p-4 rounded-2xl shadow-sm">
-                          <span className="text-xs font-bold text-foreground">Sales & Marketing</span>
-                          <span className="text-[10px] text-muted-foreground mt-1">Cost Center: CC-MKT-03</span>
-                        </div>
-                      </div>
-
-                      <div className="mt-8 flex flex-col items-center gap-2 text-center">
-                        <Badge variant="outline" className="text-primary border-primary/30 bg-primary/5 uppercase font-bold text-[10px] tracking-wider px-2 py-0.5">
-                          Visual Mockup Mode
-                        </Badge>
-                        <p className="text-[11px] text-muted-foreground max-w-sm">
-                          No active employee profiles found in this tenant database yet. Add employees in the workforce module to activate the live reporting hierarchy.
-                        </p>
-                      </div>
+                      <h4 className="font-bold text-sm text-foreground">No Organization Hierarchy Found</h4>
+                      <p className="text-xs text-muted-foreground max-w-md mt-1">
+                        No employee profiles or reporting lines have been configured for this tenant yet. Add employees in the workforce module to automatically generate the live organization tree.
+                      </p>
                     </div>
                   ) : (
                     /* Live dynamic Org Chart Renderer with Drag & Drop */
                     <div className="overflow-x-auto p-4 bg-slate-50 dark:bg-zinc-900/30 rounded-2xl border border-border min-h-[400px]">
                       <div className="flex flex-col items-center min-w-[700px] py-6">
-                        {/* Roots (nodes with no manager or manager not in list) */}
-                        {orgNodes
-                          .filter(node => !node.managerId || !orgNodes.some(n => n.userId === node.managerId))
-                          .map(rootNode => {
+                        {/* Render live workforce reporting tree */}
+                        <div className="flex flex-wrap justify-center gap-8 w-full">
+                          {buildOrgTree(orgNodes).map(rootNode => {
                             const renderNodeTree = (node: any) => {
-                              const children = orgNodes.filter(n => n.managerId === node.userId);
+                              const children = node.children || [];
                               return (
                                 <div key={node.id} className="flex flex-col items-center">
                                   {/* Draggable Card Node */}
@@ -3546,15 +3798,15 @@ export default function SettingsPage() {
                                       {node.avatarUrl ? (
                                         <img src={node.avatarUrl} alt={node.name} className="h-full w-full rounded-full object-cover" />
                                       ) : (
-                                        node.name.substring(0, 2)
+                                        (node.name || 'AP').split(' ').map((n: string) => n[0]).join('').slice(0, 2)
                                       )}
                                     </div>
                                     <h4 className="text-xs font-bold text-foreground text-center mt-2 truncate w-full">{node.name}</h4>
                                     <span className="text-[10px] text-primary font-bold text-center mt-0.5 truncate w-full">{node.designation}</span>
                                     <span className="text-[9px] text-muted-foreground text-center mt-0.5 truncate w-full">{node.department}</span>
-                                    {node.costCenter && (
+                                    {(node.office || node.costCenter) && (
                                       <span className="mt-2 text-[8px] font-mono bg-muted text-muted-foreground px-1.5 py-0.5 rounded-md">
-                                        {node.costCenter}
+                                        {node.office || node.costCenter}
                                       </span>
                                     )}
                                   </div>
@@ -3566,7 +3818,7 @@ export default function SettingsPage() {
                                       <div className="relative flex justify-center w-full">
                                         <div className="absolute top-0 left-0 right-0 h-[2px] bg-border w-[90%] mx-auto" />
                                         <div className="flex gap-8 pt-6 relative">
-                                          {children.map(child => renderNodeTree(child))}
+                                          {children.map((child: any) => renderNodeTree(child))}
                                         </div>
                                       </div>
                                     </>
@@ -3576,6 +3828,7 @@ export default function SettingsPage() {
                             };
                             return renderNodeTree(rootNode);
                           })}
+                        </div>
                       </div>
                       <div className="mt-4 flex items-center justify-center gap-2 text-[10px] text-muted-foreground font-semibold text-center border-t border-border/60 pt-4">
                         <Sparkles className="h-3.5 w-3.5 text-primary animate-pulse" />
@@ -3791,7 +4044,7 @@ export default function SettingsPage() {
                           value={workspaceDraft.emailPattern}
                           onChange={e => updateDraftField('emailPattern', e.target.value)}
                         >
-                          <option value="username@techsonance.com">username@techsonance.com</option>
+                          <option value="username@domain.com">username@domain.com</option>
                           <option value="first.last@company.com">first.last@company.com</option>
                           <option value="flast@company.com">flast@company.com</option>
                         </select>
@@ -3893,8 +4146,8 @@ export default function SettingsPage() {
                     <Input 
                       className="text-xs rounded-xl pl-9 h-10" 
                       placeholder="Search users by name, email, or role..."
-                      value={searchTerm}
-                      onChange={e => setSearchTerm(e.target.value)}
+                      value={userSearchTerm}
+                      onChange={e => setUserSearchTerm(e.target.value)}
                     />
                   </div>
 
@@ -3918,12 +4171,14 @@ export default function SettingsPage() {
                         <tbody className="divide-y divide-border">
                           {usersList
                             .filter(u => {
-                              if (!searchTerm) return true;
-                              const term = searchTerm.toLowerCase();
+                              if (!userSearchTerm.trim()) return true;
+                              const term = userSearchTerm.toLowerCase();
+                              const fullName = `${u.firstName || ''} ${u.lastName || ''}`.toLowerCase();
                               return (
                                 u.email?.toLowerCase().includes(term) ||
                                 u.firstName?.toLowerCase().includes(term) ||
                                 u.lastName?.toLowerCase().includes(term) ||
+                                fullName.includes(term) ||
                                 u.role?.toLowerCase().includes(term)
                               );
                             })
@@ -3943,18 +4198,38 @@ export default function SettingsPage() {
                                   </div>
                                 </td>
                                 <td className="py-3 px-4">
-                                  <select
-                                    className="text-xs rounded-lg border border-input bg-background px-2 py-1 focus:outline-hidden focus:ring-1 focus:ring-primary/20 font-mono"
-                                    value={user.role}
-                                    onChange={(e) => handleRoleChange(user, e.target.value)}
-                                  >
-                                    <option value="admin">admin</option>
-                                    <option value="hr_manager">hr_manager</option>
-                                    <option value="cms_administrator">cms_administrator</option>
-                                    <option value="project_manager">project_manager</option>
-                                    <option value="developer">developer</option>
-                                    <option value="intern">intern</option>
-                                  </select>
+                                  {(() => {
+                                    const availableRoleOptions = [
+                                      { value: 'Employee', label: 'Employee' },
+                                      { value: 'Admin', label: 'Admin' },
+                                      { value: 'Manager', label: 'Manager' },
+                                      { value: 'hr_manager', label: 'HR Manager' },
+                                      { value: 'cms_administrator', label: 'CMS Administrator' },
+                                      { value: 'project_manager', label: 'Project Manager' },
+                                      { value: 'developer', label: 'Developer' },
+                                      { value: 'intern', label: 'Intern' },
+                                      { value: 'Viewer', label: 'Viewer' },
+                                    ];
+
+                                    const currentRoleLower = (user.role || '').toLowerCase();
+                                    const matched = availableRoleOptions.find(opt => opt.value.toLowerCase() === currentRoleLower);
+                                    const selectValue = matched ? matched.value : (user.role || 'Employee');
+
+                                    return (
+                                      <select
+                                        className="text-xs rounded-lg border border-input bg-background px-2 py-1 focus:outline-hidden focus:ring-1 focus:ring-primary/20 font-mono font-medium"
+                                        value={selectValue}
+                                        onChange={(e) => handleRoleChange(user, e.target.value)}
+                                      >
+                                        {availableRoleOptions.map(opt => (
+                                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                        ))}
+                                        {!matched && user.role && (
+                                          <option value={user.role}>{user.role}</option>
+                                        )}
+                                      </select>
+                                    );
+                                  })()}
                                 </td>
                                 <td className="py-3 px-4 text-center">
                                   <div className="flex items-center justify-center gap-1.5">
@@ -3981,13 +4256,30 @@ export default function SettingsPage() {
                                 </td>
                               </tr>
                             ))}
-                          {usersList.length === 0 && (
+                          {usersList.length === 0 ? (
                             <tr>
                               <td colSpan={4} className="py-8 text-center text-xs text-muted-foreground border-2 border-dashed border-border/60 rounded-xl">
                                 No active users found in workspace directory.
                               </td>
                             </tr>
-                          )}
+                          ) : usersList.filter(u => {
+                              if (!userSearchTerm.trim()) return true;
+                              const term = userSearchTerm.toLowerCase();
+                              const fullName = `${u.firstName || ''} ${u.lastName || ''}`.toLowerCase();
+                              return (
+                                u.email?.toLowerCase().includes(term) ||
+                                u.firstName?.toLowerCase().includes(term) ||
+                                u.lastName?.toLowerCase().includes(term) ||
+                                fullName.includes(term) ||
+                                u.role?.toLowerCase().includes(term)
+                              );
+                            }).length === 0 ? (
+                            <tr>
+                              <td colSpan={4} className="py-8 text-center text-xs text-muted-foreground border-2 border-dashed border-border/60 rounded-xl">
+                                No users matching "{userSearchTerm}".
+                              </td>
+                            </tr>
+                          ) : null}
                         </tbody>
                       </table>
                     </div>
@@ -4116,7 +4408,7 @@ export default function SettingsPage() {
                       No roles loaded. Make sure the database is configured.
                     </div>
                   ) : (() => {
-                    const activeRole = rolesList.find(r => r.role_key === selectedRoleId || r.id === selectedRoleId);
+                    const activeRole = rolesList.find(r => r.role_key === selectedRoleId || r.id === selectedRoleId) || rolesList[0];
                     if (!activeRole) return <div className="p-5 text-xs text-muted-foreground">Select a role above</div>;
                     
                     const modulesMapping = [
@@ -4174,7 +4466,12 @@ export default function SettingsPage() {
                             </thead>
                             <tbody className="divide-y divide-border">
                               {modulesMapping.map(mod => {
-                                const allowedActions = activeRole.permissions[mod.key] || [];
+                                const rawActions = activeRole?.permissions?.[mod.key];
+                                const allowedActions: string[] = Array.isArray(rawActions)
+                                  ? rawActions
+                                  : (rawActions && typeof rawActions === 'object'
+                                    ? Object.keys(rawActions).filter(k => Boolean(rawActions[k]))
+                                    : []);
                                 return (
                                   <tr key={mod.key} className="hover:bg-slate-50/30 dark:hover:bg-zinc-900/10 transition-colors">
                                     <td className="py-3 px-4 font-semibold text-foreground">{mod.label}</td>
@@ -4295,16 +4592,19 @@ export default function SettingsPage() {
                         <div className="space-y-1">
                           <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Access Role *</Label>
                           <select
-                            className="w-full text-xs rounded-lg border border-input bg-background px-3 h-9 focus:outline-hidden focus:ring-1 focus:ring-primary/20 font-mono"
+                            className="w-full text-xs rounded-lg border border-input bg-background px-3 h-9 focus:outline-hidden focus:ring-1 focus:ring-primary/20 font-mono font-medium"
                             value={inviteForm.role}
                             onChange={e => setInviteForm(prev => ({ ...prev, role: e.target.value as any }))}
                           >
-                            <option value="admin">admin</option>
-                            <option value="hr_manager">hr_manager</option>
-                            <option value="cms_administrator">cms_administrator</option>
-                            <option value="project_manager">project_manager</option>
-                            <option value="developer">developer</option>
-                            <option value="intern">intern</option>
+                            <option value="Employee">Employee</option>
+                            <option value="Admin">Admin</option>
+                            <option value="Manager">Manager</option>
+                            <option value="hr_manager">HR Manager</option>
+                            <option value="cms_administrator">CMS Administrator</option>
+                            <option value="project_manager">Project Manager</option>
+                            <option value="developer">Developer</option>
+                            <option value="intern">Intern</option>
+                            <option value="Viewer">Viewer</option>
                           </select>
                         </div>
                       </div>
@@ -5180,7 +5480,7 @@ export default function SettingsPage() {
                     <div className="space-y-1.5">
                       <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Redirect URI / Webhook Destination URL</Label>
                       <Input 
-                        placeholder="e.g. https://api.techsonance.com/v1/webhook"
+                        placeholder="e.g. https://api.yourdomain.com/v1/webhook"
                         className="text-xs rounded-xl"
                         value={integrationConfigInput.webhookUrl}
                         onChange={e => setIntegrationConfigInput({ ...integrationConfigInput, webhookUrl: e.target.value })}
@@ -5386,7 +5686,7 @@ export default function SettingsPage() {
                       <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Quotation Prefix</Label>
                       <Input 
                         className="text-xs rounded-xl"
-                        value={workspaceDraft.quotationPrefix || 'TS-QTN-'}
+                        value={workspaceDraft.quotationPrefix || 'QTN-'}
                         onChange={e => updateDraftField('quotationPrefix', e.target.value)}
                       />
                     </div>
@@ -5394,7 +5694,7 @@ export default function SettingsPage() {
                       <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Purchase Order Prefix</Label>
                       <Input 
                         className="text-xs rounded-xl"
-                        value={workspaceDraft.purchasePrefix || 'TS-PO-'}
+                        value={workspaceDraft.purchasePrefix || 'PO-'}
                         onChange={e => updateDraftField('purchasePrefix', e.target.value)}
                       />
                     </div>
@@ -5402,7 +5702,7 @@ export default function SettingsPage() {
                       <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Credit Note Prefix</Label>
                       <Input 
                         className="text-xs rounded-xl"
-                        value={workspaceDraft.creditNotePrefix || 'TS-CN-'}
+                        value={workspaceDraft.creditNotePrefix || 'CN-'}
                         onChange={e => updateDraftField('creditNotePrefix', e.target.value)}
                       />
                     </div>
@@ -5517,69 +5817,202 @@ export default function SettingsPage() {
                 </CardContent>
               </Card>
 
-              {/* QR Code & Digital Signature */}
+              {/* Stamp, Signature & Invoicing Identity */}
               <Card className="border-border shadow-xs">
                 <CardHeader>
-                  <CardTitle className="text-lg font-bold">QR Codes & Digital Signature Verification</CardTitle>
-                  <CardDescription>Append dynamic payment codes and verification signatures onto generated PDF sheets.</CardDescription>
+                  <CardTitle className="text-lg font-bold">Corporate Stamp, Signature & Invoice Identity</CardTitle>
+                  <CardDescription>Upload official company stamp and authorized signatory credentials to dynamically brand customer invoices and financial PDFs.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
+                  {/* Tagline & Signatory Metadata */}
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <div className="space-y-2 md:col-span-1">
+                      <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Invoice Tagline / Subtitle</Label>
+                      <Input
+                        placeholder="e.g. Where Innovation Finds Its Resonance"
+                        className="text-xs rounded-xl"
+                        value={workspaceDraft.tagline || ''}
+                        onChange={e => updateDraftField('tagline', e.target.value)}
+                      />
+                      <p className="text-[10px] text-muted-foreground">Shown beneath company name in invoice header</p>
+                    </div>
+                    <div className="space-y-2 md:col-span-1">
+                      <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Signatory Full Name</Label>
+                      <Input
+                        placeholder="e.g. Sajeshkumar Adeya"
+                        className="text-xs rounded-xl"
+                        value={workspaceDraft.signatoryName || ''}
+                        onChange={e => updateDraftField('signatoryName', e.target.value)}
+                      />
+                      <p className="text-[10px] text-muted-foreground">Authorized representative's legal name</p>
+                    </div>
+                    <div className="space-y-2 md:col-span-1">
+                      <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Signatory Designation / Title</Label>
+                      <Input
+                        placeholder="e.g. Co-Founder & CTO · Authorized Signatory"
+                        className="text-xs rounded-xl"
+                        value={workspaceDraft.signatoryTitle || ''}
+                        onChange={e => updateDraftField('signatoryTitle', e.target.value)}
+                      />
+                      <p className="text-[10px] text-muted-foreground">Role printed below signature block</p>
+                    </div>
+                  </div>
+
+                  {/* Stamp & Signature Upload Grid */}
                   <div className="grid gap-6 md:grid-cols-2">
-                    {/* QR Code Setup */}
-                    <div className="p-4 border border-border rounded-2xl space-y-4 bg-slate-50/20">
+                    {/* Stamp Block */}
+                    <div className="p-4 border border-border rounded-2xl space-y-4 bg-slate-50/20 dark:bg-zinc-900/10">
                       <div className="flex items-center justify-between">
                         <div className="space-y-0.5">
-                          <h4 className="font-bold text-xs">Append QR Code to Bill</h4>
-                          <p className="text-[10px] text-muted-foreground">UPI quick payments code layout</p>
+                          <h4 className="font-bold text-xs flex items-center gap-2">
+                            <span>Official Corporate Stamp</span>
+                            {workspaceDraft.stampUrl && <Badge variant="outline" className="text-[9px] bg-emerald-50 text-emerald-600 border-emerald-200">Active</Badge>}
+                          </h4>
+                          <p className="text-[10px] text-muted-foreground">Round or oval corporate seal (transparent PNG recommended)</p>
                         </div>
-                        <input 
-                          type="checkbox"
-                          className="w-6 h-6 accent-primary cursor-pointer"
-                          checked={!!workspaceDraft.qrCodeEnabled}
-                          onChange={e => updateDraftField('qrCodeEnabled', e.target.checked)}
-                        />
                       </div>
 
-                      {workspaceDraft.qrCodeEnabled && (
-                        <div className="space-y-3 pt-2">
-                          <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">UPI ID or Merchant String</Label>
-                          <Input 
-                            placeholder="e.g. corporate@hdfcbank"
-                            className="text-xs rounded-xl"
-                            value={workspaceDraft.qrCodeUrl || ''}
-                            onChange={e => updateDraftField('qrCodeUrl', e.target.value)}
+                      <div className="flex items-center gap-4">
+                        <div className="w-24 h-24 rounded-2xl border-2 border-dashed border-border bg-white dark:bg-zinc-900 flex items-center justify-center p-2 overflow-hidden shadow-xs shrink-0">
+                          {workspaceDraft.stampUrl ? (
+                            <img src={workspaceDraft.stampUrl} alt="Corporate Stamp" className="w-full h-full object-contain" />
+                          ) : (
+                            <div className="text-center p-2 text-muted-foreground">
+                              <Building2 className="w-6 h-6 mx-auto mb-1 opacity-40" />
+                              <span className="text-[9px] block">No Stamp</span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-2 flex-1">
+                          <div className="flex items-center gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="text-xs h-8 px-3 rounded-lg border-primary/20 text-primary hover:bg-primary/5"
+                              onClick={() => stampInputRef.current?.click()}
+                            >
+                              <Upload className="w-3.5 h-3.5 mr-1.5" />
+                              Upload Stamp
+                            </Button>
+                            {workspaceDraft.stampUrl && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className="text-xs h-8 px-2.5 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg"
+                                onClick={() => updateDraftField('stampUrl', '')}
+                              >
+                                <Trash className="w-3.5 h-3.5 mr-1" /> Remove
+                              </Button>
+                            )}
+                          </div>
+                          <Input
+                            placeholder="Or paste stamp image URL..."
+                            className="text-xs rounded-xl h-8"
+                            value={workspaceDraft.stampUrl || ''}
+                            onChange={e => updateDraftField('stampUrl', e.target.value)}
                           />
                         </div>
-                      )}
+                      </div>
                     </div>
 
-                    {/* Digital Signature Setup */}
-                    <div className="p-4 border border-border rounded-2xl space-y-4 bg-slate-50/20">
+                    {/* Digital Signature Block */}
+                    <div className="p-4 border border-border rounded-2xl space-y-4 bg-slate-50/20 dark:bg-zinc-900/10">
                       <div className="flex items-center justify-between">
                         <div className="space-y-0.5">
-                          <h4 className="font-bold text-xs">Authorize Signature stamp</h4>
-                          <p className="text-[10px] text-muted-foreground">Embed corporate signature watermark</p>
+                          <h4 className="font-bold text-xs flex items-center gap-2">
+                            <span>Authorized Signatory Signature</span>
+                            {workspaceDraft.digitalSignatureUrl && <Badge variant="outline" className="text-[9px] bg-emerald-50 text-emerald-600 border-emerald-200">Active</Badge>}
+                          </h4>
+                          <p className="text-[10px] text-muted-foreground">Handwritten signature on transparent/white background</p>
                         </div>
-                        <input 
+                        <input
                           type="checkbox"
-                          className="w-6 h-6 accent-primary cursor-pointer"
+                          className="w-5 h-5 accent-primary cursor-pointer"
                           checked={!!workspaceDraft.digitalSignatureEnabled}
                           onChange={e => updateDraftField('digitalSignatureEnabled', e.target.checked)}
+                          title="Enable signature stamp on invoices"
                         />
                       </div>
 
-                      {workspaceDraft.digitalSignatureEnabled && (
-                        <div className="space-y-3 pt-2">
-                          <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Authorized Signature URL</Label>
-                          <Input 
-                            placeholder="Image URL for signature stamp"
-                            className="text-xs rounded-xl"
+                      <div className="flex items-center gap-4">
+                        <div className="w-28 h-20 rounded-2xl border-2 border-dashed border-border bg-white dark:bg-zinc-900 flex items-center justify-center p-2 overflow-hidden shadow-xs shrink-0">
+                          {workspaceDraft.digitalSignatureUrl ? (
+                            <img src={workspaceDraft.digitalSignatureUrl} alt="Signature" className="w-full h-full object-contain" />
+                          ) : (
+                            <div className="text-center p-2 text-muted-foreground">
+                              <FileText className="w-6 h-6 mx-auto mb-1 opacity-40" />
+                              <span className="text-[9px] block">No Signature</span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-2 flex-1">
+                          <div className="flex items-center gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="text-xs h-8 px-3 rounded-lg border-primary/20 text-primary hover:bg-primary/5"
+                              onClick={() => signatureInputRef.current?.click()}
+                            >
+                              <Upload className="w-3.5 h-3.5 mr-1.5" />
+                              Upload Signature
+                            </Button>
+                            {workspaceDraft.digitalSignatureUrl && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className="text-xs h-8 px-2.5 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg"
+                                onClick={() => updateDraftField('digitalSignatureUrl', '')}
+                              >
+                                <Trash className="w-3.5 h-3.5 mr-1" /> Remove
+                              </Button>
+                            )}
+                          </div>
+                          <Input
+                            placeholder="Or paste signature image URL..."
+                            className="text-xs rounded-xl h-8"
                             value={workspaceDraft.digitalSignatureUrl || ''}
-                            onChange={e => updateDraftField('digitalSignatureUrl', e.target.value)}
+                            onChange={e => {
+                              updateDraftField('digitalSignatureUrl', e.target.value);
+                              if (e.target.value) updateDraftField('digitalSignatureEnabled', true);
+                            }}
                           />
                         </div>
-                      )}
+                      </div>
                     </div>
+                  </div>
+
+                  {/* QR Code Setup */}
+                  <div className="p-4 border border-border rounded-2xl space-y-4 bg-slate-50/20">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <h4 className="font-bold text-xs">Append QR Code to Bill</h4>
+                        <p className="text-[10px] text-muted-foreground">UPI quick payments code layout</p>
+                      </div>
+                      <input 
+                        type="checkbox"
+                        className="w-5 h-5 accent-primary cursor-pointer"
+                        checked={!!workspaceDraft.qrCodeEnabled}
+                        onChange={e => updateDraftField('qrCodeEnabled', e.target.checked)}
+                      />
+                    </div>
+
+                    {workspaceDraft.qrCodeEnabled && (
+                      <div className="space-y-3 pt-2">
+                        <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">UPI ID or Merchant String</Label>
+                        <Input 
+                          placeholder="e.g. corporate@hdfcbank"
+                          className="text-xs rounded-xl"
+                          value={workspaceDraft.qrCodeUrl || ''}
+                          onChange={e => updateDraftField('qrCodeUrl', e.target.value)}
+                        />
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -6624,15 +7057,23 @@ export default function SettingsPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
-                        {tokenLogs.map((log: any) => (
-                          <tr key={log.id} className="hover:bg-slate-50/50 dark:hover:bg-zinc-900/10">
-                            <td className="p-3 font-bold">{log.feature}</td>
-                            <td className="p-3 text-muted-foreground max-w-xs truncate">{log.prompt}</td>
-                            <td className="p-3 font-mono">{log.tokensUsed.toLocaleString()}</td>
-                            <td className="p-3 font-mono">₹{log.creditsCost.toFixed(3)}</td>
-                            <td className="p-3 text-muted-foreground">{log.timestamp}</td>
+                        {tokenLogs.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="p-8 text-center text-xs text-muted-foreground">
+                              No AI prompt token logs found for this tenant.
+                            </td>
                           </tr>
-                        ))}
+                        ) : (
+                          tokenLogs.map((log: any) => (
+                            <tr key={log.id} className="hover:bg-slate-50/50 dark:hover:bg-zinc-900/10">
+                              <td className="p-3 font-bold">{log.feature}</td>
+                              <td className="p-3 text-muted-foreground max-w-xs truncate">{log.prompt}</td>
+                              <td className="p-3 font-mono">{log.tokensUsed.toLocaleString()}</td>
+                              <td className="p-3 font-mono">₹{log.creditsCost.toFixed(3)}</td>
+                              <td className="p-3 text-muted-foreground">{log.timestamp}</td>
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -6814,21 +7255,29 @@ export default function SettingsPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
-                        {loginHistoryList.map((log: any) => (
-                          <tr key={log.id} className="hover:bg-slate-50/50 dark:hover:bg-zinc-900/10">
-                            <td className="p-3 font-bold">{log.email}</td>
-                            <td className="p-3">
-                              {log.status === 'success' ? (
-                                <Badge className="bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 font-bold border-none text-[8px] rounded-md">Success</Badge>
-                              ) : (
-                                <Badge className="bg-red-100 dark:bg-red-950/30 text-red-700 dark:text-red-400 font-bold border-none text-[8px] rounded-md">Failed</Badge>
-                              )}
+                        {loginHistoryList.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="p-8 text-center text-xs text-muted-foreground">
+                              No login activity recorded for this tenant yet.
                             </td>
-                            <td className="p-3 font-mono">{log.ip_address}</td>
-                            <td className="p-3 text-muted-foreground">{log.user_agent} ({log.device_info})</td>
-                            <td className="p-3 text-muted-foreground">{new Date(log.created_at).toLocaleString()}</td>
                           </tr>
-                        ))}
+                        ) : (
+                          loginHistoryList.map((log: any) => (
+                            <tr key={log.id} className="hover:bg-slate-50/50 dark:hover:bg-zinc-900/10">
+                              <td className="p-3 font-bold">{log.email}</td>
+                              <td className="p-3">
+                                {log.status === 'success' ? (
+                                  <Badge className="bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 font-bold border-none text-[8px] rounded-md">Success</Badge>
+                                ) : (
+                                  <Badge className="bg-red-100 dark:bg-red-950/30 text-red-700 dark:text-red-400 font-bold border-none text-[8px] rounded-md">Failed</Badge>
+                                )}
+                              </td>
+                              <td className="p-3 font-mono">{log.ip_address}</td>
+                              <td className="p-3 text-muted-foreground">{log.user_agent} ({log.device_info})</td>
+                              <td className="p-3 text-muted-foreground">{new Date(log.created_at).toLocaleString()}</td>
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -7328,30 +7777,38 @@ export default function SettingsPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
-                        {saasInvoices.map((inv: any) => (
-                          <tr key={inv.id} className="hover:bg-slate-50/50 dark:hover:bg-zinc-900/10">
-                            <td className="p-4 font-bold">{inv.invoiceNumber}</td>
-                            <td className="p-4 text-muted-foreground">{inv.billingDate}</td>
-                            <td className="p-4 font-bold">{inv.currency} {inv.amount.toLocaleString()}</td>
-                            <td className="p-4">
-                              <Badge className="bg-green-100 dark:bg-green-950/30 text-green-700 dark:text-green-400 font-bold border-none text-[9px] capitalize rounded-md">
-                                {inv.status}
-                              </Badge>
-                            </td>
-                            <td className="p-4 text-right">
-                              <Button 
-                                size="sm" 
-                                variant="ghost" 
-                                className="h-8 text-[10px] font-bold text-primary hover:bg-primary/5 rounded-lg px-3"
-                                onClick={() => {
-                                  toast.info(`Simulated PDF download for invoice ${inv.invoiceNumber}`);
-                                }}
-                              >
-                                <Download className="h-3.5 w-3.5 mr-1" /> PDF
-                              </Button>
+                        {saasInvoices.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="p-8 text-center text-xs text-muted-foreground">
+                              No subscription billing invoices found for this tenant.
                             </td>
                           </tr>
-                        ))}
+                        ) : (
+                          saasInvoices.map((inv: any) => (
+                            <tr key={inv.id} className="hover:bg-slate-50/50 dark:hover:bg-zinc-900/10">
+                              <td className="p-4 font-bold">{inv.invoiceNumber}</td>
+                              <td className="p-4 text-muted-foreground">{inv.billingDate}</td>
+                              <td className="p-4 font-bold">{inv.currency} {inv.amount.toLocaleString()}</td>
+                              <td className="p-4">
+                                <Badge className="bg-green-100 dark:bg-green-950/30 text-green-700 dark:text-green-400 font-bold border-none text-[9px] capitalize rounded-md">
+                                  {inv.status}
+                                </Badge>
+                              </td>
+                              <td className="p-4 text-right">
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  className="h-8 text-[10px] font-bold text-primary hover:bg-primary/5 rounded-lg px-3"
+                                  onClick={() => {
+                                    toast.info(`Simulated PDF download for invoice ${inv.invoiceNumber}`);
+                                  }}
+                                >
+                                  <Download className="h-3.5 w-3.5 mr-1" /> PDF
+                                </Button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -7389,22 +7846,28 @@ export default function SettingsPage() {
 
                   {/* Keys list */}
                   <div className="space-y-2 max-w-xl">
-                    {developerApiKeys.map((key: any) => (
-                      <div key={key.id} className="flex justify-between items-center p-3 bg-slate-50 dark:bg-zinc-900/10 border border-border rounded-xl font-sans text-xs">
-                        <div>
-                          <h5 className="font-bold text-xs">{key.key_name}</h5>
-                          <p className="text-[10px] font-mono text-muted-foreground mt-0.5">{key.prefix}••••••••••••••••••••</p>
-                        </div>
-                        <Button 
-                          size="sm" 
-                          variant="ghost" 
-                          className="h-7 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg px-2 text-[10px] font-bold"
-                          onClick={() => handleDeleteApiKey(key.id)}
-                        >
-                          Revoke Key
-                        </Button>
+                    {developerApiKeys.length === 0 ? (
+                      <div className="py-4 text-center text-xs text-muted-foreground border border-dashed border-border rounded-xl">
+                        No active API keys found. Generate a key above to get started.
                       </div>
-                    ))}
+                    ) : (
+                      developerApiKeys.map((key: any) => (
+                        <div key={key.id} className="flex justify-between items-center p-3 bg-slate-50 dark:bg-zinc-900/10 border border-border rounded-xl font-sans text-xs">
+                          <div>
+                            <h5 className="font-bold text-xs">{key.key_name}</h5>
+                            <p className="text-[10px] font-mono text-muted-foreground mt-0.5">{key.prefix}••••••••••••••••••••</p>
+                          </div>
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            className="h-7 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg px-2 text-[10px] font-bold"
+                            onClick={() => handleDeleteApiKey(key.id)}
+                          >
+                            Revoke Key
+                          </Button>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -7443,22 +7906,28 @@ export default function SettingsPage() {
 
                   {/* Webhooks list */}
                   <div className="space-y-2 max-w-xl">
-                    {developerWebhooks.map((wh: any) => (
-                      <div key={wh.id} className="p-3 bg-slate-50 dark:bg-zinc-900/10 border border-border rounded-xl font-sans text-xs space-y-2">
-                        <div className="flex justify-between items-center">
-                          <span className="font-bold font-mono text-[10px] truncate max-w-xs">{wh.url}</span>
-                          <Button 
-                            size="sm" 
-                            variant="ghost" 
-                            className="h-6 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg px-2 text-[9px] font-bold"
-                            onClick={() => handleDeleteWebhook(wh.id)}
-                          >
-                            Remove
-                          </Button>
-                        </div>
-                        <p className="text-[9px] text-muted-foreground font-mono">Signing Secret: <span className="font-bold">{wh.secret}</span></p>
+                    {developerWebhooks.length === 0 ? (
+                      <div className="py-4 text-center text-xs text-muted-foreground border border-dashed border-border rounded-xl">
+                        No webhooks registered.
                       </div>
-                    ))}
+                    ) : (
+                      developerWebhooks.map((wh: any) => (
+                        <div key={wh.id} className="p-3 bg-slate-50 dark:bg-zinc-900/10 border border-border rounded-xl font-sans text-xs space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="font-bold font-mono text-[10px] truncate max-w-xs">{wh.url}</span>
+                            <Button 
+                              size="sm" 
+                              variant="ghost" 
+                              className="h-6 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg px-2 text-[9px] font-bold"
+                              onClick={() => handleDeleteWebhook(wh.id)}
+                            >
+                              Remove
+                            </Button>
+                          </div>
+                          <p className="text-[9px] text-muted-foreground font-mono">Signing Secret: <span className="font-bold">{wh.secret}</span></p>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -7470,19 +7939,25 @@ export default function SettingsPage() {
                   <CardDescription>Authorize secure tenant SSO logins for custom external dashboards.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {developerOAuthApps.map((app: any) => (
-                    <div key={app.id} className="p-4 border border-border rounded-2xl bg-slate-50/20 space-y-2 font-sans text-xs">
-                      <h5 className="font-bold text-xs flex justify-between items-center">
-                        <span>{app.name}</span>
-                        <Badge className="bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-none font-bold text-[8px] rounded-md">Active</Badge>
-                      </h5>
-                      <p className="text-[10px] text-muted-foreground">Redirect URI: <span className="font-mono">{app.redirectUri}</span></p>
-                      <div className="grid gap-2 md:grid-cols-2 pt-1 font-mono text-[9px] text-muted-foreground">
-                        <div>Client ID: <span className="font-bold">{app.clientId}</span></div>
-                        <div>Client Secret: <span className="font-bold">{app.clientSecret}</span></div>
-                      </div>
+                  {developerOAuthApps.length === 0 ? (
+                    <div className="py-6 text-center text-xs text-muted-foreground border-2 border-dashed border-border/80 rounded-xl">
+                      No OAuth applications registered for this tenant.
                     </div>
-                  ))}
+                  ) : (
+                    developerOAuthApps.map((app: any) => (
+                      <div key={app.id} className="p-4 border border-border rounded-2xl bg-slate-50/20 space-y-2 font-sans text-xs">
+                        <h5 className="font-bold text-xs flex justify-between items-center">
+                          <span>{app.name}</span>
+                          <Badge className="bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-none font-bold text-[8px] rounded-md">Active</Badge>
+                        </h5>
+                        <p className="text-[10px] text-muted-foreground">Redirect URI: <span className="font-mono">{app.redirectUri}</span></p>
+                        <div className="grid gap-2 md:grid-cols-2 pt-1 font-mono text-[9px] text-muted-foreground">
+                          <div>Client ID: <span className="font-bold">{app.clientId}</span></div>
+                          <div>Client Secret: <span className="font-bold">{app.clientSecret}</span></div>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </CardContent>
               </Card>
 
@@ -8183,16 +8658,24 @@ export default function SettingsPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
-                        {cronJobs.map((job: any) => (
-                          <tr key={job.id} className="hover:bg-slate-50/50 dark:hover:bg-zinc-900/10">
-                            <td className="p-3 font-bold">{job.name}</td>
-                            <td className="p-3 font-mono">{job.schedule}</td>
-                            <td className="p-3 text-muted-foreground">{job.lastRun}</td>
-                            <td className="p-3">
-                              <Badge className="bg-green-100 dark:bg-green-950/30 text-green-700 dark:text-green-400 font-bold border-none text-[8px] rounded-md">{job.status}</Badge>
+                        {cronJobs.length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="p-8 text-center text-xs text-muted-foreground">
+                              No automated cron jobs registered for this tenant.
                             </td>
                           </tr>
-                        ))}
+                        ) : (
+                          cronJobs.map((job: any) => (
+                            <tr key={job.id} className="hover:bg-slate-50/50 dark:hover:bg-zinc-900/10">
+                              <td className="p-3 font-bold">{job.name}</td>
+                              <td className="p-3 font-mono">{job.schedule}</td>
+                              <td className="p-3 text-muted-foreground">{job.lastRun}</td>
+                              <td className="p-3">
+                                <Badge className="bg-green-100 dark:bg-green-950/30 text-green-700 dark:text-green-400 font-bold border-none text-[8px] rounded-md">{job.status}</Badge>
+                              </td>
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -8360,7 +8843,7 @@ export default function SettingsPage() {
               <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-zinc-900/50 border border-border text-[11px] leading-relaxed text-muted-foreground">
                 {activeTab === 'overview' && 'Overview helps adjust global workspace names, timezones, and corporate fiscal cycles.'}
                 {activeTab === 'company' && 'Company profiles are attached to official documents and GSTIN registries.'}
-                {activeTab === 'invoice' && 'Invoicing controls prefix patterns like TS-INV-001 decimal calculations.'}
+                {activeTab === 'invoice' && 'Invoicing controls prefix patterns like INV-001 and decimal calculations.'}
                 {activeTab === 'security' && 'Security center dictates MFA restrictions and session logout timeouts.'}
                 {!['overview', 'company', 'invoice', 'security'].includes(activeTab) && 'Configure settings parameters. Tab adjustments save to local memory draft layers instantly.'}
               </div>

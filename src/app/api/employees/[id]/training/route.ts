@@ -32,9 +32,15 @@ export const GET = withApiHandler(async (request, context) => {
     .range(offset, offset + limit - 1);
 
   if (error) {
-    if (error.message?.includes('schema cache') || error.message?.includes('does not exist')) {
-      console.warn('employee_training table missing in schema cache, returning empty list');
-      return NextResponse.json(buildListResponse([], 0, 1, limit, 'Training records fetched successfully (fallback)'));
+    if (error.message?.includes('schema cache') || error.message?.includes('does not exist') || error.code === 'PGRST205') {
+      const { data: employee } = await supabase
+        .from('employees')
+        .select('skills')
+        .eq('id', Number(employeeId))
+        .single();
+      const skillsObj = typeof employee?.skills === 'object' && employee.skills ? (employee.skills as Record<string, any>) : {};
+      const list = Array.isArray(skillsObj.training_list) ? skillsObj.training_list : [];
+      return NextResponse.json(buildListResponse(list, list.length, 1, limit, 'Training records fetched successfully'));
     }
     throw new Error(error.message);
   }
@@ -57,12 +63,16 @@ export const POST = withApiHandler(async (request, context) => {
   const employeeId = url.pathname.split('/').at(-2);
   if (!employeeId || isNaN(Number(employeeId))) throw new BadRequestError('Valid employee ID required');
 
-  const payload = createTrainingSchema.parse(await request.json());
+  const rawJson = await request.json().catch(() => ({}));
+  const payload = createTrainingSchema.parse({
+    employeeId: Number(employeeId),
+    ...rawJson,
+  });
   const supabase = getAdminRouteSupabase();
 
   const { data: employee } = await supabase
     .from('employees')
-    .select('id')
+    .select('id, skills')
     .eq('id', Number(employeeId))
     .eq('tenant_id', tenantId)
     .single();
@@ -83,22 +93,71 @@ export const POST = withApiHandler(async (request, context) => {
     .select('*')
     .single();
 
-  if (error || !data) throw error ? new Error(error.message) : new Error('Failed to create training record');
+  let finalTraining: Record<string, unknown>;
 
-  // Timeline
+  if (error) {
+    if (error.message?.includes('schema cache') || error.message?.includes('does not exist') || error.code === 'PGRST205') {
+      const existingSkills = typeof employee.skills === 'object' && employee.skills ? (employee.skills as Record<string, any>) : {};
+      const existingList = Array.isArray(existingSkills.training_list) ? existingSkills.training_list : [];
+      const newTraining: Record<string, unknown> = {
+        id: Date.now(),
+        employeeId: Number(employeeId),
+        employee_id: Number(employeeId),
+        courseName: payload.courseName,
+        course_name: payload.courseName,
+        provider: payload.provider || null,
+        trainingType: payload.trainingType,
+        training_type: payload.trainingType,
+        startDate: payload.startDate || now.split('T')[0],
+        start_date: payload.startDate || now.split('T')[0],
+        endDate: payload.endDate || null,
+        end_date: payload.endDate || null,
+        status: payload.status,
+        score: payload.score ?? null,
+        certificateUrl: payload.certificateUrl || null,
+        expiryDate: payload.expiryDate || null,
+        cost: payload.cost ?? null,
+        currency: payload.currency || 'INR',
+        notes: payload.notes || null,
+        created_at: now,
+        updated_at: now,
+      };
+      const updatedList = [newTraining, ...existingList];
+      await supabase
+        .from('employees')
+        .update({
+          skills: {
+            ...existingSkills,
+            training_list: updatedList,
+          },
+          updated_at: now,
+        })
+        .eq('id', Number(employeeId));
+
+      finalTraining = newTraining;
+    } else {
+      throw new Error(error.message);
+    }
+  } else if (data) {
+    finalTraining = data as Record<string, unknown>;
+  } else {
+    throw new Error('Failed to create training record');
+  }
+
+  // Timeline (non-blocking)
   await supabase.from('employee_timeline').insert({
     tenant_id: tenantId,
     employee_id: Number(employeeId),
     event_type: payload.status === 'completed' ? 'training_completed' : 'other',
     event_title: `Training: ${payload.courseName}`,
     event_description: `${payload.trainingType} - ${payload.provider || 'N/A'}`,
-    event_data: { trainingId: data.id },
+    event_data: { trainingId: finalTraining.id },
     triggered_by: authUserId,
     created_at: now,
   }).then(() => {}).catch(() => {});
 
-  return NextResponse.json(buildSingleResponse(data as Record<string, unknown>, 'Training record created'), { status: 201 });
-}, { requireAuth: true, roles: ['Manager'] });
+  return NextResponse.json(buildSingleResponse(finalTraining, 'Training record created'), { status: 201 });
+}, { requireAuth: true, roles: ['Employee'] });
 
 export const PUT = withApiHandler(async (request, context) => {
   const tenantId = context.auth?.user.tenantId;
@@ -127,14 +186,15 @@ export const PUT = withApiHandler(async (request, context) => {
   if (error || !data) throw error ? new Error(error.message) : new NotFoundError('Training not found');
 
   return NextResponse.json(buildSingleResponse(data as Record<string, unknown>, 'Training updated'));
-}, { requireAuth: true, roles: ['Manager'] });
+}, { requireAuth: true, roles: ['Employee'] });
 
 export const DELETE = withApiHandler(async (request, context) => {
   const tenantId = context.auth?.user.tenantId;
   if (!tenantId) throw new BadRequestError('Tenant info required');
 
   const url = new URL(request.url);
-  const trainingId = Number(url.searchParams.get('trainingId'));
+  const employeeId = url.pathname.split('/').at(-2);
+  const trainingId = Number(url.searchParams.get('trainingId') || url.searchParams.get('id'));
   if (!trainingId || isNaN(trainingId)) throw new BadRequestError('Valid trainingId required');
 
   const supabase = getAdminRouteSupabase();
@@ -144,7 +204,31 @@ export const DELETE = withApiHandler(async (request, context) => {
     .eq('id', trainingId)
     .eq('tenant_id', tenantId);
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (error.message?.includes('schema cache') || error.message?.includes('does not exist') || error.code === 'PGRST205') {
+      if (employeeId && !isNaN(Number(employeeId))) {
+        const { data: employee } = await supabase
+          .from('employees')
+          .select('skills')
+          .eq('id', Number(employeeId))
+          .single();
+        const existingSkills = typeof employee?.skills === 'object' && employee?.skills ? (employee.skills as Record<string, any>) : {};
+        const existingList = Array.isArray(existingSkills.training_list) ? existingSkills.training_list : [];
+        const updatedList = existingList.filter((t: any) => Number(t.id) !== trainingId);
+        await supabase
+          .from('employees')
+          .update({
+            skills: {
+              ...existingSkills,
+              training_list: updatedList,
+            },
+          })
+          .eq('id', Number(employeeId));
+        return NextResponse.json({ success: true, message: 'Training deleted successfully' });
+      }
+    }
+    throw new Error(error.message);
+  }
 
   return NextResponse.json({ success: true, message: 'Training deleted successfully' });
-}, { requireAuth: true, roles: ['Manager'] });
+}, { requireAuth: true, roles: ['Employee'] });

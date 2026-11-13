@@ -17,8 +17,28 @@ A production-grade, multi-tenant CMS and internal operations platform built for 
 
 ---
 
+## 📚 Technical Audit & Handover Documentation Suite
+
+A comprehensive, read-only architectural audit and handover documentation suite has been compiled in `docs/`:
+
+1. [**System Architecture & Data Flow**](docs/ARCHITECTURE.md) — Multi-tenancy isolation model, Edge middleware pipeline, Mermaid topology.
+2. [**Complete Technology Stack**](docs/TECH_STACK.md) — Verified dependencies, versions, runtime engines, and build tools.
+3. [**Feature & Module Inventory**](docs/FEATURE_INVENTORY.md) — Exhaustive catalog of all 43 modules, 107 pages, and permission rules.
+4. [**Data Source & Persistence Audit**](docs/DATA_SOURCE_AUDIT.md) — Live DB vs mock data breakdown, simulated endpoints, and local storage states.
+5. [**Complete API Reference**](docs/API_REFERENCE.md) — 268 unique API routes and 556 registered HTTP method endpoints.
+6. [**Database Schema & Models**](docs/DATABASE_SCHEMA.md) — 187 defined tables across 64 migrations (171 verified live, 16 missing).
+7. [**Auth, RBAC & Security**](docs/AUTH_AND_SECURITY.md) — Hybrid Supabase + Better-Auth architecture, 23 roles, and security headers.
+8. [**Deployment & Operations Guide**](docs/DEPLOYMENT.md) — Environment variables catalog, Docker instructions, and migration steps.
+9. [**Bugs & Technical Debt Catalog**](docs/BUGS_AND_TECH_DEBT.md) — Confirmed defects (TypeScript errors, Dockerfile issues) and prioritized roadmap.
+10. [**Testing & Verification Status**](docs/TESTING_STATUS.md) — Test suite results, runtime verifications, and coverage gaps.
+11. [**Changelog & Ownership Handover**](docs/CHANGELOG_AND_HANDOVER.md) — Git commit history, contributor ownership, and onboarding checklist.
+12. [**Black Box QA Testing Guide**](docs/BLACK_BOX_TESTING_GUIDE.md) — Step-by-step 37-case manual test execution flows across all 43 modules.
+
+---
+
 ## 📑 Table of Contents
 
+- [Technical Handover Documentation](#-technical-audit--handover-documentation-suite)
 - [Overview](#-overview)
 - [Tech Stack](#-tech-stack)
 - [Architecture](#-architecture)
@@ -38,17 +58,18 @@ A production-grade, multi-tenant CMS and internal operations platform built for 
 
 ## 🔭 Overview
 
-CMS TechSonance is a **full-stack enterprise management platform** that consolidates daily operations into one application. It serves as both an internal operations hub (HR, attendance, payroll, task management) and a client-facing project management tool — all secured behind a granular **Role-Based Access Control (RBAC)** system with **multi-tenant isolation**.
+CMS TechSonance is a **full-stack enterprise management platform** that consolidates daily operations into one unified application. It serves as both an internal operations hub (HRIS, attendance, payroll, task management) and a client-facing project management tool — all secured behind a granular **Role-Based Access Control (RBAC)** system with **multi-tenant isolation**.
 
-### Key Highlights
+### Key Highlights (Audited Metrics)
 
-- **Multi-Tenant Architecture** — Complete data isolation per organization via Supabase Row-Level Security (RLS)
-- **23+ User Roles** — From Super Admin to Intern, each with fine-grained permissions across 13 modules
-- **53+ REST API Endpoints** — Full CRUD operations with Zod validation, rate limiting, and OpenAPI documentation
-- **Dual Dashboard System** — Admin-level system overview + Employee-level personal workspace
-- **Advanced Attendance** — NFC reader support, GPS geofencing, IP whitelisting, overtime tracking
-- **Real-time Notifications** — Firebase Cloud Messaging push notifications
-- **Auto-generated OpenAPI/Swagger** — Complete API specification generated at build time
+- **Multi-Tenant Architecture** — Logical tenant isolation via `tenant_id` and Supabase PostgreSQL Row-Level Security (RLS)
+- **43 Functional Modules & 107 Pages** — From Employee Lifecycle & Attendance to Project PMO, CRM Inbox, and Financial Ledgers
+- **268 Unique API Routes (556 HTTP Endpoints)** — Full RESTful suite with Zod validation, rate limiting, and OpenAPI 3.0 specs
+- **187 Database Tables** — Defined across 64 SQL migrations, with 171 tables confirmed active in the live schema cache
+- **23 User Roles** — From Super Admin and CEO to Developers and Interns, with dynamic permission overrides
+- **Dual Dashboard System** — Admin-level system command center + Employee-level personal workspace
+- **Advanced Attendance** — NFC reader integration, GPS geofencing, IP whitelisting, rotational shifts
+- **Auto-generated OpenAPI/Swagger** — Specification automatically synchronized at build time via AST parsing
 
 ---
 

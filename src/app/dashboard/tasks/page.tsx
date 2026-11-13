@@ -12,6 +12,7 @@ import { KanbanBoard } from '@/components/tasks/kanban-board';
 import { SprintPlanningDialog } from '@/components/tasks/sprint-planning-dialog';
 import { TaskDialog } from '@/components/tasks/task-dialog';
 import { isEmployeeRole, hasFullAccess, type UserRole } from '@/lib/permissions';
+import { getStoredSessionToken } from '@/lib/client-session';
 
 interface Sprint {
   id: number;
@@ -67,9 +68,10 @@ export default function TasksPage() {
 
   const fetchSprints = useCallback(async (projectId: number) => {
     try {
-      const token = localStorage.getItem('session_token');
+      const token = getStoredSessionToken();
       const response = await fetch(`/api/sprints?projectId=${projectId}&limit=100`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include'
       });
       if (response.ok) {
         const result = await response.json();
@@ -94,9 +96,10 @@ export default function TasksPage() {
 
   const fetchTaskStats = useCallback(async (sprintId: number) => {
     try {
-      const token = localStorage.getItem('session_token');
+      const token = getStoredSessionToken();
       const response = await fetch(`/api/tasks?sprintId=${sprintId}&limit=1000`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include'
       });
       if (response.ok) {
         const result = await response.json();
@@ -116,9 +119,10 @@ export default function TasksPage() {
   const fetchProjects = useCallback(async (user: User) => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('session_token');
+      const token = getStoredSessionToken();
       const response = await fetch('/api/projects?limit=100', {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include'
       });
       if (!response.ok) return;
       const result = await response.json();
@@ -127,15 +131,22 @@ export default function TasksPage() {
       if (isEmployeeRole(user.role as UserRole)) {
         // Employees: filter to only their assigned projects
         const membersRes = await fetch('/api/project-members?limit=1000', {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          credentials: 'include'
         });
         if (membersRes.ok) {
           const membersResult = await membersRes.json();
           const members: any[] = Array.isArray(membersResult) ? membersResult : (membersResult.data ?? []);
           const userProjectIds = members
-            .filter((m) => m.userId === user.id)
+            .filter((m) => 
+              m.userId === user.id || 
+              String(m.userId) === String(user.id) || 
+              (user as any).legacy_user_id === m.userId
+            )
             .map((m) => m.projectId);
-          const filtered = allProjects.filter((p) => userProjectIds.includes(p.id));
+          const filtered = userProjectIds.length > 0
+            ? allProjects.filter((p) => userProjectIds.includes(p.id))
+            : allProjects;
           setProjects(filtered);
           if (filtered.length > 0) {
             setSelectedProject(filtered[0].id);
@@ -163,18 +174,21 @@ export default function TasksPage() {
 
     const init = async () => {
       try {
-        const token = localStorage.getItem('session_token');
-        if (!token) return;
+        const token = getStoredSessionToken();
         const res = await fetch('/api/auth/me', {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          credentials: 'include'
         });
-        if (!res.ok) return;
-        const data = await res.json();
-        const user: User = data.user;
-        setCurrentUser(user);
-        await fetchProjects(user);
+        if (res.ok) {
+          const data = await res.json();
+          const user: User = data.user;
+          setCurrentUser(user);
+          await fetchProjects(user);
+        }
       } catch (error) {
         console.error('Error initializing tasks page:', error);
+      } finally {
+        setLoading(false);
       }
     };
     init();

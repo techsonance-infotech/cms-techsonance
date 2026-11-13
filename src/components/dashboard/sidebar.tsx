@@ -70,6 +70,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { User } from '@/lib/auth';
+import { getStoredSessionToken } from '@/lib/client-session';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import {
   DropdownMenu,
@@ -83,6 +84,7 @@ interface DashboardSidebarProps {
   isMobile?: boolean;
   onClose?: () => void;
   companyName?: string;
+  logoUrl?: string;
 }
 
 const normalizeRole = (roleStr?: string): string => {
@@ -147,6 +149,12 @@ const isPathActive = (itemHref: string, currentPath: string, searchParams?: any)
       if (itemHref === '/dashboard/settings' && !['overview', 'overview-tab'].includes(activeTab)) {
         return false;
       }
+      if (itemHref === '/dashboard/projects' && activeTab === 'portfolio') {
+        return false;
+      }
+      if (itemHref === '/dashboard/employees/resource-allocation' && (activeTab === 'psa' || activeTab === 'forecasting')) {
+        return false;
+      }
     }
   }
 
@@ -192,13 +200,13 @@ const categories: NavCategory[] = [
     items: [
       { name: 'Workforce Overview', href: '/dashboard/employees', icon: BarChart3, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Organization Chart', href: '/dashboard/employees/org-chart', icon: Network, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee'] },
-      { name: 'Employee Directory', href: '/dashboard/employees/directory', icon: Contact, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] },
+      { name: 'Employee Directory', href: '/dashboard/employees/directory', icon: Contact, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Add Employee', href: '/dashboard/employees/new', icon: UserPlus, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Employee Movement', href: '/dashboard/employees/movement', icon: ArrowRightLeft, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Onboarding Center', href: '/dashboard/employees/onboarding', icon: ListTodo, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Offboarding Center', href: '/dashboard/employees/offboarding', icon: Trash2, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
-      { name: 'Employee Documents', href: '/dashboard/employees/documents', icon: FileText, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee'] },
-      { name: 'Employee Assets', href: '/dashboard/employees/assets', icon: Laptop, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee'] },
+      { name: 'Employee Documents', href: '/dashboard/employees/documents', icon: FileText, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Employee Assets', href: '/dashboard/employees/assets', icon: Laptop, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Reviews & Appraisals', href: '/dashboard/employees/reviews', icon: Star, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Goals & OKRs', href: '/dashboard/employees/reviews?tab=goals', icon: Star, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Career & Succession', href: '/dashboard/employees/reviews?tab=career', icon: Award, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
@@ -230,8 +238,8 @@ const categories: NavCategory[] = [
       { name: 'Timesheet Operations', href: '/dashboard/employees/timesheets', icon: Clock, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Leaves & Time Off', href: '/dashboard/leaves', icon: Calendar, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] },
       { name: 'Work From Home', href: '/dashboard/employees/wfh', icon: Home, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] },
-      { name: 'Holiday Calendar', href: '/dashboard/employees/holidays', icon: CalendarDays, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] },
-      { name: 'Attendance Policies', href: '/dashboard/attendance/policies', icon: ScrollText, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] }
+      { name: 'Holiday Calendar', href: '/dashboard/employees/holidays', icon: CalendarDays, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Attendance Policies', href: '/dashboard/attendance/policies', icon: ScrollText, roles: ['admin', 'super_admin', 'superadmin', 'owner', 'ceo', 'cto', 'business_owner', 'hr_manager', 'project_manager', 'management', 'director', 'cms_administrator'] }
     ]
   },
   {
@@ -241,8 +249,8 @@ const categories: NavCategory[] = [
       { name: 'Operations Dashboard', href: '/dashboard/hr-operations', icon: BarChart3, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'HR Service Desk', href: '/dashboard/hr-service-desk', icon: HelpCircle, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] },
       { name: 'Employee Request Center', href: '/dashboard/employees/requests', icon: MessageSquare, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee'] },
-      { name: 'Broadcast Hub', href: '/dashboard/employees/broadcast', icon: Inbox, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
-      { name: 'Document Vault', href: '/dashboard/employees/documents', icon: FileText, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Company Announcements', href: '/dashboard/employees/broadcast', icon: Inbox, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] },
+      { name: 'Document Vault', href: '/dashboard/employees/documents', icon: FileText, roles: ['admin', 'super_admin', 'superadmin', 'owner', 'ceo', 'cto', 'business_owner', 'hr_manager', 'project_manager', 'management', 'developer', 'employee', 'intern'] },
       { name: 'Asset Tracker', href: '/dashboard/employees/assets', icon: Laptop, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Training & Skills', href: '/dashboard/employees/training', icon: GraduationCap, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] },
       { name: 'Wellness Operations', href: '/dashboard/employees/wellness', icon: HeartHandshake, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] },
@@ -254,13 +262,13 @@ const categories: NavCategory[] = [
     name: 'Projects & Delivery',
     icon: FolderKanban,
     items: [
-      { name: 'Project Dashboard', href: '/dashboard/projects', icon: BarChart3, roles: ['admin', 'project_manager', 'ceo', 'cto', 'business_owner'] },
-      { name: 'Active Projects', href: '/dashboard/projects/active', icon: FolderKanban, roles: ['admin', 'project_manager', 'developer', 'employee', 'intern', 'ceo', 'cto', 'business_owner'] },
-      { name: 'Project Portfolio', href: '/dashboard/projects/portfolio', icon: Layers, roles: ['admin', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Project Dashboard', href: '/dashboard/projects/analytics', icon: BarChart3, roles: ['admin', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Active Projects', href: '/dashboard/projects', icon: FolderKanban, roles: ['admin', 'project_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Project Portfolio', href: '/dashboard/projects?tab=portfolio', icon: Layers, roles: ['admin', 'project_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Task Board', href: '/dashboard/tasks', icon: Kanban, roles: ['admin', 'project_manager', 'developer', 'employee', 'intern', 'ceo', 'cto', 'business_owner'] },
-      { name: 'Sprint Planner', href: '/dashboard/tasks/sprint-planning', icon: Kanban, roles: ['admin', 'project_manager', 'developer', 'employee', 'intern', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Sprint Planner', href: '/dashboard/tasks/sprint-planning', icon: Kanban, roles: ['admin', 'project_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Resource Planner', href: '/dashboard/employees/resource-allocation', icon: ClipboardList, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
-      { name: 'Capacity Planner', href: '/dashboard/projects/capacity', icon: Activity, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Capacity Planner', href: '/dashboard/employees/resource-allocation?tab=forecasting', icon: Activity, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'PSA Planner', href: '/dashboard/employees/resource-allocation?tab=psa', icon: ClipboardList, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Timesheets', href: '/dashboard/employees/timesheets', icon: Clock, roles: ['admin', 'project_manager', 'developer', 'employee', 'intern', 'ceo', 'cto', 'business_owner'] }
     ]
@@ -366,7 +374,7 @@ const getModuleByCategoryName = (name: string): string => {
   }
 };
 
-export function DashboardSidebar({ user, isMobile = false, onClose, companyName: propsCompanyName }: DashboardSidebarProps) {
+export function DashboardSidebar({ user, isMobile = false, onClose, companyName: propsCompanyName, logoUrl: propsLogoUrl }: DashboardSidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const normalizedRole = normalizeRole(user.role);
@@ -374,6 +382,69 @@ export function DashboardSidebar({ user, isMobile = false, onClose, companyName:
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({});
   const [companyName, setCompanyName] = useState(propsCompanyName || 'TechSonance InfoTech');
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [displayLogo, setDisplayLogo] = useState<string | null>(propsLogoUrl || null);
+  const [logoImgError, setLogoImgError] = useState(false);
+
+  useEffect(() => {
+    if (propsLogoUrl) {
+      setDisplayLogo(propsLogoUrl);
+      setLogoImgError(false);
+    }
+  }, [propsLogoUrl]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('tenant_logo_url');
+      if (stored && !displayLogo) {
+        setDisplayLogo(stored);
+      }
+      const handleLogoUpdate = (e: any) => {
+        const newUrl = e?.detail?.logoUrl;
+        if (newUrl) {
+          setDisplayLogo(newUrl);
+          setLogoImgError(false);
+        }
+      };
+      window.addEventListener('logo-updated', handleLogoUpdate);
+      return () => {
+        window.removeEventListener('logo-updated', handleLogoUpdate);
+      };
+    }
+  }, [displayLogo]);
+
+  useEffect(() => {
+    if (!displayLogo) {
+      const fetchLogo = async () => {
+        try {
+          const res = await fetch('/api/company-settings', { credentials: 'include', cache: 'no-store' });
+          if (res.ok) {
+            const data = await res.json();
+            const url = data?.data?.logoUrl || data?.data?.logo_url;
+            if (url) {
+              setDisplayLogo(url);
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('tenant_logo_url', url);
+              }
+            }
+          }
+        } catch {}
+      };
+      fetchLogo();
+    }
+  }, [displayLogo]);
+
+  const getFileUrlWithToken = (url: string | null) => {
+    if (!url) return '';
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+      return url;
+    }
+    const token = getStoredSessionToken();
+    if (token && token !== 'null' && token !== 'undefined' && url.startsWith('/api/')) {
+      const separator = url.includes('?') ? '&' : '?';
+      return `${url}${separator}token=${encodeURIComponent(token)}`;
+    }
+    return url;
+  };
 
   // Load sidebar collapse preference on mount (only if not on mobile)
   useEffect(() => {
@@ -447,8 +518,17 @@ export function DashboardSidebar({ user, isMobile = false, onClose, companyName:
           "flex items-center bg-gradient-to-r from-[#F87941] to-[#F4662B] text-white border-b border-[#F4662B]/10 shadow-sm shrink-0 transition-all duration-300 ease-in-out h-16",
           activeCollapsed ? "px-4 justify-center" : "px-6 gap-3"
         )}>
-          <div className="relative h-9 w-9 bg-white/95 rounded-xl p-1.5 flex items-center justify-center border border-white/20 shadow-sm overflow-hidden shrink-0 transition-transform duration-200 hover:scale-[1.03]">
-            <Image src="/logo-icon.png" alt="TechSonance" fill className="object-contain p-1.5" />
+          <div className="relative h-9 w-9 bg-white/95 rounded-xl p-1 flex items-center justify-center border border-white/20 shadow-sm overflow-hidden shrink-0 transition-transform duration-200 hover:scale-[1.03]">
+            {displayLogo && !logoImgError ? (
+              <img 
+                src={getFileUrlWithToken(displayLogo)} 
+                alt={companyName || "Organization"} 
+                className="h-full w-full object-contain"
+                onError={() => setLogoImgError(true)}
+              />
+            ) : (
+              <Image src="/logo-icon.png" alt={companyName || "TechSonance"} fill className="object-contain p-1.5" />
+            )}
           </div>
           {!activeCollapsed && (
             <span className="font-bold text-sm text-white tracking-tight leading-snug flex-1 select-none animate-in fade-in duration-300 truncate">
@@ -524,6 +604,16 @@ export function DashboardSidebar({ user, isMobile = false, onClose, companyName:
 
             const visibleItems = cat.items.filter((item) => {
               const userPerms = (user as any).permissions;
+              if (
+                item.href === '/dashboard/employees/holidays' ||
+                item.href === '/dashboard/employees/assets' ||
+                item.href === '/dashboard/employees/directory' ||
+                item.href === '/dashboard/projects' ||
+                item.href === '/dashboard/tasks/sprint-planning'
+              ) {
+                const isAdmin = ['admin', 'super_admin', 'owner', 'ceo', 'cto', 'business_owner', 'hr_manager', 'project_manager'].includes(normalizedRole);
+                if (!isAdmin) return false;
+              }
               if (userPerms) {
                 if (item.href === '/dashboard/attendance') {
                   const ta = userPerms.time_attendance;

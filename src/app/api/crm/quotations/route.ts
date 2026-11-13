@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { withApiHandler } from '@/server/http/handler';
 import { BadRequestError } from '@/server/http/errors';
-import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
+import { getAdminRouteSupabase, resolveActorUuid } from '@/server/supabase/route-helpers';
 
 export const GET = withApiHandler(async (request, context) => {
   const user = context.auth!.user;
@@ -28,7 +28,7 @@ export const GET = withApiHandler(async (request, context) => {
 
   // Sort quotation items by sort_order for consistency
   if (quotations) {
-    quotations.forEach(q => {
+    quotations.forEach((q: any) => {
       if (q.quotation_items) {
         q.quotation_items.sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0));
       }
@@ -47,9 +47,9 @@ export const GET = withApiHandler(async (request, context) => {
     .select('id, alias_name, company_name, work_email, estimated_value')
     .eq('tenant_id', tenantId);
 
-  const clientMap = new Map((clients || []).map(c => [c.id, c]));
+  const clientMap = new Map<any, any>((clients || []).map((c: any) => [c.id, c]));
 
-  const mapped = (quotations || []).map(q => ({
+  const mapped = (quotations || []).map((q: any) => ({
     ...q,
     client_name: q.client_id ? (clientMap.get(q.client_id)?.company_name || clientMap.get(q.client_id)?.name || '') : '',
   }));
@@ -109,11 +109,25 @@ export const POST = withApiHandler(async (request, context) => {
   const validUntil = new Date();
   validUntil.setDate(validUntil.getDate() + validityDays);
 
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const actorUuid = await resolveActorUuid(context, supabase);
+  const createdByUuid =
+    ((user as any).id && typeof (user as any).id === 'string' && UUID_REGEX.test((user as any).id))
+      ? (user as any).id
+      : (actorUuid && UUID_REGEX.test(actorUuid))
+      ? actorUuid
+      : (user.providerUserId && typeof user.providerUserId === 'string' && UUID_REGEX.test(user.providerUserId))
+      ? user.providerUserId
+      : null;
+
+  const clientId = body.client_id && !isNaN(Number(body.client_id)) ? Number(body.client_id) : null;
+  const inquiryId = body.inquiry_id && !isNaN(Number(body.inquiry_id)) ? Number(body.inquiry_id) : null;
+
   const insertPayload = {
     tenant_id: tenantId,
     quotation_number: body.quotation_number.trim(),
-    client_id: body.client_id ? Number(body.client_id) : null,
-    inquiry_id: body.inquiry_id ? Number(body.inquiry_id) : null,
+    client_id: clientId,
+    inquiry_id: inquiryId,
     contact_name: body.contact_name?.trim() || null,
     contact_email: body.contact_email?.trim() || null,
     contact_phone: body.contact_phone?.trim() || null,
@@ -133,7 +147,7 @@ export const POST = withApiHandler(async (request, context) => {
     terms_conditions: body.terms_conditions?.trim() || null,
     notes: body.notes?.trim() || null,
     version: 1,
-    created_by: user.id || null
+    created_by: createdByUuid
   };
 
   const { data: quotation, error } = await supabase
@@ -144,7 +158,7 @@ export const POST = withApiHandler(async (request, context) => {
 
   if (error) {
     console.error('Quotation insert failed:', error);
-    return NextResponse.json({ success: false, error: 'Failed to create quotation. Please try again.' }, { status: 500 });
+    return NextResponse.json({ success: false, error: error.message || 'Failed to create quotation. Please try again.' }, { status: 500 });
   }
 
   // Insert line items
@@ -219,9 +233,12 @@ export const PUT = withApiHandler(async (request, context) => {
   const validUntil = new Date();
   validUntil.setDate(validUntil.getDate() + validityDays);
 
+  const clientId = body.client_id && !isNaN(Number(body.client_id)) ? Number(body.client_id) : null;
+  const inquiryId = body.inquiry_id && !isNaN(Number(body.inquiry_id)) ? Number(body.inquiry_id) : null;
+
   const updatePayload = {
-    client_id: body.client_id ? Number(body.client_id) : null,
-    inquiry_id: body.inquiry_id ? Number(body.inquiry_id) : null,
+    client_id: clientId,
+    inquiry_id: inquiryId,
     contact_name: body.contact_name?.trim() || null,
     contact_email: body.contact_email?.trim() || null,
     contact_phone: body.contact_phone?.trim() || null,

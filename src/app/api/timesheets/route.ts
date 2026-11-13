@@ -4,6 +4,59 @@ import { BadRequestError } from '@/server/http/errors';
 import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
 import { getDashboardType, type UserRole } from '@/lib/permissions';
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function resolveUserUuid(
+  supabase: any,
+  tenantId: string | null | undefined,
+  identifier: any
+): Promise<string | null> {
+  if (!identifier) return null;
+  const str = String(identifier).trim();
+
+  if (UUID_REGEX.test(str)) {
+    return str;
+  }
+
+  // 1. Try public.users by legacy_user_id
+  if (str && !isNaN(Number(str))) {
+    try {
+      const { data: userByLegacy } = await supabase
+        .from('users')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .eq('legacy_user_id', Number(str))
+        .maybeSingle();
+
+      if (userByLegacy?.id && UUID_REGEX.test(userByLegacy.id)) {
+        return userByLegacy.id;
+      }
+    } catch (e) {
+      console.warn('users by legacy_user_id error:', e);
+    }
+  }
+
+  // 2. Try public.employees by id
+  if (str && !isNaN(Number(str))) {
+    try {
+      const { data: empRecord } = await supabase
+        .from('employees')
+        .select('user_id')
+        .eq('tenant_id', tenantId)
+        .eq('id', Number(str))
+        .maybeSingle();
+
+      if (empRecord?.user_id && UUID_REGEX.test(empRecord.user_id)) {
+        return empRecord.user_id;
+      }
+    } catch (e) {
+      console.warn('employees by id error:', e);
+    }
+  }
+
+  return null;
+}
+
 // GET handler: Relational queries for timesheet entries, weekly grid, project breakdown, and overtime stats
 export const GET = withApiHandler(async (request, context) => {
   const user = context.auth!.user;
@@ -13,8 +66,9 @@ export const GET = withApiHandler(async (request, context) => {
 
   const supabase = getAdminRouteSupabase();
 
-  // Role validation to segregate access
-  const isManagerOrAdmin = ['super_admin', 'admin', 'hr_manager', 'finance', 'owner', 'manager', 'project_manager'].includes(user.role);
+  // Role validation to segregate access (case-insensitive)
+  const roleStr = String(user.role || '').toLowerCase();
+  const isManagerOrAdmin = ['super_admin', 'superadmin', 'admin', 'hr_manager', 'finance', 'owner', 'manager', 'project_manager'].includes(roleStr);
 
   // 1. Relational Query: Active employee roster joined with public.users
   let employees: any[] = [];
@@ -163,17 +217,25 @@ export const POST = withApiHandler(async (request, context) => {
   const user = context.auth!.user;
   const tenantId = user.tenantId;
 
-  if (!tenantId) throw new BadRequestError('Tenant ID missing');
+  const supabase = getAdminRouteSupabase();
 
-  // Role validation to segregate access
-  const isManagerOrAdmin = ['super_admin', 'admin', 'hr_manager', 'finance', 'owner', 'manager', 'project_manager'].includes(user.role);
-  const targetUserId = isManagerOrAdmin ? (userId || user.providerUserId) : user.providerUserId;
+  // Role validation to segregate access (case-insensitive)
+  const roleStr = String(user.role || '').toLowerCase();
+  const isManagerOrAdmin = ['super_admin', 'superadmin', 'admin', 'hr_manager', 'finance', 'owner', 'manager', 'project_manager'].includes(roleStr);
 
-  if (!targetUserId || !entryDate || !taskName) {
-    throw new BadRequestError('Target User ID, Entry Date, and Task Name are required');
+  const rawUserId = isManagerOrAdmin ? (userId || user.providerUserId) : user.providerUserId;
+  let targetUserId: string | null = rawUserId ? await resolveUserUuid(supabase, tenantId, rawUserId) : null;
+  if (!targetUserId && user.providerUserId) {
+    targetUserId = user.providerUserId;
   }
 
-  const supabase = getAdminRouteSupabase();
+  const finalTaskName = taskName && taskName.trim().length > 0
+    ? taskName.trim()
+    : `${activityCategory || 'Development'} - ${projectName || 'Work'}`;
+
+  if (!targetUserId || !entryDate) {
+    throw new BadRequestError('Target User ID and Entry Date are required');
+  }
 
   // Automatic Overtime Calculation (> 8 hours per day is classified as Overtime)
   const bHours = Number(billableHours) || 0;
@@ -195,7 +257,7 @@ export const POST = withApiHandler(async (request, context) => {
       tenant_id: tenantId,
       user_id: targetUserId,
       project_name: projectName,
-      task_name: taskName,
+      task_name: finalTaskName,
       activity_category: activityCategory,
       entry_date: entryDate,
       billable_hours: finalBillable,

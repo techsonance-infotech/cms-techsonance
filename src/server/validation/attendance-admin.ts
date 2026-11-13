@@ -3,11 +3,22 @@ import { z } from 'zod';
 export const attendanceStatusSchema = z.enum(['present', 'absent', 'late', 'half_day']);
 export const attendanceSourceSchema = z.enum(['nfc', 'legacy']).optional();
 
+const flexibleDateSchema = z.string().transform((val) => {
+  const trimmed = val.trim();
+  if (/^\d{2}[-/]\d{2}[-/]\d{4}$/.test(trimmed)) {
+    const parts = trimmed.split(/[-/]/);
+    return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+  }
+  return trimmed;
+}).pipe(z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format (expected YYYY-MM-DD)'));
+
+const flexibleDatetimeSchema = z.string().datetime({ offset: true });
+
 export const createAttendanceSchema = z.object({
   employeeId: z.coerce.number().int().positive(),
-  date: z.string().date(),
-  timeIn: z.string().datetime(),
-  timeOut: z.string().datetime().optional().nullable(),
+  date: flexibleDateSchema,
+  timeIn: flexibleDatetimeSchema,
+  timeOut: flexibleDatetimeSchema.optional().nullable(),
   duration: z.number().int().min(0).optional().nullable(),
   location: z.string().trim().max(255).optional().nullable(),
   readerId: z.string().trim().max(100).optional().nullable(),
@@ -19,8 +30,8 @@ export const createAttendanceSchema = z.object({
 
 export const createManualAttendanceSchema = z.object({
   employeeId: z.coerce.number().int().positive(),
-  checkIn: z.string().datetime(),
-  checkOut: z.string().datetime().optional().nullable(),
+  checkIn: flexibleDatetimeSchema,
+  checkOut: flexibleDatetimeSchema.optional().nullable(),
   notes: z.string().trim().max(1000).optional().nullable(),
 });
 
@@ -82,11 +93,11 @@ export const attendancePolicySchema = z.object({
 });
 
 export const regularizationRequestSchema = z.object({
-  date: z.string().date(),
+  date: flexibleDateSchema,
   reasonType: z.enum(['missing_punch', 'travel', 'wfh', 'forgotten_punch', 'dispute', 'regularization']),
   notes: z.string().trim().min(1).max(1000),
-  requestedTimeIn: z.string().datetime().optional().nullable(),
-  requestedTimeOut: z.string().datetime().optional().nullable(),
+  requestedTimeIn: flexibleDatetimeSchema.optional().nullable(),
+  requestedTimeOut: flexibleDatetimeSchema.optional().nullable(),
   attachmentUrl: z.string().url().optional().nullable(),
   gpsLatitude: z.coerce.number().optional().nullable(),
   gpsLongitude: z.coerce.number().optional().nullable(),
@@ -94,7 +105,7 @@ export const regularizationRequestSchema = z.object({
 
 export const overtimeRequestSchema = z.object({
   employeeId: z.coerce.number().int().positive(),
-  date: z.string().date(),
+  date: flexibleDateSchema,
   calculatedOvertimeMinutes: z.coerce.number().int().nonnegative(),
   approvedOvertimeMinutes: z.coerce.number().int().nonnegative(),
   reason: z.string().trim().max(1000).optional().nullable(),

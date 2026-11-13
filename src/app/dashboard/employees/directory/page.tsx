@@ -14,7 +14,7 @@ import {
   Mail, Phone, Sparkles, Star, CheckSquare, Square, MoreHorizontal,
   Grid, List, Columns, Plus, X, Bookmark, Upload, Settings, Check, 
   HelpCircle, Copy, ExternalLink, Calendar, Heart, Shield, AlertTriangle,
-  FileSpreadsheet, Database, EyeOff, RefreshCw, Layers, Lock, History, UserCheck, MessageSquare, Pin, Bell, Edit2
+  FileSpreadsheet, Database, EyeOff, RefreshCw, Layers, Lock, History, UserCheck, MessageSquare, Pin, Bell, Edit2, ShieldAlert
 } from 'lucide-react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -259,6 +259,7 @@ const MOCK_EMPLOYEES: Employee[] = [
 ];
 
 export default function EmployeeDirectoryPage() {
+  const [isForbidden, setIsForbidden] = useState(false);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -267,6 +268,7 @@ export default function EmployeeDirectoryPage() {
     total: number; active: number; onLeave: number; onNotice: number;
     probation: number; contract: number;
   }>({ total: 0, active: 0, onLeave: 0, onNotice: 0, probation: 0, contract: 0 });
+  const [statsLoading, setStatsLoading] = useState(true);
 
 
 
@@ -394,6 +396,19 @@ export default function EmployeeDirectoryPage() {
   const [validRowsCount, setValidRowsCount] = useState(0);
   const [errorRowsCount, setErrorRowsCount] = useState(0);
 
+  // Smart Query filter mapping logic
+  const matchSmartQuery = (emp: Employee): boolean => {
+    if (!smartValue) return true;
+    const target = `${emp.firstName || ''} ${emp.lastName || ''}`.toLowerCase();
+    return target.includes(smartValue.toLowerCase());
+  };
+
+  // Full filter criteria pipeline
+  const filteredEmployees: Employee[] = employees.filter((emp: Employee) => {
+    if (!matchSmartQuery(emp)) return false;
+    return true;
+  });
+
   useEffect(() => {
     setCurrentUser(getStoredUser());
   }, []);
@@ -516,7 +531,7 @@ export default function EmployeeDirectoryPage() {
     if (exportScope.startsWith('Current Page')) {
       dataset = filteredEmployees;
     } else if (exportScope.startsWith('Selected rows')) {
-      dataset = filteredEmployees.filter(e => selectedIds.includes(e.id));
+      dataset = filteredEmployees.filter((e: Employee) => selectedIds.includes(e.id));
       if (dataset.length === 0) {
         toast.error('No rows selected for export');
         return;
@@ -661,6 +676,10 @@ export default function EmployeeDirectoryPage() {
         const meta = Array.isArray(json) ? (json as any).meta : (json.meta || null);
         setEmployees(empList);
         setTotalResults(meta?.total || empList.length || 0);
+        if (meta?.stats) {
+          setWorkforceStats(meta.stats);
+          setStatsLoading(false);
+        }
       } else {
         toast.error('Failed to fetch employees');
       }
@@ -673,8 +692,27 @@ export default function EmployeeDirectoryPage() {
   };
 
   useEffect(() => {
+    try {
+      const stored = localStorage.getItem('user');
+      if (stored) {
+        const u = JSON.parse(stored);
+        const role = (u.role || '').toLowerCase();
+        const isAdminOrManager = ['admin', 'super_admin', 'owner', 'ceo', 'cto', 'business_owner', 'hr_manager', 'project_manager'].includes(role);
+        if (!isAdminOrManager) {
+          setIsForbidden(true);
+          setLoading(false);
+          return;
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isForbidden) return;
     fetchEmployeesData();
-  }, [currentPage, pageSize, debouncedSearch, filterDepartment, filterStatus, filterWorkMode, sortField, sortOrder]);
+  }, [currentPage, pageSize, debouncedSearch, filterDepartment, filterStatus, filterWorkMode, sortField, sortOrder, isForbidden]);
 
   // Fetch workforce stats for analytics cards
   useEffect(() => {
@@ -688,14 +726,15 @@ export default function EmployeeDirectoryPage() {
           const json = await res.json();
           const stats = (json && typeof json === 'object' && !('success' in json)) ? json : (json?.data || null);
           if (stats) {
-            setWorkforceStats({
-              total: stats.total ?? 0,
-              active: stats.active ?? 0,
-              onLeave: stats.onLeave ?? 0,
-              onNotice: stats.onNotice ?? 0,
-              probation: stats.probation ?? 0,
-              contract: stats.contract ?? 0,
-            });
+            setWorkforceStats(prev => ({
+              total: stats.total ?? prev.total,
+              active: stats.active ?? prev.active,
+              onLeave: stats.onLeave ?? prev.onLeave,
+              onNotice: stats.onNotice ?? prev.onNotice,
+              probation: stats.probation ?? prev.probation,
+              contract: stats.contract ?? prev.contract,
+            }));
+            setStatsLoading(false);
           }
         }
       } catch (err) {
@@ -915,7 +954,7 @@ export default function EmployeeDirectoryPage() {
   // Bulk Actions
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedIds(filteredEmployees.map(emp => emp.id));
+      setSelectedIds(filteredEmployees.map((emp: Employee) => emp.id));
       if (filteredEmployees.length > 0) {
         setPreviewEmployee(filteredEmployees[0]);
       }
@@ -958,18 +997,31 @@ export default function EmployeeDirectoryPage() {
     toast.success("CSV export triggered for filtered results");
   };
 
-  // Smart Query filter mapping logic
-  const matchSmartQuery = (emp: Employee): boolean => {
-    if (!smartValue) return true;
-    const target = `${emp.firstName} ${emp.lastName}`.toLowerCase();
-    return target.includes(smartValue.toLowerCase());
-  };
-
-  // Full filter criteria pipeline
-  const filteredEmployees = employees.filter(emp => {
-    if (!matchSmartQuery(emp)) return false;
-    return true;
-  });
+  if (isForbidden) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 text-center max-w-lg mx-auto">
+        <div className="w-16 h-16 rounded-2xl bg-rose-500/10 flex items-center justify-center text-rose-500 mb-4 shadow-sm border border-rose-500/20">
+          <ShieldAlert className="w-8 h-8" />
+        </div>
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">Access Restricted</h2>
+        <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+          The Employee Directory is restricted to Administrators, HR Managers, and Project Managers. Normal users and employees do not have access to view this directory.
+        </p>
+        <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
+          <Link href="/dashboard">
+            <Button variant="outline">
+              Return to Dashboard
+            </Button>
+          </Link>
+          <Link href="/dashboard/employees/org-chart">
+            <Button className="bg-[#F87941] hover:bg-[#e06632] text-white">
+              View Organization Chart
+            </Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex bg-[#FDFCFD] dark:bg-[#15161A] text-slate-800 dark:text-[#fdfcfc] min-h-[calc(100vh-120px)] relative overflow-hidden -m-6 p-6">
@@ -1074,10 +1126,19 @@ export default function EmployeeDirectoryPage() {
               <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ${card.iconBg}`}>
                 <Users className="h-4.5 w-4.5" />
               </div>
-              <div className="text-left">
+              <div className="text-left flex-1 min-w-0">
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block leading-none">{card.label}</span>
-                <span className="text-lg font-black text-slate-900 dark:text-[#fdfcfc] mt-1 block leading-none">{card.count}</span>
-                <span className="text-[9px] font-bold text-slate-400 mt-1 block leading-none">{card.desc}</span>
+                {statsLoading ? (
+                  <div className="mt-1.5 space-y-1.5">
+                    <div className="h-5 w-10 bg-slate-200 dark:bg-zinc-800 rounded animate-pulse" />
+                    <div className="h-2.5 w-14 bg-slate-100 dark:bg-zinc-850 rounded animate-pulse" />
+                  </div>
+                ) : (
+                  <>
+                    <span className="text-lg font-black text-slate-900 dark:text-[#fdfcfc] mt-1 block leading-none">{card.count}</span>
+                    <span className="text-[9px] font-bold text-slate-400 mt-1 block leading-none">{card.desc}</span>
+                  </>
+                )}
               </div>
             </Card>
           ))}
@@ -1263,7 +1324,7 @@ export default function EmployeeDirectoryPage() {
         {selectedIds.length > 0 && (currentUser?.role === 'admin' || currentUser?.role === 'hr_manager' || currentUser?.role === 'project_manager') && (
           <div className="flex items-center gap-3 bg-white dark:bg-[#1E1F22] border border-[#e6e4e6]/30 dark:border-[#2f3035]/30 p-2 px-4 rounded-xl shadow-sm animate-slide-up">
             <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{selectedIds.length} selected</span>
-            <button onClick={() => setSelectedIds(filteredEmployees.map(e => e.id))} className="text-[#f87941] hover:text-[#e06634] text-xs font-bold">
+            <button onClick={() => setSelectedIds(filteredEmployees.map((e: Employee) => e.id))} className="text-[#f87941] hover:text-[#e06634] text-xs font-bold">
               Select all {filteredEmployees.length} results
             </button>
             <div className="h-4 w-px bg-slate-200 mx-1" />
@@ -1414,7 +1475,7 @@ export default function EmployeeDirectoryPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#e6e4e6]/10 dark:divide-[#2f3035]/10 text-xs">
-                  {filteredEmployees.map((emp) => {
+                  {filteredEmployees.map((emp: Employee) => {
                     const isSelected = selectedIds.includes(emp.id);
                     const fullName = `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || 'Employee';
                     const initials = `${emp.firstName?.[0] || ''}${emp.lastName?.[0] || ''}`.toUpperCase() || 'EE';

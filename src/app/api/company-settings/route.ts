@@ -58,6 +58,11 @@ function normalizeSupabaseCompanySettings(row: Record<string, unknown>) {
     qrCodeUrl: row.qr_code_url ?? null,
     digitalSignatureEnabled: row.digital_signature_enabled ?? false,
     digitalSignatureUrl: row.digital_signature_url ?? null,
+    stampUrl: row.stamp_url ?? null,
+    signatoryName: row.signatory_name ?? null,
+    signatoryTitle: row.signatory_title ?? null,
+    tagline: row.tagline ?? null,
+    bankDetails: row.bank_details ?? null,
     invoiceTemplate: row.invoice_template ?? null,
     multiCurrencyEnabled: row.multi_currency_enabled ?? false,
     supportedCurrencies: row.supported_currencies ?? [],
@@ -170,6 +175,11 @@ export const POST = withApiHandler(async (request, context) => {
     qr_code_url: payload.qrCodeUrl ?? null,
     digital_signature_enabled: payload.digitalSignatureEnabled ?? null,
     digital_signature_url: payload.digitalSignatureUrl ?? null,
+    stamp_url: payload.stampUrl ?? null,
+    signatory_name: payload.signatoryName ?? null,
+    signatory_title: payload.signatoryTitle ?? null,
+    tagline: payload.tagline ?? null,
+    bank_details: payload.bankDetails ?? null,
     invoice_template: payload.invoiceTemplate ?? null,
     multi_currency_enabled: payload.multiCurrencyEnabled ?? null,
     supported_currencies: payload.supportedCurrencies ?? null,
@@ -187,6 +197,11 @@ export const POST = withApiHandler(async (request, context) => {
                              errorMsg.includes('pan_card_url') || 
                              errorMsg.includes('gstin') || 
                              errorMsg.includes('pan') ||
+                             errorMsg.includes('stamp_url') ||
+                             errorMsg.includes('signatory_name') ||
+                             errorMsg.includes('signatory_title') ||
+                             errorMsg.includes('tagline') ||
+                             errorMsg.includes('bank_details') ||
                              errorMsg.includes('favicon_url') ||
                              errorMsg.includes('legal_name') ||
                              errorMsg.includes('workspace_name') ||
@@ -257,6 +272,11 @@ export const POST = withApiHandler(async (request, context) => {
       delete insertData.qr_code_url;
       delete insertData.digital_signature_enabled;
       delete insertData.digital_signature_url;
+      delete insertData.stamp_url;
+      delete insertData.signatory_name;
+      delete insertData.signatory_title;
+      delete insertData.tagline;
+      delete insertData.bank_details;
       delete insertData.invoice_template;
       delete insertData.multi_currency_enabled;
       delete insertData.supported_currencies;
@@ -358,6 +378,11 @@ export const PUT = withApiHandler(async (request, context) => {
       qr_code_url: payload.qrCodeUrl ?? null,
       digital_signature_enabled: payload.digitalSignatureEnabled ?? null,
       digital_signature_url: payload.digitalSignatureUrl ?? null,
+      stamp_url: payload.stampUrl ?? null,
+      signatory_name: payload.signatoryName ?? null,
+      signatory_title: payload.signatoryTitle ?? null,
+      tagline: payload.tagline ?? null,
+      bank_details: payload.bankDetails ?? null,
       invoice_template: payload.invoiceTemplate ?? null,
       multi_currency_enabled: payload.multiCurrencyEnabled ?? null,
       supported_currencies: payload.supportedCurrencies ?? null,
@@ -375,6 +400,11 @@ export const PUT = withApiHandler(async (request, context) => {
                                errorMsg.includes('pan_card_url') || 
                                errorMsg.includes('gstin') || 
                                errorMsg.includes('pan') ||
+                               errorMsg.includes('stamp_url') ||
+                               errorMsg.includes('signatory_name') ||
+                               errorMsg.includes('signatory_title') ||
+                               errorMsg.includes('tagline') ||
+                               errorMsg.includes('bank_details') ||
                                errorMsg.includes('favicon_url') ||
                                errorMsg.includes('legal_name') ||
                                errorMsg.includes('workspace_name') ||
@@ -450,6 +480,11 @@ export const PUT = withApiHandler(async (request, context) => {
         delete insertData.qr_code_url;
         delete insertData.digital_signature_enabled;
         delete insertData.digital_signature_url;
+        delete insertData.stamp_url;
+        delete insertData.signatory_name;
+        delete insertData.signatory_title;
+        delete insertData.tagline;
+        delete insertData.bank_details;
         delete insertData.invoice_template;
         delete insertData.multi_currency_enabled;
         delete insertData.supported_currencies;
@@ -516,6 +551,11 @@ export const PUT = withApiHandler(async (request, context) => {
     ...(payload.qrCodeUrl !== undefined ? { qr_code_url: payload.qrCodeUrl } : {}),
     ...(payload.digitalSignatureEnabled !== undefined ? { digital_signature_enabled: payload.digitalSignatureEnabled } : {}),
     ...(payload.digitalSignatureUrl !== undefined ? { digital_signature_url: payload.digitalSignatureUrl } : {}),
+    ...(payload.stampUrl !== undefined ? { stamp_url: payload.stampUrl } : {}),
+    ...(payload.signatoryName !== undefined ? { signatory_name: payload.signatoryName } : {}),
+    ...(payload.signatoryTitle !== undefined ? { signatory_title: payload.signatoryTitle } : {}),
+    ...(payload.tagline !== undefined ? { tagline: payload.tagline } : {}),
+    ...(payload.bankDetails !== undefined ? { bank_details: payload.bankDetails } : {}),
     ...(payload.invoiceTemplate !== undefined ? { invoice_template: payload.invoiceTemplate } : {}),
     ...(payload.multiCurrencyEnabled !== undefined ? { multi_currency_enabled: payload.multiCurrencyEnabled } : {}),
     ...(payload.supportedCurrencies !== undefined ? { supported_currencies: payload.supportedCurrencies } : {}),
@@ -538,6 +578,11 @@ export const PUT = withApiHandler(async (request, context) => {
                              errorMsg.includes('pan_card_url') || 
                              errorMsg.includes('gstin') || 
                              errorMsg.includes('pan') ||
+                             errorMsg.includes('stamp_url') ||
+                             errorMsg.includes('signatory_name') ||
+                             errorMsg.includes('signatory_title') ||
+                             errorMsg.includes('tagline') ||
+                             errorMsg.includes('bank_details') ||
                              errorMsg.includes('favicon_url') ||
                              errorMsg.includes('legal_name') ||
                              errorMsg.includes('workspace_name') ||
@@ -613,6 +658,11 @@ export const PUT = withApiHandler(async (request, context) => {
       delete updateData.qr_code_url;
       delete updateData.digital_signature_enabled;
       delete updateData.digital_signature_url;
+      delete updateData.stamp_url;
+      delete updateData.signatory_name;
+      delete updateData.signatory_title;
+      delete updateData.tagline;
+      delete updateData.bank_details;
       delete updateData.invoice_template;
       delete updateData.multi_currency_enabled;
       delete updateData.supported_currencies;

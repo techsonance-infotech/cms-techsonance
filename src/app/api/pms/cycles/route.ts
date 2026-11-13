@@ -1,25 +1,30 @@
 import { NextResponse } from 'next/server';
 import { withApiHandler } from '@/server/http/handler';
 import { BadRequestError } from '@/server/http/errors';
-import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
+import { getAdminRouteSupabase, resolveTenantId } from '@/server/supabase/route-helpers';
 
 export const GET = withApiHandler(async (request, context) => {
-  const tenantId = context.auth?.user.tenantId;
+  const supabase = getAdminRouteSupabase();
+  const tenantId = await resolveTenantId(context, supabase);
   if (!tenantId) throw new BadRequestError('Tenant credentials required');
 
-  const supabase = getAdminRouteSupabase();
   const { data, error } = await supabase
     .from('pms_cycles')
     .select('*')
     .eq('tenant_id', tenantId)
     .order('start_date', { ascending: false });
 
-  if (error) throw new BadRequestError(error.message);
-  return NextResponse.json(data);
+  if (error) {
+    console.warn('pms_cycles fetch warning:', error.message);
+    throw new BadRequestError(error.message);
+  }
+
+  return NextResponse.json(data || []);
 }, { requireAuth: true });
 
 export const POST = withApiHandler(async (request, context) => {
-  const tenantId = context.auth?.user.tenantId;
+  const supabase = getAdminRouteSupabase();
+  const tenantId = await resolveTenantId(context, supabase);
   if (!tenantId) throw new BadRequestError('Tenant credentials required');
 
   const body = await request.json();
@@ -29,7 +34,6 @@ export const POST = withApiHandler(async (request, context) => {
     throw new BadRequestError('title, startDate, and endDate are required');
   }
 
-  const supabase = getAdminRouteSupabase();
   const { data, error } = await supabase
     .from('pms_cycles')
     .insert({
@@ -39,8 +43,8 @@ export const POST = withApiHandler(async (request, context) => {
       start_date: startDate,
       end_date: endDate,
       status: status || 'draft',
-      weightage_goals: weightageGoals || 50,
-      weightage_competencies: weightageCompetencies || 50,
+      weightage_goals: Number(weightageGoals) || 50,
+      weightage_competencies: Number(weightageCompetencies) || 50,
     })
     .select()
     .single();

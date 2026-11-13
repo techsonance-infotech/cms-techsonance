@@ -19,10 +19,14 @@ export const GET = withApiHandler(async (request, context) => {
   const id = searchParams.get('id');
 
   const accessToken = context.auth?.accessToken;
-  const tenantId = context.auth?.user.tenantId;
+  const user = context.auth?.user;
+  const tenantId = user?.tenantId;
   if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
   
   const supabase = getAdminRouteSupabase();
+
+  const roleStr = String(user?.role || '').toLowerCase();
+  const isManagerOrAdmin = ['super_admin', 'superadmin', 'admin', 'hr_manager', 'finance', 'owner', 'manager', 'project_manager', 'ceo', 'cto', 'business_owner'].includes(roleStr);
 
   if (id) {
     const { data, error } = await supabase
@@ -32,6 +36,32 @@ export const GET = withApiHandler(async (request, context) => {
       .eq('tenant_id', tenantId)
       .single();
     if (error || !data) throw new NotFoundError('Project not found');
+
+    // Employees can only view projects they are assigned to
+    if (!isManagerOrAdmin) {
+      let authUserId = (user as any)?.providerUserId || (typeof (user as any)?.id === 'string' && (user as any).id.includes('-') ? (user as any).id : null);
+      if (!authUserId && user) {
+        const { data: dbUser } = await supabase
+          .from('users')
+          .select('id')
+          .or(`id.eq.${user.id},email.eq.${user.email}`)
+          .maybeSingle();
+        if (dbUser) authUserId = dbUser.id;
+      }
+      const memberConds: string[] = [];
+      if (authUserId) memberConds.push(`user_id.eq.${authUserId}`);
+      if (user?.id && String(user.id) !== String(authUserId)) memberConds.push(`user_id.eq.${user.id}`);
+
+      const [memberCheck, taskCheck] = await Promise.all([
+        memberConds.length > 0 ? supabase.from('project_members').select('id').eq('project_id', Number(id)).eq('tenant_id', tenantId).or(memberConds.join(',')).limit(1) : Promise.resolve({ data: [] }),
+        memberConds.length > 0 ? supabase.from('tasks').select('id').eq('project_id', Number(id)).eq('tenant_id', tenantId).or(memberConds.map(c => c.replace('user_id.', 'assigned_to.')).join(',')).limit(1) : Promise.resolve({ data: [] })
+      ]);
+      const isAssigned = (memberCheck.data && memberCheck.data.length > 0) || (taskCheck.data && taskCheck.data.length > 0);
+      if (!isAssigned) {
+        throw new NotFoundError('Project not found or not assigned to user');
+      }
+    }
+
     const userMap = await buildLegacyUserIdMap(accessToken, [String(data.created_by)], tenantId);
     return NextResponse.json(normalizeSupabaseProjectRecord(data, userMap));
   }
@@ -63,7 +93,47 @@ export const GET = withApiHandler(async (request, context) => {
   if (endDate) query = query.lte('end_date', endDate);
   if (isActive === 'true' || isActive === 'false') query = query.eq('is_active', isActive === 'true');
 
-  if (assignedTo) {
+  // For regular employees: restrict query to only assigned projects
+  if (!isManagerOrAdmin) {
+    let authUserId = (user as any)?.providerUserId || (typeof (user as any)?.id === 'string' && (user as any).id.includes('-') ? (user as any).id : null);
+    if (!authUserId && user) {
+      const { data: dbUser } = await supabase
+        .from('users')
+        .select('id')
+        .or(`id.eq.${user.id},email.eq.${user.email}`)
+        .maybeSingle();
+      if (dbUser) authUserId = dbUser.id;
+    }
+    const memberConds: string[] = [];
+    if (authUserId) memberConds.push(`user_id.eq.${authUserId}`);
+    if (user?.id && String(user.id) !== String(authUserId)) memberConds.push(`user_id.eq.${user.id}`);
+
+    const [memberRowsRes, taskProjectsRes] = await Promise.all([
+      memberConds.length > 0 
+        ? supabase.from('project_members').select('project_id').eq('tenant_id', tenantId).or(memberConds.join(','))
+        : Promise.resolve({ data: [] }),
+      memberConds.length > 0
+        ? supabase.from('tasks').select('project_id').eq('tenant_id', tenantId).or(memberConds.map(c => c.replace('user_id.', 'assigned_to.')).join(','))
+        : Promise.resolve({ data: [] })
+    ]);
+
+    const assignedProjectIds = Array.from(new Set([
+      ...(memberRowsRes.data || []).map((m: any) => Number(m.project_id)),
+      ...(taskProjectsRes.data || []).map((t: any) => Number(t.project_id))
+    ])).filter(pId => Boolean(pId) && !isNaN(pId));
+
+    if (assignedProjectIds.length === 0) {
+      return NextResponse.json({
+        success: true,
+        data: [],
+        message: 'Projects fetched successfully',
+        errors: null,
+        meta: { page: 1, limit, total: 0 },
+      });
+    }
+
+    query = query.in('id', assignedProjectIds);
+  } else if (assignedTo) {
     const authUserId = await resolveAuthUserIdFromLegacyUserId(accessToken, Number(assignedTo), tenantId);
     const { data: memberships, error: membershipError } = await supabase
       .from('project_members')
@@ -73,7 +143,13 @@ export const GET = withApiHandler(async (request, context) => {
     if (membershipError) throw membershipError;
     const projectIds = ((memberships as { project_id: number }[] | null) ?? []).map((row) => row.project_id);
     if (!projectIds.length) {
-      return NextResponse.json([]);
+      return NextResponse.json({
+        success: true,
+        data: [],
+        message: 'Projects fetched successfully',
+        errors: null,
+        meta: { page: 1, limit, total: 0 },
+      });
     }
     query = query.in('id', projectIds);
   }

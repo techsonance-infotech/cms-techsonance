@@ -55,6 +55,7 @@ import { Progress } from '@/components/ui/progress';
 import { PerformanceCharts, FinancialRunRateChart } from '@/components/dashboard/performance-charts';
 import { DashboardAnnouncements, DashboardApprovalQueue, DashboardBroadcaster } from '@/components/dashboard/dashboard-widgets';
 import { PageHeader } from '@/components/ui/page-header';
+import { getStoredSessionToken } from '@/lib/client-session';
 
 interface DashboardStats {
   activeClients: number;
@@ -62,9 +63,17 @@ interface DashboardStats {
   totalRevenue: number;
   totalEmployees: number;
   monthlyRevenue: number;
+  monthlyPayroll?: number;
+  monthlyExpenses?: number;
   netCashFlow: number;
   pendingInvoicesCount: number;
   pendingInvoicesValue: number;
+  outstandingClaimsAmount?: number;
+  outstandingClaimsCount?: number;
+  paidStatutoryPF?: number;
+  pendingOnboarding?: number;
+  pendingReviews?: number;
+  pendingDocuments?: number;
   lowStockAlertsCount: number;
   topCustomers: any[];
   recentActivity: any[];
@@ -76,8 +85,6 @@ interface DashboardStats {
   pendingApprovals: any[];
   recentProjects: any[];
   financialRunRate?: any[];
-  pendingReviews?: number;
-  pendingDocuments?: number;
   assetRecovery?: number;
   missingAttendance?: number;
   insights?: {
@@ -137,14 +144,14 @@ export default function DashboardPage() {
     hasInitializedRef.current = true;
 
     async function initDashboard() {
-      const token = localStorage.getItem('session_token');
-      if (!token) {
-        router.push('/login');
-        return;
-      }
+      const token = getStoredSessionToken() || localStorage.getItem('session_token');
       try {
+        const headers: Record<string, string> = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
         const response = await fetch('/api/auth/me', {
-          headers: { 'Authorization': `Bearer ${token}` },
+          credentials: 'include',
+          cache: 'no-store',
+          headers,
         });
         if (!response.ok) {
           router.push('/login');
@@ -179,10 +186,14 @@ export default function DashboardPage() {
   }, [router]);
 
   const fetchEmployeeDashboardData = async () => {
-    const token = localStorage.getItem('session_token');
+    const token = getStoredSessionToken() || localStorage.getItem('session_token');
     try {
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
       const response = await fetch('/api/dashboard/stats/employee', {
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include',
+        cache: 'no-store',
+        headers,
       });
       if (response.ok) {
         setEmployeeStats(await response.json());
@@ -191,12 +202,15 @@ export default function DashboardPage() {
       console.error('Error fetching employee stats:', error);
     }
   };
-
   const fetchAdminDashboardData = async () => {
-    const token = localStorage.getItem('session_token');
+    const token = getStoredSessionToken() || localStorage.getItem('session_token');
     try {
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
       const response = await fetch('/api/dashboard/stats/admin', {
-        headers: { Authorization: `Bearer ${token}` }
+        credentials: 'include',
+        cache: 'no-store',
+        headers,
       });
 
       if (response.ok) {
@@ -408,11 +422,19 @@ export default function DashboardPage() {
                 <CardTitle>{isClientRole ? 'My Active Projects' : 'Recent Projects'}</CardTitle>
                 <CardDescription>{isClientRole ? 'Current software project delivery milestones' : 'Your latest project assignments'}</CardDescription>
               </div>
-              <Link href="/dashboard/projects">
-                <Button variant="ghost" size="sm" className="text-[#f87941] hover:text-[#f4662b] hover:bg-[#f87941]/10">
-                  View All <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
+              {currentUser && ['super_admin', 'superadmin', 'admin', 'hr_manager', 'finance', 'owner', 'manager', 'project_manager', 'ceo', 'cto', 'business_owner'].includes(String(currentUser.role || '').toLowerCase()) ? (
+                <Link href="/dashboard/projects">
+                  <Button variant="ghost" size="sm" className="text-[#f87941] hover:text-[#f4662b] hover:bg-[#f87941]/10">
+                    View All <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </Link>
+              ) : (
+                <Link href="/dashboard/tasks">
+                  <Button variant="ghost" size="sm" className="text-[#f87941] hover:text-[#f4662b] hover:bg-[#f87941]/10">
+                    Task Board <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </Link>
+              )}
             </CardHeader>
             <CardContent>
               <div className="space-y-1">
@@ -535,20 +557,20 @@ export default function DashboardPage() {
             icon: Users,
             iconColor: 'text-indigo-600',
             iconBg: 'bg-indigo-50 dark:bg-indigo-900/30',
-            trend: { value: 'Active', isPositive: true, show: true, className: 'text-emerald-500 bg-emerald-500/10' },
+            trend: { value: `${adminStats?.totalEmployees ?? 0} Active`, isPositive: true, show: true, className: 'text-emerald-500 bg-emerald-500/10' },
             description: 'Total active workforce records',
-            extraDetail: 'Month-over-month growth',
+            extraDetail: 'Synced with employees roster',
             detailLink: '/dashboard/employees'
           },
           {
             title: 'Pending Onboarding',
-            value: 4,
+            value: adminStats?.pendingOnboarding ?? 0,
             icon: UserPlus,
             iconColor: 'text-sky-600',
             iconBg: 'bg-sky-50 dark:bg-sky-900/30',
-            trend: { value: 'SLA Active', isPositive: true, show: true, className: 'text-sky-500 bg-sky-500/10' },
-            description: 'Candidates transitioning to employees',
-            extraDetail: 'Welcome communications sent',
+            trend: { value: `${adminStats?.pendingOnboarding ?? 0} Recent`, isPositive: true, show: true, className: 'text-sky-500 bg-sky-500/10' },
+            description: 'New joiners in 30-day onboarding window',
+            extraDetail: 'Welcome lifecycle active',
             detailLink: '/dashboard/employees/onboarding'
           },
           {
@@ -568,8 +590,13 @@ export default function DashboardPage() {
             icon: AlertTriangle,
             iconColor: 'text-rose-600',
             iconBg: 'bg-rose-50 dark:bg-rose-900/30',
-            trend: { value: 'High Risk', isPositive: false, show: true, className: 'text-rose-500 bg-rose-500/10' },
-            description: 'Missing Passport/PAN identity validation',
+            trend: { 
+              value: (adminStats?.pendingDocuments ?? 0) > 0 ? `${adminStats?.pendingDocuments} Pending` : '100% Verified', 
+              isPositive: (adminStats?.pendingDocuments ?? 0) === 0, 
+              show: true, 
+              className: (adminStats?.pendingDocuments ?? 0) > 0 ? 'text-rose-500 bg-rose-500/10' : 'text-emerald-500 bg-emerald-500/10' 
+            },
+            description: 'Missing Passport/PAN/Aadhaar validation',
             extraDetail: 'Verification pending',
             detailLink: '/dashboard/employees/documents'
           }
@@ -578,33 +605,33 @@ export default function DashboardPage() {
         return [
           {
             title: 'Monthly Payroll Run Rate',
-            value: `₹${((adminStats?.totalEmployees ?? 0) * 85000).toLocaleString()}`,
+            value: `₹${(adminStats?.monthlyPayroll ?? ((adminStats?.totalEmployees ?? 0) * 85000)).toLocaleString()}`,
             icon: Wallet,
             iconColor: 'text-emerald-600',
             iconBg: 'bg-emerald-50 dark:bg-emerald-900/30',
-            trend: { value: 'Stable', isPositive: true, show: true, className: 'text-emerald-500 bg-emerald-500/10' },
-            description: 'CTC and statutory liabilities cost',
+            trend: { value: 'Active CTC', isPositive: true, show: true, className: 'text-emerald-500 bg-emerald-500/10' },
+            description: 'Monthly compensation from roster',
             extraDetail: 'Processed in current month',
             detailLink: '/dashboard/payroll'
           },
           {
             title: 'Outstanding Claims',
-            value: '₹18,400',
+            value: `₹${(adminStats?.outstandingClaimsAmount ?? 0).toLocaleString()}`,
             icon: Receipt,
             iconColor: 'text-indigo-600',
             iconBg: 'bg-indigo-50 dark:bg-indigo-900/30',
-            trend: { value: '3 Claims', isPositive: true, show: true, className: 'text-indigo-500 bg-indigo-500/10' },
+            trend: { value: `${adminStats?.outstandingClaimsCount ?? 0} Claims`, isPositive: true, show: true, className: 'text-indigo-500 bg-indigo-500/10' },
             description: 'Awaiting accountant clearances',
             extraDetail: 'Pending reimbursement release',
             detailLink: '/dashboard/reimbursements'
           },
           {
             title: 'Paid Statutory PF',
-            value: '₹45,200',
+            value: `₹${(adminStats?.paidStatutoryPF ?? Math.round((adminStats?.monthlyPayroll ?? 0) * 0.12)).toLocaleString()}`,
             icon: DollarSign,
             iconColor: 'text-[#f87941]',
             iconBg: 'bg-[#f87941]/10',
-            trend: { value: 'Deposited', isPositive: true, show: true, className: 'text-[#f87941] bg-[#f87941]/15' },
+            trend: { value: '12% Statutory', isPositive: true, show: true, className: 'text-[#f87941] bg-[#f87941]/15' },
             description: 'Provident Fund statutory ledger',
             extraDetail: '100% statutory compliant',
             detailLink: '/dashboard/payroll'
@@ -615,7 +642,7 @@ export default function DashboardPage() {
             icon: Hourglass,
             iconColor: 'text-amber-600',
             iconBg: 'bg-amber-50 dark:bg-amber-900/30',
-            trend: { value: 'Outstanding', isPositive: true, show: true, className: 'text-amber-500 bg-amber-500/10' },
+            trend: { value: `${adminStats?.pendingInvoicesCount ?? 0} Items`, isPositive: true, show: true, className: 'text-amber-500 bg-amber-500/10' },
             description: 'Awaiting client settlements',
             extraDetail: `${adminStats?.pendingInvoicesCount ?? 0} invoices unpaid`,
             detailLink: '/dashboard/finance/invoices'
@@ -629,8 +656,8 @@ export default function DashboardPage() {
             icon: FolderKanban,
             iconColor: 'text-sky-600',
             iconBg: 'bg-sky-50 dark:bg-sky-900/30',
-            trend: { value: 'On Track', isPositive: true, show: true, className: 'text-emerald-500 bg-emerald-500/10' },
-            description: 'Current delivery and implementation teams',
+            trend: { value: `${adminStats?.activeProjects ?? 0} Active`, isPositive: true, show: true, className: 'text-emerald-500 bg-emerald-500/10' },
+            description: 'Current delivery and planning teams',
             extraDetail: 'SLA threshold 98%',
             detailLink: '/dashboard/projects'
           },
@@ -658,11 +685,11 @@ export default function DashboardPage() {
           },
           {
             title: 'Missing Attendance Logs',
-            value: adminStats?.missingAttendance ?? 0,
+            value: adminStats?.workforce?.absentToday ?? 0,
             icon: AlertCircle,
             iconColor: 'text-rose-600',
             iconBg: 'bg-rose-50 dark:bg-rose-900/30',
-            trend: { value: 'Unlogged', isPositive: false, show: true, className: 'text-rose-500 bg-rose-500/10' },
+            trend: { value: `${adminStats?.workforce?.absentToday ?? 0} Unlogged`, isPositive: false, show: true, className: 'text-rose-500 bg-rose-500/10' },
             description: 'Employees who missed shift punch in today',
             extraDetail: 'Review anomalies',
             detailLink: '/dashboard/attendance'
@@ -672,14 +699,14 @@ export default function DashboardPage() {
         return [
           {
             title: 'My Direct Reports',
-            value: 8,
+            value: adminStats?.totalEmployees ?? 0,
             icon: Users,
             iconColor: 'text-indigo-600',
             iconBg: 'bg-indigo-50 dark:bg-indigo-900/30',
-            trend: { value: 'Allocated', isPositive: true, show: true, className: 'text-emerald-500 bg-emerald-500/10' },
-            description: 'Allocated engineers and designers in team',
+            trend: { value: `${adminStats?.totalEmployees ?? 0} Members`, isPositive: true, show: true, className: 'text-emerald-500 bg-emerald-500/10' },
+            description: 'Allocated team members in organization',
             extraDetail: '100% capacity filled',
-            detailLink: '/dashboard/employees/directory'
+            detailLink: '/dashboard/employees'
           },
           {
             title: 'Pending Team Approvals',
@@ -687,25 +714,30 @@ export default function DashboardPage() {
             icon: CheckCircle2,
             iconColor: 'text-sky-600',
             iconBg: 'bg-sky-50 dark:bg-sky-900/30',
-            trend: { value: 'Action required', isPositive: false, show: true, className: 'text-[#f87941] bg-[#f87941]/10' },
+            trend: { 
+              value: (adminStats?.pendingApprovals?.length ?? 0) > 0 ? `${adminStats?.pendingApprovals?.length} In Queue` : 'Queue Clear', 
+              isPositive: (adminStats?.pendingApprovals?.length ?? 0) === 0, 
+              show: true, 
+              className: (adminStats?.pendingApprovals?.length ?? 0) > 0 ? 'text-[#f87941] bg-[#f87941]/10' : 'text-emerald-500 bg-emerald-500/10' 
+            },
             description: 'Timesheets, leaves and reimbursement approvals',
             extraDetail: 'Review in queue',
             detailLink: '/dashboard'
           },
           {
-            title: 'Team Burnout Risk Warnings',
-            value: '2 Alerts',
-            icon: AlertTriangle,
-            iconColor: 'text-rose-600',
-            iconBg: 'bg-rose-50 dark:bg-rose-900/30',
-            trend: { value: 'Overtime limit reached', isPositive: false, show: true, className: 'text-rose-500 bg-rose-500/10' },
-            description: 'High workload risk detected (over 60h logged)',
-            extraDetail: 'AI reallocation engine recommended',
-            detailLink: '/dashboard/employees/resource-allocation'
+            title: 'Active Projects',
+            value: adminStats?.activeProjects ?? 0,
+            icon: FolderKanban,
+            iconColor: 'text-[#f87941]',
+            iconBg: 'bg-[#f87941]/10',
+            trend: { value: `${adminStats?.activeProjects ?? 0} Active`, isPositive: true, show: true, className: 'text-emerald-500 bg-emerald-500/10' },
+            description: 'Active project delivery and sprint tracking',
+            extraDetail: 'Delivery on schedule',
+            detailLink: '/dashboard/projects'
           },
           {
-            title: 'Team Punctuality Rate',
-            value: '94.2%',
+            title: 'Team Attendance Rate',
+            value: `${adminStats?.insights?.attendanceRate ?? 100}%`,
             icon: Clock,
             iconColor: 'text-emerald-600',
             iconBg: 'bg-emerald-50 dark:bg-emerald-900/30',
@@ -725,12 +757,10 @@ export default function DashboardPage() {
             iconColor: 'text-indigo-600 dark:text-indigo-400',
             iconBg: 'bg-indigo-50 dark:bg-indigo-900/30',
             trend: {
-              value: isFinancialAdmin ? `${Math.abs(revenueTrend).toFixed(1)}%` : 'Restricted',
-              isPositive: revenueTrend >= 0,
-              show: isFinancialAdmin && lastMonthData.revenue > 0,
-              className: revenueTrend >= 0 
-                ? 'text-emerald-600 dark:text-emerald-500 bg-emerald-50/50 dark:bg-emerald-900/10' 
-                : 'text-rose-600 dark:text-rose-500 bg-rose-50/50 dark:bg-rose-900/10'
+              value: isFinancialAdmin ? ((adminStats?.monthlyRevenue ?? 0) > 0 ? 'Paid Billings' : 'Stable') : 'Restricted',
+              isPositive: true,
+              show: true,
+              className: 'text-emerald-600 dark:text-emerald-500 bg-emerald-50/50 dark:bg-emerald-900/10'
             },
             description: 'Accrued billings in current cycle',
             gradient: 'from-indigo-500 to-purple-600',
@@ -745,10 +775,10 @@ export default function DashboardPage() {
             iconColor: (adminStats?.netCashFlow ?? 0) >= 0 ? 'text-emerald-600 dark:text-emerald-500' : 'text-rose-600 dark:text-rose-500',
             iconBg: (adminStats?.netCashFlow ?? 0) >= 0 ? 'bg-emerald-50 dark:bg-emerald-900/30' : 'bg-rose-50 dark:bg-rose-900/30',
             trend: {
-              value: isFinancialAdmin ? `${Math.abs(cashFlowTrend).toFixed(1)}%` : 'Restricted',
-              isPositive: cashFlowTrend >= 0,
-              show: isFinancialAdmin && lastMonthCashFlow !== 0,
-              className: cashFlowTrend >= 0 
+              value: isFinancialAdmin ? ((adminStats?.netCashFlow ?? 0) >= 0 ? 'Positive Margin' : 'Deficit') : 'Restricted',
+              isPositive: (adminStats?.netCashFlow ?? 0) >= 0,
+              show: true,
+              className: (adminStats?.netCashFlow ?? 0) >= 0 
                 ? 'text-emerald-600 dark:text-emerald-500 bg-emerald-50/50 dark:bg-emerald-900/10' 
                 : 'text-rose-600 dark:text-rose-500 bg-rose-50/50 dark:bg-rose-900/10'
             },
@@ -783,7 +813,7 @@ export default function DashboardPage() {
             iconColor: 'text-sky-600 dark:text-sky-500',
             iconBg: 'bg-sky-50 dark:bg-sky-900/30',
             trend: {
-              value: 'Active',
+              value: `${adminStats?.activeClients ?? 0} Active`,
               isPositive: true,
               show: true,
               className: 'text-emerald-600 dark:text-emerald-500 bg-emerald-50/50 dark:bg-emerald-900/10'
@@ -1023,7 +1053,7 @@ export default function DashboardPage() {
                     <CardTitle className="text-lg font-bold">Recent Activity</CardTitle>
                     <CardDescription className="text-xs font-medium text-muted-foreground mt-0.5">Latest transactions and activities across all departments</CardDescription>
                   </div>
-                  <Link href="/dashboard/invoices">
+                  <Link href="/dashboard/finance/invoices">
                     <Button variant="link" className="text-[#f87941] hover:text-[#f4662b] transition-colors font-semibold p-0 h-auto">View Invoices</Button>
                   </Link>
                 </CardHeader>
@@ -1111,7 +1141,7 @@ export default function DashboardPage() {
                 <CardContent className="space-y-4">
                   {/* Unpaid Invoices Alert */}
                   {adminStats.pendingInvoicesCount > 0 && (dashboardView === 'ceo' || dashboardView === 'finance') && (
-                    <Link href="/dashboard/invoices" className="block">
+                    <Link href="/dashboard/finance/invoices" className="block">
                       <div className="flex gap-4 p-3 rounded-xl bg-slate-50 dark:bg-zinc-900/50 border border-slate-100 dark:border-zinc-800/80 hover:border-[#f87941] dark:hover:border-[#f87941] transition-all group cursor-pointer">
                         <div className="w-10 h-10 shrink-0 bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400 flex items-center justify-center rounded-lg">
                           <AlertTriangle className="h-5 w-5" />
@@ -1231,7 +1261,7 @@ export default function DashboardPage() {
                     <Users className="h-5 w-5 text-[#f87941]" />
                     Workforce Hub
                   </CardTitle>
-                  <CardDescription>Today's attendance and compliance overview</CardDescription>
+                  <CardDescription>Today&apos;s attendance and compliance overview</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-zinc-900/50 rounded-xl">

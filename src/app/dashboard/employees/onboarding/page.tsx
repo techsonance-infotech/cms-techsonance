@@ -58,11 +58,16 @@ export default function OnboardingCenterPage() {
   const [selectedMentor, setSelectedMentor] = useState('');
   const [selectedBuddy, setSelectedBuddy] = useState('');
   const [selectedProject, setSelectedProject] = useState('');
+  const [customProjectName, setCustomProjectName] = useState('');
   const [selectedTraining, setSelectedTraining] = useState('');
+  const [customTrainingTitle, setCustomTrainingTitle] = useState('');
   const [selectedAssetId, setSelectedAssetId] = useState('');
+  const [customDeviceName, setCustomDeviceName] = useState('');
+  const [customSerialNumber, setCustomSerialNumber] = useState('');
   const [welcomeKitSize, setWelcomeKitSize] = useState('L');
   const [inductionTime, setInductionTime] = useState('');
   const [inductionLocation, setInductionLocation] = useState('');
+  const [genericNotes, setGenericNotes] = useState('');
 
   // File upload state for KYC documents
   const [uploadingDoc, setUploadingDoc] = useState(false);
@@ -83,6 +88,72 @@ export default function OnboardingCenterPage() {
       setBlueprintTasks([]);
     }
   }, [selectedChecklistId]);
+
+  const fetchAssetsList = async () => {
+    try {
+      const token = getStoredSessionToken();
+      const headers: Record<string, string> = {};
+      if (token && token !== 'null' && token !== 'undefined') {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      const assetRes = await fetch('/api/assets', {
+        headers,
+        credentials: 'include',
+        cache: 'no-store'
+      });
+      if (assetRes.ok) {
+        const assetData = await assetRes.json();
+        const list = Array.isArray(assetData) ? assetData : (assetData.data || []);
+        setAssets(list);
+      }
+    } catch (err) {
+      console.error('Failed to load assets:', err);
+    }
+  };
+
+  const fetchTrainingProgramsList = async () => {
+    try {
+      const token = getStoredSessionToken();
+      const headers: Record<string, string> = {};
+      if (token && token !== 'null' && token !== 'undefined') {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      const trainRes = await fetch('/api/training/programs', {
+        headers,
+        credentials: 'include',
+        cache: 'no-store'
+      });
+      if (trainRes.ok) {
+        const trainData = await trainRes.json();
+        const list = Array.isArray(trainData) ? trainData : (trainData.data || []);
+        setTrainingPrograms(list);
+      }
+    } catch (err) {
+      console.error('Failed to load training programs:', err);
+    }
+  };
+
+  const fetchProjectsList = async () => {
+    try {
+      const token = getStoredSessionToken();
+      const headers: Record<string, string> = {};
+      if (token && token !== 'null' && token !== 'undefined') {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      const projRes = await fetch('/api/projects', {
+        headers,
+        credentials: 'include',
+        cache: 'no-store'
+      });
+      if (projRes.ok) {
+        const projData = await projRes.json();
+        const list = Array.isArray(projData) ? projData : (projData.data || []);
+        setProjects(list);
+      }
+    } catch (err) {
+      console.error('Failed to load projects:', err);
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -123,43 +194,13 @@ export default function OnboardingCenterPage() {
     }
 
     // 3. Fetch projects
-    try {
-      const projRes = await fetch('/api/projects', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (projRes.ok) {
-        const projData = await projRes.json();
-        setProjects(projData.data || projData || []);
-      }
-    } catch (err) {
-      console.error('Failed to load projects:', err);
-    }
+    await fetchProjectsList();
 
     // 4. Fetch assets
-    try {
-      const assetRes = await fetch('/api/assets', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (assetRes.ok) {
-        const assetData = await assetRes.json();
-        setAssets(assetData.data || assetData || []);
-      }
-    } catch (err) {
-      console.error('Failed to load assets:', err);
-    }
+    await fetchAssetsList();
 
     // 5. Fetch training programs
-    try {
-      const trainRes = await fetch('/api/training/programs', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (trainRes.ok) {
-        const trainData = await trainRes.json();
-        setTrainingPrograms(trainData.data || trainData || []);
-      }
-    } catch (err) {
-      console.error('Failed to load training programs:', err);
-    }
+    await fetchTrainingProgramsList();
 
     // 6. Fetch events queue
     try {
@@ -374,7 +415,7 @@ export default function OnboardingCenterPage() {
   const handleTaskClick = (t: any) => {
     setActiveTask(t);
     // Initialize temporary state values from saved details if present
-    const details = t.details || {};
+    const details = t?.details || {};
     setOfferDesignation(details.designation || selectedEmployee?.designation || '');
     setOfferCTC(details.ctc || selectedEmployee?.salary || '');
     setOfferDate(details.date || new Date().toISOString().split('T')[0]);
@@ -382,14 +423,28 @@ export default function OnboardingCenterPage() {
     setProvisionUsername(details.username || `${selectedEmployee?.firstName?.toLowerCase()}.${selectedEmployee?.lastName?.toLowerCase()}`);
     setSelectedManager(details.managerId || '');
     setSelectedMentor(details.mentorId || '');
-    setSelectedBuddy(details.buddyId || '');
-    setSelectedProject(details.projectId || '');
-    setSelectedTraining(details.trainingId || '');
-    setSelectedAssetId(details.assetId || '');
+    setSelectedProject(details.projectId ? String(details.projectId) : '');
+    setCustomProjectName(details.customProjectName || details.projectName || '');
+    setSelectedTraining(details.trainingId ? String(details.trainingId) : '');
+    setCustomTrainingTitle(details.customTrainingTitle || details.trainingTitle || '');
+    setSelectedAssetId(details.assetId ? String(details.assetId) : '');
+    setCustomDeviceName(details.customDeviceName || details.deviceName || '');
+    setCustomSerialNumber(details.customSerialNumber || details.serialNumber || '');
     setWelcomeKitSize(details.kitSize || 'L');
     setInductionTime(details.inductionTime || '10:00');
     setInductionLocation(details.inductionLocation || 'Main Conference Room');
     setProvisionLogs([]);
+    setGenericNotes(details.notes || '');
+
+    if (t.onboarding_tasks?.title?.toLowerCase()?.includes('asset')) {
+      fetchAssetsList();
+    }
+    if (t.onboarding_tasks?.title?.toLowerCase()?.includes('training')) {
+      fetchTrainingProgramsList();
+    }
+    if (t.onboarding_tasks?.title?.toLowerCase()?.includes('project')) {
+      fetchProjectsList();
+    }
   };
 
   const executeTaskAction = async (status: string = 'completed', updatedDetails: any = {}) => {
@@ -399,7 +454,7 @@ export default function OnboardingCenterPage() {
       const token = getStoredSessionToken();
       
       const payloadDetails = {
-        ...(activeTask.details || {}),
+        ...(activeTask?.details || {}),
         ...updatedDetails
       };
 
@@ -635,7 +690,7 @@ export default function OnboardingCenterPage() {
       const data = await res.json();
       const docUrl = data.data?.url || data.url;
 
-      const currentDocs = activeTask.details?.uploadedDocs || [];
+      const currentDocs = activeTask?.details?.uploadedDocs || [];
       const updatedDocs = [...currentDocs, { name: file.name, type: docType, url: docUrl, date: new Date().toLocaleDateString() }];
 
       executeTaskAction('completed', { uploadedDocs: updatedDocs });
@@ -756,9 +811,9 @@ export default function OnboardingCenterPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 min-w-0">
         {/* Left column: templates configurations */}
-        <div className="space-y-6 lg:col-span-1 animate-fadeIn">
+        <div className="space-y-6 lg:col-span-1 animate-fadeIn min-w-0">
           <Card className="border-slate-100 dark:border-zinc-800 shadow-lg dark:bg-slate-950/40">
             <CardHeader className="bg-slate-50/50 dark:bg-zinc-900/20 border-b border-slate-100 dark:border-zinc-800/80">
               <CardTitle className="text-md flex items-center gap-2 font-bold text-slate-800 dark:text-slate-200">
@@ -887,8 +942,8 @@ export default function OnboardingCenterPage() {
         </div>
 
         {/* Right column: employee progress board */}
-        <div className="lg:col-span-2 space-y-6">
-          <Card className="border-slate-100 dark:border-zinc-800 shadow-xl dark:bg-slate-950/40">
+        <div className="lg:col-span-2 space-y-6 min-w-0">
+          <Card className="border-slate-100 dark:border-zinc-800 shadow-xl dark:bg-slate-950/40 overflow-hidden">
             <CardHeader className="bg-slate-50/50 dark:bg-zinc-900/20 border-b border-slate-100 dark:border-zinc-800/80">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
@@ -910,7 +965,7 @@ export default function OnboardingCenterPage() {
                 )}
               </div>
             </CardHeader>
-            <CardContent className="pt-6">
+            <CardContent className="pt-6 min-w-0">
               {/* Employee list horizontal scroll */}
               <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-thin">
                 {employees.map((emp) => (
@@ -991,27 +1046,63 @@ export default function OnboardingCenterPage() {
                   </div>
 
                   {/* Workflow Tabs header */}
-                  <div className="flex gap-2 border-b pb-2">
-                    <Button variant={workflowTab === 'stages' ? 'default' : 'ghost'} size="sm" onClick={() => setWorkflowTab('stages')} className={workflowTab === 'stages' ? 'bg-[#f87941] text-white hover:bg-[#f87941]/90' : 'text-slate-400'}>
-                      <TrendingUp className="h-4 w-4 mr-1" /> Progression Stages
+                  <div className="flex items-center gap-1.5 border-b border-slate-100 dark:border-zinc-800/80 pb-2 overflow-x-auto scrollbar-thin scrollbar-hide scroll-smooth max-w-full">
+                    <Button
+                      variant={workflowTab === 'stages' ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => setWorkflowTab('stages')}
+                      className={`shrink-0 text-xs font-semibold rounded-xl px-3.5 h-8.5 transition-all ${
+                        workflowTab === 'stages'
+                          ? 'bg-[#f87941] text-white hover:bg-[#e06634] shadow-sm'
+                          : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-zinc-800'
+                      }`}
+                    >
+                      <TrendingUp className="h-3.5 w-3.5 mr-1.5 shrink-0" /> Progression Stages
                     </Button>
-                    <Button variant={workflowTab === 'drafts' ? 'default' : 'ghost'} size="sm" onClick={() => setWorkflowTab('drafts')} className={workflowTab === 'drafts' ? 'bg-[#f87941] text-white hover:bg-[#f87941]/90' : 'text-slate-400'}>
-                      <Eye className="h-4 w-4 mr-1" /> Candidate Vault Verification
+                    <Button
+                      variant={workflowTab === 'drafts' ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => setWorkflowTab('drafts')}
+                      className={`shrink-0 text-xs font-semibold rounded-xl px-3.5 h-8.5 transition-all ${
+                        workflowTab === 'drafts'
+                          ? 'bg-[#f87941] text-white hover:bg-[#e06634] shadow-sm'
+                          : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-zinc-800'
+                      }`}
+                    >
+                      <Eye className="h-3.5 w-3.5 mr-1.5 shrink-0" /> Candidate Vault Verification
                     </Button>
-                    <Button variant={workflowTab === 'audits' ? 'default' : 'ghost'} size="sm" onClick={() => setWorkflowTab('audits')} className={workflowTab === 'audits' ? 'bg-[#f87941] text-white hover:bg-[#f87941]/90' : 'text-slate-400'}>
-                      <History className="h-4 w-4 mr-1" /> Immutables Audit History
+                    <Button
+                      variant={workflowTab === 'audits' ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => setWorkflowTab('audits')}
+                      className={`shrink-0 text-xs font-semibold rounded-xl px-3.5 h-8.5 transition-all ${
+                        workflowTab === 'audits'
+                          ? 'bg-[#f87941] text-white hover:bg-[#e06634] shadow-sm'
+                          : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-zinc-800'
+                      }`}
+                    >
+                      <History className="h-3.5 w-3.5 mr-1.5 shrink-0" /> Immutables Audit History
                     </Button>
-                    <Button variant={workflowTab === 'events' ? 'default' : 'ghost'} size="sm" onClick={() => setWorkflowTab('events')} className={workflowTab === 'events' ? 'bg-[#f87941] text-white hover:bg-[#f87941]/90' : 'text-slate-400'}>
-                      <Activity className="h-4 w-4 mr-1" /> Domain Events queue
+                    <Button
+                      variant={workflowTab === 'events' ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => setWorkflowTab('events')}
+                      className={`shrink-0 text-xs font-semibold rounded-xl px-3.5 h-8.5 transition-all ${
+                        workflowTab === 'events'
+                          ? 'bg-[#f87941] text-white hover:bg-[#e06634] shadow-sm'
+                          : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-zinc-800'
+                      }`}
+                    >
+                      <Activity className="h-3.5 w-3.5 mr-1.5 shrink-0" /> Domain Events Queue
                     </Button>
                   </div>
 
                   {/* Tab 1: Workflow Stages progression */}
                   {workflowTab === 'stages' && (
-                    <div className="space-y-4 pt-2">
+                    <div className="space-y-4 pt-2 min-w-0">
                       {/* Active Stage & Action gates */}
                       {workflowInstance && (
-                        <div className="p-4 rounded-xl border bg-slate-50/50 dark:bg-zinc-900/10 flex justify-between items-center text-xs">
+                        <div className="p-4 rounded-xl border bg-slate-50/50 dark:bg-zinc-900/10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 text-xs">
                           <div>
                             <span className="text-slate-400 block font-semibold text-[10px] uppercase">Active Stage Gate</span>
                             <span className="font-bold text-slate-800 dark:text-slate-200 text-sm mt-0.5 block">{workflowInstance.current_stage}</span>
@@ -1294,7 +1385,8 @@ export default function OnboardingCenterPage() {
 
       {/* Task execution custom modals dialog */}
       <Dialog open={!!activeTask} onOpenChange={() => setActiveTask(null)}>
-        <DialogContent className="max-w-2xl bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-3xl overflow-hidden max-h-[90vh] flex flex-col p-0 shadow-2xl">
+        {activeTask && (
+          <DialogContent className="max-w-2xl bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-3xl overflow-hidden max-h-[90vh] flex flex-col p-0 shadow-2xl">
           <DialogHeader className="bg-slate-50/60 dark:bg-zinc-900/30 p-6 border-b border-slate-100 dark:border-zinc-800/80">
             <div className="flex items-center justify-between">
               <div>
@@ -1411,8 +1503,8 @@ export default function OnboardingCenterPage() {
 
                 {/* Uploaded files grid */}
                 <div className="space-y-2">
-                  <Label className="text-xs font-semibold block mb-2">Uploaded Document Vault ({activeTask.details?.uploadedDocs?.length || 0})</Label>
-                  {(activeTask.details?.uploadedDocs || []).map((doc: any, i: number) => (
+                  <Label className="text-xs font-semibold block mb-2">Uploaded Document Vault ({activeTask?.details?.uploadedDocs?.length || 0})</Label>
+                  {(activeTask?.details?.uploadedDocs || []).map((doc: any, i: number) => (
                     <div key={i} className="flex items-center justify-between p-3 border rounded-xl bg-slate-50/50 dark:bg-slate-900/10 text-xs">
                       <div className="flex items-center gap-2">
                         <FileText className="h-4 w-4 text-[#f87941]" />
@@ -1468,16 +1560,72 @@ export default function OnboardingCenterPage() {
             {activeTask?.onboarding_tasks?.title?.toLowerCase()?.includes('asset') && (
               <div className="space-y-4">
                 <div>
-                  <Label className="text-xs">Allocate Workspace Laptop / Device</Label>
-                  <select value={selectedAssetId} onChange={e => setSelectedAssetId(e.target.value)} className="w-full border rounded-lg p-2 bg-transparent text-xs mt-1.5 border-input outline-none">
-                    <option value="" className="bg-white dark:bg-zinc-950">Select Asset Inventory ID</option>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Allocate Workspace Laptop / Device
+                    </Label>
+                    <button
+                      type="button"
+                      onClick={() => fetchAssetsList()}
+                      className="text-[10px] text-[#f87941] hover:underline font-bold flex items-center gap-1"
+                    >
+                      <RotateCw className="h-3 w-3" /> Refresh Inventory
+                    </button>
+                  </div>
+
+                  <select
+                    value={selectedAssetId}
+                    onChange={e => {
+                      setSelectedAssetId(e.target.value);
+                      if (e.target.value !== 'custom') {
+                        setCustomDeviceName('');
+                        setCustomSerialNumber('');
+                      }
+                    }}
+                    className="w-full border rounded-xl p-2.5 bg-transparent text-xs border-input outline-none font-medium"
+                  >
+                    <option value="" className="bg-white dark:bg-zinc-950 font-bold">
+                      {assets.length > 0 ? 'Select Device from Company Inventory' : 'No pre-registered inventory — Choose Custom Device below'}
+                    </option>
                     {assets.map((asset) => (
-                      <option key={asset.id} value={asset.id} className="bg-white dark:bg-zinc-950">
-                        {asset.name} - S/N: {asset.serialNumber} ({asset.status})
+                      <option key={asset.id} value={String(asset.id)} className="bg-white dark:bg-zinc-950">
+                        {asset.name} • S/N: {asset.serialNumber || asset.serial_number || 'N/A'} ({asset.status || 'available'})
                       </option>
                     ))}
+                    <option value="custom" className="bg-white dark:bg-zinc-950 font-bold text-[#f87941]">
+                      + Assign Custom / Manual Hardware Device
+                    </option>
                   </select>
                 </div>
+
+                {/* If custom is selected or no assets exist, show manual hardware entry fields */}
+                {(selectedAssetId === 'custom' || (!selectedAssetId && assets.length === 0)) && (
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-zinc-900 border space-y-3 animate-fadeIn">
+                    <p className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                      Manual Hardware Allocation
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-[10px] text-slate-400">Device Model / Name</Label>
+                        <Input
+                          placeholder="e.g. MacBook Pro M3 or Dell Latitude"
+                          value={customDeviceName}
+                          onChange={e => setCustomDeviceName(e.target.value)}
+                          className="text-xs h-9 mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-[10px] text-slate-400">Serial Number / Asset Tag</Label>
+                        <Input
+                          placeholder="e.g. C02-MBP-9842"
+                          value={customSerialNumber}
+                          onChange={e => setCustomSerialNumber(e.target.value)}
+                          className="text-xs h-9 mt-1 font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div className="p-4 rounded-xl border border-dashed text-xs text-slate-500 space-y-1.5">
                   <p className="font-bold text-slate-700 dark:text-slate-300">Device Handover Handshakes</p>
@@ -1486,7 +1634,30 @@ export default function OnboardingCenterPage() {
 
                 <div className="flex gap-2 justify-end pt-3 border-t">
                   <Button variant="outline" size="sm" onClick={() => setActiveTask(null)}>Close</Button>
-                  <Button size="sm" className="bg-[#f87941] hover:bg-[#e06634] text-white flex items-center gap-1.5" onClick={() => executeTaskAction('completed', { assetId: selectedAssetId })}>
+                  <Button
+                    size="sm"
+                    disabled={!selectedAssetId && (!customDeviceName || !customSerialNumber)}
+                    className="bg-[#f87941] hover:bg-[#e06634] text-white flex items-center gap-1.5"
+                    onClick={() => {
+                      const assetDetails: any = {
+                        assetId: selectedAssetId || 'custom',
+                        allocatedAt: new Date().toISOString()
+                      };
+                      if (selectedAssetId === 'custom' || (!selectedAssetId && customDeviceName)) {
+                        assetDetails.customDeviceName = customDeviceName;
+                        assetDetails.customSerialNumber = customSerialNumber;
+                        assetDetails.deviceName = customDeviceName;
+                        assetDetails.serialNumber = customSerialNumber;
+                      } else {
+                        const chosen = assets.find(a => String(a.id) === String(selectedAssetId));
+                        if (chosen) {
+                          assetDetails.deviceName = chosen.name;
+                          assetDetails.serialNumber = chosen.serialNumber || chosen.serial_number;
+                        }
+                      }
+                      executeTaskAction('completed', assetDetails);
+                    }}
+                  >
                     <Laptop className="h-4 w-4" /> Issue Asset Device
                   </Button>
                 </div>
@@ -1571,18 +1742,78 @@ export default function OnboardingCenterPage() {
             {activeTask?.onboarding_tasks?.title?.toLowerCase()?.includes('project') && (
               <div className="space-y-4">
                 <div>
-                  <Label className="text-xs">Select Project Assignment</Label>
-                  <select value={selectedProject} onChange={e => setSelectedProject(e.target.value)} className="w-full border rounded-lg p-2 bg-transparent text-xs mt-1.5 border-input outline-none">
-                    <option value="" className="bg-white dark:bg-zinc-950">Select Corporate Project</option>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Select Project Assignment
+                    </Label>
+                    <button
+                      type="button"
+                      onClick={() => fetchProjectsList()}
+                      className="text-[10px] text-[#f87941] hover:underline font-bold flex items-center gap-1"
+                    >
+                      <RotateCw className="h-3 w-3" /> Refresh Projects
+                    </button>
+                  </div>
+
+                  <select
+                    value={selectedProject}
+                    onChange={e => {
+                      setSelectedProject(e.target.value);
+                      if (e.target.value !== 'custom') {
+                        setCustomProjectName('');
+                      }
+                    }}
+                    className="w-full border rounded-xl p-2.5 bg-transparent text-xs border-input outline-none font-medium"
+                  >
+                    <option value="" className="bg-white dark:bg-zinc-950 font-bold">
+                      {projects.length > 0 ? 'Select Corporate Project' : 'No active projects found — Choose Custom below'}
+                    </option>
                     {projects.map(p => (
-                      <option key={p.id} value={p.id} className="bg-white dark:bg-zinc-950">{p.name} ({p.status})</option>
+                      <option key={p.id} value={String(p.id)} className="bg-white dark:bg-zinc-950">
+                        {p.name} ({p.status || 'Active'})
+                      </option>
                     ))}
+                    <option value="custom" className="bg-white dark:bg-zinc-950 font-bold text-[#f87941]">
+                      + Assign Custom / Internal Project
+                    </option>
                   </select>
                 </div>
 
+                {(selectedProject === 'custom' || (!selectedProject && projects.length === 0)) && (
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-zinc-900 border space-y-2 animate-fadeIn">
+                    <Label className="text-[10px] text-slate-400 font-bold">Project Name / Client Tag</Label>
+                    <Input
+                      placeholder="e.g. Core Engineering Platform or Internal Tooling"
+                      value={customProjectName}
+                      onChange={e => setCustomProjectName(e.target.value)}
+                      className="text-xs h-9"
+                    />
+                  </div>
+                )}
+
                 <div className="flex gap-2 justify-end pt-3 border-t">
                   <Button variant="outline" size="sm" onClick={() => setActiveTask(null)}>Close</Button>
-                  <Button size="sm" className="bg-[#f87941] hover:bg-[#e06634] text-white" onClick={() => executeTaskAction('completed', { projectId: selectedProject })}>
+                  <Button
+                    size="sm"
+                    disabled={!selectedProject && !customProjectName}
+                    className="bg-[#f87941] hover:bg-[#e06634] text-white"
+                    onClick={() => {
+                      const projDetails: any = {
+                        projectId: selectedProject || 'custom',
+                        assignedAt: new Date().toISOString()
+                      };
+                      if (selectedProject === 'custom' || (!selectedProject && customProjectName)) {
+                        projDetails.customProjectName = customProjectName;
+                        projDetails.projectName = customProjectName;
+                      } else {
+                        const chosen = projects.find(p => String(p.id) === String(selectedProject));
+                        if (chosen) {
+                          projDetails.projectName = chosen.name;
+                        }
+                      }
+                      executeTaskAction('completed', projDetails);
+                    }}
+                  >
                     Assign Project Access
                   </Button>
                 </div>
@@ -1594,17 +1825,57 @@ export default function OnboardingCenterPage() {
               <div className="space-y-4">
                 <div className="space-y-3">
                   <div>
-                    <Label className="text-xs">Select Orientation Program Course</Label>
-                    <select value={selectedTraining} onChange={e => setSelectedTraining(e.target.value)} className="w-full border rounded-lg p-2 bg-transparent text-xs mt-1 border-input outline-none">
-                      <option value="" className="bg-white dark:bg-zinc-950">Select Corporate Training</option>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                        Select Orientation Program Course
+                      </Label>
+                      <button
+                        type="button"
+                        onClick={() => fetchTrainingProgramsList()}
+                        className="text-[10px] text-[#f87941] hover:underline font-bold flex items-center gap-1"
+                      >
+                        <RotateCw className="h-3 w-3" /> Refresh Courses
+                      </button>
+                    </div>
+
+                    <select
+                      value={selectedTraining}
+                      onChange={e => {
+                        setSelectedTraining(e.target.value);
+                        if (e.target.value !== 'custom') {
+                          setCustomTrainingTitle('');
+                        }
+                      }}
+                      className="w-full border rounded-xl p-2.5 bg-transparent text-xs border-input outline-none font-medium"
+                    >
+                      <option value="" className="bg-white dark:bg-zinc-950 font-bold">
+                        {trainingPrograms.length > 0 ? 'Select Corporate Training Program' : 'No pre-registered programs — Choose Custom Training below'}
+                      </option>
                       {trainingPrograms.map(t => (
-                        <option key={t.id} value={t.id} className="bg-white dark:bg-zinc-950">{t.title} - {t.durationHours} Hours</option>
+                        <option key={t.id} value={String(t.id)} className="bg-white dark:bg-zinc-950">
+                          {t.title} ({t.durationHours || t.duration_hours || 'Self-Paced'} Hours) • {t.category || 'Orientation'}
+                        </option>
                       ))}
+                      <option value="custom" className="bg-white dark:bg-zinc-950 font-bold text-[#f87941]">
+                        + Assign Custom / On-the-job Training Course
+                      </option>
                     </select>
                   </div>
 
+                  {(selectedTraining === 'custom' || (!selectedTraining && trainingPrograms.length === 0)) && (
+                    <div className="p-4 rounded-2xl bg-slate-50 dark:bg-zinc-900 border space-y-2 animate-fadeIn">
+                      <Label className="text-[10px] text-slate-400 font-bold">Custom Course Title / Objective</Label>
+                      <Input
+                        placeholder="e.g. Department Induction & Internal Tools Training"
+                        value={customTrainingTitle}
+                        onChange={e => setCustomTrainingTitle(e.target.value)}
+                        className="text-xs h-9"
+                      />
+                    </div>
+                  )}
+
                   <div className="flex items-start gap-2.5 p-3 rounded-xl border bg-slate-50/50 dark:bg-slate-900/10">
-                    <input type="checkbox" id="polCheck" className="mt-1 h-3.5 w-3.5 accent-[#f87941] cursor-pointer" defaultChecked={activeTask.details?.policiesChecked} />
+                    <input type="checkbox" id="polCheck" className="mt-1 h-3.5 w-3.5 accent-[#f87941] cursor-pointer" defaultChecked={activeTask?.details?.policiesChecked ?? true} />
                     <div>
                       <Label htmlFor="polCheck" className="text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer">Enforce Handbook Policies Check</Label>
                       <p className="text-[10px] text-slate-400 mt-0.5">Require candidate to sign employee handbook, NDA agreements, and remote workspace safety checklist.</p>
@@ -1614,7 +1885,28 @@ export default function OnboardingCenterPage() {
 
                 <div className="flex gap-2 justify-end pt-3 border-t">
                   <Button variant="outline" size="sm" onClick={() => setActiveTask(null)}>Close</Button>
-                  <Button size="sm" className="bg-[#f87941] hover:bg-[#e06634] text-white flex items-center gap-1.5" onClick={() => executeTaskAction('completed', { trainingId: selectedTraining, policiesChecked: true })}>
+                  <Button
+                    size="sm"
+                    disabled={!selectedTraining && !customTrainingTitle}
+                    className="bg-[#f87941] hover:bg-[#e06634] text-white flex items-center gap-1.5"
+                    onClick={() => {
+                      const trainingDetails: any = {
+                        trainingId: selectedTraining || 'custom',
+                        policiesChecked: true,
+                        assignedAt: new Date().toISOString()
+                      };
+                      if (selectedTraining === 'custom' || (!selectedTraining && customTrainingTitle)) {
+                        trainingDetails.customTrainingTitle = customTrainingTitle;
+                        trainingDetails.trainingTitle = customTrainingTitle;
+                      } else {
+                        const chosen = trainingPrograms.find(t => String(t.id) === String(selectedTraining));
+                        if (chosen) {
+                          trainingDetails.trainingTitle = chosen.title;
+                        }
+                      }
+                      executeTaskAction('completed', trainingDetails);
+                    }}
+                  >
                     <Award className="h-4 w-4" /> Enroll & Assign Policies
                   </Button>
                 </div>
@@ -1725,8 +2017,95 @@ export default function OnboardingCenterPage() {
                 </div>
               </div>
             )}
+
+            {/* CASE 13 / FALLBACK: Any Custom Blueprint Step that does not match predefined keywords */}
+            {(() => {
+              const titleLower = activeTask?.onboarding_tasks?.title?.toLowerCase() || '';
+              const isSpecial =
+                titleLower.includes('offer letter') ||
+                titleLower.includes('accept offer') ||
+                titleLower.includes('document') ||
+                titleLower.includes('background') ||
+                titleLower.includes('asset') ||
+                titleLower.includes('slack') ||
+                titleLower.includes('relationship') ||
+                titleLower.includes('project') ||
+                titleLower.includes('training') ||
+                titleLower.includes('id card') ||
+                titleLower.includes('welcome kit') ||
+                titleLower.includes('approval');
+
+              if (isSpecial) return null;
+
+              return (
+                <div className="space-y-4 animate-fadeIn">
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                        Custom Blueprint Task Guidelines
+                      </span>
+                      <Badge className="bg-[#f87941]/10 text-[#f87941] border border-[#f87941]/20 font-bold text-[10px]">
+                        {activeTask?.onboarding_tasks?.role_responsible || 'HR'} Action
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                      {activeTask?.onboarding_tasks?.description || 'Review and complete this onboarding checklist step according to team instructions.'}
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="custom-step-notes" className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Step Execution Remarks / Progress Notes
+                    </Label>
+                    <textarea
+                      id="custom-step-notes"
+                      rows={4}
+                      value={genericNotes}
+                      onChange={e => setGenericNotes(e.target.value)}
+                      placeholder="Enter verification notes, meeting summary, or handover details..."
+                      className="w-full text-xs p-3 rounded-xl border border-input bg-transparent outline-none resize-none focus:ring-1 focus:ring-[#f87941]"
+                    />
+                  </div>
+
+                  {activeTask?.details?.completedAt && (
+                    <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 text-xs flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 shrink-0" />
+                      <span>Completed on {new Date(activeTask?.details?.completedAt).toLocaleString()}</span>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between pt-3 border-t">
+                    <Button variant="outline" size="sm" onClick={() => setActiveTask(null)}>
+                      Close
+                    </Button>
+                    <div className="flex items-center gap-2">
+                      {activeTask?.status !== 'in_progress' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={executing}
+                          className="text-amber-600 border-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/20 text-xs"
+                          onClick={() => executeTaskAction('in_progress', { notes: genericNotes })}
+                        >
+                          Mark In Progress
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        disabled={executing}
+                        className="bg-[#f87941] hover:bg-[#e06634] text-white flex items-center gap-1.5 text-xs font-semibold"
+                        onClick={() => executeTaskAction('completed', { notes: genericNotes, completedAt: new Date().toISOString() })}
+                      >
+                        <Check className="h-3.5 w-3.5" /> Complete Step
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </DialogContent>
+        )}
       </Dialog>
     </div>
   );

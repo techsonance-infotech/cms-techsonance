@@ -71,14 +71,6 @@ export default function RosterTab({ tenantId, isFullAccess, employees }: RosterT
     } catch (err) {
       console.error('Failed to load roster data:', err);
     } finally {
-      setData((prev: any) => ({
-        ...prev,
-        // Fallback demo data to guarantee display if DB tables are empty
-        shiftDefinitions: prev.shiftDefinitions.length ? prev.shiftDefinitions : [
-          { id: '1', name: 'General Shift', start_time: '09:00:00', end_time: '18:00:00' },
-          { id: '2', name: 'Night Shift', start_time: '22:00:00', end_time: '06:00:00' }
-        ]
-      }));
       setLoading(false);
     }
   };
@@ -89,9 +81,22 @@ export default function RosterTab({ tenantId, isFullAccess, employees }: RosterT
 
   const handleAssignRoster = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!assignForm.employeeId) {
+      toast.error('Please select an employee');
+      return;
+    }
+    if (!assignForm.rosterDate) {
+      toast.error('Please select a roster date');
+      return;
+    }
+    if (!assignForm.isWeeklyOff && !assignForm.shiftId) {
+      toast.error('Please select a shift or mark as weekly off');
+      return;
+    }
+
     setAssigning(true);
     try {
-      const targetEmp = employees.find((emp) => String(emp.id) === assignForm.employeeId);
+      const targetEmp = employees.find((emp) => String(emp.id) === assignForm.employeeId || String(emp.userId) === assignForm.employeeId);
       if (!targetEmp) {
         toast.error('Selected employee is invalid');
         return;
@@ -101,19 +106,28 @@ export default function RosterTab({ tenantId, isFullAccess, employees }: RosterT
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userIds: [targetEmp.id],
-          shiftId: assignForm.shiftId || null,
+          isRosterAssignment: true,
+          employeeId: targetEmp.id,
+          userIds: [targetEmp.userId || targetEmp.id],
+          shiftId: assignForm.isWeeklyOff ? null : (assignForm.shiftId || null),
           rosterDate: assignForm.rosterDate,
           isWeeklyOff: assignForm.isWeeklyOff,
         }),
       });
 
       if (response.ok) {
-        toast.success('Shift assigned successfully!');
+        const resData = await response.json().catch(() => ({}));
+        toast.success(resData.message || (assignForm.isWeeklyOff ? 'Weekly off scheduled successfully!' : 'Shift assigned successfully!'));
         setShowAssignDialog(false);
+        setAssignForm({
+          employeeId: '',
+          shiftId: '',
+          rosterDate: new Date().toISOString().split('T')[0],
+          isWeeklyOff: false
+        });
         fetchData();
       } else {
-        const err = await response.json();
+        const err = await response.json().catch(() => ({}));
         toast.error(err.message || 'Failed to assign shift');
       }
     } catch (err) {
@@ -125,14 +139,29 @@ export default function RosterTab({ tenantId, isFullAccess, employees }: RosterT
 
   const handleSwapRequest = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!swapForm.targetUserId) {
+      toast.error('Please select a colleague to swap with');
+      return;
+    }
+    if (!swapForm.requesterDate || !swapForm.targetDate) {
+      toast.error('Please select both your shift date and colleague shift date');
+      return;
+    }
+    if (!swapForm.reason || swapForm.reason.trim().length < 5) {
+      toast.error('Please provide a reason for the shift swap (at least 5 characters)');
+      return;
+    }
     setSubmittingSwap(true);
     try {
+      const targetEmp = employees.find((emp) => String(emp.id) === swapForm.targetUserId || String(emp.userId) === swapForm.targetUserId);
       const response = await fetch('/api/shifts/management/swap', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           isApproval: false,
-          targetUserId: swapForm.targetUserId,
+          targetUserId: targetEmp?.authUserId || targetEmp?.user_id || targetEmp?.userId || swapForm.targetUserId,
+          employeeId: targetEmp?.id,
+          employeeCode: targetEmp?.employeeId,
           requesterDate: swapForm.requesterDate,
           targetDate: swapForm.targetDate,
           reason: swapForm.reason,
@@ -142,9 +171,15 @@ export default function RosterTab({ tenantId, isFullAccess, employees }: RosterT
       if (response.ok) {
         toast.success('Shift swap request submitted to manager!');
         setShowSwapDialog(false);
+        setSwapForm({
+          targetUserId: '',
+          requesterDate: new Date().toISOString().split('T')[0],
+          targetDate: new Date().toISOString().split('T')[0],
+          reason: ''
+        });
         fetchData();
       } else {
-        const err = await response.json();
+        const err = await response.json().catch(() => ({}));
         toast.error(err.message || 'Failed to submit swap request');
       }
     } catch (err) {
@@ -393,25 +428,47 @@ export default function RosterTab({ tenantId, isFullAccess, employees }: RosterT
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {data.shiftRosterAssignments.slice(0, 10).map((r: any) => (
-                        <TableRow key={r.id} className="border-b border-border">
-                          <TableCell className="font-bold py-3">Employee ID #{r.employee_table_id}</TableCell>
-                          <TableCell className="font-semibold text-slate-900 dark:text-white">{r.roster_date}</TableCell>
-                          <TableCell className="font-bold text-slate-600 dark:text-slate-300">
-                            {r.is_weekly_off ? '-' : r.shift_definitions?.name || 'General Shift'}
-                          </TableCell>
-                          <TableCell className="text-slate-500 font-semibold">
-                            {r.is_weekly_off ? '-' : `${r.shift_definitions?.start_time || '09:00'} - ${r.shift_definitions?.end_time || '18:00'}`}
-                          </TableCell>
-                          <TableCell>
-                            {r.is_weekly_off ? (
-                              <Badge className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[10px] font-bold border-none">Yes</Badge>
-                            ) : (
-                              <Badge className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold border-none">No</Badge>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {data.shiftRosterAssignments.slice(0, 15).map((r: any) => {
+                        const emp = employees.find((e: any) => 
+                          String(e.id) === String(r.employee_table_id) || 
+                          (r.user_id && String(e.userId) === String(r.user_id))
+                        );
+                        const staffLabel = emp 
+                          ? `${emp.firstName} ${emp.lastName} (${emp.employeeId})`
+                          : `Employee #${r.employee_table_id || (r.user_id ? String(r.user_id).slice(0, 8) : 'Staff')}`;
+
+                        return (
+                          <TableRow key={r.id} className="border-b border-border">
+                            <TableCell className="font-bold py-3 text-slate-900 dark:text-white">
+                              {staffLabel}
+                            </TableCell>
+                            <TableCell className="font-semibold text-slate-700 dark:text-slate-300">
+                              {r.roster_date}
+                            </TableCell>
+                            <TableCell className="font-bold text-slate-600 dark:text-slate-300">
+                              {r.is_weekly_off ? (
+                                <span className="text-amber-600 dark:text-amber-400 font-semibold italic">Weekly Off</span>
+                              ) : (
+                                r.shift_definitions?.name || 'General Shift'
+                              )}
+                            </TableCell>
+                            <TableCell className="text-slate-500 font-semibold">
+                              {r.is_weekly_off ? (
+                                <span className="text-slate-400 font-normal">Off Duty</span>
+                              ) : (
+                                `${r.shift_definitions?.start_time ? r.shift_definitions.start_time.slice(0, 5) : '09:00'} - ${r.shift_definitions?.end_time ? r.shift_definitions.end_time.slice(0, 5) : '18:00'}`
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {r.is_weekly_off ? (
+                                <Badge className="bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 text-[10px] font-bold border border-amber-200 dark:border-amber-900/50">Weekly Off</Badge>
+                              ) : (
+                                <Badge className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold border border-emerald-200 dark:border-emerald-900/50">Active Shift</Badge>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>

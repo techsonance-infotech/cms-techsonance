@@ -58,7 +58,7 @@ export const GET = withApiHandler(async (request, context) => {
 
   const usersMap = new Map<string, any>();
   if (users) {
-    users.forEach(u => usersMap.set(u.id, u));
+    users.forEach((u: any) => usersMap.set(u.id, u));
   }
 
   // ---------------- METRICS COMPUTATION ----------------
@@ -66,14 +66,14 @@ export const GET = withApiHandler(async (request, context) => {
   // Requisition Stats
   const reqStats = {
     total: requisitions?.length || 0,
-    open: requisitions?.filter(r => r.status === 'Open').length || 0,
-    draft: requisitions?.filter(r => r.status === 'Draft').length || 0,
-    onHold: requisitions?.filter(r => r.status === 'On Hold').length || 0,
-    closed: requisitions?.filter(r => r.status === 'Closed').length || 0,
+    open: requisitions?.filter((r: any) => r.status === 'Open').length || 0,
+    draft: requisitions?.filter((r: any) => r.status === 'Draft').length || 0,
+    onHold: requisitions?.filter((r: any) => r.status === 'On Hold').length || 0,
+    closed: requisitions?.filter((r: any) => r.status === 'Closed').length || 0,
   };
 
   const reqByDeptMap: Record<string, number> = {};
-  requisitions?.forEach(r => {
+  requisitions?.forEach((r: any) => {
     reqByDeptMap[r.department] = (reqByDeptMap[r.department] || 0) + 1;
   });
   const reqByDepartment = Object.entries(reqByDeptMap).map(([name, value]) => ({ name, value }));
@@ -82,12 +82,12 @@ export const GET = withApiHandler(async (request, context) => {
   const candStats = {
     total: candidates?.length || 0,
     averageScreeningScore: candidates?.length 
-      ? Math.round(candidates.reduce((sum, c) => sum + (c.screening_score || 0), 0) / candidates.length)
+      ? Math.round(candidates.reduce((sum: number, c: any) => sum + (c.screening_score || 0), 0) / candidates.length)
       : 0,
   };
 
   const candBySourceMap: Record<string, number> = {};
-  candidates?.forEach(c => {
+  candidates?.forEach((c: any) => {
     const src = c.source || 'Career Portal';
     candBySourceMap[src] = (candBySourceMap[src] || 0) + 1;
   });
@@ -99,7 +99,7 @@ export const GET = withApiHandler(async (request, context) => {
   funnelStages.forEach(s => { stageCounts[s] = 0; });
   
   // Count candidates by current stage
-  applications?.forEach(app => {
+  applications?.forEach((app: any) => {
     const stage = app.current_stage || 'Applied';
     if (stageCounts[stage] !== undefined) {
       stageCounts[stage]++;
@@ -117,25 +117,25 @@ export const GET = withApiHandler(async (request, context) => {
   // Interview Stats
   const intStats = {
     total: interviews?.length || 0,
-    completed: interviews?.filter(i => i.status === 'Completed').length || 0,
-    scheduled: interviews?.filter(i => i.status === 'Scheduled').length || 0,
-    cancelled: interviews?.filter(i => i.status === 'Cancelled').length || 0,
+    completed: interviews?.filter((i: any) => i.status === 'Completed').length || 0,
+    scheduled: interviews?.filter((i: any) => i.status === 'Scheduled').length || 0,
+    cancelled: interviews?.filter((i: any) => i.status === 'Cancelled').length || 0,
     averageScore: interviews?.length 
-      ? Number((interviews.reduce((sum, i) => sum + (i.feedback_score || 0), 0) / interviews.length).toFixed(1))
+      ? Number((interviews.reduce((sum: number, i: any) => sum + (i.feedback_score || 0), 0) / interviews.length).toFixed(1))
       : 0
   };
 
   // Offer Stats
   const offStats = {
     total: offers?.length || 0,
-    accepted: offers?.filter(o => o.status === 'Accepted').length || 0,
-    rejected: offers?.filter(o => o.status === 'Rejected').length || 0,
-    extended: offers?.filter(o => ['Extended', 'Pending Approval', 'Approved'].includes(o.status)).length || 0,
+    accepted: offers?.filter((o: any) => o.status === 'Accepted').length || 0,
+    rejected: offers?.filter((o: any) => o.status === 'Rejected').length || 0,
+    extended: offers?.filter((o: any) => ['Extended', 'Pending Approval', 'Approved'].includes(o.status)).length || 0,
     acceptanceRate: offers?.length 
-      ? Math.round((offers.filter(o => o.status === 'Accepted').length / offers.length) * 100)
+      ? Math.round((offers.filter((o: any) => o.status === 'Accepted').length / offers.length) * 100)
       : 0,
     avgSalary: offers?.length
-      ? Math.round(offers.reduce((sum, o) => sum + Number(o.base_salary || 0), 0) / offers.length)
+      ? Math.round(offers.reduce((sum: number, o: any) => sum + Number(o.base_salary || 0), 0) / offers.length)
       : 0
   };
 
@@ -144,7 +144,7 @@ export const GET = withApiHandler(async (request, context) => {
   let totalHiredCount = 0;
   let accumulatedDays = 0;
 
-  applications?.forEach(app => {
+  applications?.forEach((app: any) => {
     if (app.current_stage === 'Preboarding' || app.current_stage === 'Hired') {
       const appDate = new Date(app.created_at);
       const updateDate = new Date(app.updated_at);
@@ -162,7 +162,7 @@ export const GET = withApiHandler(async (request, context) => {
   // Recruiter / Hiring manager performance
   const recruiterStatsMap = new Map<string, { name: string; requisitions: number; offers: number; hires: number }>();
 
-  requisitions?.forEach(r => {
+  requisitions?.forEach((r: any) => {
     const creatorId = r.created_by;
     if (creatorId) {
       const user = usersMap.get(creatorId);
@@ -173,7 +173,7 @@ export const GET = withApiHandler(async (request, context) => {
     }
   });
 
-  offers?.forEach(o => {
+  offers?.forEach((o: any) => {
     const creatorId = o.created_by;
     if (creatorId) {
       const user = usersMap.get(creatorId);
@@ -194,9 +194,9 @@ export const GET = withApiHandler(async (request, context) => {
   let femaleHires = 0;
   let otherHires = 0;
 
-  candidates?.forEach(c => {
+  candidates?.forEach((c: any) => {
     if (c.status === 'Hired' || c.status === 'Offered') {
-      const matchedUser = users?.find(u => u.email?.toLowerCase() === c.email?.toLowerCase());
+      const matchedUser = users?.find((u: any) => u.email?.toLowerCase() === c.email?.toLowerCase());
       if (matchedUser) {
         const gender = (matchedUser.gender || '').toLowerCase();
         if (gender === 'female') femaleHires++;

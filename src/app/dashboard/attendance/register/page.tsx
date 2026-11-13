@@ -375,23 +375,30 @@ export default function AttendancePage() {
         const meData = await meResponse.json();
         setCurrentUser(meData.user);
 
-        // Get employee record for all users (to support personal attendance/leave views)
+        // Immediate direct assignment if employeeRecordId is already attached by /api/auth/me
+        if (meData.user?.employeeRecordId) {
+          setEmployeeId(Number(meData.user.employeeRecordId));
+          setEmployeeData(meData.user);
+        }
+
+        // Also query employee record for details
         {
           const employeeResponse = await fetch(`/api/employees?userId=${meData.user.id}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
 
           if (employeeResponse.ok) {
-            const employees = await employeeResponse.json();
-            if (employees && employees.length > 0) {
-              setEmployeeId(employees[0].id);
+            const employeesRes = await employeeResponse.json();
+            const empList = Array.isArray(employeesRes) ? employeesRes : (employeesRes?.data || []);
+            if (empList && empList.length > 0) {
+              setEmployeeId(Number(empList[0].id));
               setEmployeeData({
-                ...employees[0],
+                ...empList[0],
                 firstName: meData.user.firstName,
                 lastName: meData.user.lastName,
                 avatarUrl: meData.user.avatarUrl
               });
-            } else if (!hasFullAccess(meData.user.role as UserRole)) {
+            } else if (!meData.user?.employeeRecordId && !hasFullAccess(meData.user.role as UserRole)) {
               toast.error('Employee record not found. Please contact admin.');
             }
           }
@@ -416,24 +423,26 @@ export default function AttendancePage() {
       });
 
       if (response.ok) {
-        const data = await response.json();
-        setEmployees(data);
+        const result = await response.json();
+        const empList = Array.isArray(result) ? result : (result.data || []);
+        setEmployees(empList);
 
         // Fallback default employee selection for administrator test profiles
-        if (data && data.length > 0) {
-          setEmployeeId((prev: any) => prev || Number(data[0].id));
+        if (empList && empList.length > 0) {
+          setEmployeeId((prev: any) => prev || Number(empList[0].id));
         }
 
         // Fetch user details for all employees
-        const userIds = data.map((emp: Employee) => emp.userId);
+        const userIds = empList.map((emp: Employee) => emp.userId).filter(Boolean);
         if (userIds.length > 0) {
           const usersResponse = await fetch('/api/users?limit=100', {
             headers: { 'Authorization': `Bearer ${token}` }
           });
 
           if (usersResponse.ok) {
-            const usersData = await usersResponse.json();
-            setUsers(usersData);
+            const usersResult = await usersResponse.json();
+            const userList = Array.isArray(usersResult) ? usersResult : (usersResult.data || []);
+            setUsers(userList);
           }
         }
       }
@@ -827,6 +836,11 @@ export default function AttendancePage() {
       return;
     }
 
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('CSV file size exceeds 5 MB limit');
+      return;
+    }
+
     setIsUploading(true);
     const formData = new FormData();
     formData.append('file', file);
@@ -884,6 +898,13 @@ export default function AttendancePage() {
 
   const handleUpdateAttendance = async () => {
     if (!editingAttendance) return;
+
+    if (editAttendanceForm.timeIn && editAttendanceForm.timeOut) {
+      if (editAttendanceForm.timeOut <= editAttendanceForm.timeIn) {
+        toast.error('Time out must be later than time in');
+        return;
+      }
+    }
 
     setLoading(true);
     try {
@@ -956,8 +977,8 @@ export default function AttendancePage() {
       return;
     }
 
-    if (!holidayForm.reason || holidayForm.reason.trim() === '') {
-      toast.error('Please provide a reason');
+    if (!holidayForm.reason || holidayForm.reason.trim().length < 3) {
+      toast.error('Please provide a holiday name/reason (at least 3 characters)');
       return;
     }
 
@@ -1000,8 +1021,21 @@ export default function AttendancePage() {
       return;
     }
 
+    const selectedDate = new Date(attendanceForm.date);
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    if (selectedDate > today) {
+      toast.error('Cannot mark attendance for a future date');
+      return;
+    }
+
     if (!attendanceForm.timeIn || !attendanceForm.timeOut) {
       toast.error('Please provide both time in and time out');
+      return;
+    }
+
+    if (attendanceForm.timeOut <= attendanceForm.timeIn) {
+      toast.error('Time out must be later than time in');
       return;
     }
 
@@ -1361,8 +1395,8 @@ export default function AttendancePage() {
                 id: Number(e.id),
                 employeeId: e.employeeId,
                 department: e.department,
-                firstName: profile?.firstName || '',
-                lastName: profile?.lastName || '',
+                firstName: profile?.firstName || e.firstName || '',
+                lastName: profile?.lastName || e.lastName || '',
               };
             })}
           />
@@ -1381,10 +1415,13 @@ export default function AttendancePage() {
               const profile = users.find(u => u.id === e.userId);
               return {
                 id: Number(e.id),
+                userId: e.userId,
+                authUserId: e.authUserId || e.user_id || (profile as any)?.id,
+                user_id: e.authUserId || e.user_id || (profile as any)?.id,
                 employeeId: e.employeeId,
                 department: e.department,
-                firstName: profile?.firstName || '',
-                lastName: profile?.lastName || '',
+                firstName: profile?.firstName || e.firstName || '',
+                lastName: profile?.lastName || e.lastName || '',
               };
             })}
           />

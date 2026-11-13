@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { withApiHandler } from '@/server/http/handler';
-import { BadRequestError } from '@/server/http/errors';
+import { BadRequestError, ForbiddenError } from '@/server/http/errors';
 import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
+import { isEmployeeRole, type UserRole } from '@/lib/permissions';
 
 export const POST = withApiHandler(async (request, context) => {
   const payload = await request.json();
@@ -16,15 +17,22 @@ export const POST = withApiHandler(async (request, context) => {
 
   if (!tenantId) throw new BadRequestError('Tenant ID missing');
 
+  // RBAC Enforcement: Regular employees are strictly forbidden from approving or rejecting WFH requests
+  const userRole = (user.role || 'employee').toLowerCase().replace(/[\s-]+/g, '_') as UserRole;
+  if (isEmployeeRole(userRole)) {
+    throw new ForbiddenError('Employees are not authorized to approve or reject WFH requests.');
+  }
+
   const supabase = getAdminRouteSupabase();
 
   const newStatus = action === 'approve' ? 'Approved' : 'Rejected';
+  const approverId = user.providerUserId || user.id;
 
   // Update `wfh_requests` row in Supabase DB
   try {
     await supabase.from('wfh_requests').update({
       status: newStatus,
-      approver_id: user.id,
+      approver_id: approverId,
       manager_comments: comments,
       approved_at: action === 'approve' ? new Date().toISOString() : null
     }).eq('id', requestId).eq('tenant_id', tenantId);
@@ -41,3 +49,4 @@ export const POST = withApiHandler(async (request, context) => {
     timestamp: new Date().toISOString()
   });
 }, { requireAuth: true });
+

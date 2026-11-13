@@ -158,9 +158,18 @@ export function EditEmployeeDialog({ open, onOpenChange, onSuccess, employee, us
         body: JSON.stringify(userPayload),
       });
 
+      const extractMessage = (data: any, fallback: string) => {
+        if (!data) return fallback;
+        if (Array.isArray(data.errors) && data.errors.length > 0) {
+          const msgs = data.errors.map((e: any) => `${e.path?.join('.') || 'field'}: ${e.message}`).filter(Boolean);
+          if (msgs.length > 0) return msgs.join(', ');
+        }
+        return data.error || data.message || fallback;
+      };
+
       if (!userResponse.ok) {
         const errorData = await userResponse.json();
-        const message = errorData.error || errorData.message || 'Failed to update user information';
+        const message = extractMessage(errorData, 'Failed to update user information');
         if (message.toLowerCase().includes('email')) {
           form.setError('email', { message });
           return;
@@ -172,25 +181,29 @@ export function EditEmployeeDialog({ open, onOpenChange, onSuccess, employee, us
         throw new Error(message);
       }
 
+      const safeManagerId = values.managerId && !isNaN(Number(values.managerId)) && Number(values.managerId) > 0 
+        ? Number(values.managerId) 
+        : null;
+
       const employeePayload = {
         employeeId: values.employeeId.trim(),
         department: values.department,
         designation: values.designation.trim(),
-        employmentType: values.employmentType,
-        dateOfJoining: values.dateOfJoining,
-        dateOfBirth: values.dateOfBirth || null,
-        salary: values.salary ? Number(values.salary) : null,
-        hourlyRate: values.hourlyRate ? Number(values.hourlyRate) : null,
-        ctc: values.ctc ? Number(values.ctc) : null,
+        employmentType: (values.employmentType || '').toLowerCase().replace('-', '_'),
+        dateOfJoining: values.dateOfJoining ? values.dateOfJoining.split('T')[0] : '',
+        dateOfBirth: values.dateOfBirth ? values.dateOfBirth.split('T')[0] : null,
+        salary: values.salary ? Number(String(values.salary).replace(/[^0-9.-]/g, '')) || null : null,
+        hourlyRate: values.hourlyRate ? Number(String(values.hourlyRate).replace(/[^0-9.-]/g, '')) || null : null,
+        ctc: values.ctc ? Number(String(values.ctc).replace(/[^0-9.-]/g, '')) || null : null,
         pfNumber: values.pfNumber?.trim() || null,
         uanNumber: values.uanNumber?.trim() || null,
         bankName: values.bankName?.trim() || null,
         bankAccountNumber: values.bankAccountNumber?.trim() || null,
         ifscCode: values.ifscCode?.trim() || null,
-        managerId: values.managerId ? Number(values.managerId) : null,
+        managerId: safeManagerId,
         skills: values.skills?.trim() ? values.skills.split(',').map((skill) => skill.trim()).filter(Boolean) : [],
         gender: values.gender || null,
-        status: values.status,
+        status: (values.status || 'active').toLowerCase().replace(/[\s-]+/g, '_'),
       };
 
       const employeeResponse = await fetch(`/api/employees?id=${employee.id}`, {
@@ -204,7 +217,7 @@ export function EditEmployeeDialog({ open, onOpenChange, onSuccess, employee, us
 
       if (!employeeResponse.ok) {
         const errorData = await employeeResponse.json();
-        const message = errorData.error || errorData.message || 'Failed to update employee information';
+        const message = extractMessage(errorData, 'Failed to update employee information');
         if (message.toLowerCase().includes('employeeid') || message.toLowerCase().includes('employee id')) {
           form.setError('employeeId', { message });
           return;

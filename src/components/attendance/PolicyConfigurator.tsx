@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import { Loader2, Settings, Plus, Sparkles, Copy, Trash2, Save, FileText, CheckCircle } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { getStoredSessionToken } from '@/lib/client-session';
 
 interface PolicyConfiguratorProps {
   tenantId: string;
@@ -61,7 +62,10 @@ export default function PolicyConfigurator({ tenantId }: PolicyConfiguratorProps
   const fetchPolicies = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/attendance/policies');
+      const token = getStoredSessionToken();
+      const response = await fetch('/api/attendance/policies', {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined
+      });
       if (response.ok) {
         const data = await response.json();
         setPolicies(data || []);
@@ -174,6 +178,26 @@ export default function PolicyConfigurator({ tenantId }: PolicyConfiguratorProps
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!form.name || form.name.trim().length < 3) {
+      toast.error('Policy name must be at least 3 characters');
+      return;
+    }
+    if (form.gracePeriodMinutes !== undefined && Number(form.gracePeriodMinutes) < 0) {
+      toast.error('Grace period cannot be negative');
+      return;
+    }
+    if (form.halfDayThresholdHours !== undefined && Number(form.halfDayThresholdHours) <= 0) {
+      toast.error('Half day threshold must be greater than 0');
+      return;
+    }
+    if (form.fullDayHours !== undefined && form.halfDayThresholdHours !== undefined && Number(form.fullDayHours) <= Number(form.halfDayThresholdHours)) {
+      toast.error('Full day minimum hours must be greater than half day threshold');
+      return;
+    }
+    if (form.overtimeEligibility && form.overtimeMinMinutes !== undefined && Number(form.overtimeMinMinutes) < 0) {
+      toast.error('Overtime minimum minutes cannot be negative');
+      return;
+    }
     setSaving(true);
     try {
       const url = selectedPolicy ? `/api/attendance/policies?id=${selectedPolicy.id}` : '/api/attendance/policies';
@@ -195,9 +219,13 @@ export default function PolicyConfigurator({ tenantId }: PolicyConfiguratorProps
         }
       };
 
+      const token = getStoredSessionToken();
       const response = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
         body: JSON.stringify(payload),
       });
 
@@ -227,8 +255,10 @@ export default function PolicyConfigurator({ tenantId }: PolicyConfiguratorProps
 
     setSaving(true);
     try {
+      const token = getStoredSessionToken();
       const response = await fetch(`/api/attendance/policies?id=${selectedPolicy.id}`, {
         method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined
       });
 
       if (response.ok) {

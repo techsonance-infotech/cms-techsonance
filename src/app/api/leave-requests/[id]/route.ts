@@ -15,8 +15,20 @@ async function getCurrentSupabaseEmployee(tenantId: string, authUserId: string) 
     .select('id')
     .eq('user_id', authUserId)
     .eq('tenant_id', tenantId)
-    .single();
+    .maybeSingle();
   return employee ?? null;
+}
+
+function resolveLeaveRequestId(request: Request, context?: any): number {
+  let rawId: any = (context as any)?.params?.id;
+  if (!rawId || isNaN(Number(rawId))) {
+    const url = new URL(request.url);
+    const searchId = url.searchParams.get('id');
+    const pathParts = url.pathname.split('/').filter(Boolean);
+    const lastPart = pathParts[pathParts.length - 1];
+    rawId = searchId || lastPart;
+  }
+  return Number(rawId);
 }
 
 function normalizeSupabaseLeaveRequestRow(
@@ -24,26 +36,40 @@ function normalizeSupabaseLeaveRequestRow(
   userMap: Map<string, number | null>
 ) {
   const approvedBy = typeof row.approved_by === 'string' ? userMap.get(row.approved_by) ?? null : null;
+  let attachmentUrl = (row.attachment_url as string | null) ?? null;
+  let attachmentName = (row.attachment_name as string | null) ?? null;
+
+  const rawReason = String(row.reason ?? '');
+  if (!attachmentUrl) {
+    const match = rawReason.match(/\n\n\[Attachment:\s*(.*?)\s*\|\s*(.*?)\]$/);
+    if (match) {
+      attachmentName = match[1];
+      attachmentUrl = match[2];
+    }
+  }
+
+  const cleanReason = rawReason.replace(/\n\n\[Attachment:\s*.*?\s*\|\s*.*?\]$/, '').trim();
+
   return {
     id: Number(row.id),
     employeeId: Number(row.employee_id),
     leaveType: row.leave_type,
     startDate: row.start_date,
     endDate: row.end_date,
-    reason: row.reason,
+    reason: cleanReason,
     status: row.status,
     leavePeriod: row.leave_period,
     actualDays: row.actual_days,
     approvedBy,
+    attachmentUrl,
+    attachmentName,
     createdAt: row.created_at ?? null,
     updatedAt: row.updated_at ?? null,
   };
 }
 
 export const PATCH = withApiHandler(async (request: Request, context) => {
-  const dynamicParams = (context as any).params;
-  const resolvedParams = typeof dynamicParams?.then === 'function' ? await dynamicParams : dynamicParams;
-  const id = Number(resolvedParams?.id);
+  const id = resolveLeaveRequestId(request, context);
 
   if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('Valid leave request id is required');
   const payload = updateLeaveRequestSchema.parse(await request.json());
@@ -94,9 +120,7 @@ export const PATCH = withApiHandler(async (request: Request, context) => {
 }, { requireAuth: true, roles: ['Employee'] });
 
 export const DELETE = withApiHandler(async (request: Request, context) => {
-  const dynamicParams = (context as any).params;
-  const resolvedParams = typeof dynamicParams?.then === 'function' ? await dynamicParams : dynamicParams;
-  const id = Number(resolvedParams?.id);
+  const id = resolveLeaveRequestId(request, context);
 
   if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('Valid leave request id is required');
   const user = context.auth!.user;

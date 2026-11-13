@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server';
 import { withApiHandler } from '@/server/http/handler';
 import { BadRequestError } from '@/server/http/errors';
-import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
+import { getAdminRouteSupabase, resolveTenantId } from '@/server/supabase/route-helpers';
 import { trainingProgramSchema } from '@/server/validation/training';
 
 export const GET = withApiHandler(async (request, context) => {
-  const tenantId = context.auth?.user.tenantId;
+  const supabase = getAdminRouteSupabase();
+  const tenantId = await resolveTenantId(context, supabase);
   if (!tenantId) throw new BadRequestError('Tenant info required');
 
-  const supabase = getAdminRouteSupabase();
   const { data, error } = await supabase
     .from('training_programs')
     .select('*')
@@ -20,13 +20,13 @@ export const GET = withApiHandler(async (request, context) => {
 }, { requireAuth: true });
 
 export const POST = withApiHandler(async (request, context) => {
-  const tenantId = context.auth?.user.tenantId;
+  const supabase = getAdminRouteSupabase();
+  const tenantId = await resolveTenantId(context, supabase);
   if (!tenantId) throw new BadRequestError('Tenant info required');
 
   const body = await request.json();
   const validated = trainingProgramSchema.parse(body);
 
-  const supabase = getAdminRouteSupabase();
   const { data, error } = await supabase
     .from('training_programs')
     .insert({
@@ -52,4 +52,23 @@ export const POST = withApiHandler(async (request, context) => {
 
   if (error) throw new BadRequestError(error.message);
   return NextResponse.json(data);
+}, { requireAuth: true });
+
+export const DELETE = withApiHandler(async (request, context) => {
+  const supabase = getAdminRouteSupabase();
+  const tenantId = await resolveTenantId(context, supabase);
+  if (!tenantId) throw new BadRequestError('Tenant info required');
+
+  const searchParams = new URL(request.url).searchParams;
+  const id = searchParams.get('id');
+  if (!id) throw new BadRequestError('id is required');
+
+  const { error } = await supabase
+    .from('training_programs')
+    .delete()
+    .eq('id', Number(id))
+    .eq('tenant_id', tenantId);
+
+  if (error) throw new BadRequestError(error.message);
+  return NextResponse.json({ success: true });
 }, { requireAuth: true });

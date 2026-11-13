@@ -54,6 +54,7 @@ interface HandlerOptions {
 interface HandlerContext {
   requestId: string;
   auth: Awaited<ReturnType<typeof authenticateRequest>>;
+  params?: any;
 }
 
 function extractErrorMessages(error: unknown, seen = new Set()): string[] {
@@ -133,7 +134,7 @@ export function withApiHandler(
   handler: (request: Request, context: HandlerContext) => Promise<Response>,
   options?: HandlerOptions
 ) {
-  return async function wrappedHandler(request: Request) {
+  return async function wrappedHandler(request: Request, routeProps?: any) {
     const requestId = request.headers.get('x-correlation-id') ?? crypto.randomUUID();
     const startedAt = performance.now();
     const pathname = new URL(request.url).pathname;
@@ -146,7 +147,12 @@ export function withApiHandler(
       });
       authContext = auth;
 
-      const response = await handler(request, { requestId, auth });
+      let params = routeProps?.params;
+      if (params && typeof params.then === 'function') {
+        params = await params;
+      }
+
+      const response = await handler(request, { requestId, auth, params });
       const durationMs = Math.round((performance.now() - startedAt) * 100) / 100;
       response.headers.set('x-correlation-id', requestId);
 

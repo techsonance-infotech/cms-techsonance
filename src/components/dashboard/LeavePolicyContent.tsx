@@ -59,6 +59,7 @@ function formatHolidayDate(dateStr: string) {
 export function LeavePolicyContent() {
   const [policies, setPolicies] = useState<LeavePolicy[]>([]);
   const [holidays, setHolidays] = useState<CompanyHoliday[]>([]);
+  const [companyName, setCompanyName] = useState<string>('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -74,6 +75,14 @@ export function LeavePolicyContent() {
         if (policyRes.ok) {
           const json = await policyRes.json();
           setPolicies(Array.isArray(json) ? json : json?.data ?? []);
+        }
+
+        // Fetch company name
+        const companyRes = await fetch('/api/company-settings', { headers, cache: 'no-store' });
+        if (companyRes.ok) {
+          const cJson = await companyRes.json();
+          const name = cJson?.data?.companyName || cJson?.data?.legalName || cJson?.data?.workspaceName || cJson?.companyName || '';
+          if (name) setCompanyName(name);
         }
 
         // Fetch company holidays for current year
@@ -131,7 +140,7 @@ export function LeavePolicyContent() {
         </div>
         <div className="relative z-10">
           <Badge className="bg-emerald-500 hover:bg-emerald-600 mb-2">Internal Document</Badge>
-          <h1 className="text-4xl font-black tracking-tight">Techsonance Leave Policy</h1>
+          <h1 className="text-4xl font-black tracking-tight">{companyName ? `${companyName} Leave Policy` : 'Company Leave Policy'}</h1>
           <p className="text-slate-400 text-lg">Guidelines for the 2026/27 Financial Year (Effective April 1st, 2026)</p>
         </div>
       </section>

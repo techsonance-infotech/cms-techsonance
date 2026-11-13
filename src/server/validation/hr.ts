@@ -1,28 +1,56 @@
 import { z } from 'zod';
 
-export const leaveTypeSchema = z.enum(['casual', 'sick', 'earned', 'unpaid', 'maternity', 'paternity']);
+export const leaveTypeSchema = z.enum([
+  'annual',
+  'casual',
+  'sick',
+  'earned',
+  'family',
+  'maternity',
+  'paternity',
+  'study',
+  'unpaid',
+  'work_from_home',
+  'bereavement',
+  'compensatory',
+]).or(z.string().trim().min(1).max(50));
+
 export const approvalStatusSchema = z.enum(['pending', 'approved', 'rejected']);
-export const leavePeriodSchema = z.enum(['full_day', 'first_half', 'second_half']);
+
+export const leavePeriodSchema = z.enum([
+  'full_day',
+  'half_day',
+  'hourly',
+  'first_half',
+  'second_half',
+]).or(z.string().trim().min(1).max(50));
 
 export const createLeaveRequestSchema = z.object({
-  employeeId: z.coerce.number().int().positive().optional(),
+  employeeId: z.preprocess(
+    (val) => (val === 0 || val === '0' || val === '' || val === null ? undefined : val),
+    z.coerce.number().int().positive().optional()
+  ),
   leaveType: leaveTypeSchema,
-  startDate: z.string().date(),
-  endDate: z.string().date(),
+  startDate: z.string().min(1),
+  endDate: z.string().min(1),
   reason: z.string().trim().min(1).max(2000),
   leavePeriod: leavePeriodSchema.optional(),
-  actualDays: z.coerce.number().positive().optional(),
+  actualDays: z.coerce.number().min(0).optional(),
+  attachmentUrl: z.string().optional().nullable(),
+  attachmentName: z.string().optional().nullable(),
 });
 
 export const updateLeaveRequestSchema = z.object({
   leaveType: leaveTypeSchema.optional(),
-  startDate: z.string().date().optional(),
-  endDate: z.string().date().optional(),
+  startDate: z.string().min(1).optional(),
+  endDate: z.string().min(1).optional(),
   reason: z.string().trim().min(1).max(2000).optional(),
   leavePeriod: leavePeriodSchema.optional(),
-  actualDays: z.coerce.number().positive().optional(),
+  actualDays: z.coerce.number().min(0).optional(),
   status: approvalStatusSchema.optional(),
   adminComment: z.string().trim().max(2000).optional().nullable(),
+  attachmentUrl: z.string().optional().nullable(),
+  attachmentName: z.string().optional().nullable(),
 });
 
 export const createPerformanceReviewSchema = z.object({

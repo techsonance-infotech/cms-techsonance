@@ -1,0 +1,30 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "react",
+    "nextjs",
+    "jsx-a11y",
+    "typescript"
+  ],
+  "categories": {
+    "correctness": "warn"
+  },
+  "rules": {
+    "no-unused-vars": "off",
+    "no-empty": "warn",
+    "no-constant-condition": "warn",
+    "react/no-unescaped-entities": "off",
+    "nextjs/no-img-element": "off",
+    "react/jsx-key": "warn",
+    "react-hooks/rules-of-hooks": "error",
+    "react-hooks/exhaustive-deps": "off"
+  },
+  "ignorePatterns": [
+    ".next/**",
+    "node_modules/**",
+    "docs/**",
+    "graphify-out/**",
+    ".gitnexus/**",
+    "coverage/**"
+  ]
+}

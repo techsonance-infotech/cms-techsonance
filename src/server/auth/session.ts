@@ -56,7 +56,7 @@ export async function authenticateRequest(request: Request, options?: { required
           avatarUrl: session.user.image || (session.user as any).avatar_url || null,
           phone: session.user.phone || null,
           providerUserId: session.user.id,
-          tenantId: (session.user as any).tenant_id || null,
+          tenantId: (session.user as any).tenant_id || (session.user as any).tenantId || (session.session as any)?.tenant_id || (session.session as any)?.tenantId || null,
         },
         accessToken: session.session.token,
         tokenId: session.user.id,
@@ -75,13 +75,21 @@ export async function authenticateRequest(request: Request, options?: { required
 
   // 2. Fallback: Retrieve legacy Supabase session from Authorization header
   const authHeader = request.headers.get('authorization');
-  let bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice('Bearer '.length) : null;
+  let bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice('Bearer '.length).trim() : null;
+
+  if (bearerToken === 'null' || bearerToken === 'undefined' || bearerToken === '') {
+    bearerToken = null;
+  }
 
   if (!bearerToken) {
     try {
       const cookieStore = await cookies();
       bearerToken = cookieStore.get('session_token')?.value ?? null;
     } catch {}
+  }
+
+  if (bearerToken === 'null' || bearerToken === 'undefined' || bearerToken === '') {
+    bearerToken = null;
   }
 
   if (!bearerToken) {

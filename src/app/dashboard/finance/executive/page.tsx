@@ -47,6 +47,7 @@ export default function FinancialExecutiveDashboard() {
   const [currency, setCurrency] = useState<'INR' | 'USD'>('INR');
   const [reconciling, setReconciling] = useState(false);
   const [financeData, setFinanceData] = useState<any>(null);
+  const [lastAudit, setLastAudit] = useState<any>(null);
 
   const exchangeRates = {
     INR: 1,
@@ -85,13 +86,33 @@ export default function FinancialExecutiveDashboard() {
     fetchDashboardData();
   }, []);
 
-  const handleReconcile = () => {
-    setReconciling(true);
-    setTimeout(() => {
+  const handleReconcile = async () => {
+    try {
+      setReconciling(true);
+      const token = localStorage.getItem('session_token');
+      const res = await fetch('/api/finance/executive', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ action: 'reconcile' })
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        setLastAudit(json.data);
+        toast.success(json.data?.message || 'Ledger reconciliation completed successfully.');
+        await fetchDashboardData();
+      } else {
+        toast.error('Failed to run ledger reconciliation.');
+      }
+    } catch (err) {
+      console.error('Reconciliation error:', err);
+      toast.error('An error occurred during ledger reconciliation.');
+    } finally {
       setReconciling(false);
-      toast.success("Ledger reconciliation run complete. All transactional audits match standard baseline!");
-      fetchDashboardData();
-    }, 1500);
+    }
   };
 
   if (loading || !financeData) {
@@ -146,6 +167,17 @@ export default function FinancialExecutiveDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Live Reconciliation Audit Alert */}
+      {lastAudit && (
+        <div className="bg-emerald-950/40 border border-emerald-800/60 rounded-xl p-3 px-4 flex items-center justify-between text-xs text-emerald-200">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+            <span><strong>Live Audit Result:</strong> {lastAudit.message}</span>
+          </div>
+          <span className="text-emerald-400/80">Audited at {new Date(lastAudit.auditedAt).toLocaleTimeString()}</span>
+        </div>
+      )}
 
       {/* Financial Bento KPIs */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">

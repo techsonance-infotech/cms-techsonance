@@ -11,6 +11,7 @@ import { isEmployeeRole, type UserRole } from '@/lib/permissions';
 import { toast } from 'sonner';
 import { KanbanSkeleton } from '@/components/ui/dashboard-skeleton';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
+import { getStoredSessionToken } from '@/lib/client-session';
 
 
 interface Task {
@@ -100,12 +101,13 @@ export function KanbanBoard({
 
     setLoading(true);
     try {
-      const token = localStorage.getItem('session_token');
+      const token = getStoredSessionToken();
       let url = `/api/tasks?limit=1000&projectId=${projectId}`;
       if (sprintId) url += `&sprintId=${sprintId}`;
 
       const response = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include'
       });
 
       if (response.ok) {
@@ -181,13 +183,14 @@ export function KanbanBoard({
     setTasks(tasks.map((t) => t.id === draggedTask.id ? { ...t, status: status as Task['status'] } : t));
 
     try {
-      const token = localStorage.getItem('session_token');
+      const token = getStoredSessionToken();
       const response = await fetch(`/api/tasks?id=${draggedTask.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Authorization:  `Bearer ${token}`,
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
+        credentials: 'include',
         body: JSON.stringify({ status }),
       });
       if (!response.ok) {

@@ -3,27 +3,34 @@ import { z } from 'zod';
 // ========================
 // Employee Assets
 // ========================
-export const assetTypeSchema = z.enum([
-  'laptop', 'desktop', 'mac', 'monitor', 'mouse', 'keyboard',
-  'mobile', 'sim', 'id_card', 'access_card', 'parking_pass',
-  'locker', 'headset', 'dock', 'other'
-]);
+export const assetTypeSchema = z.preprocess(
+  (val) => (typeof val === 'string' ? val.trim().toLowerCase().replace(/\s+/g, '_') : val),
+  z.string().min(1).max(100)
+);
 
-export const assetConditionSchema = z.enum(['new', 'good', 'fair', 'damaged', 'lost']);
-export const assetStatusSchema = z.enum(['issued', 'returned', 'lost', 'damaged', 'under_repair']);
+export const assetConditionSchema = z.preprocess(
+  (val) => (typeof val === 'string' ? val.trim().toLowerCase() : val),
+  z.string().default('good')
+);
+
+export const assetStatusSchema = z.preprocess(
+  (val) => (typeof val === 'string' ? val.trim().toLowerCase().replace(/\s+/g, '_') : val),
+  z.string().default('issued')
+);
 
 export const createAssetSchema = z.object({
-  employeeId: z.coerce.number().int().positive(),
+  employeeId: z.coerce.number().int().positive().optional(),
   assetType: assetTypeSchema,
   assetName: z.string().trim().min(1).max(200),
   serialNumber: z.string().trim().max(200).optional().nullable(),
   brand: z.string().trim().max(100).optional().nullable(),
   model: z.string().trim().max(100).optional().nullable(),
   specification: z.string().trim().max(500).optional().nullable(),
-  issueDate: z.string().date().optional().nullable(),
-  returnDate: z.string().date().optional().nullable(),
+  issueDate: z.string().optional().nullable(),
+  issuedDate: z.string().optional().nullable(),
+  returnDate: z.string().optional().nullable(),
   condition: assetConditionSchema.optional().default('good'),
-  warrantyExpiry: z.string().date().optional().nullable(),
+  warrantyExpiry: z.string().optional().nullable(),
   status: assetStatusSchema.optional().default('issued'),
   notes: z.string().trim().max(1000).optional().nullable(),
 });
@@ -33,15 +40,18 @@ export const updateAssetSchema = createAssetSchema.omit({ employeeId: true }).pa
 // ========================
 // Employee Skills
 // ========================
-export const skillCategorySchema = z.enum([
-  'programming', 'framework', 'language', 'cloud', 'devops',
-  'design', 'soft_skill', 'certification', 'database', 'tools', 'other'
-]);
+export const skillCategorySchema = z.preprocess(
+  (val) => (typeof val === 'string' ? val.trim() : val),
+  z.string().min(1).max(100)
+);
 
-export const proficiencyLevelSchema = z.enum(['beginner', 'intermediate', 'advanced', 'expert']);
+export const proficiencyLevelSchema = z.preprocess(
+  (val) => (typeof val === 'string' ? val.trim() : val),
+  z.string().default('intermediate')
+);
 
 export const createSkillSchema = z.object({
-  employeeId: z.coerce.number().int().positive(),
+  employeeId: z.coerce.number().int().positive().optional(),
   skillName: z.string().trim().min(1).max(200),
   category: skillCategorySchema,
   proficiencyLevel: proficiencyLevelSchema.optional().default('intermediate'),
@@ -55,25 +65,27 @@ export const updateSkillSchema = createSkillSchema.omit({ employeeId: true }).pa
 // ========================
 // Employee Training
 // ========================
-export const trainingTypeSchema = z.enum([
-  'internal', 'external', 'compliance', 'certification', 'workshop', 'conference'
-]);
+export const trainingTypeSchema = z.preprocess(
+  (val) => (typeof val === 'string' ? val.trim() : val),
+  z.string().default('external')
+);
 
-export const trainingStatusSchema = z.enum([
-  'pending', 'in_progress', 'completed', 'expired', 'cancelled'
-]);
+export const trainingStatusSchema = z.preprocess(
+  (val) => (typeof val === 'string' ? val.trim() : val),
+  z.string().default('pending')
+);
 
 export const createTrainingSchema = z.object({
-  employeeId: z.coerce.number().int().positive(),
+  employeeId: z.coerce.number().int().positive().optional(),
   courseName: z.string().trim().min(1).max(300),
   provider: z.string().trim().max(200).optional().nullable(),
   trainingType: trainingTypeSchema.optional().default('external'),
-  startDate: z.string().date().optional().nullable(),
-  endDate: z.string().date().optional().nullable(),
+  startDate: z.string().optional().nullable(),
+  endDate: z.string().optional().nullable(),
   status: trainingStatusSchema.optional().default('pending'),
   score: z.coerce.number().min(0).max(100).optional().nullable(),
   certificateUrl: z.string().trim().url().optional().nullable(),
-  expiryDate: z.string().date().optional().nullable(),
+  expiryDate: z.string().optional().nullable(),
   cost: z.coerce.number().min(0).optional().nullable(),
   currency: z.string().trim().max(10).optional().default('INR'),
   notes: z.string().trim().max(1000).optional().nullable(),
@@ -99,8 +111,8 @@ export const timelineEventTypeSchema = z.enum([
 ]);
 
 export const createTimelineEventSchema = z.object({
-  employeeId: z.coerce.number().int().positive(),
-  eventType: timelineEventTypeSchema,
+  employeeId: z.coerce.number().int().positive().optional(),
+  eventType: z.string().min(1).default('other'),
   eventTitle: z.string().trim().min(1).max(300),
   eventDescription: z.string().trim().max(2000).optional().nullable(),
   eventData: z.record(z.string(), z.unknown()).optional().default({}),
@@ -109,19 +121,23 @@ export const createTimelineEventSchema = z.object({
 // ========================
 // Employee Notes
 // ========================
-export const noteTypeSchema = z.enum([
-  'general', 'hr_private', 'manager_note', 'achievement', 'award',
-  'incident', 'warning', 'compliment', 'feedback', 'disciplinary'
-]);
+export const noteTypeSchema = z.preprocess(
+  (val) => (typeof val === 'string' ? val.trim().toLowerCase().replace(/\s+/g, '_') : val),
+  z.string().default('general')
+);
 
-export const noteVisibilitySchema = z.enum(['private', 'manager', 'hr', 'public']);
+export const noteVisibilitySchema = z.preprocess(
+  (val) => (typeof val === 'string' ? val.trim().toLowerCase() : val),
+  z.string().default('private')
+);
 
 export const createNoteSchema = z.object({
-  employeeId: z.coerce.number().int().positive(),
+  employeeId: z.coerce.number().int().positive().optional(),
   noteType: noteTypeSchema.optional().default('general'),
   title: z.string().trim().max(300).optional().nullable(),
   content: z.string().trim().min(1).max(5000),
   visibility: noteVisibilitySchema.optional().default('private'),
+  isPrivate: z.boolean().optional(),
 });
 
 export const updateNoteSchema = createNoteSchema.omit({ employeeId: true }).partial();

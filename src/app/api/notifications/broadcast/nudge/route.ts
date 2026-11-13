@@ -19,7 +19,20 @@ export const POST = withApiHandler(async (request, context) => {
 
   const supabase = getAdminRouteSupabase();
 
-  const targetCount = employeeIds.length > 0 ? employeeIds.length : 338;
+  // Query pending acknowledgements count dynamically from database
+  let pendingCount = 0;
+  try {
+    const { count } = await supabase
+      .from('broadcast_acknowledgements')
+      .select('*', { count: 'exact', head: true })
+      .eq('tenant_id', tenantId)
+      .eq('status', 'Pending');
+    pendingCount = count || 0;
+  } catch (err) {
+    console.warn('Pending acks count query info:', err);
+  }
+
+  const targetCount = employeeIds.length > 0 ? employeeIds.length : pendingCount;
 
   // Insert in-app nudge notifications if specific employees specified
   if (employeeIds.length > 0) {

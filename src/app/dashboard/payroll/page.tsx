@@ -533,37 +533,33 @@ export default function PayrollPage() {
             });
 
             if (response.ok) {
-                const htmlString = await response.text();
+                const blob = await response.blob();
                 
                 const employee = employees.find(e => e.id === payroll.employeeId);
                 const user = users.find(u => u.id === employee?.userId);
-                const empName = user ? `${user.firstName} ${user.lastName}` : employee?.employeeId || 'Unknown';
-                const filename = `Payslip_${empName}_${payroll.month}_${payroll.year}.pdf`;
+                const empName = user ? `${user.firstName}_${user.lastName}` : (employee?.employeeId || `emp_${payroll.employeeId}`);
+                const cleanName = empName.replace(/[^a-zA-Z0-9_-]/g, '_');
+                const filename = `Payslip_${cleanName}_${payroll.month}_${payroll.year}.pdf`;
 
-                const html2pdf = (await import('html2pdf.js')).default;
-                
-                const opt = {
-                  margin:       0.5,
-                  filename:     filename,
-                  image:        { type: 'jpeg' as const, quality: 0.98 },
-                  html2canvas:  { scale: 2 },
-                  jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' as const }
-                };
-
-                const tempDiv = document.createElement('div');
-                tempDiv.style.position = 'absolute';
-                tempDiv.style.left = '-9999px';
-                tempDiv.style.top = '0';
-                tempDiv.innerHTML = htmlString;
-                document.body.appendChild(tempDiv);
-                
-                html2pdf().set(opt).from(tempDiv).save().then(() => {
-                   document.body.removeChild(tempDiv);
-                   toast.success('Payslip downloaded successfully');
-                });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+                toast.success('Payslip downloaded successfully');
             } else {
-                const errorData = await response.json();
-                toast.error(errorData.error || 'Failed to download payslip');
+                let errorMsg = 'Failed to download payslip';
+                try {
+                    const errorData = await response.json();
+                    errorMsg = errorData.error || errorMsg;
+                } catch {
+                    const text = await response.text();
+                    if (text) errorMsg = text;
+                }
+                toast.error(errorMsg);
             }
         } catch (error) {
             console.error('Error downloading payslip:', error);

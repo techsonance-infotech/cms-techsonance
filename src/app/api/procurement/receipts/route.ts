@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { withApiHandler } from '@/server/http/handler';
 import { BadRequestError } from '@/server/http/errors';
-import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
+import { getAdminRouteSupabase, resolveActorUuid } from '@/server/supabase/route-helpers';
 
 export const GET = withApiHandler(async (request, context) => {
   const tenantId = context.auth?.user.tenantId;
@@ -26,12 +26,13 @@ export const GET = withApiHandler(async (request, context) => {
       .maybeSingle();
 
     if (po && po.purchase_request) {
+      const receiverUuid = await resolveActorUuid(context, supabase);
       const { data: inserted, error: insertErr } = await supabase
         .from('goods_receipts')
         .insert({
           tenant_id: tenantId,
           purchase_order_id: po.id,
-          received_by: context.auth!.user.id,
+          received_by: receiverUuid,
           received_quantity: po.purchase_request.quantity,
           condition: 'Good'
         })
@@ -58,13 +59,14 @@ export const POST = withApiHandler(async (request, context) => {
   }
 
   const supabase = getAdminRouteSupabase();
+  const receiverUuid = await resolveActorUuid(context, supabase);
 
   const { data, error } = await supabase
     .from('goods_receipts')
     .insert({
       tenant_id: tenantId,
       purchase_order_id: purchaseOrderId,
-      received_by: context.auth!.user.id,
+      received_by: receiverUuid,
       received_quantity: parseInt(receivedQuantity) || 1,
       condition: condition || 'Good'
     })

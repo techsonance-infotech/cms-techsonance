@@ -110,8 +110,16 @@ export const employeeEditFormSchema = employeeCreateFormSchema.omit({ password: 
 export const taskFormSchema = z.object({
   projectId: z.string().min(1, 'Project is required'),
   sprintId: z.string().optional().or(z.literal('')),
-  title: z.string().trim().min(3, 'Title must be at least 3 characters'),
-  description: z.string().optional().or(z.literal('')),
+  title: z
+    .string({ message: 'Task title is required' })
+    .trim()
+    .min(3, 'Title must be at least 3 characters')
+    .max(100, 'Title cannot exceed 100 characters'),
+  description: z
+    .string()
+    .max(2000, 'Detail context cannot exceed 2,000 characters')
+    .optional()
+    .or(z.literal('')),
   assignedTo: z.string().min(1, 'Assignee is required'),
   status: z.enum(taskStatusOptions),
   priority: z.enum(taskPriorityOptions),
@@ -124,14 +132,18 @@ export const taskFormSchema = z.object({
     .string()
     .optional()
     .or(z.literal(''))
-    .refine((value) => !value || (!Number.isNaN(Number(value)) && Number(value) >= 0), 'Estimated hours must be a valid positive number'),
+    .refine((value) => !value || (!Number.isNaN(Number(value)) && Number(value) >= 0 && Number(value) <= 1000), 'Estimated hours must be between 0 and 1,000'),
   loggedHours: z
     .string()
     .optional()
     .or(z.literal(''))
-    .refine((value) => !value || (!Number.isNaN(Number(value)) && Number(value) >= 0), 'Logged hours must be a valid positive number'),
+    .refine((value) => !value || (!Number.isNaN(Number(value)) && Number(value) >= 0 && Number(value) <= 1000), 'Logged hours must be between 0 and 1,000'),
   blockedById: z.string().optional().or(z.literal('')),
   dueDate: optionalDateField,
+  parentTaskId: z.string().optional().or(z.literal('')),
+  taskType: z.string().optional().or(z.literal('')),
+  severity: z.string().optional().or(z.literal('')),
+  epicId: z.string().optional().or(z.literal('')),
 });
 
 export const sprintFormSchema = z
@@ -208,7 +220,7 @@ export const leaveRequestFormSchema = z
     type: z.enum(leaveTypeOptions),
     from: z.string().min(1, 'Please select a start date'),
     to: z.string().min(1, 'Please select an end date'),
-    reason: z.string().trim().min(10, 'Reason must be at least 10 characters'),
+    reason: z.string().trim().min(10, 'Reason must be at least 10 characters').max(500, 'Reason cannot exceed 500 characters'),
     attachmentUrl: z.string().optional().or(z.literal('')),
     attachmentName: z.string().optional().or(z.literal('')),
     actualHours: z.string().optional().or(z.literal('')),

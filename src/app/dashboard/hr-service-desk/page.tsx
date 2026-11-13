@@ -20,6 +20,7 @@ import {
   Bot, CornerDownRight, ThumbsUp, Eye, UserCheck
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { getStoredSessionToken, getStoredUser } from '@/lib/client-session';
 
 export const HR_CASE_CATEGORIES = [
   'Payroll & Benefits',
@@ -88,7 +89,10 @@ export default function HrServiceDeskPage() {
 
   // RBAC State
   const [canApprove, setCanApprove] = useState(false);
-  const [userRole, setUserRole] = useState('developer');
+  const [isSuperAdminOrAdmin, setIsSuperAdminOrAdmin] = useState(false);
+  const [userRole, setUserRole] = useState('employee');
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentEmployee, setCurrentEmployee] = useState<RosterEmp | null>(null);
 
   // Dynamic API State
   const [roster, setRoster] = useState<RosterEmp[]>([]);
@@ -109,6 +113,7 @@ export default function HrServiceDeskPage() {
   // Filter & Search State
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [employeeFilter, setEmployeeFilter] = useState('all');
 
   // New Case Modal State
   const [showNewCaseModal, setShowNewCaseModal] = useState(false);
@@ -117,6 +122,7 @@ export default function HrServiceDeskPage() {
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('Normal');
+  const [formTouched, setFormTouched] = useState({ subject: false, description: false });
 
   // Ticket Detail & Interactive Chat/Notes Modal
   const [selectedTicket, setSelectedTicket] = useState<HrTicketRecord | null>(null);
@@ -133,7 +139,7 @@ export default function HrServiceDeskPage() {
   // Fetch 100% Dynamic Data from Backend API
   const loadServiceDeskDataFromApi = async () => {
     try {
-      const token = localStorage.getItem('session_token');
+      const token = getStoredSessionToken() || localStorage.getItem('session_token');
       const res = await fetch('/api/hr/service-desk', {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       });
@@ -141,15 +147,16 @@ export default function HrServiceDeskPage() {
       if (res.ok) {
         const data = await res.json();
         if (data.canApprove !== undefined) setCanApprove(data.canApprove);
+        if (data.isSuperAdminOrAdmin !== undefined) setIsSuperAdminOrAdmin(data.isSuperAdminOrAdmin);
         if (data.userRole) setUserRole(data.userRole);
+        if (data.currentEmployee) setCurrentEmployee(data.currentEmployee);
         if (data.kbArticles) setKbArticles(data.kbArticles);
         if (data.escalationMatrix) setEscalationMatrix(data.escalationMatrix);
         if (data.employeeRoster) {
           setRoster(data.employeeRoster);
-          if (data.currentUserId) {
-            setSelectedUserId(data.currentUserId);
-          } else if (data.employeeRoster.length > 0 && !selectedUserId) {
-            setSelectedUserId(data.employeeRoster[0].id);
+          const defaultEmpId = data.currentUserId || (data.currentEmployee?.id) || (data.employeeRoster.length > 0 ? data.employeeRoster[0].id : '');
+          if (defaultEmpId) {
+            setSelectedUserId(String(defaultEmpId));
           }
         }
         if (data.summaryStats) setSummaryStats(data.summaryStats);
@@ -163,26 +170,49 @@ export default function HrServiceDeskPage() {
   };
 
   useEffect(() => {
+    const stored = getStoredUser();
+    if (stored) {
+      setCurrentUser(stored);
+      const roleStr = (stored.role || '').toLowerCase();
+      const isAdminOrSuper = ['superadmin', 'super_admin', 'admin', 'hr_manager', 'owner', 'tenant_owner'].includes(roleStr);
+      setIsSuperAdminOrAdmin(isAdminOrSuper);
+    }
     loadServiceDeskDataFromApi();
   }, []);
 
-  // Submit New HR Case
+  // Submit New HR Case with Field-Level Validation
   const handleCreateCase = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedUserId || !subject.trim() || !description.trim()) {
-      toast.error('Please fill in Employee, Subject, and Description');
+    setFormTouched({ subject: true, description: true });
+
+    const effectiveUserId = isSuperAdminOrAdmin ? selectedUserId : (currentEmployee?.id || selectedUserId);
+    if (!effectiveUserId) {
+      toast.error('Employee applicant is required');
+      return;
+    }
+
+    const trimmedSubject = subject.trim();
+    const trimmedDescription = description.trim();
+
+    if (trimmedSubject.length < 5) {
+      toast.error('Subject must be at least 5 characters');
+      return;
+    }
+
+    if (trimmedDescription.length < 10) {
+      toast.error('Description must be at least 10 characters');
       return;
     }
 
     setSubmitting(true);
 
     try {
-      const token = localStorage.getItem('session_token');
+      const token = getStoredSessionToken() || localStorage.getItem('session_token');
       const payload = {
-        userId: selectedUserId,
+        userId: effectiveUserId,
         category: selectedCategory,
-        subject: subject.trim(),
-        description: description.trim(),
+        subject: trimmedSubject,
+        description: trimmedDescription,
         priority
       };
 
@@ -202,6 +232,7 @@ export default function HrServiceDeskPage() {
       setShowNewCaseModal(false);
       setSubject('');
       setDescription('');
+      setFormTouched({ subject: false, description: false });
       await loadServiceDeskDataFromApi();
     } catch (err: any) {
       console.error(err);
@@ -222,7 +253,7 @@ export default function HrServiceDeskPage() {
     setActionProcessing(true);
 
     try {
-      const token = localStorage.getItem('session_token');
+      const token = getStoredSessionToken() || localStorage.getItem('session_token');
       const payload = {
         ticketIds: targetIds,
         action,
@@ -295,10 +326,11 @@ export default function HrServiceDeskPage() {
 
   const filteredTickets = tickets.filter(t => {
     const matchesCategory = categoryFilter === 'all' || t.category === categoryFilter;
+    const matchesEmployee = employeeFilter === 'all' || String(t.userId) === String(employeeFilter);
     const matchesSearch = t.ticketNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           t.employeeName.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           t.subject.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
+    return matchesCategory && matchesEmployee && matchesSearch;
   });
 
   if (loading) {
@@ -333,7 +365,7 @@ export default function HrServiceDeskPage() {
                     Enterprise HR Service Desk
                   </h1>
                   <Badge className="bg-[#f87941]/20 text-[#f87941] border border-[#f87941]/40 font-bold text-[10px]">
-                    {canApprove ? 'HR Admin & Manager Desk' : 'Employee Service Desk'}
+                    {isSuperAdminOrAdmin ? 'Super Admin / HR Desk' : (canApprove ? 'HR Manager Desk' : 'Employee Service Desk')}
                   </Badge>
                 </div>
                 <p className="text-slate-400 text-xs md:text-sm font-medium mt-0.5">
@@ -343,40 +375,42 @@ export default function HrServiceDeskPage() {
             </div>
           </div>
 
-          {/* Quick Metrics Bar */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Total HR Cases</div>
-              <div className="text-xl font-black text-white mt-0.5">{summaryStats.totalTickets}</div>
-              <div className="text-[10px] text-emerald-400 flex items-center justify-center gap-0.5 mt-0.5">
-                <CheckCircle2 className="h-2.5 w-2.5" /> API Connected
+          {/* Quick Metrics Bar - Only visible to Admins & HR Managers; hidden for employees */}
+          {(isSuperAdminOrAdmin || canApprove) && (
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
+                <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Total HR Cases</div>
+                <div className="text-xl font-black text-white mt-0.5">{summaryStats.totalTickets}</div>
+                <div className="text-[10px] text-emerald-400 flex items-center justify-center gap-0.5 mt-0.5">
+                  <CheckCircle2 className="h-2.5 w-2.5" /> API Connected
+                </div>
+              </div>
+
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
+                <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Open Tickets</div>
+                <div className="text-xl font-black text-amber-400 mt-0.5">{summaryStats.openCount}</div>
+                <div className="text-[10px] text-amber-400/80 mt-0.5">In Queue</div>
+              </div>
+
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
+                <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">CSAT Score</div>
+                <div className="text-xl font-black text-emerald-400 mt-0.5">{summaryStats.avgCsatRating}</div>
+                <div className="text-[10px] text-emerald-400/80 mt-0.5">Satisfaction Index</div>
+              </div>
+
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
+                <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">SLA Compliance</div>
+                <div className="text-xl font-black text-cyan-400 mt-0.5">{summaryStats.slaCompliancePercent}</div>
+                <div className="text-[10px] text-cyan-400/80 mt-0.5">Target Met</div>
+              </div>
+
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
+                <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">First Response</div>
+                <div className="text-xl font-black text-purple-400 mt-0.5">{summaryStats.avgFirstResponseTime}</div>
+                <div className="text-[10px] text-purple-400/80 mt-0.5">Turnaround</div>
               </div>
             </div>
-
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Open Tickets</div>
-              <div className="text-xl font-black text-amber-400 mt-0.5">{summaryStats.openCount}</div>
-              <div className="text-[10px] text-amber-400/80 mt-0.5">In Queue</div>
-            </div>
-
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">CSAT Score</div>
-              <div className="text-xl font-black text-emerald-400 mt-0.5">{summaryStats.avgCsatRating}</div>
-              <div className="text-[10px] text-emerald-400/80 mt-0.5">Satisfaction Index</div>
-            </div>
-
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">SLA Compliance</div>
-              <div className="text-xl font-black text-cyan-400 mt-0.5">{summaryStats.slaCompliancePercent}</div>
-              <div className="text-[10px] text-cyan-400/80 mt-0.5">Target Met</div>
-            </div>
-
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur-md">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">First Response</div>
-              <div className="text-xl font-black text-purple-400 mt-0.5">{summaryStats.avgFirstResponseTime}</div>
-              <div className="text-[10px] text-purple-400/80 mt-0.5">Turnaround</div>
-            </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -399,7 +433,15 @@ export default function HrServiceDeskPage() {
           </TabsList>
 
           <Button
-            onClick={() => setShowNewCaseModal(true)}
+            onClick={() => {
+              if (!isSuperAdminOrAdmin && currentEmployee?.id) {
+                setSelectedUserId(currentEmployee.id);
+              } else if (isSuperAdminOrAdmin && !selectedUserId && roster.length > 0) {
+                setSelectedUserId(currentEmployee?.id || roster[0]?.id);
+              }
+              setFormTouched({ subject: false, description: false });
+              setShowNewCaseModal(true);
+            }}
             className="bg-[#f87941] hover:bg-[#e06634] text-white font-extrabold text-xs h-9 px-4 rounded-xl flex items-center gap-1.5 shadow-md shadow-[#f87941]/20"
           >
             <Plus className="h-3.5 w-3.5" /> Raise New HR Case
@@ -430,6 +472,20 @@ export default function HrServiceDeskPage() {
                     </SelectContent>
                   </Select>
 
+                  {isSuperAdminOrAdmin && (
+                    <Select value={employeeFilter} onValueChange={setEmployeeFilter}>
+                      <SelectTrigger className="w-44 h-9 text-xs rounded-xl border-slate-200 dark:border-zinc-800">
+                        <SelectValue placeholder="All Employees" />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl max-h-60">
+                        <SelectItem value="all">All Employees ({roster.length})</SelectItem>
+                        {roster.map(e => (
+                          <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+
                   <Input
                     placeholder="Search case #, subject..."
                     value={searchQuery}
@@ -456,10 +512,12 @@ export default function HrServiceDeskPage() {
                 <table className="w-full text-left border-collapse text-xs font-semibold">
                   <thead>
                     <tr className="bg-slate-50 dark:bg-zinc-900/60 text-slate-400 font-extrabold border-b uppercase text-[10px]">
-                      <th className="p-4 px-6 w-10">
-                        {canApprove && <Checkbox checked={selectedTicketIds.length === tickets.length} onCheckedChange={toggleSelectAllTickets} />}
-                      </th>
-                      <th className="p-4">Case # & Employee</th>
+                      {canApprove && (
+                        <th className="p-4 px-6 w-10">
+                          <Checkbox checked={selectedTicketIds.length === tickets.length && tickets.length > 0} onCheckedChange={toggleSelectAllTickets} />
+                        </th>
+                      )}
+                      <th className="p-4">Case # & {isSuperAdminOrAdmin ? 'Employee' : 'Submitted Date'}</th>
                       <th className="p-4">Category</th>
                       <th className="p-4">Subject</th>
                       <th className="p-4">Priority</th>
@@ -474,13 +532,17 @@ export default function HrServiceDeskPage() {
                       const isSelected = selectedTicketIds.includes(t.id);
                       return (
                         <tr key={t.id} className={`transition-all ${isSelected ? 'bg-[#f87941]/5' : 'hover:bg-slate-50/70 dark:hover:bg-zinc-900/30'}`}>
-                          <td className="p-4 px-6">
-                            {canApprove && <Checkbox checked={isSelected} onCheckedChange={() => toggleSelectTicket(t.id)} />}
-                          </td>
+                          {canApprove && (
+                            <td className="p-4 px-6">
+                              <Checkbox checked={isSelected} onCheckedChange={() => toggleSelectTicket(t.id)} />
+                            </td>
+                          )}
 
                           <td className="p-4">
                             <div className="font-extrabold text-[#f87941] font-mono text-xs">{t.ticketNumber}</div>
-                            <div className="text-[11px] text-slate-900 dark:text-slate-100 font-bold">{t.employeeName}</div>
+                            <div className="text-[11px] text-slate-900 dark:text-slate-100 font-bold">
+                              {isSuperAdminOrAdmin ? t.employeeName : (t.createdAt ? new Date(t.createdAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Recent')}
+                            </div>
                           </td>
 
                           <td className="p-4">
@@ -518,12 +580,15 @@ export default function HrServiceDeskPage() {
                           </td>
 
                           <td className="p-4">
-                            <Badge className={`border-none font-bold text-[9px] ${
+                            <Badge className={`border-none font-bold text-[10px] px-2.5 py-1 flex items-center w-fit gap-1.5 ${
                               t.status === 'Resolved' || t.status === 'Closed'
-                                ? 'bg-emerald-500/10 text-emerald-600'
-                                : (t.status === 'Escalated' ? 'bg-rose-500/10 text-rose-600' : 'bg-amber-500/10 text-amber-600')
+                                ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                                : (t.status === 'Escalated' ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400' : 'bg-amber-500/15 text-amber-600 dark:text-amber-400')
                             }`}>
-                              {t.status}
+                              <span className={`h-1.5 w-1.5 rounded-full ${
+                                t.status === 'Resolved' || t.status === 'Closed' ? 'bg-emerald-500' : (t.status === 'Escalated' ? 'bg-rose-500' : 'bg-amber-500 animate-pulse')
+                              }`} />
+                              {t.status === 'Open' ? 'Open (Pending Review)' : t.status}
                             </Badge>
                           </td>
 
@@ -532,9 +597,9 @@ export default function HrServiceDeskPage() {
                               variant="outline"
                               size="sm"
                               onClick={() => setSelectedTicket(t)}
-                              className="rounded-xl text-[10px] font-bold h-7 px-3 border-slate-200 dark:border-zinc-800"
+                              className="rounded-xl text-[10px] font-bold h-7 px-3 border-slate-200 dark:border-zinc-800 hover:border-[#f87941] hover:text-[#f87941] transition-all"
                             >
-                              View Thread
+                              View Details
                             </Button>
                           </td>
                         </tr>
@@ -665,9 +730,14 @@ export default function HrServiceDeskPage() {
 
       </Tabs>
 
-      {/* Raise New HR Case Modal Dialog */}
-      <Dialog open={showNewCaseModal} onOpenChange={setShowNewCaseModal}>
-        <DialogContent className="rounded-3xl max-w-lg border-slate-200 dark:border-zinc-800">
+      {/* Raise New HR Case Modal Dialog with Strict Width Constraints & Field Validation */}
+      <Dialog open={showNewCaseModal} onOpenChange={(open) => {
+        setShowNewCaseModal(open);
+        if (!open) {
+          setFormTouched({ subject: false, description: false });
+        }
+      }}>
+        <DialogContent className="rounded-3xl max-w-lg w-full overflow-hidden border-slate-200 dark:border-zinc-800 shadow-2xl p-6">
           <DialogHeader>
             <DialogTitle className="text-base font-black">Raise New HR Case / Service Ticket</DialogTitle>
             <DialogDescription className="text-xs">
@@ -675,26 +745,65 @@ export default function HrServiceDeskPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleCreateCase} className="space-y-4 pt-2">
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Employee Target / Applicant</label>
-              <Select value={selectedUserId} onValueChange={setSelectedUserId} disabled={!canApprove}>
-                <SelectTrigger className="rounded-xl text-xs font-semibold h-10 border-slate-200 dark:border-zinc-800">
-                  <SelectValue placeholder="Select Employee" />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl max-h-60">
-                  {roster.map(e => (
-                    <SelectItem key={e.id} value={e.id}>{e.name} ({e.department})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <form onSubmit={handleCreateCase} className="space-y-4 pt-2 w-full max-w-full min-w-0 overflow-hidden">
+            <div className="space-y-1.5 w-full max-w-full min-w-0">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Employee Target / Applicant <span className="text-rose-500">*</span>
+                </label>
+                {isSuperAdminOrAdmin ? (
+                  <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-600 border-amber-500/20 font-bold">
+                    Admin Access (All Employees)
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/20 font-bold flex items-center gap-1">
+                    <UserCheck className="h-2.5 w-2.5" /> Auto-Filled
+                  </Badge>
+                )}
+              </div>
+
+              {isSuperAdminOrAdmin ? (
+                <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                  <SelectTrigger className="rounded-xl text-xs font-semibold h-10 w-full max-w-full border-slate-200 dark:border-zinc-800">
+                    <SelectValue placeholder="Select Employee from Roster" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl max-h-60">
+                    {roster.map(e => (
+                      <SelectItem key={e.id} value={e.id}>
+                        {e.name} ({e.department}) {e.designation ? `- ${e.designation}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="relative flex items-center w-full max-w-full">
+                  <Input
+                    value={
+                      currentEmployee
+                        ? `${currentEmployee.name} (${currentEmployee.department || 'Operations'}${currentEmployee.designation ? ` - ${currentEmployee.designation}` : ''})`
+                        : (currentUser?.firstName ? `${currentUser.firstName} ${currentUser.lastName || ''} (Operations)` : (roster[0]?.name ? `${roster[0].name} (${roster[0].department})` : 'Current Employee'))
+                    }
+                    disabled
+                    readOnly
+                    className="rounded-xl text-xs font-bold h-10 w-full max-w-full border-slate-200 bg-slate-100 text-slate-800 dark:bg-zinc-800/80 dark:border-zinc-700 dark:text-zinc-200 cursor-not-allowed pl-9 truncate"
+                  />
+                  <UserCheck className="absolute left-3 h-4 w-4 text-emerald-500 pointer-events-none" />
+                </div>
+              )}
+              <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                {isSuperAdminOrAdmin
+                  ? 'As Super Admin / Admin, select any employee from the list to file a ticket on their behalf.'
+                  : 'Auto-filled with your employee profile. Tickets will be tracked under your account.'}
+              </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Case Category</label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-full min-w-0">
+              <div className="space-y-1.5 w-full max-w-full min-w-0">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Case Category <span className="text-rose-500">*</span>
+                </label>
                 <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                  <SelectTrigger className="rounded-xl text-xs font-semibold h-10 border-slate-200 dark:border-zinc-800">
+                  <SelectTrigger className="rounded-xl text-xs font-semibold h-10 w-full max-w-full border-slate-200 dark:border-zinc-800">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="rounded-xl">
@@ -705,10 +814,12 @@ export default function HrServiceDeskPage() {
                 </Select>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Priority Level</label>
+              <div className="space-y-1.5 w-full max-w-full min-w-0">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Priority Level <span className="text-rose-500">*</span>
+                </label>
                 <Select value={priority} onValueChange={setPriority}>
-                  <SelectTrigger className="rounded-xl text-xs font-semibold h-10 border-slate-200 dark:border-zinc-800">
+                  <SelectTrigger className="rounded-xl text-xs font-semibold h-10 w-full max-w-full border-slate-200 dark:border-zinc-800">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="rounded-xl">
@@ -722,35 +833,102 @@ export default function HrServiceDeskPage() {
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Subject / Inquiry Title</label>
+            {/* Subject / Inquiry Title with Character Counter & Validation */}
+            <div className="space-y-1.5 w-full max-w-full min-w-0">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Subject / Inquiry Title <span className="text-rose-500">*</span>
+                </label>
+                <span className={`text-[10px] font-semibold transition-colors ${
+                  subject.length > 0 && subject.trim().length < 5 ? 'text-rose-500' : 'text-slate-400'
+                }`}>
+                  {subject.length} / 100 characters
+                </span>
+              </div>
               <Input
                 value={subject}
-                onChange={e => setSubject(e.target.value)}
-                placeholder="e.g. Query regarding tax deduction on bonus payment..."
-                className="rounded-xl text-xs font-semibold h-10 border-slate-200 dark:border-zinc-800"
+                maxLength={100}
+                onChange={e => {
+                  setSubject(e.target.value);
+                  if (!formTouched.subject) setFormTouched(prev => ({ ...prev, subject: true }));
+                }}
+                onBlur={() => setFormTouched(prev => ({ ...prev, subject: true }))}
+                placeholder="e.g. Query regarding tax deduction on bonus payment (min 5 chars)..."
+                className={`rounded-xl text-xs font-semibold h-10 w-full max-w-full min-w-0 border transition-all ${
+                  formTouched.subject && (subject.trim().length === 0 || subject.trim().length < 5)
+                    ? 'border-rose-500 focus-visible:ring-rose-500/20'
+                    : 'border-slate-200 dark:border-zinc-800'
+                }`}
               />
+              {formTouched.subject && subject.trim().length === 0 && (
+                <p className="text-[11px] text-rose-500 font-medium mt-0.5">Subject is required (minimum 5 characters)</p>
+              )}
+              {formTouched.subject && subject.trim().length > 0 && subject.trim().length < 5 && (
+                <p className="text-[11px] text-rose-500 font-medium mt-0.5">
+                  Subject must be at least 5 characters (currently {subject.trim().length}/100)
+                </p>
+              )}
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Detailed Description</label>
+            {/* Detailed Description with Overflow Wrap, Character Counter & Validation */}
+            <div className="space-y-1.5 w-full max-w-full min-w-0">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Detailed Description <span className="text-rose-500">*</span>
+                </label>
+                <span className={`text-[10px] font-semibold transition-colors ${
+                  description.length > 0 && description.trim().length < 10 ? 'text-rose-500' : 'text-slate-400'
+                }`}>
+                  {description.length} / 500 characters
+                </span>
+              </div>
               <Textarea
-                rows={3}
+                rows={4}
+                maxLength={500}
                 value={description}
-                onChange={e => setDescription(e.target.value)}
-                placeholder="Provide full description of your HR case or issue..."
-                className="rounded-2xl text-xs p-3 border-slate-200 dark:border-zinc-800"
+                onChange={e => {
+                  setDescription(e.target.value);
+                  if (!formTouched.description) setFormTouched(prev => ({ ...prev, description: true }));
+                }}
+                onBlur={() => setFormTouched(prev => ({ ...prev, description: true }))}
+                placeholder="Provide full description of your HR case or issue (10 to 500 characters)..."
+                style={{ fieldSizing: 'normal' } as any}
+                className={`rounded-2xl text-xs p-3 w-full max-w-full min-w-0 resize-y break-words [overflow-wrap:anywhere] border transition-all ${
+                  formTouched.description && (description.trim().length === 0 || description.trim().length < 10)
+                    ? 'border-rose-500 focus-visible:ring-rose-500/20'
+                    : 'border-slate-200 dark:border-zinc-800'
+                }`}
               />
+              {formTouched.description && description.trim().length === 0 && (
+                <p className="text-[11px] text-rose-500 font-medium mt-0.5">Description is required (minimum 10 characters)</p>
+              )}
+              {formTouched.description && description.trim().length > 0 && description.trim().length < 10 && (
+                <p className="text-[11px] text-rose-500 font-medium mt-0.5">
+                  Description must be at least 10 characters (currently {description.trim().length}/500)
+                </p>
+              )}
             </div>
 
-            <DialogFooter>
-              <Button variant="outline" type="button" onClick={() => setShowNewCaseModal(false)} className="rounded-xl text-xs font-bold">
+            <DialogFooter className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2">
+              <Button
+                variant="outline"
+                type="button"
+                onClick={() => {
+                  setShowNewCaseModal(false);
+                  setFormTouched({ subject: false, description: false });
+                }}
+                className="rounded-xl text-xs font-bold"
+              >
                 Cancel
               </Button>
               <Button
                 type="submit"
-                disabled={submitting}
-                className="bg-[#f87941] hover:bg-[#e06634] text-white font-bold text-xs rounded-xl"
+                disabled={submitting || subject.trim().length < 5 || description.trim().length < 10}
+                className={`text-white font-extrabold text-xs rounded-xl h-9 px-4 transition-all flex items-center gap-1.5 ${
+                  subject.trim().length < 5 || description.trim().length < 10
+                    ? 'bg-slate-300 dark:bg-zinc-700 text-slate-500 cursor-not-allowed opacity-60'
+                    : 'bg-[#f87941] hover:bg-[#e06634] shadow-md shadow-[#f87941]/20'
+                }`}
               >
                 {submitting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <SendHorizontal className="h-4 w-4" />}
                 Submit HR Case
@@ -779,10 +957,50 @@ export default function HrServiceDeskPage() {
             </DialogHeader>
 
             <div className="space-y-4 pt-2 text-xs">
+              {/* Status & Key Metrics Overview */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs">
+                <div>
+                  <div className="text-[10px] uppercase font-bold text-slate-400">Current Status</div>
+                  <Badge className={`mt-1 border-none font-bold text-[10px] px-2 py-0.5 flex items-center w-fit gap-1 ${
+                    selectedTicket.status === 'Resolved' || selectedTicket.status === 'Closed'
+                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                      : (selectedTicket.status === 'Escalated' ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400' : 'bg-amber-500/15 text-amber-600 dark:text-amber-400')
+                  }`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${
+                      selectedTicket.status === 'Resolved' || selectedTicket.status === 'Closed' ? 'bg-emerald-500' : (selectedTicket.status === 'Escalated' ? 'bg-rose-500' : 'bg-amber-500')
+                    }`} />
+                    {selectedTicket.status === 'Open' ? 'Open (Pending Review)' : selectedTicket.status}
+                  </Badge>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase font-bold text-slate-400">Priority</div>
+                  <div className="font-extrabold text-slate-900 dark:text-white mt-1">{selectedTicket.priority}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase font-bold text-slate-400">Assigned Agent</div>
+                  <div className="font-extrabold text-slate-900 dark:text-white mt-1">{selectedTicket.assignedToName || 'L1 Helpdesk'}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase font-bold text-slate-400">Submitted On</div>
+                  <div className="font-extrabold text-slate-900 dark:text-white mt-1">
+                    {selectedTicket.createdAt ? new Date(selectedTicket.createdAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Recent'}
+                  </div>
+                </div>
+              </div>
+
               <div className="p-4 rounded-2xl bg-slate-50 dark:bg-zinc-900 border space-y-2">
                 <div className="font-bold text-slate-400 uppercase text-[10px]">Case Description</div>
-                <div className="text-slate-700 dark:text-slate-300 font-medium">{selectedTicket.description}</div>
+                <div className="text-slate-700 dark:text-slate-300 font-medium leading-relaxed">{selectedTicket.description}</div>
               </div>
+
+              {selectedTicket.resolutionNotes && (
+                <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 space-y-1">
+                  <div className="font-extrabold text-[10px] uppercase flex items-center gap-1.5">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> HR Resolution Summary
+                  </div>
+                  <div className="font-medium text-xs leading-relaxed">{selectedTicket.resolutionNotes}</div>
+                </div>
+              )}
 
               {selectedTicket.aiSuggestedAnswer && (
                 <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/30 text-purple-700 dark:text-purple-300 space-y-1">

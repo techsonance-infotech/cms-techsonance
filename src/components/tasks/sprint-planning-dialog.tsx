@@ -22,6 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { sprintFormSchema, sprintStatusOptions, type SprintFormValues } from '@/lib/forms/schemas';
 import { Loader2, Zap, AlertCircle, CalendarDays, Target } from 'lucide-react';
 import { toast } from 'sonner';
+import { getStoredSessionToken } from '@/lib/client-session';
 
 interface SprintPlanningDialogProps {
   open: boolean;
@@ -70,9 +71,10 @@ export function SprintPlanningDialog({
     if (projectsFetchedRef.current && projects.length > 0) return;
     setLoadingProjects(true);
     try {
-      const token = localStorage.getItem('session_token');
+      const token = getStoredSessionToken();
       const response = await fetch('/api/projects?limit=100', {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include'
       });
       if (response.ok) {
         const data = await response.json();
@@ -124,7 +126,7 @@ export function SprintPlanningDialog({
 
     setLoading(true);
     try {
-      const token = localStorage.getItem('session_token');
+      const token = getStoredSessionToken();
       const payload = {
         projectId: parseInt(values.projectId, 10),
         name:      values.name.trim(),
@@ -138,8 +140,9 @@ export function SprintPlanningDialog({
         method: 'POST',
         headers: {
           'Content-Type':  'application/json',
-          'Authorization': `Bearer ${token}`,
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         },
+        credentials: 'include',
         body: JSON.stringify(payload),
       });
 

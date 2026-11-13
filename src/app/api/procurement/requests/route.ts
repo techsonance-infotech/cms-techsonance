@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { withApiHandler } from '@/server/http/handler';
 import { BadRequestError } from '@/server/http/errors';
-import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
+import { getAdminRouteSupabase, resolveActorUuid } from '@/server/supabase/route-helpers';
 
 export const GET = withApiHandler(async (request, context) => {
   const tenantId = context.auth?.user.tenantId;
@@ -49,10 +49,11 @@ export const GET = withApiHandler(async (request, context) => {
     }
 
     // 2. Seed requests
+    const requesterUuid = await resolveActorUuid(context, supabase);
     const seeds = [
       {
         tenant_id: tenantId,
-        requested_by: context.auth!.user.id,
+        requested_by: requesterUuid,
         item_name: 'HP ProBook 445 G10 Laptops',
         quantity: 5,
         estimated_cost: 325000.00,
@@ -61,7 +62,7 @@ export const GET = withApiHandler(async (request, context) => {
       },
       {
         tenant_id: tenantId,
-        requested_by: context.auth!.user.id,
+        requested_by: requesterUuid,
         item_name: 'Cisco 24-Port Gigabit Switch',
         quantity: 2,
         estimated_cost: 95000.00,
@@ -95,12 +96,13 @@ export const POST = withApiHandler(async (request, context) => {
   }
 
   const supabase = getAdminRouteSupabase();
+  const requesterUuid = await resolveActorUuid(context, supabase);
 
   const { data, error } = await supabase
     .from('purchase_requests')
     .insert({
       tenant_id: tenantId,
-      requested_by: context.auth!.user.id,
+      requested_by: requesterUuid,
       item_name: itemName,
       quantity: parseInt(quantity) || 1,
       estimated_cost: parseFloat(estimatedCost) || 0,

@@ -56,7 +56,40 @@ export default function EmployeeOvertimeTab({ employeeId }: EmployeeOvertimeTabP
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!employeeId) return;
+    if (!employeeId) {
+      toast.error('Employee record not found. Please refresh the page.');
+      return;
+    }
+
+    if (!form.date) {
+      toast.error('Please select the date for this overtime claim');
+      return;
+    }
+
+    const claimDate = new Date(form.date);
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    if (claimDate > today) {
+      toast.error('Cannot claim overtime for future dates');
+      return;
+    }
+
+    const parsedHours = Number(form.hours);
+    if (isNaN(parsedHours) || parsedHours <= 0) {
+      toast.error('Overtime hours must be greater than 0');
+      return;
+    }
+
+    if (parsedHours > 16) {
+      toast.error('Overtime hours cannot exceed 16 hours per shift');
+      return;
+    }
+
+    if (!form.reason || form.reason.trim().length < 5) {
+      toast.error('Please provide a business justification (at least 5 characters)');
+      return;
+    }
+
     setSubmitting(true);
     try {
       const response = await fetch('/api/attendance/overtime', {
@@ -65,8 +98,8 @@ export default function EmployeeOvertimeTab({ employeeId }: EmployeeOvertimeTabP
         body: JSON.stringify({
           employeeId,
           date: form.date,
-          hours: Number(form.hours),
-          reason: form.reason
+          hours: parsedHours,
+          reason: form.reason.trim()
         }),
       });
 
@@ -137,7 +170,16 @@ export default function EmployeeOvertimeTab({ employeeId }: EmployeeOvertimeTabP
                       <Input
                         type="date"
                         value={form.date}
-                        onChange={(e) => setForm({ ...form, date: e.target.value })}
+                        max={new Date().toISOString().split('T')[0]}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const todayStr = new Date().toISOString().split('T')[0];
+                          if (val && val > todayStr) {
+                            toast.error('Future dates cannot be selected for overtime claims');
+                            return;
+                          }
+                          setForm({ ...form, date: val });
+                        }}
                         className="bg-white dark:bg-[#1E1F22] border-slate-200 dark:border-slate-800 h-9 text-xs"
                         required
                       />

@@ -1,12 +1,25 @@
 import { NextResponse } from 'next/server';
 import { withApiHandler } from '@/server/http/handler';
-import { BadRequestError } from '@/server/http/errors';
+import { BadRequestError, ForbiddenError } from '@/server/http/errors';
 import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
-import { getDashboardType, type UserRole } from '@/lib/permissions';
+import { logger } from '@/server/logging/logger';
+
+// Helper to validate UUID string
+const isValidUuid = (val: unknown): val is string =>
+  typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+
+const checkAdminAccess = (roleStr?: string) => {
+  const role = (roleStr || '').toLowerCase();
+  const isAdminOrManager = ['admin', 'super_admin', 'owner', 'ceo', 'cto', 'business_owner', 'hr_manager'].includes(role);
+  if (!isAdminOrManager) {
+    throw new ForbiddenError('Access Denied: Only administrators and HR managers have permission to manage holiday calendars');
+  }
+};
 
 // GET handler: Relational queries for holiday master, holiday groups, impact analytics & long weekends
 export const GET = withApiHandler(async (request, context) => {
   const user = context.auth!.user;
+  checkAdminAccess(user.role);
   const tenantId = user.tenantId;
 
   if (!tenantId) throw new BadRequestError('Tenant ID missing');
@@ -16,18 +29,93 @@ export const GET = withApiHandler(async (request, context) => {
   // 1. Query Holiday Master entries from DB `holiday_master` table
   let dbHolidays: any[] = [];
   try {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('holiday_master')
       .select('*')
-      .eq('tenant_id', tenantId)
+      .or(`tenant_id.eq.${tenantId},tenant_id.is.null`)
       .order('holiday_date', { ascending: true });
-    if (data) dbHolidays = data;
+    if (!error && data) dbHolidays = data;
   } catch (err) {
     console.warn('Holiday master DB query info:', err);
   }
 
+  // 2. Query `company_holidays` to unify any holidays added via attendance/leaves
+  try {
+    const { data: chData } = await supabase
+      .from('company_holidays')
+      .select('*')
+      .eq('tenant_id', tenantId);
+
+    if (chData && chData.length > 0) {
+      const existingDatesAndTitles = new Set(
+        dbHolidays.map((h: any) => `${h.holiday_date}_${(h.title || '').toLowerCase().trim()}`)
+      );
+
+      for (const ch of chData) {
+        const key = `${ch.date}_${(ch.reason || '').toLowerCase().trim()}`;
+        if (!existingDatesAndTitles.has(key)) {
+          existingDatesAndTitles.add(key);
+          dbHolidays.push({
+            id: `ch-${ch.id}`,
+            tenant_id: ch.tenant_id,
+            title: ch.reason || 'Company Holiday',
+            holiday_date: ch.date,
+            holiday_type: 'company',
+            scope_target: 'Company Universal',
+            is_recurring: true,
+            is_optional_rh: false,
+            impact_level: 'High',
+            description: 'Synchronized from Company Holidays register',
+            created_at: ch.created_at
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Company holidays merge info:', err);
+  }
+
+  // 3. Query `holidays` legacy table if present
+  try {
+    const { data: legacyHolidays } = await supabase
+      .from('holidays')
+      .select('*')
+      .eq('tenant_id', tenantId);
+
+    if (legacyHolidays && legacyHolidays.length > 0) {
+      const existingDatesAndTitles = new Set(
+        dbHolidays.map((h: any) => `${h.holiday_date}_${(h.title || '').toLowerCase().trim()}`)
+      );
+
+      for (const lh of legacyHolidays) {
+        const key = `${lh.holiday_date}_${(lh.name || '').toLowerCase().trim()}`;
+        if (!existingDatesAndTitles.has(key)) {
+          existingDatesAndTitles.add(key);
+          dbHolidays.push({
+            id: `legacy-${lh.id}`,
+            tenant_id: lh.tenant_id,
+            title: lh.name || 'Public Holiday',
+            holiday_date: lh.holiday_date,
+            holiday_type: 'global',
+            scope_target: 'Global',
+            is_recurring: true,
+            is_optional_rh: !!lh.is_optional,
+            impact_level: 'High',
+            description: 'Synchronized from Holiday Calendar table',
+            created_at: lh.created_at
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Legacy holidays merge info:', err);
+  }
+
+  // Sort unified holidays by date
+  dbHolidays.sort((a, b) => (a.holiday_date || '').localeCompare(b.holiday_date || ''));
+
   const holidays = dbHolidays.map((h: any) => ({
-    id: h.id,
+    id: String(h.id),
     title: h.title,
     holidayDate: h.holiday_date,
     holidayType: h.holiday_type || 'global',
@@ -39,7 +127,7 @@ export const GET = withApiHandler(async (request, context) => {
     createdAt: h.created_at
   }));
 
-  // 2. Query Holiday Groups from DB `holiday_groups` table
+  // 4. Query Holiday Groups from DB `holiday_groups` table
   let dbGroups: any[] = [];
   try {
     const { data } = await supabase
@@ -101,41 +189,152 @@ export const POST = withApiHandler(async (request, context) => {
   }
 
   const user = context.auth!.user;
+  checkAdminAccess(user.role);
   const tenantId = user.tenantId;
 
   if (!tenantId) throw new BadRequestError('Tenant ID missing');
 
-  // Authorization check
-  const userRole = (user.role || '').toLowerCase() as UserRole;
-  if (getDashboardType(userRole) !== 'admin' && userRole !== 'manager' && userRole !== 'super_admin' && userRole !== 'admin' && userRole !== 'hr_manager') {
-    return NextResponse.json({ error: 'Unauthorized to configure holiday master' }, { status: 403 });
-  }
+  // Resolve valid UUID for created_by
+  const createdByUuid = isValidUuid(user.providerUserId)
+    ? user.providerUserId
+    : (isValidUuid(context.auth?.tokenId)
+      ? context.auth.tokenId
+      : (isValidUuid(context.auth?.sessionId) ? context.auth.sessionId : null));
 
   const supabase = getAdminRouteSupabase();
 
   // Insert row into `holiday_master`
-  let insertedHoliday: any = null;
-  try {
-    const { data } = await supabase.from('holiday_master').insert({
-      tenant_id: tenantId,
-      title: title.trim(),
-      holiday_date: holidayDate,
-      holiday_type: holidayType,
-      scope_target: scopeTarget,
-      is_recurring: isRecurring,
-      is_optional_rh: isOptionalRh,
-      impact_level: impactLevel,
-      description: description.trim(),
-      created_by: user.id
-    }).select().single();
-    insertedHoliday = data;
-  } catch (err) {
-    console.warn('Holiday insert error:', err);
+  const { data: insertedHoliday, error: insertError } = await supabase.from('holiday_master').insert({
+    tenant_id: tenantId,
+    title: title.trim(),
+    holiday_date: holidayDate,
+    holiday_type: holidayType,
+    scope_target: scopeTarget,
+    is_recurring: isRecurring,
+    is_optional_rh: isOptionalRh,
+    impact_level: impactLevel,
+    description: description.trim(),
+    created_by: createdByUuid
+  }).select('*').single();
+
+  if (insertError) {
+    logger.error('Holiday master insert failed', { error: insertError });
+    throw new BadRequestError(insertError.message || 'Failed to save holiday to database');
   }
+
+  // Also sync to `company_holidays` for cross-page compatibility (Attendance, Leaves, Payroll)
+  try {
+    const holidayYear = parseInt(holidayDate.split('-')[0], 10) || new Date().getFullYear();
+    const { data: maxRecord } = await supabase
+      .from('company_holidays')
+      .select('id')
+      .order('id', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const nextId = (maxRecord?.id || 0) + 1;
+
+    const { data: existingCh } = await supabase
+      .from('company_holidays')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('date', holidayDate)
+      .maybeSingle();
+
+    if (!existingCh) {
+      await supabase.from('company_holidays').insert({
+        id: nextId,
+        tenant_id: tenantId,
+        date: holidayDate,
+        reason: title.trim(),
+        year: holidayYear,
+        created_at: new Date().toISOString()
+      });
+    }
+  } catch (syncErr) {
+    console.warn('Sync to company_holidays notice:', syncErr);
+  }
+
+  const normalizedHoliday = {
+    id: String(insertedHoliday.id),
+    title: insertedHoliday.title,
+    holidayDate: insertedHoliday.holiday_date,
+    holidayType: insertedHoliday.holiday_type || holidayType,
+    scopeTarget: insertedHoliday.scope_target || scopeTarget,
+    isRecurring: !!insertedHoliday.is_recurring,
+    isOptionalRh: !!insertedHoliday.is_optional_rh,
+    impactLevel: insertedHoliday.impact_level || impactLevel,
+    description: insertedHoliday.description || '',
+    createdAt: insertedHoliday.created_at
+  };
 
   return NextResponse.json({
     success: true,
     message: `Holiday "${title}" added successfully for ${holidayDate}!`,
+    holiday: normalizedHoliday,
     timestamp: new Date().toISOString()
   }, { status: 201 });
+}, { requireAuth: true });
+
+// DELETE handler: Deletes a holiday entry by id
+export const DELETE = withApiHandler(async (request, context) => {
+  const url = new URL(request.url);
+  const id = url.searchParams.get('id');
+
+  if (!id) throw new BadRequestError('Holiday ID is required');
+
+  const user = context.auth!.user;
+  checkAdminAccess(user.role);
+  const tenantId = user.tenantId;
+
+  if (!tenantId) throw new BadRequestError('Tenant ID missing');
+
+  const supabase = getAdminRouteSupabase();
+
+  if (id.startsWith('ch-')) {
+    const chId = Number(id.replace('ch-', ''));
+    const { error } = await supabase
+      .from('company_holidays')
+      .delete()
+      .eq('id', chId)
+      .eq('tenant_id', tenantId);
+    if (error) throw new BadRequestError(error.message);
+  } else if (id.startsWith('legacy-')) {
+    const lId = Number(id.replace('legacy-', ''));
+    const { error } = await supabase
+      .from('holidays')
+      .delete()
+      .eq('id', lId)
+      .eq('tenant_id', tenantId);
+    if (error) throw new BadRequestError(error.message);
+  } else {
+    // Delete from holiday_master
+    const { data: existingHm } = await supabase
+      .from('holiday_master')
+      .select('holiday_date, title')
+      .eq('id', id)
+      .eq('tenant_id', tenantId)
+      .maybeSingle();
+
+    const { error } = await supabase
+      .from('holiday_master')
+      .delete()
+      .eq('id', id)
+      .eq('tenant_id', tenantId);
+    if (error) throw new BadRequestError(error.message);
+
+    // Also clean up from company_holidays if matched
+    if (existingHm?.holiday_date) {
+      await supabase
+        .from('company_holidays')
+        .delete()
+        .eq('date', existingHm.holiday_date)
+        .eq('tenant_id', tenantId);
+    }
+  }
+
+  return NextResponse.json({
+    success: true,
+    message: 'Holiday removed successfully',
+    timestamp: new Date().toISOString()
+  });
 }, { requireAuth: true });

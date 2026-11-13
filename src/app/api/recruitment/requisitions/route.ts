@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
 import { withApiHandler } from '@/server/http/handler';
 import { BadRequestError } from '@/server/http/errors';
-import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
+import { getAdminRouteSupabase, resolveActorUuid } from '@/server/supabase/route-helpers';
 
 export const GET = withApiHandler(async (request, context) => {
   const tenantId = context.auth?.user.tenantId;
   if (!tenantId) throw new BadRequestError('Tenant context missing');
 
   const supabase = getAdminRouteSupabase();
+  const creatorUuid = await resolveActorUuid(context, supabase);
 
   let { data: requisitions, error } = await supabase
     .from('job_requisitions')
@@ -32,7 +33,7 @@ export const GET = withApiHandler(async (request, context) => {
         salary_range_max: 1800000.00,
         description: 'We are seeking a senior full-stack developer to construct low-latency Next.js portals and microservices.',
         requirements: '5+ years experience in React/Next.js, Tailwind CSS, PostgreSQL, and Go web services.',
-        created_by: context.auth!.user.id
+        created_by: creatorUuid
       },
       {
         tenant_id: tenantId,
@@ -46,7 +47,7 @@ export const GET = withApiHandler(async (request, context) => {
         salary_range_max: 2400000.00,
         description: 'Construct scalable multi-tenant infrastructure and monitor microservices performance metrics.',
         requirements: 'Docker, Kubernetes, AWS EKS, Terraform, and CI/CD setup.',
-        created_by: context.auth!.user.id
+        created_by: creatorUuid
       },
       {
         tenant_id: tenantId,
@@ -60,7 +61,7 @@ export const GET = withApiHandler(async (request, context) => {
         salary_range_max: 900000.00,
         description: 'Design premium layouts and responsive components for our HRMS application pages.',
         requirements: 'Figma, prototyping, interaction patterns, design system token workflows.',
-        created_by: context.auth!.user.id
+        created_by: creatorUuid
       }
     ];
 
@@ -89,6 +90,7 @@ export const POST = withApiHandler(async (request, context) => {
   }
 
   const supabase = getAdminRouteSupabase();
+  const creatorUuid = await resolveActorUuid(context, supabase);
 
   const { data, error } = await supabase
     .from('job_requisitions')
@@ -104,7 +106,7 @@ export const POST = withApiHandler(async (request, context) => {
       requirements,
       salary_range_min: salaryRangeMin || 0,
       salary_range_max: salaryRangeMax || 0,
-      created_by: context.auth!.user.id
+      created_by: creatorUuid
     })
     .select('*')
     .single();

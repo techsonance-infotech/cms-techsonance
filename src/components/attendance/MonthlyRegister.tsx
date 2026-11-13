@@ -5,15 +5,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Download, Lock, Unlock, Loader2, Calendar, LayoutGrid, CheckCircle } from 'lucide-react';
+import { Download, Lock, Unlock, Loader2, Calendar, LayoutGrid, CheckCircle, RefreshCw } from 'lucide-react';
+import { getStoredSessionToken } from '@/lib/client-session';
 
 interface MonthlyRegisterProps {
   tenantId: string;
   isFullAccess: boolean;
   employees: any[];
+  refreshTrigger?: number;
 }
 
-export default function MonthlyRegister({ tenantId, isFullAccess, employees }: MonthlyRegisterProps) {
+export default function MonthlyRegister({ tenantId, isFullAccess, employees, refreshTrigger }: MonthlyRegisterProps) {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedEmployee, setSelectedEmployee] = useState<string>('all');
@@ -45,7 +47,10 @@ export default function MonthlyRegister({ tenantId, isFullAccess, employees }: M
 
   const fetchLocks = async () => {
     try {
-      const response = await fetch('/api/attendance/lock');
+      const token = getStoredSessionToken() || localStorage.getItem('session_token');
+      const response = await fetch('/api/attendance/lock', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
       if (response.ok) {
         const data = await response.json();
         setLocks(data);
@@ -58,18 +63,22 @@ export default function MonthlyRegister({ tenantId, isFullAccess, employees }: M
   const fetchMonthlyAttendance = async () => {
     setLoading(true);
     try {
+      const token = getStoredSessionToken() || localStorage.getItem('session_token');
       const start = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
       const end = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${new Date(selectedYear, selectedMonth, 0).getDate()}`;
       
-      let url = `/api/attendance?start_date=${start}&end_date=${end}&limit=100`;
+      let url = `/api/attendance?start_date=${start}&end_date=${end}&limit=1000`;
       if (selectedEmployee !== 'all') {
         url += `&employee_id=${selectedEmployee}`;
       }
 
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
       if (response.ok) {
         const result = await response.json();
-        setAttendanceData(result.data || []);
+        const records = Array.isArray(result) ? result : (result.data || []);
+        setAttendanceData(records);
       }
     } catch (err) {
       toast.error('Failed to fetch monthly attendance register');
@@ -84,14 +93,18 @@ export default function MonthlyRegister({ tenantId, isFullAccess, employees }: M
 
   useEffect(() => {
     fetchMonthlyAttendance();
-  }, [selectedMonth, selectedYear, selectedEmployee]);
+  }, [selectedMonth, selectedYear, selectedEmployee, refreshTrigger]);
 
   const handleToggleLock = async () => {
     setTogglingLock(true);
     try {
+      const token = getStoredSessionToken() || localStorage.getItem('session_token');
       const response = await fetch('/api/attendance/lock', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({
           year: selectedYear,
           month: selectedMonth,
@@ -161,6 +174,7 @@ export default function MonthlyRegister({ tenantId, isFullAccess, employees }: M
       case 'weekly_off': return 'bg-slate-300 dark:bg-slate-700 hover:bg-slate-400 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200';
       case 'wfh': return 'bg-indigo-500 hover:bg-indigo-600 text-white';
       case 'missing_punch': return 'bg-amber-600 hover:bg-amber-700 text-white';
+      case 'unrecorded': return 'bg-slate-100 dark:bg-[#2B2D31] text-slate-400';
       default: return 'bg-slate-100 dark:bg-[#2B2D31] text-slate-400';
     }
   };
@@ -183,6 +197,15 @@ export default function MonthlyRegister({ tenantId, isFullAccess, employees }: M
               </CardDescription>
             </div>
             <div className="flex items-center gap-2 self-start md:self-center">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={fetchMonthlyAttendance}
+                disabled={loading}
+                className="h-9 text-xs font-semibold flex items-center gap-1.5 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-[#2B2D31]"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -261,7 +284,7 @@ export default function MonthlyRegister({ tenantId, isFullAccess, employees }: M
                   <SelectItem value="all" className="text-xs">All Staff Members</SelectItem>
                   {employees.map((e) => (
                     <SelectItem key={e.id} value={String(e.id)} className="text-xs">
-                      {e.firstName} {e.lastName} ({e.employeeId})
+                      {e.firstName || ''} {e.lastName || ''} ({e.employeeId})
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -288,7 +311,10 @@ export default function MonthlyRegister({ tenantId, isFullAccess, employees }: M
                   {employees
                     .filter((emp) => selectedEmployee === 'all' || String(emp.id) === selectedEmployee)
                     .map((emp) => {
-                      const empRecords = attendanceData.filter((r) => r.employeeId === emp.id);
+                      const empRecords = attendanceData.filter((r) => 
+                        Number(r.employeeId) === Number(emp.id) ||
+                        (r.employee?.employeeId && String(r.employee.employeeId).trim() === String(emp.employeeId).trim())
+                      );
                       
                       const stats = {
                         present: empRecords.filter(r => r.status === 'present').length,
@@ -299,15 +325,18 @@ export default function MonthlyRegister({ tenantId, isFullAccess, employees }: M
                         leave: empRecords.filter(r => r.status === 'leave').length,
                       };
 
+                      const initialFirst = emp.firstName ? emp.firstName[0] : 'E';
+                      const initialLast = emp.lastName ? emp.lastName[0] : '';
+
                       return (
                         <TableRow key={emp.id} className="hover:bg-slate-50/40 dark:hover:bg-slate-800/10 transition-colors border-b border-border">
                           <TableCell className="font-semibold text-slate-900 dark:text-white py-3.5">
                             <div className="flex items-center gap-2">
                               <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[11px] font-bold text-[#f87941] border border-slate-200 dark:border-slate-700">
-                                {emp.firstName[0]}{emp.lastName[0]}
+                                {initialFirst}{initialLast}
                               </div>
                               <div>
-                                <span className="block font-bold">{emp.firstName} {emp.lastName}</span>
+                                <span className="block font-bold">{emp.firstName || ''} {emp.lastName || ''}</span>
                                 <span className="block text-[10px] text-slate-400 font-medium">{emp.employeeId}</span>
                               </div>
                             </div>
@@ -325,17 +354,35 @@ export default function MonthlyRegister({ tenantId, isFullAccess, employees }: M
                             </div>
                           </TableCell>
                           <TableCell className="py-3">
-                            <div className="flex items-center gap-1 overflow-x-auto py-1 max-w-[480px] scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
+                            <div className="flex items-center gap-1 overflow-x-auto py-1 max-w-[860px] scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
                               {daysArray.map((day) => {
                                 const dateStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                                const record = empRecords.find((r) => r.date === dateStr);
-                                const status = record ? record.status : 'absent';
+                                const record = empRecords.find((r) => {
+                                  const rDate = r.date ? (r.date.includes('T') ? r.date.split('T')[0] : r.date) : '';
+                                  return rDate === dateStr;
+                                });
+
+                                const now = new Date();
+                                const isCurrentMonth = selectedYear === now.getFullYear() && selectedMonth === (now.getMonth() + 1);
+                                const isFuture = isCurrentMonth && day > now.getDate();
+                                const isToday = isCurrentMonth && day === now.getDate();
+                                const dayDate = new Date(selectedYear, selectedMonth - 1, day);
+                                const isWeekend = dayDate.getDay() === 0 || dayDate.getDay() === 6;
+                                
+                                let status = 'unrecorded';
+                                if (record) {
+                                  status = record.status;
+                                } else if (isWeekend) {
+                                  status = 'weekly_off';
+                                } else if (!isFuture) {
+                                  status = 'absent';
+                                }
                                 
                                 return (
                                   <div
                                     key={day}
-                                    title={`Date: ${dateStr}\nStatus: ${status}`}
-                                    className={`w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold shrink-0 shadow-sm transition-all hover:scale-110 cursor-help border border-transparent hover:border-slate-400 dark:hover:border-slate-500 ${getStatusColor(status)}`}
+                                    title={`Date: ${dateStr}\nStatus: ${status}${isToday ? ' (Today)' : ''}`}
+                                    className={`w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold shrink-0 shadow-sm transition-all hover:scale-110 cursor-help border border-transparent hover:border-slate-400 dark:hover:border-slate-500 ${isToday ? 'ring-2 ring-[#f87941] ring-offset-1 dark:ring-offset-slate-900' : ''} ${getStatusColor(status)}`}
                                   >
                                     {day}
                                   </div>
@@ -355,3 +402,4 @@ export default function MonthlyRegister({ tenantId, isFullAccess, employees }: M
     </div>
   );
 }
+

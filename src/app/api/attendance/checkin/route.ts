@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { withApiHandler } from '@/server/http/handler';
 import { BadRequestError, ConflictError, NotFoundError } from '@/server/http/errors';
 import { checkInSchema } from '@/server/validation/attendance';
@@ -41,7 +42,7 @@ export const POST = withApiHandler(async (request, context) => {
       .select('*')
       .eq('idempotency_key', payload.idempotencyKey)
       .eq('tenant_id', tenantId)
-      .single();
+      .maybeSingle();
     if (existingByKey) {
       return NextResponse.json({ ...existingByKey, message: 'Check-in already processed (idempotency)' });
     }
@@ -144,11 +145,14 @@ export const POST = withApiHandler(async (request, context) => {
 
   // ROUTE TO APPROVAL QUEUE IF WEEKEND OR ANOMALY DETECTED
   if (isWeekend || aiResult.isAnomaly) {
+    const targetTimeIn = payload.timeIn || nowDate.toISOString();
+    const targetTimeOut = payload.timeOut || null;
+
     const { data: requestRecord, error: requestError } = await supabase.from('attendance_requests').insert({
       employee_id: resolved.employeeId,
-      date: today,
-      time_in: nowDate.toISOString(),
-      time_out: null,
+      date: payload.date || today,
+      time_in: targetTimeIn,
+      time_out: targetTimeOut,
       duration: null,
       status: 'pending',
       check_in_method: resolved.checkInMethod,
@@ -165,8 +169,9 @@ export const POST = withApiHandler(async (request, context) => {
         aiDetails: aiResult.details,
         clientIp,
         userAgent,
-        requested_time_in: nowDate.toISOString(),
-        reason_type: isWeekend ? 'regularization' : 'dispute',
+        requested_time_in: targetTimeIn,
+        requested_time_out: targetTimeOut,
+        reason_type: payload.metadata?.reasonType || (isWeekend ? 'regularization' : 'dispute'),
         gps_latitude: payload.locationLatitude ?? null,
         gps_longitude: payload.locationLongitude ?? null,
         ai_fraud_check: {
@@ -262,7 +267,7 @@ export const POST = withApiHandler(async (request, context) => {
     reader_id: payload.readerId ?? null,
     location: payload.location ?? null,
     tag_uid: payload.tagUid ?? null,
-    idempotency_key: payload.idempotencyKey ?? null,
+    idempotency_key: payload.idempotencyKey || crypto.randomUUID(),
     synced_at: null,
     metadata,
     tenant_id: tenantId,

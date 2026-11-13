@@ -11,6 +11,9 @@ import {
   RefreshCw, BarChart3, PieChart as PieChartIcon, ShieldCheck, AlertTriangle, Users, Calendar
 } from 'lucide-react';
 import { toast } from 'sonner';
+import Link from 'next/link';
+import { ShieldAlert } from 'lucide-react';
+import { getStoredUser } from '@/lib/client-session';
 import {
   ResponsiveContainer,
   BarChart,
@@ -66,29 +69,45 @@ function ProjectSkeleton() {
   );
 }
 
+const hasAnalyticsAccess = (roleStr?: string) => {
+  if (!roleStr) return false;
+  const r = roleStr.toLowerCase().replace(/[^a-z0-9_]/g, '');
+  return ['admin', 'super_admin', 'superadmin', 'owner', 'tenant_owner', 'business_owner', 'ceo', 'cto', 'director', 'manager', 'project_manager'].includes(r);
+};
+
 export default function ProjectAnalyticsPage() {
+  const [canAccess, setCanAccess] = useState<boolean | null>(null);
   const [activeTab, setActiveTab] = useState('backlog');
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
 
   const fetchAnalytics = async () => {
     try {
       setSyncing(true);
-      const token = localStorage.getItem('session_token');
+      setError(null);
+      const token = typeof window !== 'undefined' 
+        ? (sessionStorage.getItem('session_token') || localStorage.getItem('session_token')) 
+        : null;
       const url = `/api/projects/analytics`;
       const res = await fetch(url, {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        credentials: 'include'
       });
       if (res.ok) {
         const json = await res.json();
         setData(json);
         toast.success('Project BI synced successfully!');
       } else {
-        toast.error('Failed to load project analytics.');
+        const errJson = await res.json().catch(() => null);
+        const errMsg = errJson?.message || `HTTP ${res.status}: Failed to load project analytics.`;
+        setError(errMsg);
+        toast.error(errMsg);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      setError(err?.message || 'Error fetching project analytics.');
       toast.error('Error fetching project analytics.');
     } finally {
       setLoading(false);
@@ -97,7 +116,18 @@ export default function ProjectAnalyticsPage() {
   };
 
   useEffect(() => {
-    fetchAnalytics();
+    const user = getStoredUser();
+    if (user) {
+      const allowed = hasAnalyticsAccess(user.role);
+      setCanAccess(allowed);
+      if (allowed) {
+        fetchAnalytics();
+      } else {
+        setLoading(false);
+      }
+    } else {
+      fetchAnalytics();
+    }
   }, []);
 
   const handleExportCSV = (reportName: string, exportData: any[]) => {
@@ -108,7 +138,7 @@ export default function ProjectAnalyticsPage() {
     const headers = Object.keys(exportData[0]).join(',');
     const rows = exportData.map(row => 
       Object.values(row).map(val => {
-        const str = String(val).replace(/"/g, '""');
+        const str = String(val).replaceAll('"', '""');
         return `"${str}"`;
       }).join(',')
     );
@@ -123,7 +153,50 @@ export default function ProjectAnalyticsPage() {
     toast.success('Report downloaded successfully!');
   };
 
-  if (loading || !data) {
+  if (error && !data) {
+    return (
+      <div className="p-12 max-w-lg mx-auto text-center space-y-4">
+        <div className="h-16 w-16 bg-rose-50 dark:bg-rose-950/30 text-rose-500 rounded-2xl flex items-center justify-center mx-auto">
+          <AlertTriangle className="h-8 w-8" />
+        </div>
+        <h3 className="text-xl font-bold">Unable to load Project Analytics</h3>
+        <p className="text-xs text-muted-foreground">{error}</p>
+        <Button onClick={fetchAnalytics} className="font-bold bg-primary hover:bg-primary-focus text-white">
+          <RefreshCw className="mr-2 h-4 w-4" /> Retry Sync
+        </Button>
+      </div>
+    );
+  }
+
+  if (canAccess === false) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 bg-card border border-border rounded-2xl shadow-xs space-y-4 max-w-xl mx-auto my-8">
+        <div className="p-4 bg-destructive/10 text-destructive rounded-full">
+          <ShieldAlert className="h-10 w-10 text-destructive" />
+        </div>
+        <div className="space-y-1">
+          <h3 className="text-xl font-black text-foreground">Access Restricted</h3>
+          <p className="text-xs text-muted-foreground max-w-md mt-2 leading-relaxed">
+            Project Analytics and BI reporting are restricted to Management and Administrators.
+          </p>
+        </div>
+        <div className="flex items-center gap-3 mt-4">
+          <Link href="/dashboard">
+            <Button variant="outline" className="rounded-xl px-5 text-xs font-bold h-10 border-border">
+              Return to Dashboard
+            </Button>
+          </Link>
+          <Link href="/dashboard/tasks">
+            <Button className="bg-primary text-white hover:bg-primary/90 rounded-xl px-5 text-xs font-bold h-10">
+              Go to Task Board
+            </Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+    if (loading || !data) {
     return <ProjectSkeleton />;
   }
 
@@ -281,17 +354,25 @@ export default function ProjectAnalyticsPage() {
               <CardTitle className="text-xs font-black uppercase text-muted-foreground">Sprint Completion vs Backlog Trend</CardTitle>
             </CardHeader>
             <CardContent className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dashboards.backlogTrends}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="sprint" stroke="#888888" fontSize={9} />
-                  <YAxis stroke="#888888" fontSize={9} />
-                  <ChartTooltip />
-                  <Legend />
-                  <Bar dataKey="completed" fill="#F87941" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="backlog" fill="#37383E" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              {dashboards.backlogTrends && dashboards.backlogTrends.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={dashboards.backlogTrends}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="sprint" stroke="#888888" fontSize={9} />
+                    <YAxis stroke="#888888" fontSize={9} />
+                    <ChartTooltip />
+                    <Legend />
+                    <Bar dataKey="completed" fill="#F87941" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="backlog" fill="#37383E" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center text-center p-6 text-muted-foreground">
+                  <Clock className="h-10 w-10 text-muted-foreground/30 mb-2" />
+                  <p className="text-xs font-semibold">No sprint or task velocity data recorded yet</p>
+                  <p className="text-[11px] text-muted-foreground/70">Create sprints and assign tasks to visualize live backlog trends.</p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -303,18 +384,26 @@ export default function ProjectAnalyticsPage() {
               <CardTitle className="text-xs font-black uppercase text-muted-foreground">Capacity Planning by Core Projects</CardTitle>
             </CardHeader>
             <CardContent className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dashboards.resourceAllocation}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="name" stroke="#888888" fontSize={9} />
-                  <YAxis stroke="#888888" fontSize={9} />
-                  <ChartTooltip />
-                  <Legend />
-                  <Bar dataKey="devs" fill="#F87941" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="QA" fill="#F9B095" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="PM" fill="#37383E" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              {dashboards.resourceAllocation && dashboards.resourceAllocation.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={dashboards.resourceAllocation}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="name" stroke="#888888" fontSize={9} />
+                    <YAxis stroke="#888888" fontSize={9} />
+                    <ChartTooltip />
+                    <Legend />
+                    <Bar dataKey="devs" fill="#F87941" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="QA" fill="#F9B095" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="PM" fill="#37383E" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center text-center p-6 text-muted-foreground">
+                  <Users className="h-10 w-10 text-muted-foreground/30 mb-2" />
+                  <p className="text-xs font-semibold">No resource allocations mapped to projects yet</p>
+                  <p className="text-[11px] text-muted-foreground/70">Assign team members to projects to populate capacity planning.</p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -337,14 +426,22 @@ export default function ProjectAnalyticsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {dashboards.clientPerformance.map((c: any, idx: number) => (
-                      <TableRow key={idx} className="border-b hover:bg-slate-50 dark:hover:bg-zinc-900/20 border-slate-100 dark:border-zinc-850">
-                        <TableCell className="p-3 px-6 font-bold text-slate-800 dark:text-white text-xs">{c.client}</TableCell>
-                        <TableCell className="p-3 text-xs font-semibold">{c.active}</TableCell>
-                        <TableCell className="p-3 text-xs font-semibold text-slate-500">{c.completed}</TableCell>
-                        <TableCell className="p-3 text-right text-xs font-bold text-emerald-500">{c.health}</TableCell>
+                    {dashboards.clientPerformance && dashboards.clientPerformance.length > 0 ? (
+                      dashboards.clientPerformance.map((c: any, idx: number) => (
+                        <TableRow key={idx} className="border-b hover:bg-slate-50 dark:hover:bg-zinc-900/20 border-slate-100 dark:border-zinc-850">
+                          <TableCell className="p-3 px-6 font-bold text-slate-800 dark:text-white text-xs">{c.client}</TableCell>
+                          <TableCell className="p-3 text-xs font-semibold">{c.active}</TableCell>
+                          <TableCell className="p-3 text-xs font-semibold text-slate-500">{c.completed}</TableCell>
+                          <TableCell className="p-3 text-right text-xs font-bold text-emerald-500">{c.health}</TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center py-8 text-xs text-muted-foreground">
+                          No client-associated projects found in database.
+                        </TableCell>
                       </TableRow>
-                    ))}
+                    )}
                   </TableBody>
                 </Table>
               </div>
@@ -370,14 +467,22 @@ export default function ProjectAnalyticsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {dashboards.risksList.map((r: any, idx: number) => (
-                      <TableRow key={idx} className="border-b hover:bg-slate-50 dark:hover:bg-zinc-900/20 border-slate-100 dark:border-zinc-850">
-                        <TableCell className="p-3 px-6 font-bold text-slate-800 dark:text-white text-xs">{r.title || r.statement}</TableCell>
-                        <TableCell className="p-3 text-xs"><Badge className="bg-amber-500/10 text-amber-500 border-none font-bold text-[9px] uppercase">{r.type}</Badge></TableCell>
-                        <TableCell className="p-3 text-xs"><Badge className="bg-rose-500/10 text-rose-500 border-none font-bold text-[9px] uppercase">{r.severity}</Badge></TableCell>
-                        <TableCell className="p-3 text-right text-xs font-bold uppercase text-slate-500">{r.status}</TableCell>
+                    {dashboards.risksList && dashboards.risksList.length > 0 ? (
+                      dashboards.risksList.map((r: any, idx: number) => (
+                        <TableRow key={idx} className="border-b hover:bg-slate-50 dark:hover:bg-zinc-900/20 border-slate-100 dark:border-zinc-850">
+                          <TableCell className="p-3 px-6 font-bold text-slate-800 dark:text-white text-xs">{r.title || r.statement}</TableCell>
+                          <TableCell className="p-3 text-xs"><Badge className="bg-amber-500/10 text-amber-500 border-none font-bold text-[9px] uppercase">{r.type}</Badge></TableCell>
+                          <TableCell className="p-3 text-xs"><Badge className="bg-rose-500/10 text-rose-500 border-none font-bold text-[9px] uppercase">{r.severity}</Badge></TableCell>
+                          <TableCell className="p-3 text-right text-xs font-bold uppercase text-slate-500">{r.status}</TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center py-8 text-xs text-muted-foreground">
+                          No active project risks or issues recorded in database.
+                        </TableCell>
                       </TableRow>
-                    ))}
+                    )}
                   </TableBody>
                 </Table>
               </div>

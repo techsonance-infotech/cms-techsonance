@@ -31,6 +31,8 @@ interface Manager {
   firstName: string;
   lastName: string;
   email: string;
+  role?: string;
+  designation?: string;
 }
 
 const STEPS = [
@@ -79,6 +81,7 @@ export default function NewEmployeePage() {
   const router = useRouter();
   const [activeStep, setActiveStep] = useState('personal');
   const [managers, setManagers] = useState<Manager[]>([]);
+  const [colleagues, setColleagues] = useState<any[]>([]);
   const [loadingManagers, setLoadingManagers] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [employeeEditId, setEmployeeEditId] = useState<string | null>(null);
@@ -174,6 +177,8 @@ export default function NewEmployeePage() {
     dateOfJoining: new Date().toISOString().split('T')[0],
     dateOfBirth: '',
     managerId: '',
+    buddy: '',
+    mentor: '',
     status: 'active',
     probationPeriod: '',
     confirmationDate: '',
@@ -277,13 +282,15 @@ export default function NewEmployeePage() {
               personalIdNumber: employee.personalIdNumber || '',
               department: employee.department || '',
               designation: employee.designation || '',
-              employmentType: employee.employmentType === 'full_time' ? 'Full-Time' : employee.employmentType === 'part_time' ? 'Part-Time' : employee.employmentType === 'contract' ? 'Contract' : employee.employmentType === 'intern' ? 'Intern' : 'Full-Time',
-              dateOfJoining: employee.dateOfJoining || '',
-              dateOfBirth: employee.dateOfBirth || '',
+              employmentType: employee.employmentType === 'full_time' || employee.employmentType === 'Full Time' || employee.employmentType === 'Full-Time' ? 'Full-Time' : employee.employmentType === 'part_time' || employee.employmentType === 'Part Time' || employee.employmentType === 'Part-Time' ? 'Part-Time' : employee.employmentType === 'contract' || employee.employmentType === 'Contract' ? 'Contract' : employee.employmentType === 'intern' || employee.employmentType === 'Intern' ? 'Intern' : 'Full-Time',
+              dateOfJoining: employee.dateOfJoining ? employee.dateOfJoining.split('T')[0] : '',
+              dateOfBirth: employee.dateOfBirth ? employee.dateOfBirth.split('T')[0] : '',
               managerId: employee.managerId ? String(employee.managerId) : '',
+              buddy: employee.buddy || employee.buddyName || '',
+              mentor: employee.mentor || employee.mentorName || '',
               status: employee.status || 'active',
               probationPeriod: employee.probationPeriod ? String(employee.probationPeriod) : '',
-              confirmationDate: employee.confirmationDate || '',
+              confirmationDate: employee.confirmationDate ? employee.confirmationDate.split('T')[0] : '',
               workLocation: employee.workLocation || '',
               workShift: employee.workShift || '',
               noticePeriod: employee.noticePeriod ? String(employee.noticePeriod) : '',
@@ -327,21 +334,97 @@ export default function NewEmployeePage() {
     fetchEmployeeDetails();
   }, [employeeEditId]);
 
-  // Fetch potential managers
+  // Fetch potential managers from organization employees and users
   useEffect(() => {
     async function fetchManagers() {
       setLoadingManagers(true);
       try {
-        const token = getStoredSessionToken();
-        const res = await fetch('/api/users?limit=100', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const json = await res.json();
-          // Filter admin and managers
-          const candidates = (json.data || []).filter((u: any) => u.role === 'Admin' || u.role === 'Manager');
-          setManagers(candidates);
+        const token =
+          getStoredSessionToken() ||
+          (typeof window !== 'undefined'
+            ? localStorage.getItem('session_token') || sessionStorage.getItem('session_token')
+            : null);
+        const headers: Record<string, string> = {};
+        if (token && token !== 'null' && token !== 'undefined') {
+          headers['Authorization'] = `Bearer ${token}`;
         }
+
+        const candidateMap = new Map<string, any>();
+
+        // 1. Fetch all employees in organization
+        try {
+          const empRes = await fetch('/api/employees?limit=1000', {
+            headers,
+            credentials: 'include',
+          });
+          if (empRes.ok) {
+            const empJson = await empRes.json();
+            const empList = Array.isArray(empJson) ? empJson : (empJson.data || []);
+            empList.forEach((e: any) => {
+              const id = e.userId || e.id;
+              if (id) {
+                candidateMap.set(String(id), {
+                  id: Number(id),
+                  employeeId: e.id,
+                  firstName: e.firstName || '',
+                  lastName: e.lastName || '',
+                  email: e.email || '',
+                  role: e.designation || e.role || 'Employee',
+                  designation: e.designation || e.department || '',
+                });
+              }
+            });
+          }
+        } catch (err) {
+          console.error('Error fetching employees for managers:', err);
+        }
+
+        // 2. Fetch users directory to include Admins/Managers not in employees table
+        try {
+          const userRes = await fetch('/api/users?limit=100', {
+            headers,
+            credentials: 'include',
+          });
+          if (userRes.ok) {
+            const userJson = await userRes.json();
+            const userList = userJson.data || [];
+            userList.forEach((u: any) => {
+              const id = u.id;
+              if (id && !candidateMap.has(String(id))) {
+                candidateMap.set(String(id), {
+                  id: Number(id),
+                  firstName: u.firstName || '',
+                  lastName: u.lastName || '',
+                  email: u.email || '',
+                  role: u.role || 'User',
+                  designation: u.role || '',
+                });
+              }
+            });
+          }
+        } catch (err) {
+          console.error('Error fetching users for managers:', err);
+        }
+
+        const allCandidates = Array.from(candidateMap.values());
+        setColleagues(allCandidates);
+
+        // Filter: prioritize Admins, Managers, Leads if available, but fallback to all candidates so the dropdown is NEVER empty
+        const mgrs = allCandidates.filter((u: any) => {
+          const r = `${u.role || ''} ${u.designation || ''}`.toLowerCase();
+          return (
+            r.includes('admin') ||
+            r.includes('manager') ||
+            r.includes('lead') ||
+            r.includes('head') ||
+            r.includes('director') ||
+            r.includes('vp') ||
+            r.includes('chief') ||
+            r.includes('president')
+          );
+        });
+
+        setManagers(mgrs.length > 0 ? mgrs : allCandidates);
       } catch (err) {
         console.error('Error fetching managers:', err);
       } finally {
@@ -352,16 +435,16 @@ export default function NewEmployeePage() {
   }, []);
 
   // Step-specific validation for wizard navigation
-  const validateStep = (stepId: string) => {
+  const validateStep = (stepId: string): Record<string, string> => {
     const newErrors: Record<string, string> = {};
 
     if (stepId === 'personal') {
       if (!formData.firstName.trim()) newErrors.firstName = 'First name is required';
       if (!formData.lastName.trim()) newErrors.lastName = 'Last name is required';
       if (!formData.email.trim()) {
-        newErrors.email = 'Email is required';
-      } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-        newErrors.email = 'Valid email is required';
+        newErrors.email = 'Personal email is required';
+      } else if (!/\S+@\S+\.\S+/.test(formData.email.trim())) {
+        newErrors.email = 'Valid personal email is required';
       }
     } else if (stepId === 'work') {
       if (!formData.employeeId.trim()) newErrors.employeeId = 'Employee ID is required';
@@ -369,23 +452,33 @@ export default function NewEmployeePage() {
       if (!formData.designation.trim()) newErrors.designation = 'Designation is required';
       if (!formData.dateOfJoining) newErrors.dateOfJoining = 'Joining Date is required';
     } else if (stepId === 'access') {
+      const trimmedUsername = (formData.username || '').trim();
+      const trimmedOfficeEmail = (formData.officeEmail || '').trim();
+      const trimmedPassword = (formData.password || '').trim();
+
       if (!employeeEditId) {
-        if (!formData.password) {
-          newErrors.password = 'Initial password is required';
-        } else if (formData.password.length < 6) {
+        if (!trimmedPassword) {
+          newErrors.password = 'Initial password is required (minimum 6 characters)';
+        } else if (trimmedPassword.length < 6) {
           newErrors.password = 'Password must be at least 6 characters';
         }
+      } else {
+        if (trimmedPassword && trimmedPassword.length < 6) {
+          newErrors.password = 'New password must be at least 6 characters';
+        }
       }
-      if (formData.username && !/^[a-z0-9._-]+$/.test(formData.username)) {
-        newErrors.username = 'Username must contain only lowercase letters, numbers, dots, and underscores';
+
+      if (trimmedUsername && !/^[a-zA-Z0-9._-]+$/.test(trimmedUsername)) {
+        newErrors.username = 'Username must contain only letters, numbers, dots, hyphens, or underscores';
       }
-      if (formData.officeEmail && !/\S+@\S+\.\S+/.test(formData.officeEmail)) {
-        newErrors.officeEmail = 'Valid office email is required';
+
+      if (trimmedOfficeEmail && !/\S+@\S+\.\S+/.test(trimmedOfficeEmail)) {
+        newErrors.officeEmail = 'Valid office email is required (e.g. name@company.com)';
       }
     }
 
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return newErrors;
   };
 
   const handlePrevStep = () => {
@@ -397,8 +490,10 @@ export default function NewEmployeePage() {
   };
 
   const handleNextStep = () => {
-    if (!validateStep(activeStep)) {
-      toast.error('Please resolve validation errors before continuing.');
+    const stepErrors = validateStep(activeStep);
+    if (Object.keys(stepErrors).length > 0) {
+      const errorMsg = Object.values(stepErrors).join(' • ');
+      toast.error(errorMsg);
       return;
     }
     const currentIndex = STEPS.findIndex((s) => s.id === activeStep);
@@ -413,8 +508,10 @@ export default function NewEmployeePage() {
     const currentIdx = STEPS.findIndex((s) => s.id === activeStep);
 
     if (targetIdx > currentIdx) {
-      if (!validateStep(activeStep)) {
-        toast.error('Please resolve validation errors in the current section.');
+      const stepErrors = validateStep(activeStep);
+      if (Object.keys(stepErrors).length > 0) {
+        const errorMsg = Object.values(stepErrors).join(' • ');
+        toast.error(errorMsg);
         return;
       }
     }
@@ -522,35 +619,46 @@ export default function NewEmployeePage() {
     if (!formData.dateOfJoining) newErrors.dateOfJoining = 'Joining Date is required';
 
     // System access
+    const trimmedUsername = (formData.username || '').trim();
+    const trimmedOfficeEmail = (formData.officeEmail || '').trim();
+    const trimmedPassword = (formData.password || '').trim();
+
     if (!employeeEditId) {
-      if (!formData.password) {
-        newErrors.password = 'Initial password is required';
-      } else if (formData.password.length < 6) {
+      if (!trimmedPassword) {
+        newErrors.password = 'Initial password is required (minimum 6 characters)';
+      } else if (trimmedPassword.length < 6) {
         newErrors.password = 'Password must be at least 6 characters';
       }
+    } else {
+      if (trimmedPassword && trimmedPassword.length < 6) {
+        newErrors.password = 'New password must be at least 6 characters';
+      }
     }
-    if (formData.username && !/^[a-z0-9._-]+$/.test(formData.username)) {
-      newErrors.username = 'Username must contain only lowercase letters, numbers, dots, and underscores';
+
+    if (trimmedUsername && !/^[a-zA-Z0-9._-]+$/.test(trimmedUsername)) {
+      newErrors.username = 'Username must contain only letters, numbers, dots, hyphens, or underscores';
     }
-    if (formData.officeEmail && !/\S+@\S+\.\S+/.test(formData.officeEmail)) {
+    if (trimmedOfficeEmail && !/\S+@\S+\.\S+/.test(trimmedOfficeEmail)) {
       newErrors.officeEmail = 'Valid office email is required';
     }
 
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return newErrors;
   };
 
   const handleSubmit = async () => {
-    if (!validateForm()) {
-      toast.error('Please check validation errors in the form.');
+    const formErrors = validateForm();
+    if (Object.keys(formErrors).length > 0) {
+      const errorMsg = Object.values(formErrors).join(' • ');
+      toast.error(`Please fix validation errors: ${errorMsg}`);
       // Scroll to the first error section
-      if (errors.firstName || errors.lastName || errors.email) {
+      if (formErrors.firstName || formErrors.lastName || formErrors.email) {
         setActiveStep('personal');
         window.scrollTo({ top: 0, behavior: 'smooth' });
-      } else if (errors.employeeId || errors.department || errors.designation) {
+      } else if (formErrors.employeeId || formErrors.department || formErrors.designation || formErrors.dateOfJoining) {
         setActiveStep('work');
         window.scrollTo({ top: 0, behavior: 'smooth' });
-      } else if (errors.password) {
+      } else if (formErrors.password || formErrors.username || formErrors.officeEmail) {
         setActiveStep('access');
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
@@ -564,53 +672,96 @@ export default function NewEmployeePage() {
 
       if (employeeEditId) {
         // --- EDIT MODE FLOW ---
-        // 1. Update User
-        const userPayload = {
-          email: formData.email,
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          role: formData.role,
-          phone: formData.phone || undefined,
-          username: formData.username || undefined,
-          middleName: formData.middleName || undefined,
-          gender: formData.gender,
-          officeEmail: formData.officeEmail || undefined,
-          ...(formData.password ? { password: formData.password } : {}),
+        // Helper to extract granular validation issues
+        const extractApiErrorMessage = (errorData: any, fallback: string): string => {
+          if (!errorData) return fallback;
+          if (Array.isArray(errorData.errors) && errorData.errors.length > 0) {
+            const msgs = errorData.errors
+              .map((err: any) => {
+                const path = Array.isArray(err.path) ? err.path.join('.') : err.path;
+                return path ? `${path}: ${err.message}` : err.message;
+              })
+              .filter(Boolean);
+            if (msgs.length > 0) return msgs.join(', ');
+          }
+          if (errorData.errors && typeof errorData.errors === 'object') {
+            return Object.entries(errorData.errors)
+              .map(([k, v]) => `${k}: ${v}`)
+              .join(', ');
+          }
+          return errorData.error || errorData.message || fallback;
         };
 
-        const userRes = await fetch(`/api/users?id=${formData.userId}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify(userPayload)
-        });
+        // 1. Update User (if linked numeric userId exists)
+        if (formData.userId && !isNaN(Number(formData.userId)) && Number(formData.userId) > 0) {
+          const userPayload: Record<string, any> = {
+            email: formData.email.trim(),
+            firstName: formData.firstName.trim(),
+            lastName: formData.lastName.trim(),
+            role: formData.role || 'Employee',
+            phone: formData.phone?.trim() || null,
+            middleName: formData.middleName?.trim() || null,
+            gender: formData.gender || null,
+          };
+          if (formData.username?.trim()) userPayload.username = formData.username.trim();
+          if (formData.officeEmail?.trim()) userPayload.officeEmail = formData.officeEmail.trim();
+          if (formData.password?.trim() && formData.password.trim().length >= 6) {
+            userPayload.password = formData.password.trim();
+          }
 
-        if (!userRes.ok) {
-          const errorData = await userRes.json();
-          throw new Error(errorData.message || 'Failed to update user account details');
+          const userHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+          if (token && token !== 'null' && token !== 'undefined') {
+            userHeaders['Authorization'] = `Bearer ${token}`;
+          }
+
+          const userRes = await fetch(`/api/users?id=${formData.userId}`, {
+            method: 'PUT',
+            headers: userHeaders,
+            credentials: 'include',
+            body: JSON.stringify(userPayload)
+          });
+
+          if (!userRes.ok) {
+            const errorData = await userRes.json();
+            console.error('User update error data:', errorData);
+            const detailedMsg = extractApiErrorMessage(errorData, 'Failed to update user account details');
+            throw new Error(`[User Update] ${detailedMsg}`);
+          }
         }
 
         // 2. Update Employee Profile
+        const safeManagerId = formData.managerId && !isNaN(Number(formData.managerId)) && Number(formData.managerId) > 0 
+          ? Number(formData.managerId) 
+          : null;
+        const safeStatus = (formData.status || 'active').toLowerCase().replace(/[\s-]+/g, '_');
+        const safeSalary = formData.salary ? Number(String(formData.salary).replace(/[^0-9.-]/g, '')) || null : null;
+        const safeHourlyRate = formData.hourlyRate ? Number(String(formData.hourlyRate).replace(/[^0-9.-]/g, '')) || null : null;
+        const safeCtc = formData.ctc ? Number(String(formData.ctc).replace(/[^0-9.-]/g, '')) || null : null;
+        const safeProbation = formData.probationPeriod ? Number(String(formData.probationPeriod).replace(/[^0-9.-]/g, '')) || null : null;
+        const safeNotice = formData.noticePeriod ? Number(String(formData.noticePeriod).replace(/[^0-9.-]/g, '')) || null : null;
+
         const employeePayload = {
-          employeeId: formData.employeeId,
-          department: formData.department,
-          designation: formData.designation,
+          employeeId: formData.employeeId.trim(),
+          department: formData.department.trim(),
+          designation: formData.designation.trim(),
           employmentType: normEmploymentType,
-          dateOfJoining: formData.dateOfJoining,
-          dateOfBirth: formData.dateOfBirth || null,
-          managerId: formData.managerId ? Number(formData.managerId) : null,
-          status: formData.status,
-          probationPeriod: formData.probationPeriod ? Number(formData.probationPeriod) : null,
-          confirmationDate: formData.confirmationDate || null,
+          dateOfJoining: formData.dateOfJoining ? formData.dateOfJoining.split('T')[0] : '',
+          dateOfBirth: formData.dateOfBirth ? formData.dateOfBirth.split('T')[0] : null,
+          managerId: safeManagerId,
+          buddy: formData.buddy || null,
+          buddyName: formData.buddy || null,
+          mentor: formData.mentor || null,
+          mentorName: formData.mentor || null,
+          status: safeStatus,
+          probationPeriod: safeProbation,
+          confirmationDate: formData.confirmationDate ? formData.confirmationDate.split('T')[0] : null,
           workLocation: formData.workLocation || null,
           workShift: formData.workShift || null,
-          noticePeriod: formData.noticePeriod ? Number(formData.noticePeriod) : null,
+          noticePeriod: safeNotice,
           
-          salary: formData.salary ? Number(formData.salary) : null,
-          hourlyRate: formData.hourlyRate ? Number(formData.hourlyRate) : null,
-          ctc: formData.ctc ? Number(formData.ctc) : null,
+          salary: safeSalary,
+          hourlyRate: safeHourlyRate,
+          ctc: safeCtc,
           currency: formData.currency,
           bankName: formData.bankName || null,
           bankAccountNumber: formData.bankAccountNumber || null,
@@ -629,7 +780,7 @@ export default function NewEmployeePage() {
           experienceCertificateUrl: formData.experienceCertificateUrl || null,
           resumeUrl: formData.resumeUrl || null,
 
-          permissions: formData.permissions ? JSON.parse(formData.permissions) : null,
+          permissions: formData.permissions ? (typeof formData.permissions === 'string' ? JSON.parse(formData.permissions) : formData.permissions) : null,
 
           emergencyContactName: formData.emergencyContactName || null,
           emergencyContactRelationship: formData.emergencyContactRelationship || null,
@@ -642,25 +793,36 @@ export default function NewEmployeePage() {
           previousCompany: formData.previousCompany || null,
           referralSource: formData.referralSource || null,
           notes: formData.notes || null,
-          gender: formData.gender,
+          gender: formData.gender || null,
+          maritalStatus: formData.maritalStatus || null,
+          bloodGroup: formData.bloodGroup || null,
+          nationality: formData.nationality || null,
+          personalIdNumber: formData.personalIdNumber || null,
+          middleName: formData.middleName || null,
+          officeEmail: formData.officeEmail || null,
         };
+
+        const empHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token && token !== 'null' && token !== 'undefined') {
+          empHeaders['Authorization'] = `Bearer ${token}`;
+        }
 
         const employeeRes = await fetch(`/api/employees?id=${employeeEditId}`, {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
+          headers: empHeaders,
+          credentials: 'include',
           body: JSON.stringify(employeePayload)
         });
 
         if (!employeeRes.ok) {
           const errorData = await employeeRes.json();
-          throw new Error(errorData.message || 'Failed to update employee profile mapping');
+          console.error('Employee update error data:', errorData);
+          const detailedMsg = extractApiErrorMessage(errorData, 'Failed to update employee profile mapping');
+          throw new Error(`[Employee Update] ${detailedMsg}`);
         }
 
         toast.success('Employee profile successfully updated!');
-        router.push('/dashboard/employees');
+        router.push(`/dashboard/employees/${employeeEditId}`);
       } else {
         // --- CREATION MODE FLOW ---
         // 1. Create User
@@ -704,6 +866,10 @@ export default function NewEmployeePage() {
           dateOfJoining: formData.dateOfJoining,
           dateOfBirth: formData.dateOfBirth || undefined,
           managerId: formData.managerId ? Number(formData.managerId) : undefined,
+          buddy: formData.buddy || undefined,
+          buddyName: formData.buddy || undefined,
+          mentor: formData.mentor || undefined,
+          mentorName: formData.mentor || undefined,
           status: formData.status,
           probationPeriod: formData.probationPeriod ? Number(formData.probationPeriod) : undefined,
           confirmationDate: formData.confirmationDate || undefined,
@@ -746,6 +912,12 @@ export default function NewEmployeePage() {
           referralSource: formData.referralSource || undefined,
           notes: formData.notes || undefined,
           gender: formData.gender,
+          maritalStatus: formData.maritalStatus || undefined,
+          bloodGroup: formData.bloodGroup || undefined,
+          nationality: formData.nationality || undefined,
+          personalIdNumber: formData.personalIdNumber || undefined,
+          middleName: formData.middleName || undefined,
+          officeEmail: formData.officeEmail || undefined,
         };
 
         const employeeRes = await fetch('/api/employees', {
@@ -785,9 +957,9 @@ export default function NewEmployeePage() {
             {employeeEditId ? 'Update employee details and system credentials in the organization.' : 'Create a complete employee profile and onboard them into the organization.'}
           </p>
         </div>
-        <Link href="/dashboard/employees">
+        <Link href={employeeEditId ? `/dashboard/employees/${employeeEditId}` : "/dashboard/employees"}>
           <Button variant="outline" className="border-[#e6e4e6]/30 dark:border-[#2f3035]/30 hover:bg-[#e6e4e6]/10 dark:hover:bg-[#2f3035]/10 text-slate-700 dark:text-[#fdfcfc] font-semibold flex items-center gap-2">
-            <ArrowLeft className="h-4 w-4" /> Back to Employees
+            <ArrowLeft className="h-4 w-4" /> {employeeEditId ? 'Back to Employee Profile' : 'Back to Employees'}
           </Button>
         </Link>
       </div>
@@ -1151,10 +1323,72 @@ export default function NewEmployeePage() {
                     className="flex h-10 w-full rounded-md border border-gray-200 dark:border-zinc-800 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-[#fdfcfc] focus:border-[#f87941] mt-2 outline-none"
                     disabled={loadingManagers}
                   >
-                    <option value="" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Select Reporting Manager</option>
+                    <option value="" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">
+                      {loadingManagers ? 'Loading managers...' : 'Select Reporting Manager'}
+                    </option>
                     {managers.map(m => (
-                      <option key={m.id} value={m.id} className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">{m.firstName} {m.lastName} ({m.email})</option>
+                      <option key={m.id} value={m.id} className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">
+                        {m.firstName} {m.lastName} {m.designation ? `(${m.designation})` : m.role ? `(${m.role})` : m.email ? `(${m.email})` : ''}
+                      </option>
                     ))}
+                  </select>
+                </div>
+                <div>
+                  <Label htmlFor="buddy" className="text-slate-700 dark:text-[#fdfcfc]">Buddy Assigned</Label>
+                  <select
+                    id="buddy"
+                    name="buddy"
+                    value={formData.buddy}
+                    onChange={handleInputChange}
+                    className="flex h-10 w-full rounded-md border border-gray-200 dark:border-zinc-800 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-[#fdfcfc] focus:border-[#f87941] mt-2 outline-none"
+                    disabled={loadingManagers}
+                  >
+                    <option value="" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">
+                      {loadingManagers ? 'Loading colleagues...' : 'Select Onboarding Buddy (or None)'}
+                    </option>
+                    {formData.buddy && !colleagues.some(c => `${c.firstName} ${c.lastName}`.trim() === formData.buddy) && (
+                      <option value={formData.buddy} className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">
+                        {formData.buddy} (Current)
+                      </option>
+                    )}
+                    {colleagues.map((c: any) => {
+                      const fullName = `${c.firstName} ${c.lastName}`.trim();
+                      const label = `${fullName} ${c.designation ? `(${c.designation})` : c.role ? `(${c.role})` : ''}`.trim();
+                      return (
+                        <option key={`buddy-${c.id}`} value={fullName} className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">
+                          {label}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+                <div>
+                  <Label htmlFor="mentor" className="text-slate-700 dark:text-[#fdfcfc]">Mentor Assigned</Label>
+                  <select
+                    id="mentor"
+                    name="mentor"
+                    value={formData.mentor}
+                    onChange={handleInputChange}
+                    className="flex h-10 w-full rounded-md border border-gray-200 dark:border-zinc-800 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-[#fdfcfc] focus:border-[#f87941] mt-2 outline-none"
+                    disabled={loadingManagers}
+                  >
+                    <option value="" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">
+                      {loadingManagers ? 'Loading colleagues...' : 'Select Mentor (or None)'}
+                    </option>
+                    {formData.mentor && !colleagues.some(c => `${c.firstName} ${c.lastName}`.trim() === formData.mentor) && (
+                      <option value={formData.mentor} className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">
+                        {formData.mentor} (Current)
+                      </option>
+                    )}
+                    {colleagues.map((c: any) => {
+                      const fullName = `${c.firstName} ${c.lastName}`.trim();
+                      const label = `${fullName} ${c.designation ? `(${c.designation})` : c.role ? `(${c.role})` : ''}`.trim();
+                      return (
+                        <option key={`mentor-${c.id}`} value={fullName} className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">
+                          {label}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
                 <div>
@@ -1519,9 +1753,12 @@ export default function NewEmployeePage() {
                     name="username" 
                     value={formData.username}
                     onChange={handleInputChange}
-                    className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
+                    className={`bg-white dark:bg-slate-950 border text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2 ${
+                      errors.username ? 'border-red-500' : 'border-gray-200 dark:border-zinc-800'
+                    }`}
                     placeholder="e.g. john.doe"
                   />
+                  {errors.username && <span className="text-xs text-red-500 mt-1 block">{errors.username}</span>}
                 </div>
                 <div>
                   <Label htmlFor="officeEmail" className="text-slate-700 dark:text-[#fdfcfc]">Office/Work Email</Label>
@@ -1531,27 +1768,36 @@ export default function NewEmployeePage() {
                     type="email"
                     value={formData.officeEmail}
                     onChange={handleInputChange}
-                    className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
+                    className={`bg-white dark:bg-slate-950 border text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2 ${
+                      errors.officeEmail ? 'border-red-500' : 'border-gray-200 dark:border-zinc-800'
+                    }`}
                     placeholder="john@company.com"
                   />
+                  {errors.officeEmail && <span className="text-xs text-red-500 mt-1 block">{errors.officeEmail}</span>}
                 </div>
                 <div>
-                  <Label htmlFor="password" className="text-slate-700 dark:text-[#fdfcfc]">Initial Password <span className="text-[#f87941]">*</span></Label>
+                  <Label htmlFor="password" className="text-slate-700 dark:text-[#fdfcfc]">
+                    {employeeEditId ? 'Change Password (optional)' : 'Initial Password'} {!employeeEditId && <span className="text-[#f87941]">*</span>}
+                  </Label>
                   <Input 
                     id="password" 
                     name="password" 
                     type="password"
                     value={formData.password}
                     onChange={handleInputChange}
-                    className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
-                    placeholder="••••••••"
+                    className={`bg-white dark:bg-slate-950 border text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2 ${
+                      errors.password ? 'border-red-500' : 'border-gray-200 dark:border-zinc-800'
+                    }`}
+                    placeholder={employeeEditId ? 'Leave blank to keep current' : '••••••••'}
                   />
-                   {errors.password && <span className="text-xs text-red-500 mt-1 block">{errors.password}</span>}
-                   {!employeeEditId && formData.employeeId && (
-                     <span className="text-[10px] text-[#f87941]/90 mt-1 block font-semibold">
-                       Auto-generated: Welcome@{formData.employeeId}
-                     </span>
-                   )}
+                  {errors.password && <span className="text-xs text-red-500 mt-1 block">{errors.password}</span>}
+                  {employeeEditId ? (
+                    <span className="text-[11px] text-slate-400 mt-1 block">Leave empty to keep current password unchanged.</span>
+                  ) : formData.employeeId ? (
+                    <span className="text-[10px] text-[#f87941]/90 mt-1 block font-semibold">
+                      Auto-generated: Welcome@{formData.employeeId}
+                    </span>
+                  ) : null}
                 </div>
                 <div>
                   <Label htmlFor="role" className="text-slate-700 dark:text-[#fdfcfc]">System Role</Label>
@@ -1886,7 +2132,7 @@ export default function NewEmployeePage() {
                     <ChevronLeft className="h-4 w-4" /> Previous
                   </Button>
                   <div className="flex gap-4">
-                    <Link href="/dashboard/employees">
+                    <Link href={employeeEditId ? `/dashboard/employees/${employeeEditId}` : "/dashboard/employees"}>
                       <Button variant="outline" className="border-[#e6e4e6]/30 dark:border-[#2f3035]/30 hover:bg-[#e6e4e6]/10 dark:hover:bg-[#2f3035]/10 text-slate-700 dark:text-[#fdfcfc]">
                         Cancel
                       </Button>
@@ -1898,11 +2144,11 @@ export default function NewEmployeePage() {
                     >
                       {submitting ? (
                         <>
-                          <Loader2 className="h-4 w-4 animate-spin" /> Onboarding...
+                          <Loader2 className="h-4 w-4 animate-spin" /> {employeeEditId ? 'Saving Changes...' : 'Onboarding...'}
                         </>
                       ) : (
                         <>
-                          Complete Onboarding <ChevronRight className="h-4 w-4" />
+                          {employeeEditId ? 'Save Changes' : 'Complete Onboarding'} <ChevronRight className="h-4 w-4" />
                         </>
                       )}
                     </Button>

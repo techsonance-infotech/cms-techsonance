@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { getStoredUser } from '@/lib/client-session';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,7 +22,7 @@ import {
 import { 
   BookOpen, Search, Plus, Sparkles, FileText, 
   HelpCircle, MessageSquare, History, Edit, 
-  ShieldAlert, RefreshCw, FolderClosed, Eye 
+  ShieldAlert, RefreshCw, FolderClosed, Eye, Trash2
 } from 'lucide-react';
 
 type DocType = 'Policy' | 'Article' | 'FAQ' | 'Announcement' | 'SOP';
@@ -49,6 +50,7 @@ export default function KnowledgeBasePortal() {
   const [changeSummary, setChangeSummary] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [canManageDocs, setCanManageDocs] = useState(false);
 
   const fetchDocuments = async () => {
     try {
@@ -71,6 +73,12 @@ export default function KnowledgeBasePortal() {
 
   useEffect(() => {
     fetchDocuments();
+    const user = getStoredUser();
+    if (user) {
+      const roleStr = (user.role || '').toLowerCase();
+      const hasManageRole = ['admin', 'superadmin', 'super_admin', 'hr_manager', 'hr', 'owner', 'business_owner', 'tenant_owner', 'ceo', 'cto', 'manager', 'project_manager'].includes(roleStr);
+      setCanManageDocs(hasManageRole);
+    }
   }, []);
 
   const fetchVersionHistory = async (docId: string) => {
@@ -122,11 +130,12 @@ export default function KnowledgeBasePortal() {
         setContent('');
         fetchDocuments();
       } else {
-        toast.error('Failed to publish document.');
+        const errJson = await res.json().catch(() => ({}));
+        toast.error(errJson.error || errJson.message || 'Failed to publish document.');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      toast.error('Error publishing knowledge document.');
+      toast.error(err.message || 'Error publishing knowledge document.');
     } finally {
       setSubmitting(false);
     }
@@ -134,6 +143,10 @@ export default function KnowledgeBasePortal() {
 
   const handleUpdateDocument = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canManageDocs) {
+      toast.error('Only managers and administrators can edit knowledge base documents.');
+      return;
+    }
     if (!selectedDoc || !title || !content) return;
     setSubmitting(true);
 
@@ -160,13 +173,38 @@ export default function KnowledgeBasePortal() {
         setIsViewOpen(false);
         fetchDocuments();
       } else {
-        toast.error('Failed to update document.');
+        const errJson = await res.json().catch(() => ({}));
+        toast.error(errJson.error || errJson.message || 'Failed to update document.');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      toast.error('Error saving document updates.');
+      toast.error(err.message || 'Error saving document updates.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleDeleteDocument = async (docId: string, docTitle: string) => {
+    if (!canManageDocs) {
+      toast.error('Only managers and administrators can delete knowledge base documents.');
+      return;
+    }
+    try {
+      const token = localStorage.getItem('session_token');
+      const res = await fetch(`/api/knowledge-base?id=${encodeURIComponent(docId)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        toast.success(`Document "${docTitle}" deleted.`);
+        fetchDocuments();
+        setIsViewOpen(false);
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        toast.error(errJson.error || errJson.message || 'Failed to delete document.');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Error deleting document.');
     }
   };
 
@@ -219,16 +257,18 @@ export default function KnowledgeBasePortal() {
             >
               <RefreshCw className="h-4 w-4" /> Refresh
             </Button>,
-            <Button 
-              key="add" 
-              onClick={() => {
-                setDocType(activeTab);
-                setIsCreateOpen(true);
-              }}
-              className="bg-primary hover:bg-primary/95 text-white font-bold border-none"
-            >
-              <Plus className="mr-2 h-4 w-4" /> Create Document
-            </Button>
+            ...(canManageDocs ? [
+              <Button 
+                key="add" 
+                onClick={() => {
+                  setDocType(activeTab);
+                  setIsCreateOpen(true);
+                }}
+                className="bg-primary hover:bg-primary/95 text-white font-bold border-none"
+              >
+                <Plus className="mr-2 h-4 w-4" /> Create Document
+              </Button>
+            ] : [])
           ]}
           breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Knowledge Base' }]}
         />
@@ -294,7 +334,11 @@ export default function KnowledgeBasePortal() {
                 setChangeSummary('');
                 setIsEditing(false);
                 setIsViewOpen(true);
-                fetchVersionHistory(doc.id);
+                if (canManageDocs) {
+                  fetchVersionHistory(doc.id);
+                } else {
+                  setVersionLogs([]);
+                }
               }}
               className="border-none shadow-xs hover:shadow-md hover:scale-[1.01] transition-all cursor-pointer bg-card flex flex-col justify-between"
             >
@@ -435,10 +479,17 @@ export default function KnowledgeBasePortal() {
                     <Badge variant="outline" className="text-xs font-bold border-border">
                       Version: {selectedDoc.version}
                     </Badge>
+                    {!canManageDocs && (
+                      <Badge variant="outline" className="text-xs font-bold border-border text-muted-foreground flex items-center gap-1">
+                        <Eye className="h-3 w-3" /> Read-Only
+                      </Badge>
+                    )}
                   </div>
                 </div>
                 <DialogDescription>
-                  Review latest revisions or edit standard parameters. Version history is logged below.
+                  {canManageDocs
+                    ? 'Review latest revisions or edit standard parameters. Version history is logged below.'
+                    : 'Official corporate documentation and guidelines (Read-Only access).'}
                 </DialogDescription>
               </DialogHeader>
 
@@ -487,34 +538,36 @@ export default function KnowledgeBasePortal() {
                   </div>
                 )}
 
-                {/* Audit trail version log */}
-                <div className="space-y-3 pt-4 border-t border-border">
-                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                    <History className="h-3.5 w-3.5 text-primary" /> Version Revision History
-                  </h4>
-                  
-                  <div className="space-y-2 max-h-36 overflow-y-auto">
-                    {loadingVersions ? (
-                      <p className="text-[10px] text-muted-foreground italic">Loading revisions list...</p>
-                    ) : (
-                      versionLogs.map((log) => (
-                        <div key={log.id} className="flex justify-between items-center text-xs p-2.5 border border-border/30 rounded-xl bg-accent/10">
-                          <div className="flex flex-col">
-                            <span className="font-bold text-foreground">v{log.version} - {log.change_summary}</span>
-                            <span className="text-[9px] text-muted-foreground mt-0.5">
-                              Edited by: {log.changed_by ? `${log.changed_by.first_name} ${log.changed_by.last_name}` : 'Corporate'}
-                            </span>
+                {/* Audit trail version log - Only visible to managers and admins */}
+                {canManageDocs && (
+                  <div className="space-y-3 pt-4 border-t border-border">
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                      <History className="h-3.5 w-3.5 text-primary" /> Version Revision History
+                    </h4>
+                    
+                    <div className="space-y-2 max-h-36 overflow-y-auto">
+                      {loadingVersions ? (
+                        <p className="text-[10px] text-muted-foreground italic">Loading revisions list...</p>
+                      ) : (
+                        versionLogs.map((log) => (
+                          <div key={log.id} className="flex justify-between items-center text-xs p-2.5 border border-border/30 rounded-xl bg-accent/10">
+                            <div className="flex flex-col">
+                              <span className="font-bold text-foreground">v{log.version} - {log.change_summary}</span>
+                              <span className="text-[9px] text-muted-foreground mt-0.5">
+                                Edited by: {log.changed_by ? `${log.changed_by.first_name} ${log.changed_by.last_name}` : 'Corporate'}
+                              </span>
+                            </div>
+                            <Badge variant="outline" className="text-[9px] font-extrabold border-border shrink-0">
+                              {new Date(log.created_at).toLocaleDateString(undefined, { dateStyle: 'short' })}
+                            </Badge>
                           </div>
-                          <Badge variant="outline" className="text-[9px] font-extrabold border-border shrink-0">
-                            {new Date(log.created_at).toLocaleDateString(undefined, { dateStyle: 'short' })}
-                          </Badge>
-                        </div>
-                      ))
-                    )}
+                        ))
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
 
-                <DialogFooter className="pt-4 border-t border-border mt-4">
+                <DialogFooter className="pt-4 border-t border-border mt-4 flex items-center justify-between">
                   {isEditing ? (
                     <>
                       <Button type="button" variant="outline" onClick={() => setIsEditing(false)} disabled={submitting}>
@@ -526,12 +579,33 @@ export default function KnowledgeBasePortal() {
                     </>
                   ) : (
                     <>
-                      <Button type="button" variant="outline" onClick={() => setIsViewOpen(false)}>
-                        Close
-                      </Button>
-                      <Button type="button" onClick={() => setIsEditing(true)} className="bg-primary hover:bg-primary/95 text-white font-bold border-none flex items-center gap-1.5">
-                        <Edit className="h-4 w-4" /> Edit Parameters
-                      </Button>
+                      {canManageDocs ? (
+                        <>
+                          <Button 
+                            type="button" 
+                            variant="ghost" 
+                            onClick={() => handleDeleteDocument(selectedDoc.id, selectedDoc.title)}
+                            className="text-destructive hover:bg-destructive/10 font-bold text-xs flex items-center gap-1.5 mr-auto"
+                          >
+                            <Trash2 className="h-4 w-4" /> Delete
+                          </Button>
+                          <Button type="button" variant="outline" onClick={() => setIsViewOpen(false)}>
+                            Close
+                          </Button>
+                          <Button type="button" onClick={() => setIsEditing(true)} className="bg-primary hover:bg-primary/95 text-white font-bold border-none flex items-center gap-1.5">
+                            <Edit className="h-4 w-4" /> Edit Parameters
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-xs text-muted-foreground flex items-center gap-1.5 mr-auto">
+                            <Eye className="h-3.5 w-3.5 text-primary" /> Official corporate documentation (Read-Only)
+                          </span>
+                          <Button type="button" variant="outline" onClick={() => setIsViewOpen(false)}>
+                            Close
+                          </Button>
+                        </>
+                      )}
                     </>
                   )}
                 </DialogFooter>

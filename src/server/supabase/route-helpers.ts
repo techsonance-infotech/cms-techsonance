@@ -18,27 +18,90 @@ export async function getCurrentSupabaseActor(accessToken: string) {
   return getCurrentSupabaseProfile(accessToken);
 }
 
-export async function resolveAuthUserIdFromLegacyUserId(accessToken: string, legacyUserId: number, tenantId?: string) {
-  const profile = await getSupabaseProfileByLegacyUserId(legacyUserId, { 
+export async function resolveAuthUserIdFromLegacyUserId(
+  accessToken: string,
+  legacyUserId: number,
+  tenantId?: string
+) {
+  const profile = await getSupabaseProfileByLegacyUserId(legacyUserId, {
     useAdmin: true,
-    tenantId
+    tenantId,
   });
   return profile.id;
 }
 
-export async function buildLegacyUserIdMap(accessToken: string, authUserIds: string[], tenantId?: string) {
+export async function resolveActorUuid(context: any, supabase?: any): Promise<string | null> {
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const providerId = context?.auth?.user?.providerUserId;
+  const tokenId = context?.auth?.tokenId;
+  const legacyId = context?.auth?.user?.id;
+  const email = context?.auth?.user?.email;
+
+  if (supabase) {
+    if (providerId && typeof providerId === 'string' && UUID_REGEX.test(providerId)) {
+      const { data: u } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', providerId)
+        .maybeSingle();
+      if (u?.id) return u.id;
+    }
+    if (tokenId && typeof tokenId === 'string' && UUID_REGEX.test(tokenId)) {
+      const { data: u } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', tokenId)
+        .maybeSingle();
+      if (u?.id) return u.id;
+    }
+    if (legacyId) {
+      const { data: u } = await supabase
+        .from('users')
+        .select('id')
+        .eq('legacy_user_id', legacyId)
+        .maybeSingle();
+      if (u?.id) return u.id;
+    }
+    if (email) {
+      const { data: u } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', email)
+        .maybeSingle();
+      if (u?.id) return u.id;
+    }
+  }
+
+  if (providerId && typeof providerId === 'string' && UUID_REGEX.test(providerId)) {
+    return providerId;
+  }
+  if (tokenId && typeof tokenId === 'string' && UUID_REGEX.test(tokenId)) {
+    return tokenId;
+  }
+
+  return null;
+}
+
+export async function buildLegacyUserIdMap(
+  accessToken: string,
+  authUserIds: string[],
+  tenantId?: string
+) {
   const sanitizedAuthUserIds = authUserIds.filter(
-    (id) => typeof id === 'string' && id.trim() !== '' && id !== 'null' && id !== 'undefined'
+    id => typeof id === 'string' && id.trim() !== '' && id !== 'null' && id !== 'undefined'
   );
   if (!sanitizedAuthUserIds.length) {
     return new Map<string, number | null>();
   }
-  const profiles = await listSupabaseProfilesByAuthIds(sanitizedAuthUserIds, { 
+  const profiles = await listSupabaseProfilesByAuthIds(sanitizedAuthUserIds, {
     useAdmin: true,
-    tenantId
+    tenantId,
   });
   return new Map<string, number | null>(
-    Array.from(profiles.entries()).map(([authUserId, profile]) => [authUserId, profile.legacy_user_id])
+    Array.from(profiles.entries()).map(([authUserId, profile]) => [
+      authUserId,
+      profile.legacy_user_id,
+    ])
   );
 }
 
@@ -62,16 +125,24 @@ export function normalizeSupabaseEmployeeRecord(
     parsedSkills = row.skills;
   }
 
-  const isSkillsObject = parsedSkills && typeof parsedSkills === 'object' && !Array.isArray(parsedSkills);
-  const skillsList = isSkillsObject ? (parsedSkills.skills_list || []) : (Array.isArray(parsedSkills) ? parsedSkills : []);
+  const isSkillsObject =
+    parsedSkills && typeof parsedSkills === 'object' && !Array.isArray(parsedSkills);
+  const skillsList = isSkillsObject
+    ? parsedSkills.skills_list || []
+    : Array.isArray(parsedSkills)
+      ? parsedSkills
+      : [];
 
   // Safe field reading helper (from column or skills jsonb fallback)
   const getField = (columnName: string, camelName: string, defaultValue: any = null) => {
     if (row[columnName] !== undefined && row[columnName] !== null) {
       return row[columnName];
     }
-    if (isSkillsObject && parsedSkills[camelName] !== undefined) {
+    if (isSkillsObject && parsedSkills[camelName] !== undefined && parsedSkills[camelName] !== null) {
       return parsedSkills[camelName];
+    }
+    if (isSkillsObject && parsedSkills[columnName] !== undefined && parsedSkills[columnName] !== null) {
+      return parsedSkills[columnName];
     }
     return defaultValue;
   };
@@ -109,17 +180,27 @@ export function normalizeSupabaseEmployeeRecord(
     freelance: 'Freelance',
     temporary: 'Temporary',
   };
-  const formattedEmploymentType = employmentTypeMap[rawEmpType] ?? rawEmpType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const formattedEmploymentType =
+    employmentTypeMap[rawEmpType] ??
+    rawEmpType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
   return {
     id: Number(row.id),
     userId: authUserId ? (legacyUserIdMap.get(authUserId) ?? null) : null,
+    authUserId: authUserId,
+    user_id: authUserId,
     firstName: profile?.first_name ?? getField('first_name', 'firstName', ''),
     lastName: profile?.last_name ?? getField('last_name', 'lastName', ''),
     email: profile?.email ?? getField('email', 'email', ''),
     avatarUrl: profile?.avatar_url ?? getField('avatar_url', 'avatarUrl', null),
     phone: profile?.phone ?? getField('phone', 'phone', null),
-    managerName: managerProfile ? `${managerProfile.first_name} ${managerProfile.last_name}` : getField('manager_name', 'managerName', null),
+    managerName: managerProfile
+      ? `${managerProfile.first_name} ${managerProfile.last_name}`
+      : getField('manager_name', 'managerName', null),
+    buddy: getField('buddy', 'buddy') || getField('buddy_name', 'buddyName', null),
+    buddyName: getField('buddy_name', 'buddyName') || getField('buddy', 'buddy', null),
+    mentor: getField('mentor', 'mentor') || getField('mentor_name', 'mentorName', null),
+    mentorName: getField('mentor_name', 'mentorName') || getField('mentor', 'mentor', null),
     workMode: getField('work_mode', 'workMode', 'Office'),
     employeeId: row.employee_id,
     nfcCardId: row.nfc_card_id ?? null,
@@ -148,12 +229,19 @@ export function normalizeSupabaseEmployeeRecord(
     managerId: managerAuthId ? (legacyUserIdMap.get(managerAuthId) ?? null) : null,
 
     // Personal details
-    middleName: getField('middle_name', 'middleName'),
-    gender: getField('gender', 'gender') || (skillsList.find((s: string) => s.startsWith('__gender:'))?.split(':')[1] || null),
+    middleName: profile?.middle_name ?? getField('middle_name', 'middleName'),
+    gender:
+      profile?.gender ??
+      (getField('gender', 'gender') ||
+        skillsList.find((s: any) => typeof s === 'string' && s.startsWith('__gender:'))?.split(':')[1] ||
+        null),
     maritalStatus: getField('marital_status', 'maritalStatus'),
     bloodGroup: getField('blood_group', 'bloodGroup'),
     nationality: getField('nationality', 'nationality'),
-    personalIdNumber: getField('personal_id_number', 'personalIdNumber'),
+    personalIdNumber:
+      getField('personal_id_number', 'personalIdNumber') ||
+      getField('aadhaar_number', 'aadhaarNumber') ||
+      null,
 
     // Work details
     probationPeriod: getField('probation_period', 'probationPeriod'),
@@ -179,12 +267,16 @@ export function normalizeSupabaseEmployeeRecord(
 
     // System Access
     permissions: getField('permissions', 'permissions') || [],
-    officeEmail: getField('office_email', 'officeEmail'),
-    accountExpiryDate: getField('account_expiry_date', 'accountExpiryDate'),
+    officeEmail: profile?.office_email ?? getField('office_email', 'officeEmail'),
+    accountExpiryDate:
+      profile?.account_expiry_date ?? getField('account_expiry_date', 'accountExpiryDate'),
 
     // Emergency Contact
     emergencyContactName: getField('emergency_contact_name', 'emergencyContactName'),
-    emergencyContactRelationship: getField('emergency_contact_relationship', 'emergencyContactRelationship'),
+    emergencyContactRelationship: getField(
+      'emergency_contact_relationship',
+      'emergencyContactRelationship'
+    ),
     emergencyContactPhone: getField('emergency_contact_phone', 'emergencyContactPhone'),
     emergencyContactAddress: getField('emergency_contact_address', 'emergencyContactAddress'),
 
@@ -196,8 +288,10 @@ export function normalizeSupabaseEmployeeRecord(
     referralSource: getField('referral_source', 'referralSource'),
     notes: getField('notes', 'notes'),
 
-    // Cleaned skills list (excluding __ tags)
-    skills: skillsList.filter((s: string) => !s.startsWith('__')),
+    // Cleaned skills list (excluding __ tags, handling both strings and skill objects)
+    skills: skillsList
+      .map((s: any) => (typeof s === 'string' ? s : (s?.skillName || s?.skill_name || s?.name || '')))
+      .filter((s: any) => typeof s === 'string' && s.length > 0 && !s.startsWith('__')),
   };
 }
 
@@ -256,3 +350,21 @@ export function normalizeSupabaseTaskRecord(
     epicId: row.epic_id === null ? null : Number(row.epic_id),
   };
 }
+
+export async function resolveTenantId(context: any, supabase?: any): Promise<string | null> {
+  let tenantId = context?.auth?.user?.tenantId;
+  if (!tenantId && context?.auth?.user) {
+    const userIdentifier = context.auth.user.providerUserId || context.auth.user.id;
+    const client = supabase || getAdminRouteSupabase();
+    if (userIdentifier && client) {
+      const { data: u } = await client
+        .from('users')
+        .select('tenant_id')
+        .or(`id.eq.${userIdentifier},legacy_user_id.eq.${typeof userIdentifier === 'number' ? userIdentifier : 0}`)
+        .maybeSingle();
+      tenantId = u?.tenant_id || null;
+    }
+  }
+  return tenantId || null;
+}
+

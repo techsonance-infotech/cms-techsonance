@@ -1,0 +1,24 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "tabWidth": 2,
+  "useTabs": false,
+  "semi": true,
+  "singleQuote": true,
+  "trailingComma": "es5",
+  "bracketSpacing": true,
+  "bracketSameLine": false,
+  "arrowParens": "avoid",
+  "printWidth": 100,
+  "endOfLine": "lf",
+  "ignorePatterns": [
+    ".next/**",
+    "node_modules/**",
+    "docs/**",
+    "graphify-out/**",
+    ".gitnexus/**",
+    "coverage/**",
+    "public/**",
+    "dist/**",
+    "build/**"
+  ]
+}

@@ -1,65 +1,112 @@
 import { NextResponse } from 'next/server';
 import { withApiHandler } from '@/server/http/handler';
 import { BadRequestError } from '@/server/http/errors';
-import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
+import { getAdminRouteSupabase, resolveActorUuid } from '@/server/supabase/route-helpers';
+import { isSchemaCacheError, travelMemoryStore } from '@/server/travel/fallback-store';
+import { normalizeAppRole } from '@/server/auth/rbac';
 
 export const GET = withApiHandler(async (request, context) => {
-  const tenantId = context.auth?.user.tenantId;
+  const user = context.auth!.user;
+  const tenantId = user.tenantId;
   if (!tenantId) throw new BadRequestError('Tenant context missing');
+
+  const normalizedRole = normalizeAppRole(user.role);
+  const rawRole = (user.rawRole || user.role || '').toLowerCase().replace(/[^a-z0-9_]/g, '');
+
+  const isSuperAdminOrAdmin =
+    normalizedRole === 'SuperAdmin' ||
+    normalizedRole === 'Admin' ||
+    ['superadmin', 'super_admin', 'admin', 'hr_manager', 'hr_executive', 'owner', 'tenant_owner', 'accountant', 'finance'].includes(rawRole);
+
+  const canApprove = isSuperAdminOrAdmin || normalizedRole === 'Manager' || ['manager', 'project_manager'].includes(rawRole);
 
   const supabase = getAdminRouteSupabase();
 
-  let { data: requests, error } = await supabase
-    .from('travel_requests')
-    .select('*, employee:employee_id(first_name, last_name, email)')
-    .eq('tenant_id', tenantId)
-    .order('created_at', { ascending: false });
-
-  if (error) throw error;
-
-  // Insert seed travel requests if empty
-  if (!requests || requests.length === 0) {
-    const seeds = [
-      {
-        tenant_id: tenantId,
-        employee_id: context.auth!.user.id,
-        destination: 'San Francisco, USA',
-        purpose: 'Annual Partner Conference & Product Launch keynotes',
-        departure_date: '2026-09-10',
-        return_date: '2026-09-18',
-        status: 'Pending',
-        visa_required: true,
-        visa_status: 'Pending',
-        advance_amount: 80000.00,
-        advance_status: 'Requested'
-      },
-      {
-        tenant_id: tenantId,
-        employee_id: context.auth!.user.id,
-        destination: 'Bangalore, India',
-        purpose: 'Workforce Onboarding & Team Alignment Meetups',
-        departure_date: '2026-08-01',
-        return_date: '2026-08-05',
-        status: 'Approved',
-        visa_required: false,
-        visa_status: 'N/A',
-        advance_amount: 15000.00,
-        advance_status: 'Disbursed'
-      }
-    ];
-
-    const { data: inserted, error: insertErr } = await supabase
+  try {
+    let { data: requests, error } = await supabase
       .from('travel_requests')
-      .insert(seeds)
-      .select('*, employee:employee_id(first_name, last_name, email)');
+      .select('*, employee:employee_id(first_name, last_name, email)')
+      .eq('tenant_id', tenantId)
+      .order('created_at', { ascending: false });
 
-    if (!insertErr && inserted) {
-      requests = inserted;
+    if (error) {
+      if (isSchemaCacheError(error)) {
+        console.warn('travel_requests table not found in schema cache. Using in-memory fallback store:', error.message);
+        return NextResponse.json({
+          success: true,
+          data: travelMemoryStore.getRequests(tenantId, user),
+          canApprove,
+          userRole: rawRole || normalizedRole,
+          source: 'memory_fallback'
+        });
+      }
+      throw error;
     }
-  }
 
-  return NextResponse.json({ success: true, data: requests });
-}, { requireAuth: true, roles: ['Employee'] });
+    // Auto-seed travel requests if empty in real DB
+    if (!requests || requests.length === 0) {
+      const actorUuid = await resolveActorUuid(context, supabase);
+      if (actorUuid) {
+        const seeds = [
+          {
+            tenant_id: tenantId,
+            employee_id: actorUuid,
+            destination: 'San Francisco, USA',
+            purpose: 'Annual Partner Conference & Product Launch keynotes',
+            departure_date: '2026-11-15',
+            return_date: '2026-11-22',
+            status: 'Pending',
+            visa_required: true,
+            visa_status: 'Pending',
+            advance_amount: 80000.00,
+            advance_status: 'Requested'
+          },
+          {
+            tenant_id: tenantId,
+            employee_id: actorUuid,
+            destination: 'Bangalore, India',
+            purpose: 'Workforce Onboarding & Team Alignment Meetups',
+            departure_date: '2026-10-10',
+            return_date: '2026-10-15',
+            status: 'Approved',
+            visa_required: false,
+            visa_status: 'N/A',
+            advance_amount: 15000.00,
+            advance_status: 'Disbursed'
+          }
+        ];
+
+        const { data: inserted, error: insertErr } = await supabase
+          .from('travel_requests')
+          .insert(seeds)
+          .select('*, employee:employee_id(first_name, last_name, email)');
+
+        if (!insertErr && inserted) {
+          requests = inserted;
+        }
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: requests || [],
+      canApprove,
+      userRole: rawRole || normalizedRole
+    });
+  } catch (err: any) {
+    if (isSchemaCacheError(err)) {
+      console.warn('travel_requests table missing from DB. Using in-memory fallback store:', err.message);
+      return NextResponse.json({
+        success: true,
+        data: travelMemoryStore.getRequests(tenantId, user),
+        canApprove,
+        userRole: rawRole || normalizedRole,
+        source: 'memory_fallback'
+      });
+    }
+    throw err;
+  }
+}, { requireAuth: true });
 
 export const POST = withApiHandler(async (request, context) => {
   const tenantId = context.auth?.user.tenantId;
@@ -73,28 +120,88 @@ export const POST = withApiHandler(async (request, context) => {
   }
 
   const supabase = getAdminRouteSupabase();
+  const actorUuid = await resolveActorUuid(context, supabase);
 
-  const { data, error } = await supabase
-    .from('travel_requests')
-    .insert({
-      tenant_id: tenantId,
-      employee_id: context.auth!.user.id,
-      destination,
-      purpose,
-      departure_date: departureDate,
-      return_date: returnDate,
-      status: 'Pending',
-      visa_required: !!visaRequired,
-      visa_status: visaRequired ? 'Pending' : 'N/A',
-      advance_amount: advanceAmount || 0,
-      advance_status: advanceAmount > 0 ? 'Requested' : 'N/A'
-    })
-    .select('*')
-    .single();
+  try {
+    if (!actorUuid) throw new BadRequestError('User identity could not be verified');
 
-  if (error) throw error;
-  return NextResponse.json({ success: true, data });
-}, { requireAuth: true, roles: ['Employee'] });
+    const { data, error } = await supabase
+      .from('travel_requests')
+      .insert({
+        tenant_id: tenantId,
+        employee_id: actorUuid,
+        destination,
+        purpose,
+        departure_date: departureDate,
+        return_date: returnDate,
+        status: 'Pending',
+        visa_required: !!visaRequired,
+        visa_status: visaRequired ? 'Pending' : 'N/A',
+        advance_amount: advanceAmount || 0,
+        advance_status: advanceAmount > 0 ? 'Requested' : 'N/A'
+      })
+      .select('*')
+      .single();
+
+    if (error) {
+      if (isSchemaCacheError(error)) {
+        const memoryRecord = {
+          id: `tr-${Date.now()}`,
+          tenant_id: tenantId,
+          employee_id: actorUuid || String(context.auth?.user.id),
+          destination,
+          purpose,
+          departure_date: departureDate,
+          return_date: returnDate,
+          status: 'Pending',
+          visa_required: !!visaRequired,
+          visa_status: visaRequired ? 'Pending' : 'N/A',
+          advance_amount: advanceAmount || 0,
+          advance_status: advanceAmount > 0 ? 'Requested' : 'N/A',
+          employee: {
+            first_name: context.auth?.user.firstName || 'Current',
+            last_name: context.auth?.user.lastName || 'Employee',
+            email: context.auth?.user.email || 'employee@company.com'
+          },
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        travelMemoryStore.addRequest(tenantId, memoryRecord);
+        return NextResponse.json({ success: true, data: memoryRecord, source: 'memory_fallback' }, { status: 201 });
+      }
+      throw error;
+    }
+
+    return NextResponse.json({ success: true, data }, { status: 201 });
+  } catch (err: any) {
+    if (isSchemaCacheError(err)) {
+      const memoryRecord = {
+        id: `tr-${Date.now()}`,
+        tenant_id: tenantId,
+        employee_id: actorUuid || String(context.auth?.user.id),
+        destination,
+        purpose,
+        departure_date: departureDate,
+        return_date: returnDate,
+        status: 'Pending',
+        visa_required: !!visaRequired,
+        visa_status: visaRequired ? 'Pending' : 'N/A',
+        advance_amount: advanceAmount || 0,
+        advance_status: advanceAmount > 0 ? 'Requested' : 'N/A',
+        employee: {
+          first_name: context.auth?.user.firstName || 'Current',
+          last_name: context.auth?.user.lastName || 'Employee',
+          email: context.auth?.user.email || 'employee@company.com'
+        },
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      travelMemoryStore.addRequest(tenantId, memoryRecord);
+      return NextResponse.json({ success: true, data: memoryRecord, source: 'memory_fallback' }, { status: 201 });
+    }
+    throw err;
+  }
+}, { requireAuth: true });
 
 export const PUT = withApiHandler(async (request, context) => {
   const tenantId = context.auth?.user.tenantId;
@@ -116,14 +223,29 @@ export const PUT = withApiHandler(async (request, context) => {
   if (visaStatus) updateFields.visa_status = visaStatus;
   if (advanceStatus) updateFields.advance_status = advanceStatus;
 
-  const { data, error } = await supabase
-    .from('travel_requests')
-    .update(updateFields)
-    .eq('id', requestId)
-    .eq('tenant_id', tenantId)
-    .select('*')
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from('travel_requests')
+      .update(updateFields)
+      .eq('id', requestId)
+      .eq('tenant_id', tenantId)
+      .select('*')
+      .single();
 
-  if (error) throw error;
-  return NextResponse.json({ success: true, data });
-}, { requireAuth: true, roles: ['Employee'] });
+    if (error) {
+      if (isSchemaCacheError(error)) {
+        const updated = travelMemoryStore.updateRequest(tenantId, requestId, updateFields);
+        return NextResponse.json({ success: true, data: updated, source: 'memory_fallback' });
+      }
+      throw error;
+    }
+
+    return NextResponse.json({ success: true, data });
+  } catch (err: any) {
+    if (isSchemaCacheError(err)) {
+      const updated = travelMemoryStore.updateRequest(tenantId, requestId, updateFields);
+      return NextResponse.json({ success: true, data: updated, source: 'memory_fallback' });
+    }
+    throw err;
+  }
+}, { requireAuth: true });

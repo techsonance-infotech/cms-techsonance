@@ -25,12 +25,24 @@ interface PerformanceChartsProps {
 }
 
 export function PerformanceCharts({ data }: PerformanceChartsProps) {
+  const taskDistribution = data?.taskDistribution || { todo: 0, in_progress: 0, review: 0, done: 0 };
   const taskData = [
-    { name: 'To Do', value: data.taskDistribution.todo, color: '#94a3b8' },
-    { name: 'In Progress', value: data.taskDistribution.in_progress, color: '#3b82f6' },
-    { name: 'Review', value: data.taskDistribution.review, color: '#a855f7' },
-    { name: 'Done', value: data.taskDistribution.done, color: '#10b981' },
+    { name: 'To Do', value: taskDistribution.todo, color: '#94a3b8' },
+    { name: 'In Progress', value: taskDistribution.in_progress, color: '#3b82f6' },
+    { name: 'Review', value: taskDistribution.review, color: '#a855f7' },
+    { name: 'Done', value: taskDistribution.done, color: '#10b981' },
   ].filter(d => d.value > 0);
+
+  const reportHistory = data?.reportHistory || [];
+  const submittedCount = reportHistory.filter(d => Number(d.submitted) === 1).length;
+  const missedCount = reportHistory.length - submittedCount;
+  const consistencyRate = reportHistory.length > 0 ? Math.round((submittedCount / reportHistory.length) * 100) : 0;
+
+  // Normalized bar values so every day (submitted or missed) has a visible, beautifully styled pillar
+  const reportChartData = reportHistory.map(entry => ({
+    ...entry,
+    barValue: 1,
+  }));
 
   return (
     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -124,14 +136,29 @@ export function PerformanceCharts({ data }: PerformanceChartsProps) {
 
       {/* Reporting Regularity Chart */}
       <Card className="lg:col-span-3 overflow-hidden bg-card/50 backdrop-blur-sm border-none shadow-lg">
-        <CardHeader>
-          <CardTitle className="text-lg">Daily Update Regularity</CardTitle>
-          <CardDescription>Check-in consistency (Last 14 days)</CardDescription>
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2">
+          <div>
+            <CardTitle className="text-lg">Daily Update Regularity</CardTitle>
+            <CardDescription>Check-in consistency (Last 14 days)</CardDescription>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 text-xs">
+            <div className="flex items-center gap-1.5 font-medium text-muted-foreground">
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-sm" />
+              <span>Submitted: <strong className="text-foreground">{submittedCount}</strong></span>
+            </div>
+            <div className="flex items-center gap-1.5 font-medium text-muted-foreground">
+              <span className="h-2.5 w-2.5 rounded-full bg-rose-500 shadow-sm" />
+              <span>Missed: <strong className="text-foreground">{missedCount}</strong></span>
+            </div>
+            <div className="rounded-full bg-muted/80 border border-border/50 px-2.5 py-0.5 font-semibold text-foreground">
+              {consistencyRate}% Regularity
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="h-[200px] w-full pt-4">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data.reportHistory}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.5} />
+            <BarChart data={reportChartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.4} />
               <XAxis 
                 dataKey="date" 
                 axisLine={false} 
@@ -139,18 +166,22 @@ export function PerformanceCharts({ data }: PerformanceChartsProps) {
                 tick={{ fontSize: 10, fill: '#64748b' }}
                 interval={0}
               />
-              <YAxis hide />
+              <YAxis hide domain={[0, 1]} />
               <Tooltip 
-                cursor={{ fill: 'rgba(59, 130, 246, 0.1)' }}
+                cursor={{ fill: 'rgba(59, 130, 246, 0.08)', radius: 6 }}
                 content={({ active, payload }) => {
                   if (active && payload && payload.length) {
-                    const submitted = payload[0].value === 1;
+                    const item = payload[0].payload;
+                    const isSubmitted = Number(item.submitted) === 1;
                     return (
-                      <div className="bg-white p-2 rounded-lg shadow-md border-none text-xs">
-                        <p className="font-semibold text-gray-900">{payload[0].payload.date}</p>
-                        <p className={submitted ? "text-emerald-600" : "text-rose-500"}>
-                          {submitted ? "✓ Submitted" : "✗ Missed"}
-                        </p>
+                      <div className="bg-popover text-popover-foreground px-3 py-2 rounded-xl shadow-lg border border-border text-xs min-w-[120px]">
+                        <p className="font-semibold text-foreground mb-1">{item.date}</p>
+                        <div className="flex items-center gap-1.5 font-medium">
+                          <span className={`h-2 w-2 rounded-full ${isSubmitted ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                          <span className={isSubmitted ? "text-emerald-600 dark:text-emerald-400 font-semibold" : "text-rose-600 dark:text-rose-400 font-semibold"}>
+                            {isSubmitted ? "✓ Submitted" : "✗ Missed"}
+                          </span>
+                        </div>
                       </div>
                     );
                   }
@@ -158,17 +189,21 @@ export function PerformanceCharts({ data }: PerformanceChartsProps) {
                 }}
               />
               <Bar 
-                dataKey="submitted" 
-                radius={[4, 4, 0, 0]}
-                animationDuration={1500}
+                dataKey="barValue" 
+                radius={[6, 6, 0, 0]}
+                animationDuration={1200}
+                background={{ fill: 'rgba(241, 245, 249, 0.45)', radius: 6 }}
               >
-                {data.reportHistory.map((entry, index) => (
-                  <Cell 
-                    key={`cell-${index}`} 
-                    fill={entry.submitted ? '#10b981' : '#f43f5e'} 
-                    fillOpacity={0.8}
-                  />
-                ))}
+                {reportChartData.map((entry, index) => {
+                  const isSubmitted = Number(entry.submitted) === 1;
+                  return (
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={isSubmitted ? '#10b981' : '#f43f5e'} 
+                      fillOpacity={isSubmitted ? 0.85 : 0.45}
+                    />
+                  );
+                })}
               </Bar>
             </BarChart>
           </ResponsiveContainer>

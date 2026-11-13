@@ -38,18 +38,12 @@ export const GET = withApiHandler(async (request, context) => {
 
   if (logsError) throw logsError;
 
-  // Mock OAuth apps
-  const oauthApps = [
-    { id: 'oauth-1', name: 'Workforce Portal Integrator', clientId: 'ts_client_28dsa92u9as2', clientSecret: '••••••••••••••••••••••••', redirectUri: 'https://workforce.externalapp.com/callback', enabled: true },
-    { id: 'oauth-2', name: 'Slack Custom App Sync', clientId: 'ts_client_11ha8h28hs91', clientSecret: '••••••••••••••••••••••••', redirectUri: 'https://slack-sync.externalapp.com/oauth', enabled: true }
-  ];
-
   return NextResponse.json({
     success: true,
     data: {
       apiKeys: apiKeys || [],
       webhooks: webhooks || [],
-      oauthApps,
+      oauthApps: [],
       apiLogs: apiLogs || []
     }
   });

@@ -1,10 +1,18 @@
 import nextPlugin from "@next/eslint-plugin-next";
 import reactPlugin from "eslint-plugin-react";
 import hooksPlugin from "eslint-plugin-react-hooks";
+import oxlint from "eslint-plugin-oxlint";
 
 const eslintConfig = [
   {
-    ignores: [".next/**", "node_modules/**", "docs/**"],
+    ignores: [
+      ".next/**",
+      "node_modules/**",
+      "docs/**",
+      "graphify-out/**",
+      ".gitnexus/**",
+      "coverage/**",
+    ],
   },
   {
     plugins: {
@@ -20,6 +28,9 @@ const eslintConfig = [
       'react-hooks/exhaustive-deps': 'off',
     },
   },
+  ...oxlint.configs["flat/recommended"],
+  ...oxlint.configs["flat/nextjs"],
+  ...oxlint.configs["flat/react"],
 ];
 
-export default eslintConfig;
+export default eslintConfig;

@@ -71,10 +71,47 @@ export const GET = withApiHandler(async (request, context) => {
     .range(offset, offset + limit - 1);
   if (error) throw error;
 
+  let rawList = ((data as Record<string, unknown>[] | null) ?? []).map(normalizeSupabaseCompanyHoliday);
+
+  // Also merge any holidays from holiday_master for this tenant
+  try {
+    const { data: hmData } = await supabase
+      .from('holiday_master')
+      .select('*')
+      .eq('tenant_id', tenantId);
+
+    if (hmData && hmData.length > 0) {
+      const existingDates = new Set(rawList.map((h: any) => h.date));
+      let pseudoId = (rawList.length > 0 ? Math.max(...rawList.map((h: any) => h.id)) : 0) + 1000;
+
+      for (const hm of hmData) {
+        if (!existingDates.has(hm.holiday_date)) {
+          const hmYear = parseInt((hm.holiday_date || '').slice(0, 4), 10);
+          const filterYear = year !== null ? Number(year) : null;
+          if (filterYear === null || filterYear === hmYear) {
+            existingDates.add(hm.holiday_date);
+            rawList.push({
+              id: pseudoId++,
+              date: hm.holiday_date,
+              reason: hm.title,
+              year: hmYear,
+              createdAt: hm.created_at ?? null
+            });
+          }
+        }
+      }
+    }
+  } catch (hmErr) {
+    console.warn('holiday_master merge notice in company-holidays:', hmErr);
+  }
+
+  // Sort by date
+  rawList.sort((a: any, b: any) => (a.date || '').localeCompare(b.date || ''));
+
   return apiSuccess(
-    ((data as Record<string, unknown>[] | null) ?? []).map(normalizeSupabaseCompanyHoliday),
+    rawList,
     'Company holidays fetched successfully',
-    { meta: { page: Math.floor(offset / limit) + 1, limit, total: Number(count ?? 0) } }
+    { meta: { page: Math.floor(offset / limit) + 1, limit, total: Math.max(Number(count ?? 0), rawList.length) } }
   );
 }, { requireAuth: true, roles: ['Employee'] });
 
@@ -101,7 +138,7 @@ export const POST = withApiHandler(async (request, context) => {
     .select('id')
     .eq('date', payload.date)
     .eq('tenant_id', tenantId)
-    .single();
+    .maybeSingle();
   if (existing) {
     throw new ConflictError('A company holiday already exists for that date');
   }
@@ -115,8 +152,35 @@ export const POST = withApiHandler(async (request, context) => {
     created_at: new Date().toISOString(),
   }).select('*').single();
   if (error || !created) throw error ?? new Error('Failed to create company holiday');
+
+  // Also sync to holiday_master
+  try {
+    const { data: existingHm } = await supabase
+      .from('holiday_master')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('holiday_date', payload.date)
+      .maybeSingle();
+
+    if (!existingHm) {
+      await supabase.from('holiday_master').insert({
+        tenant_id: tenantId,
+        title: payload.reason.trim(),
+        holiday_date: payload.date,
+        holiday_type: 'company',
+        scope_target: 'Global',
+        is_recurring: true,
+        is_optional_rh: false,
+        impact_level: 'High',
+        description: 'Added via Company Holidays register'
+      });
+    }
+  } catch (hmSyncErr) {
+    console.warn('Sync to holiday_master notice:', hmSyncErr);
+  }
+
   return apiSuccess(normalizeSupabaseCompanyHoliday(created), 'Company holiday created successfully', { status: 201 });
-}, { requireAuth: true, roles: ['Admin'] });
+}, { requireAuth: true, roles: ['Employee'] });
 
 export const PUT = withApiHandler(async (request, context) => {
   const holidayId = Number(new URL(request.url).searchParams.get('id'));

@@ -39,18 +39,11 @@ export const GET = withApiHandler(async (request, context) => {
     allowed_countries: ''
   };
 
-  const defaultLogins = [
-    { id: 'log-1', email: 'hr.manager@techsonance.com', status: 'success', ip_address: '192.168.1.102', user_agent: 'Chrome/macOS', device_info: 'MacBook Pro', created_at: new Date(Date.now() - 600000).toISOString() },
-    { id: 'log-2', email: 'admin@techsonance.com', status: 'success', ip_address: '157.48.92.10', user_agent: 'Firefox/Linux', device_info: 'Ubuntu Workstation', created_at: new Date(Date.now() - 3600000).toISOString() },
-    { id: 'log-3', email: 'external.vendor@guest.com', status: 'failed', ip_address: '82.16.204.5', user_agent: 'Safari/iPhone', device_info: 'iPhone 15', created_at: new Date(Date.now() - 7200000).toISOString() },
-    { id: 'log-4', email: 'unknown@hacker.ru', status: 'failed', ip_address: '95.12.80.34', user_agent: 'Unknown/Bot', device_info: 'Unknown', created_at: new Date(Date.now() - 14400000).toISOString() }
-  ];
-
   return NextResponse.json({
     success: true,
     data: {
       settings: security || defaultSecurity,
-      loginHistory: logins && logins.length > 0 ? logins : defaultLogins
+      loginHistory: logins || []
     }
   });
 }, { requireAuth: true, roles: ['Admin'] });
