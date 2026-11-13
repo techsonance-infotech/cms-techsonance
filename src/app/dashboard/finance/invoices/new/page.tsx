@@ -20,7 +20,11 @@ import {
   CreditCard,
   History,
   FileCheck,
-  ChevronDown
+  ChevronDown,
+  Upload,
+  Image as ImageIcon,
+  Building2,
+  Check
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -96,15 +100,44 @@ function InvoiceGeneratorInner() {
   const [paymentInstructions, setPaymentInstructions] = useState<string>('Please mention the invoice number in the payment reference and share payment confirmation after transfer.');
   const [refundPolicy, setRefundPolicy] = useState<string>('Payments are subject to the applicable project agreement, cancellation terms and approved scope of work.');
 
+  // Dynamic Tenant Branding & Signatory Profile
+  const [companyName, setCompanyName] = useState<string>(TECHSONANCE_COMPANY.name);
+  const [companyLogo, setCompanyLogo] = useState<string>(TECHSONANCE_COMPANY.logoUrl);
+  const [companyTagline, setCompanyTagline] = useState<string>(TECHSONANCE_COMPANY.tagline);
+  const [companyAddress, setCompanyAddress] = useState<string>(TECHSONANCE_COMPANY.address);
+  const [companyEmail, setCompanyEmail] = useState<string>(TECHSONANCE_COMPANY.email);
+  const [companyWebsite, setCompanyWebsite] = useState<string>(TECHSONANCE_COMPANY.website);
+  const [companyGstin, setCompanyGstin] = useState<string>(TECHSONANCE_COMPANY.gstin);
+  const [companyLlpin, setCompanyLlpin] = useState<string>(TECHSONANCE_COMPANY.llpin);
+  const [companyStampUrl, setCompanyStampUrl] = useState<string>(TECHSONANCE_COMPANY.stampUrl);
+  const [companySignatureUrl, setCompanySignatureUrl] = useState<string>(TECHSONANCE_COMPANY.signatureUrl);
+  const [signatoryName, setSignatoryName] = useState<string>(TECHSONANCE_COMPANY.signatory.name);
+  const [signatoryTitle, setSignatoryTitle] = useState<string>(TECHSONANCE_COMPANY.signatory.title);
+  const [stampEnabled, setStampEnabled] = useState<boolean>(true);
+  const [digitalSignatureEnabled, setDigitalSignatureEnabled] = useState<boolean>(true);
+  const [brandingSectionOpen, setBrandingSectionOpen] = useState<boolean>(false);
+  const [bankDetails, setBankDetails] = useState({
+    name: TECHSONANCE_COMPANY.bank.name,
+    accountName: TECHSONANCE_COMPANY.bank.accountName,
+    accountNo: TECHSONANCE_COMPANY.bank.accountNo,
+    ifsc: TECHSONANCE_COMPANY.bank.ifsc,
+    upiId: TECHSONANCE_COMPANY.bank.upiId,
+  });
+
+  const stampFileRef = useRef<HTMLInputElement>(null);
+  const sigFileRef = useRef<HTMLInputElement>(null);
+  const logoFileRef = useRef<HTMLInputElement>(null);
+
   // UI / Status
   const [saving, setSaving] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<{ text: string; isError: boolean } | null>(null);
   const [historyList, setHistoryList] = useState<any[]>([]);
 
-  // 1. Fetch Clients and Next Invoice Number
+  // 1. Fetch Clients, Company Branding, and Next Invoice Number
   useEffect(() => {
     fetchClients();
     loadLocalHistory();
+    fetchCompanySettings();
   }, []);
 
   useEffect(() => {
@@ -117,7 +150,8 @@ function InvoiceGeneratorInner() {
     if (!id || isNaN(id)) return;
     try {
       const token = getStoredSessionToken();
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const headers: Record<string, string> = {};
+      if (token && token !== 'null') headers['Authorization'] = `Bearer ${token}`;
       const res = await fetch(`/api/invoices?id=${id}`, { headers, credentials: 'include' });
       if (res.ok) {
         const inv = await res.json();
@@ -219,8 +253,10 @@ function InvoiceGeneratorInner() {
   const fetchClients = async () => {
     try {
       const token = getStoredSessionToken();
+      const headers: Record<string, string> = {};
+      if (token && token !== 'null') headers['Authorization'] = `Bearer ${token}`;
       const res = await fetch('/api/clients?limit=100', {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers,
         credentials: 'include',
       });
       if (res.ok) {
@@ -255,6 +291,109 @@ function InvoiceGeneratorInner() {
       }
     } catch {
       // ignore
+    }
+  };
+
+  const fetchCompanySettings = async () => {
+    try {
+      const token = getStoredSessionToken();
+      const headers: Record<string, string> = {};
+      if (token && token !== 'null') headers['Authorization'] = `Bearer ${token}`;
+
+      // 1. Fetch Company Settings
+      const res = await fetch('/api/company-settings', { headers, credentials: 'include' });
+      if (res.ok) {
+        const json = await res.json();
+        const data = json.data || json;
+        if (data) {
+          const tenantName = data.companyName || data.legalName || data.tenant?.name;
+          if (tenantName) setCompanyName(tenantName);
+          if (data.logoUrl) setCompanyLogo(data.logoUrl);
+          if (data.tagline) setCompanyTagline(data.tagline);
+          if (data.address) setCompanyAddress(data.address);
+          if (data.email) setCompanyEmail(data.email);
+          if (data.website) setCompanyWebsite(data.website);
+          if (data.gstin) setCompanyGstin(data.gstin);
+          if (data.cinNumber || data.llpin) setCompanyLlpin(data.cinNumber || data.llpin);
+          if (data.stampUrl) setCompanyStampUrl(data.stampUrl);
+          if (data.digitalSignatureUrl) setCompanySignatureUrl(data.digitalSignatureUrl);
+          if (data.signatoryName) setSignatoryName(data.signatoryName);
+          if (data.signatoryTitle) setSignatoryTitle(data.signatoryTitle);
+          if (data.digitalSignatureEnabled !== undefined && data.digitalSignatureEnabled !== null) {
+            setDigitalSignatureEnabled(Boolean(data.digitalSignatureEnabled));
+          }
+          if (data.bankDetails && typeof data.bankDetails === 'object' && Object.keys(data.bankDetails).length > 0) {
+            setBankDetails((prev) => ({ ...prev, ...data.bankDetails }));
+          }
+        }
+      }
+
+      // 2. Fetch Workspace Settings for extended custom fields
+      const wsRes = await fetch('/api/workspace-settings', { headers, credentials: 'include' });
+      if (wsRes.ok) {
+        const wsJson = await wsRes.json();
+        const wsData = wsJson.data || wsJson;
+        if (wsData) {
+          if (wsData.stampUrl) setCompanyStampUrl(wsData.stampUrl);
+          if (wsData.digitalSignatureUrl) setCompanySignatureUrl(wsData.digitalSignatureUrl);
+          if (wsData.signatoryName) setSignatoryName(wsData.signatoryName);
+          if (wsData.signatoryTitle) setSignatoryTitle(wsData.signatoryTitle);
+          if (wsData.tagline) setCompanyTagline(wsData.tagline);
+          if (wsData.bankDetails && typeof wsData.bankDetails === 'object' && Object.keys(wsData.bankDetails).length > 0) {
+            setBankDetails((prev) => ({ ...prev, ...wsData.bankDetails }));
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to fetch dynamic company branding:', err);
+    }
+  };
+
+  const handleInlineUpload = async (e: React.ChangeEvent<HTMLInputElement>, target: 'stamp' | 'signature' | 'logo') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file (PNG, JPG, WebP).');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      if (target === 'stamp') {
+        setCompanyStampUrl(dataUrl);
+        setStampEnabled(true);
+      } else if (target === 'signature') {
+        setCompanySignatureUrl(dataUrl);
+        setDigitalSignatureEnabled(true);
+      } else if (target === 'logo') {
+        setCompanyLogo(dataUrl);
+      }
+    };
+    reader.readAsDataURL(file);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('kind', 'avatar');
+      const token = getStoredSessionToken();
+      const headers: Record<string, string> = {};
+      if (token && token !== 'null') headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch('/api/upload', { method: 'POST', headers, body: formData });
+      if (res.ok) {
+        const json = await res.json();
+        const uploadedUrl = json.data?.url || json.url;
+        if (uploadedUrl) {
+          if (target === 'stamp') setCompanyStampUrl(uploadedUrl);
+          if (target === 'signature') setCompanySignatureUrl(uploadedUrl);
+          if (target === 'logo') setCompanyLogo(uploadedUrl);
+        }
+      }
+      toast.success(`${target === 'stamp' ? 'Corporate Stamp' : target === 'signature' ? 'Signature' : 'Logo'} updated!`);
+    } catch {
+      toast.info('Using locally uploaded preview image.');
     }
   };
 
@@ -1018,14 +1157,14 @@ function InvoiceGeneratorInner() {
           <div className="no-print bg-gradient-to-r from-[#061a3a] via-[#0b2b5d] to-[#1268e8] text-white rounded-2xl p-4 md:p-6 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 bg-white rounded-xl p-1.5 flex items-center justify-center shadow-md">
-                <img src={TECHSONANCE_COMPANY.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+                <img src={companyLogo || TECHSONANCE_COMPANY.logoUrl} alt="Logo" className="w-full h-full object-contain" />
               </div>
               <div>
                 <h1 className="text-xl md:text-2xl font-black tracking-tight">
-                  TechSonance Invoice Generator & Live PDF
+                  {companyName || 'TechSonance'} Invoice Generator & Live PDF
                 </h1>
                 <p className="text-xs text-blue-100/80 mt-0.5">
-                  Prepare, preview, record in database and generate official TechSonance Client Invoices.
+                  Prepare, preview, record in database and generate official {companyName || 'TechSonance'} Client Invoices.
                 </p>
               </div>
             </div>
@@ -1059,6 +1198,11 @@ function InvoiceGeneratorInner() {
             
             {/* LEFT COLUMN: INTERACTIVE FORM (5 Cols on XL) */}
             <div className="no-print xl:col-span-5 space-y-4">
+              {/* Hidden file inputs for inline upload triggers */}
+              <input type="file" ref={stampFileRef} className="hidden" accept="image/png, image/jpeg, image/jpg, image/webp" onChange={e => handleInlineUpload(e, 'stamp')} />
+              <input type="file" ref={sigFileRef} className="hidden" accept="image/png, image/jpeg, image/jpg, image/webp" onChange={e => handleInlineUpload(e, 'signature')} />
+              <input type="file" ref={logoFileRef} className="hidden" accept="image/png, image/jpeg, image/jpg, image/webp" onChange={e => handleInlineUpload(e, 'logo')} />
+
               <form onSubmit={handleSaveInvoice} className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl p-5 shadow-sm space-y-5">
                 
                 <div className="flex items-center justify-between border-b pb-3 border-slate-100 dark:border-zinc-800">
@@ -1072,6 +1216,172 @@ function InvoiceGeneratorInner() {
                   >
                     <RefreshCw className="h-3 w-3" /> New / Reset
                   </button>
+                </div>
+
+                {/* CORPORATE BRANDING & SIGNATORY (TENANT IDENTITY) */}
+                <div className="rounded-xl border border-blue-200/60 dark:border-blue-900/40 bg-gradient-to-br from-blue-50/40 via-white to-indigo-50/20 dark:from-zinc-900 dark:to-zinc-800/50 p-3.5 space-y-3">
+                  <div className="flex items-center justify-between cursor-pointer" onClick={() => setBrandingSectionOpen(!brandingSectionOpen)}>
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                        <Building2 className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <span className="text-xs font-black tracking-tight text-slate-800 dark:text-slate-100 block">
+                          {companyName || 'Tenant Organization'}
+                        </span>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                          Dynamic Corporate Stamp, Signature & Branding
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10.5px] font-semibold text-blue-600 dark:text-blue-400">
+                        {brandingSectionOpen ? 'Collapse' : 'Customize Branding'}
+                      </span>
+                      <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${brandingSectionOpen ? 'rotate-180' : ''}`} />
+                    </div>
+                  </div>
+
+                  {brandingSectionOpen && (
+                    <div className="space-y-3 pt-2 border-t border-blue-100 dark:border-zinc-800 text-xs">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10.5px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Company / Entity Name
+                          </label>
+                          <input
+                            type="text"
+                            value={companyName}
+                            onChange={(e) => setCompanyName(e.target.value)}
+                            placeholder="e.g. TechSonance InfoTech LLP"
+                            className="w-full border rounded-lg px-2.5 py-1.5 bg-white dark:bg-zinc-800 text-xs outline-none border-slate-200 dark:border-zinc-700 font-semibold"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10.5px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Tagline / Subtitle
+                          </label>
+                          <input
+                            type="text"
+                            value={companyTagline}
+                            onChange={(e) => setCompanyTagline(e.target.value)}
+                            placeholder="e.g. Where Innovation Finds Its Resonance"
+                            className="w-full border rounded-lg px-2.5 py-1.5 bg-white dark:bg-zinc-800 text-xs outline-none border-slate-200 dark:border-zinc-700"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Stamp & Signature Preview & Uploaders */}
+                      <div className="grid grid-cols-2 gap-3 pt-1">
+                        {/* Stamp Card */}
+                        <div className="p-2.5 bg-white dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700 rounded-xl space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10.5px] font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                              Corporate Stamp
+                            </span>
+                            <label className="inline-flex items-center gap-1 text-[10px] text-slate-500 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={stampEnabled}
+                                onChange={(e) => setStampEnabled(e.target.checked)}
+                                className="w-3.5 h-3.5 accent-blue-600 rounded"
+                              />
+                              Show
+                            </label>
+                          </div>
+                          <div className="h-16 w-full rounded-lg bg-slate-50 dark:bg-zinc-900 border border-dashed border-slate-200 dark:border-zinc-700 flex items-center justify-center p-1 overflow-hidden">
+                            {companyStampUrl ? (
+                              <img src={companyStampUrl} alt="Stamp" className="h-full object-contain" />
+                            ) : (
+                              <span className="text-[10px] text-slate-400">No stamp uploaded</span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => stampFileRef.current?.click()}
+                            className="w-full text-[10.5px] font-bold py-1 px-2 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200/60 dark:border-blue-900/40 hover:bg-blue-100/60 transition flex items-center justify-center gap-1"
+                          >
+                            <Upload className="w-3 h-3" /> Upload Stamp
+                          </button>
+                        </div>
+
+                        {/* Signature Card */}
+                        <div className="p-2.5 bg-white dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700 rounded-xl space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10.5px] font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                              Signatory Signature
+                            </span>
+                            <label className="inline-flex items-center gap-1 text-[10px] text-slate-500 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={digitalSignatureEnabled}
+                                onChange={(e) => setDigitalSignatureEnabled(e.target.checked)}
+                                className="w-3.5 h-3.5 accent-blue-600 rounded"
+                              />
+                              Show
+                            </label>
+                          </div>
+                          <div className="h-16 w-full rounded-lg bg-slate-50 dark:bg-zinc-900 border border-dashed border-slate-200 dark:border-zinc-700 flex items-center justify-center p-1 overflow-hidden">
+                            {companySignatureUrl ? (
+                              <img src={companySignatureUrl} alt="Signature" className="h-full object-contain" />
+                            ) : (
+                              <span className="text-[10px] text-slate-400">No signature uploaded</span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => sigFileRef.current?.click()}
+                            className="w-full text-[10.5px] font-bold py-1 px-2 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200/60 dark:border-blue-900/40 hover:bg-blue-100/60 transition flex items-center justify-center gap-1"
+                          >
+                            <Upload className="w-3 h-3" /> Upload Signature
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Signatory Name & Designation */}
+                      <div className="grid grid-cols-2 gap-3 pt-1">
+                        <div>
+                          <label className="block text-[10.5px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Signatory Name
+                          </label>
+                          <input
+                            type="text"
+                            value={signatoryName}
+                            onChange={(e) => setSignatoryName(e.target.value)}
+                            placeholder="e.g. Sajeshkumar Adeya"
+                            className="w-full border rounded-lg px-2.5 py-1.5 bg-white dark:bg-zinc-800 text-xs outline-none border-slate-200 dark:border-zinc-700"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10.5px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Signatory Designation
+                          </label>
+                          <input
+                            type="text"
+                            value={signatoryTitle}
+                            onChange={(e) => setSignatoryTitle(e.target.value)}
+                            placeholder="e.g. Co-Founder & CTO · Authorized Signatory"
+                            className="w-full border rounded-lg px-2.5 py-1.5 bg-white dark:bg-zinc-800 text-xs outline-none border-slate-200 dark:border-zinc-700"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Logo upload trigger */}
+                      <div className="flex items-center justify-between pt-1 text-[11px] text-slate-500">
+                        <span className="flex items-center gap-1.5">
+                          <img src={companyLogo || TECHSONANCE_COMPANY.logoUrl} alt="Logo" className="w-5 h-5 object-contain rounded" />
+                          <span>Tenant Logo active</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => logoFileRef.current?.click()}
+                          className="text-[10.5px] font-bold text-blue-600 hover:underline"
+                        >
+                          Replace Logo
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* 1. INVOICE META */}
@@ -1801,10 +2111,10 @@ function InvoiceGeneratorInner() {
                   {/* INVOICE HEADER */}
                   <div className="inv-header">
                     <div className="inv-brand">
-                      <img src={TECHSONANCE_COMPANY.logoUrl} alt="TechSonance Logo" />
+                      <img src={companyLogo || TECHSONANCE_COMPANY.logoUrl} alt={`${companyName || 'Company'} Logo`} />
                       <div>
-                        <div className="inv-brand-name">{TECHSONANCE_COMPANY.name}</div>
-                        <div className="inv-tagline">{TECHSONANCE_COMPANY.tagline}</div>
+                        <div className="inv-brand-name">{companyName || TECHSONANCE_COMPANY.name}</div>
+                        <div className="inv-tagline">{companyTagline || TECHSONANCE_COMPANY.tagline}</div>
                       </div>
                     </div>
 
@@ -1821,11 +2131,24 @@ function InvoiceGeneratorInner() {
                     <div>
                       <div className="inv-block-title">Issued By</div>
                       <div className="inv-party">
-                        <strong>{TECHSONANCE_COMPANY.name}</strong><br />
-                        UG-15, Palladium Plaza, VIP Road, Vesu,<br />
-                        Surat, Gujarat - 395007, India<br />
-                        {TECHSONANCE_COMPANY.email} · {TECHSONANCE_COMPANY.website}<br />
-                        GSTIN: {TECHSONANCE_COMPANY.gstin} · LLPIN: {TECHSONANCE_COMPANY.llpin}
+                        <strong>{companyName || TECHSONANCE_COMPANY.name}</strong><br />
+                        {companyAddress ? (
+                          companyAddress.split('\n').map((line, idx) => (
+                            <React.Fragment key={idx}>
+                              {line}<br />
+                            </React.Fragment>
+                          ))
+                        ) : (
+                          <>
+                            UG-15, Palladium Plaza, VIP Road, Vesu,<br />
+                            Surat, Gujarat - 395007, India<br />
+                          </>
+                        )}
+                        {[companyEmail || TECHSONANCE_COMPANY.email, companyWebsite || TECHSONANCE_COMPANY.website].filter(Boolean).join(' · ')}<br />
+                        {[
+                          (companyGstin || TECHSONANCE_COMPANY.gstin) && `GSTIN: ${companyGstin || TECHSONANCE_COMPANY.gstin}`,
+                          (companyLlpin || TECHSONANCE_COMPANY.llpin) && `LLPIN/CIN: ${companyLlpin || TECHSONANCE_COMPANY.llpin}`
+                        ].filter(Boolean).join(' · ')}
                       </div>
                     </div>
 
@@ -1988,20 +2311,34 @@ function InvoiceGeneratorInner() {
                     <div>
                       <div className="inv-block-title">Payment Details</div>
                       <div className="inv-bank">
-                        <b>Bank:</b> {TECHSONANCE_COMPANY.bank.name}<br />
-                        <b>Account Name:</b> {TECHSONANCE_COMPANY.bank.accountName}<br />
-                        <b>Account No.:</b> {TECHSONANCE_COMPANY.bank.accountNo} · <b>IFSC/SWIFT:</b> {TECHSONANCE_COMPANY.bank.ifsc}<br />
-                        <b>UPI ID:</b> {TECHSONANCE_COMPANY.bank.upiId}
+                        <b>Bank:</b> {bankDetails.name || TECHSONANCE_COMPANY.bank.name}<br />
+                        <b>Account Name:</b> {bankDetails.accountName || companyName || TECHSONANCE_COMPANY.bank.accountName}<br />
+                        <b>Account No.:</b> {bankDetails.accountNo || TECHSONANCE_COMPANY.bank.accountNo} · <b>IFSC/SWIFT:</b> {bankDetails.ifsc || TECHSONANCE_COMPANY.bank.ifsc}<br />
+                        {(bankDetails.upiId || TECHSONANCE_COMPANY.bank.upiId) && (
+                          <><b>UPI ID:</b> {bankDetails.upiId || TECHSONANCE_COMPANY.bank.upiId}</>
+                        )}
                       </div>
 
                       <div className="inv-sign-area">
                         <div className="inv-sig-stack">
-                          <img className="inv-stamp-img" src={TECHSONANCE_COMPANY.stampUrl} alt="TechSonance Official Stamp" />
-                          <img className="inv-sig-img" src={TECHSONANCE_COMPANY.signatureUrl} alt="Authorized Signatory" />
+                          {stampEnabled && (companyStampUrl || TECHSONANCE_COMPANY.stampUrl) && (
+                            <img
+                              className="inv-stamp-img"
+                              src={companyStampUrl || TECHSONANCE_COMPANY.stampUrl}
+                              alt="Official Corporate Stamp"
+                            />
+                          )}
+                          {digitalSignatureEnabled && (companySignatureUrl || TECHSONANCE_COMPANY.signatureUrl) && (
+                            <img
+                              className="inv-sig-img"
+                              src={companySignatureUrl || TECHSONANCE_COMPANY.signatureUrl}
+                              alt="Authorized Signatory"
+                            />
+                          )}
                         </div>
                         <div className="inv-sign-line">
-                          <strong>{TECHSONANCE_COMPANY.signatory.name}</strong>
-                          {TECHSONANCE_COMPANY.signatory.title}
+                          <strong>{signatoryName || TECHSONANCE_COMPANY.signatory.name}</strong>
+                          {signatoryTitle || TECHSONANCE_COMPANY.signatory.title}
                         </div>
                       </div>
                     </div>
@@ -2035,7 +2372,7 @@ function InvoiceGeneratorInner() {
                   {/* FOOTER */}
                   <div className="inv-footer">
                     <span>Thank you for your business.</span>
-                    <span>{TECHSONANCE_COMPANY.name} · Confidential Commercial Document</span>
+                    <span>{companyName || TECHSONANCE_COMPANY.name} · Confidential Commercial Document</span>
                   </div>
 
                 </div>

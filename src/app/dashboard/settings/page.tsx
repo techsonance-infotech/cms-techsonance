@@ -150,6 +150,11 @@ interface WorkspaceState {
   qrCodeUrl?: string | null;
   digitalSignatureEnabled?: boolean | null;
   digitalSignatureUrl?: string | null;
+  stampUrl?: string | null;
+  signatoryName?: string | null;
+  signatoryTitle?: string | null;
+  tagline?: string | null;
+  bankDetails?: Record<string, any> | null;
   invoiceTemplate?: string | null;
   multiCurrencyEnabled?: boolean | null;
   supportedCurrencies?: string[] | null;
@@ -299,6 +304,11 @@ const DEFAULT_WORKSPACE_STATE: WorkspaceState = {
   qrCodeUrl: '',
   digitalSignatureEnabled: false,
   digitalSignatureUrl: '',
+  stampUrl: '',
+  signatoryName: '',
+  signatoryTitle: '',
+  tagline: '',
+  bankDetails: {},
   invoiceTemplate: 'modern',
   multiCurrencyEnabled: false,
   supportedCurrencies: [],
@@ -1922,6 +1932,8 @@ export default function SettingsPage() {
   const invoiceLogoInputRef = useRef<HTMLInputElement>(null);
   const docVaultInputRef = useRef<HTMLInputElement>(null);
   const onboardingInputRef = useRef<HTMLInputElement>(null);
+  const stampInputRef = useRef<HTMLInputElement>(null);
+  const signatureInputRef = useRef<HTMLInputElement>(null);
 
   // Password Update Form State
   const [changingPassword, setChangingPassword] = useState(false);
@@ -2555,6 +2567,13 @@ export default function SettingsPage() {
       workspaceDraft.pan !== savedWorkspace.pan ||
       workspaceDraft.gstCertificateUrl !== savedWorkspace.gstCertificateUrl ||
       workspaceDraft.panCardUrl !== savedWorkspace.panCardUrl ||
+      workspaceDraft.stampUrl !== savedWorkspace.stampUrl ||
+      workspaceDraft.signatoryName !== savedWorkspace.signatoryName ||
+      workspaceDraft.signatoryTitle !== savedWorkspace.signatoryTitle ||
+      workspaceDraft.tagline !== savedWorkspace.tagline ||
+      JSON.stringify(workspaceDraft.bankDetails) !== JSON.stringify(savedWorkspace.bankDetails) ||
+      workspaceDraft.digitalSignatureUrl !== savedWorkspace.digitalSignatureUrl ||
+      workspaceDraft.digitalSignatureEnabled !== savedWorkspace.digitalSignatureEnabled ||
       workspaceDraft.registrationCertificateUrl !== savedWorkspace.registrationCertificateUrl;
 
     // 2. Evaluate Invoicing / Business Settings alterations
@@ -2645,6 +2664,11 @@ export default function SettingsPage() {
       workspaceDraft.qrCodeUrl !== savedWorkspace.qrCodeUrl ||
       workspaceDraft.digitalSignatureEnabled !== savedWorkspace.digitalSignatureEnabled ||
       workspaceDraft.digitalSignatureUrl !== savedWorkspace.digitalSignatureUrl ||
+      workspaceDraft.stampUrl !== savedWorkspace.stampUrl ||
+      workspaceDraft.signatoryName !== savedWorkspace.signatoryName ||
+      workspaceDraft.signatoryTitle !== savedWorkspace.signatoryTitle ||
+      workspaceDraft.tagline !== savedWorkspace.tagline ||
+      JSON.stringify(workspaceDraft.bankDetails) !== JSON.stringify(savedWorkspace.bankDetails) ||
       workspaceDraft.invoiceTemplate !== savedWorkspace.invoiceTemplate ||
       workspaceDraft.multiCurrencyEnabled !== savedWorkspace.multiCurrencyEnabled ||
       JSON.stringify(workspaceDraft.supportedCurrencies) !== JSON.stringify(savedWorkspace.supportedCurrencies) ||
@@ -2683,6 +2707,13 @@ export default function SettingsPage() {
         registrationCertificateUrl: workspaceDraft.registrationCertificateUrl ? sanitizeStr(workspaceDraft.registrationCertificateUrl) : null,
         panCardUrl: workspaceDraft.panCardUrl ? sanitizeStr(workspaceDraft.panCardUrl) : null,
         gstCertificateUrl: workspaceDraft.gstCertificateUrl ? sanitizeStr(workspaceDraft.gstCertificateUrl) : null,
+        stampUrl: workspaceDraft.stampUrl ? sanitizeStr(workspaceDraft.stampUrl) : null,
+        signatoryName: workspaceDraft.signatoryName ? sanitizeStr(workspaceDraft.signatoryName) : null,
+        signatoryTitle: workspaceDraft.signatoryTitle ? sanitizeStr(workspaceDraft.signatoryTitle) : null,
+        tagline: workspaceDraft.tagline ? sanitizeStr(workspaceDraft.tagline) : null,
+        bankDetails: workspaceDraft.bankDetails || null,
+        digitalSignatureUrl: workspaceDraft.digitalSignatureUrl ? sanitizeStr(workspaceDraft.digitalSignatureUrl) : null,
+        digitalSignatureEnabled: Boolean(workspaceDraft.digitalSignatureEnabled),
       };
 
       promises.push(
@@ -2783,26 +2814,30 @@ export default function SettingsPage() {
   }, [workspaceDraft, hasUnsavedChanges, undoStack, redoStack]);
 
   // File Upload Helper
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, targetField: 'logoUrl' | 'faviconUrl' | 'documents') => {
+  const handleFileUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>, 
+    targetField: 'logoUrl' | 'faviconUrl' | 'documents' | 'stampUrl' | 'digitalSignatureUrl'
+  ) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const isImage = ['image/png', 'image/jpeg', 'image/jpg'].includes(file.type) || 
+    const isImage = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'].includes(file.type) || 
                     file.name.toLowerCase().endsWith('.png') || 
                     file.name.toLowerCase().endsWith('.jpg') || 
-                    file.name.toLowerCase().endsWith('.jpeg');
+                    file.name.toLowerCase().endsWith('.jpeg') ||
+                    file.name.toLowerCase().endsWith('.webp');
 
     const isDoc = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'].includes(file.type) ||
                   file.name.toLowerCase().endsWith('.pdf') ||
                   file.name.toLowerCase().endsWith('.docx');
 
-    if (targetField === 'logoUrl' || targetField === 'faviconUrl') {
+    if (targetField === 'logoUrl' || targetField === 'faviconUrl' || targetField === 'stampUrl' || targetField === 'digitalSignatureUrl') {
       if (!isImage) {
-        toast.error('Invalid image type. Only PNG and JPG/JPEG are allowed for branding logos.');
+        toast.error('Invalid image type. Only PNG, JPG and WebP are allowed for logos, stamps, and signatures.');
         return;
       }
-      if (file.size > 1 * 1024 * 1024) {
-        toast.error('File size exceeds the 1MB limit for images.');
+      if (file.size > 2 * 1024 * 1024) {
+        toast.error('File size exceeds the 2MB limit for images.');
         return;
       }
     } else {
@@ -2827,7 +2862,7 @@ export default function SettingsPage() {
     if (token && token !== 'null' && token !== 'undefined') {
       headers['Authorization'] = `Bearer ${token}`;
     }
-    toast.info(`Uploading file: ${file.name}...`);
+    toast.info(`Uploading ${targetField === 'stampUrl' ? 'stamp' : targetField === 'digitalSignatureUrl' ? 'signature' : 'file'}: ${file.name}...`);
 
     try {
       const res = await fetch('/api/upload', {
@@ -2851,6 +2886,11 @@ export default function SettingsPage() {
           }
         } else if (targetField === 'faviconUrl') {
           updateDraftField('faviconUrl', fileUrl);
+        } else if (targetField === 'stampUrl') {
+          updateDraftField('stampUrl', fileUrl);
+        } else if (targetField === 'digitalSignatureUrl') {
+          updateDraftField('digitalSignatureUrl', fileUrl);
+          updateDraftField('digitalSignatureEnabled', true);
         } else if (targetField === 'documents') {
           // Format file size
           const formatBytes = (bytes: number) => {
@@ -2871,10 +2911,43 @@ export default function SettingsPage() {
           updateDraftField('uploadedDocuments', [...(workspaceDraft.uploadedDocuments || []), newDoc]);
         }
       } else {
-        toast.error(resJson.error || resJson.message || 'File upload failed');
+        // Fallback to FileReader for local preview if network upload endpoint fails
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64Url = reader.result as string;
+          if (targetField === 'stampUrl') {
+            updateDraftField('stampUrl', base64Url);
+            toast.success(`${file.name} loaded (client preview)`);
+          } else if (targetField === 'digitalSignatureUrl') {
+            updateDraftField('digitalSignatureUrl', base64Url);
+            updateDraftField('digitalSignatureEnabled', true);
+            toast.success(`${file.name} loaded (client preview)`);
+          } else if (targetField === 'logoUrl') {
+            updateDraftField('logoUrl', base64Url);
+            toast.success(`${file.name} loaded (client preview)`);
+          } else {
+            toast.error(resJson.error || resJson.message || 'File upload failed');
+          }
+        };
+        reader.readAsDataURL(file);
       }
     } catch {
-      toast.error('Network dispatch connection failure during upload');
+      // Fallback to FileReader on network failure
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64Url = reader.result as string;
+        if (targetField === 'stampUrl') {
+          updateDraftField('stampUrl', base64Url);
+          toast.success(`${file.name} loaded (offline preview)`);
+        } else if (targetField === 'digitalSignatureUrl') {
+          updateDraftField('digitalSignatureUrl', base64Url);
+          updateDraftField('digitalSignatureEnabled', true);
+          toast.success(`${file.name} loaded (offline preview)`);
+        } else {
+          toast.error('Network dispatch connection failure during upload');
+        }
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -3292,6 +3365,8 @@ export default function SettingsPage() {
       <input type="file" ref={invoiceLogoInputRef} className="hidden" accept="image/png, image/jpeg, image/jpg" onChange={e => handleFileUpload(e, 'logoUrl')} />
       <input type="file" ref={docVaultInputRef} className="hidden" accept="image/png, image/jpeg, image/jpg, application/pdf" onChange={e => handleFileUpload(e, 'documents')} />
       <input type="file" ref={onboardingInputRef} className="hidden" accept="image/png, image/jpeg, image/jpg, application/pdf" onChange={handleOnboardingFileUpload} />
+      <input type="file" ref={stampInputRef} className="hidden" accept="image/png, image/jpeg, image/jpg, image/webp" onChange={e => handleFileUpload(e, 'stampUrl')} />
+      <input type="file" ref={signatureInputRef} className="hidden" accept="image/png, image/jpeg, image/jpg, image/webp" onChange={e => handleFileUpload(e, 'digitalSignatureUrl')} />
 
       {/* Settings Center Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-border pb-4">
@@ -5742,69 +5817,202 @@ export default function SettingsPage() {
                 </CardContent>
               </Card>
 
-              {/* QR Code & Digital Signature */}
+              {/* Stamp, Signature & Invoicing Identity */}
               <Card className="border-border shadow-xs">
                 <CardHeader>
-                  <CardTitle className="text-lg font-bold">QR Codes & Digital Signature Verification</CardTitle>
-                  <CardDescription>Append dynamic payment codes and verification signatures onto generated PDF sheets.</CardDescription>
+                  <CardTitle className="text-lg font-bold">Corporate Stamp, Signature & Invoice Identity</CardTitle>
+                  <CardDescription>Upload official company stamp and authorized signatory credentials to dynamically brand customer invoices and financial PDFs.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
+                  {/* Tagline & Signatory Metadata */}
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <div className="space-y-2 md:col-span-1">
+                      <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Invoice Tagline / Subtitle</Label>
+                      <Input
+                        placeholder="e.g. Where Innovation Finds Its Resonance"
+                        className="text-xs rounded-xl"
+                        value={workspaceDraft.tagline || ''}
+                        onChange={e => updateDraftField('tagline', e.target.value)}
+                      />
+                      <p className="text-[10px] text-muted-foreground">Shown beneath company name in invoice header</p>
+                    </div>
+                    <div className="space-y-2 md:col-span-1">
+                      <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Signatory Full Name</Label>
+                      <Input
+                        placeholder="e.g. Sajeshkumar Adeya"
+                        className="text-xs rounded-xl"
+                        value={workspaceDraft.signatoryName || ''}
+                        onChange={e => updateDraftField('signatoryName', e.target.value)}
+                      />
+                      <p className="text-[10px] text-muted-foreground">Authorized representative's legal name</p>
+                    </div>
+                    <div className="space-y-2 md:col-span-1">
+                      <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Signatory Designation / Title</Label>
+                      <Input
+                        placeholder="e.g. Co-Founder & CTO · Authorized Signatory"
+                        className="text-xs rounded-xl"
+                        value={workspaceDraft.signatoryTitle || ''}
+                        onChange={e => updateDraftField('signatoryTitle', e.target.value)}
+                      />
+                      <p className="text-[10px] text-muted-foreground">Role printed below signature block</p>
+                    </div>
+                  </div>
+
+                  {/* Stamp & Signature Upload Grid */}
                   <div className="grid gap-6 md:grid-cols-2">
-                    {/* QR Code Setup */}
-                    <div className="p-4 border border-border rounded-2xl space-y-4 bg-slate-50/20">
+                    {/* Stamp Block */}
+                    <div className="p-4 border border-border rounded-2xl space-y-4 bg-slate-50/20 dark:bg-zinc-900/10">
                       <div className="flex items-center justify-between">
                         <div className="space-y-0.5">
-                          <h4 className="font-bold text-xs">Append QR Code to Bill</h4>
-                          <p className="text-[10px] text-muted-foreground">UPI quick payments code layout</p>
+                          <h4 className="font-bold text-xs flex items-center gap-2">
+                            <span>Official Corporate Stamp</span>
+                            {workspaceDraft.stampUrl && <Badge variant="outline" className="text-[9px] bg-emerald-50 text-emerald-600 border-emerald-200">Active</Badge>}
+                          </h4>
+                          <p className="text-[10px] text-muted-foreground">Round or oval corporate seal (transparent PNG recommended)</p>
                         </div>
-                        <input 
-                          type="checkbox"
-                          className="w-6 h-6 accent-primary cursor-pointer"
-                          checked={!!workspaceDraft.qrCodeEnabled}
-                          onChange={e => updateDraftField('qrCodeEnabled', e.target.checked)}
-                        />
                       </div>
 
-                      {workspaceDraft.qrCodeEnabled && (
-                        <div className="space-y-3 pt-2">
-                          <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">UPI ID or Merchant String</Label>
-                          <Input 
-                            placeholder="e.g. corporate@hdfcbank"
-                            className="text-xs rounded-xl"
-                            value={workspaceDraft.qrCodeUrl || ''}
-                            onChange={e => updateDraftField('qrCodeUrl', e.target.value)}
+                      <div className="flex items-center gap-4">
+                        <div className="w-24 h-24 rounded-2xl border-2 border-dashed border-border bg-white dark:bg-zinc-900 flex items-center justify-center p-2 overflow-hidden shadow-xs shrink-0">
+                          {workspaceDraft.stampUrl ? (
+                            <img src={workspaceDraft.stampUrl} alt="Corporate Stamp" className="w-full h-full object-contain" />
+                          ) : (
+                            <div className="text-center p-2 text-muted-foreground">
+                              <Building2 className="w-6 h-6 mx-auto mb-1 opacity-40" />
+                              <span className="text-[9px] block">No Stamp</span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-2 flex-1">
+                          <div className="flex items-center gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="text-xs h-8 px-3 rounded-lg border-primary/20 text-primary hover:bg-primary/5"
+                              onClick={() => stampInputRef.current?.click()}
+                            >
+                              <Upload className="w-3.5 h-3.5 mr-1.5" />
+                              Upload Stamp
+                            </Button>
+                            {workspaceDraft.stampUrl && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className="text-xs h-8 px-2.5 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg"
+                                onClick={() => updateDraftField('stampUrl', '')}
+                              >
+                                <Trash className="w-3.5 h-3.5 mr-1" /> Remove
+                              </Button>
+                            )}
+                          </div>
+                          <Input
+                            placeholder="Or paste stamp image URL..."
+                            className="text-xs rounded-xl h-8"
+                            value={workspaceDraft.stampUrl || ''}
+                            onChange={e => updateDraftField('stampUrl', e.target.value)}
                           />
                         </div>
-                      )}
+                      </div>
                     </div>
 
-                    {/* Digital Signature Setup */}
-                    <div className="p-4 border border-border rounded-2xl space-y-4 bg-slate-50/20">
+                    {/* Digital Signature Block */}
+                    <div className="p-4 border border-border rounded-2xl space-y-4 bg-slate-50/20 dark:bg-zinc-900/10">
                       <div className="flex items-center justify-between">
                         <div className="space-y-0.5">
-                          <h4 className="font-bold text-xs">Authorize Signature stamp</h4>
-                          <p className="text-[10px] text-muted-foreground">Embed corporate signature watermark</p>
+                          <h4 className="font-bold text-xs flex items-center gap-2">
+                            <span>Authorized Signatory Signature</span>
+                            {workspaceDraft.digitalSignatureUrl && <Badge variant="outline" className="text-[9px] bg-emerald-50 text-emerald-600 border-emerald-200">Active</Badge>}
+                          </h4>
+                          <p className="text-[10px] text-muted-foreground">Handwritten signature on transparent/white background</p>
                         </div>
-                        <input 
+                        <input
                           type="checkbox"
-                          className="w-6 h-6 accent-primary cursor-pointer"
+                          className="w-5 h-5 accent-primary cursor-pointer"
                           checked={!!workspaceDraft.digitalSignatureEnabled}
                           onChange={e => updateDraftField('digitalSignatureEnabled', e.target.checked)}
+                          title="Enable signature stamp on invoices"
                         />
                       </div>
 
-                      {workspaceDraft.digitalSignatureEnabled && (
-                        <div className="space-y-3 pt-2">
-                          <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Authorized Signature URL</Label>
-                          <Input 
-                            placeholder="Image URL for signature stamp"
-                            className="text-xs rounded-xl"
+                      <div className="flex items-center gap-4">
+                        <div className="w-28 h-20 rounded-2xl border-2 border-dashed border-border bg-white dark:bg-zinc-900 flex items-center justify-center p-2 overflow-hidden shadow-xs shrink-0">
+                          {workspaceDraft.digitalSignatureUrl ? (
+                            <img src={workspaceDraft.digitalSignatureUrl} alt="Signature" className="w-full h-full object-contain" />
+                          ) : (
+                            <div className="text-center p-2 text-muted-foreground">
+                              <FileText className="w-6 h-6 mx-auto mb-1 opacity-40" />
+                              <span className="text-[9px] block">No Signature</span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-2 flex-1">
+                          <div className="flex items-center gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="text-xs h-8 px-3 rounded-lg border-primary/20 text-primary hover:bg-primary/5"
+                              onClick={() => signatureInputRef.current?.click()}
+                            >
+                              <Upload className="w-3.5 h-3.5 mr-1.5" />
+                              Upload Signature
+                            </Button>
+                            {workspaceDraft.digitalSignatureUrl && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className="text-xs h-8 px-2.5 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg"
+                                onClick={() => updateDraftField('digitalSignatureUrl', '')}
+                              >
+                                <Trash className="w-3.5 h-3.5 mr-1" /> Remove
+                              </Button>
+                            )}
+                          </div>
+                          <Input
+                            placeholder="Or paste signature image URL..."
+                            className="text-xs rounded-xl h-8"
                             value={workspaceDraft.digitalSignatureUrl || ''}
-                            onChange={e => updateDraftField('digitalSignatureUrl', e.target.value)}
+                            onChange={e => {
+                              updateDraftField('digitalSignatureUrl', e.target.value);
+                              if (e.target.value) updateDraftField('digitalSignatureEnabled', true);
+                            }}
                           />
                         </div>
-                      )}
+                      </div>
                     </div>
+                  </div>
+
+                  {/* QR Code Setup */}
+                  <div className="p-4 border border-border rounded-2xl space-y-4 bg-slate-50/20">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <h4 className="font-bold text-xs">Append QR Code to Bill</h4>
+                        <p className="text-[10px] text-muted-foreground">UPI quick payments code layout</p>
+                      </div>
+                      <input 
+                        type="checkbox"
+                        className="w-5 h-5 accent-primary cursor-pointer"
+                        checked={!!workspaceDraft.qrCodeEnabled}
+                        onChange={e => updateDraftField('qrCodeEnabled', e.target.checked)}
+                      />
+                    </div>
+
+                    {workspaceDraft.qrCodeEnabled && (
+                      <div className="space-y-3 pt-2">
+                        <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">UPI ID or Merchant String</Label>
+                        <Input 
+                          placeholder="e.g. corporate@hdfcbank"
+                          className="text-xs rounded-xl"
+                          value={workspaceDraft.qrCodeUrl || ''}
+                          onChange={e => updateDraftField('qrCodeUrl', e.target.value)}
+                        />
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
