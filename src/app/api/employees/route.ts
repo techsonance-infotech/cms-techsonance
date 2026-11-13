@@ -62,7 +62,7 @@ export const GET = withApiHandler(
     if (!tenantId) {
       tenantId = await resolveTenantId(context, supabase);
     }
-    if (!tenantId)
+    if (!tenantId || !accessToken)
       throw new BadRequestError('Authorization and tenant info required');
 
     if (id) {
@@ -271,7 +271,7 @@ export const POST = withApiHandler(
     if (!tenantId) {
       tenantId = await resolveTenantId(context, supabase);
     }
-    if (!tenantId)
+    if (!tenantId || !accessToken)
       throw new BadRequestError('Authorization and tenant info required');
 
     const authUserId = await resolveAuthUserIdFromLegacyUserId(
@@ -301,7 +301,7 @@ export const POST = withApiHandler(
     let managerAuthId = null;
     if (payload.managerId) {
       managerAuthId = await resolveAuthUserIdFromLegacyUserId(
-        accessToken,
+        accessToken!,
         payload.managerId,
         tenantId
       );
@@ -593,7 +593,7 @@ export const PUT = withApiHandler(
     if (!tenantId) {
       tenantId = await resolveTenantId(context, supabase);
     }
-    if (!tenantId)
+    if (!tenantId || !accessToken)
       throw new BadRequestError('Authorization and tenant info required');
 
     const { data: existingEmployee } = await supabase
@@ -619,7 +619,7 @@ export const PUT = withApiHandler(
     let managerAuthId = undefined;
     if ('managerId' in payload) {
       managerAuthId = payload.managerId
-        ? await resolveAuthUserIdFromLegacyUserId(accessToken, payload.managerId, tenantId).catch(() => null)
+        ? await resolveAuthUserIdFromLegacyUserId(accessToken!, payload.managerId, tenantId).catch(() => null)
         : null;
     }
 
@@ -908,7 +908,7 @@ export const DELETE = withApiHandler(
     if (!tenantId) {
       tenantId = await resolveTenantId(context, supabase);
     }
-    if (!tenantId)
+    if (!tenantId || !accessToken)
       throw new BadRequestError('Authorization and tenant info required');
     const { data, error } = await supabase
       .from('employees')

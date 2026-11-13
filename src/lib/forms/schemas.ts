@@ -111,7 +111,7 @@ export const taskFormSchema = z.object({
   projectId: z.string().min(1, 'Project is required'),
   sprintId: z.string().optional().or(z.literal('')),
   title: z
-    .string({ required_error: 'Task title is required' })
+    .string({ message: 'Task title is required' })
     .trim()
     .min(3, 'Title must be at least 3 characters')
     .max(100, 'Title cannot exceed 100 characters'),

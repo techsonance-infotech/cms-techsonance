@@ -271,7 +271,7 @@ export const PUT = withApiHandler(async (request, context) => {
     ? await getSupabaseProfileByAuthUserId(rawId, { accessToken, tenantId, useAdmin: true }).catch((e) => { lookupError = e; return null; })
     : await getSupabaseProfileByLegacyUserId(Number(rawId), { accessToken, tenantId, useAdmin: true }).catch((e) => { lookupError = e; return null; });
   if (!existingUser) {
-    throw new NotFoundError(`User lookup failed for ID ${id}. Log: ${lookupError?.message || 'Not found'}`);
+    throw new NotFoundError(`User lookup failed for ID ${rawId}. Log: ${lookupError?.message || 'Not found'}`);
   }
 
   const columns = await getUsersColumns(admin);

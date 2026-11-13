@@ -126,8 +126,8 @@ export const GET = withApiHandler(async (_request, context) => {
     };
   });
 
-  const pendingCount = announcements.filter(a => a.status === 'Pending').length;
-  const completedCount = announcements.filter(a => a.status === 'Acknowledged').length;
+  const pendingCount = announcements.filter((a: any) => a.status === 'Pending').length;
+  const completedCount = announcements.filter((a: any) => a.status === 'Acknowledged').length;
 
   return NextResponse.json({
     success: true,

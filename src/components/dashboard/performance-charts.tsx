@@ -192,7 +192,7 @@ export function PerformanceCharts({ data }: PerformanceChartsProps) {
                 dataKey="barValue" 
                 radius={[6, 6, 0, 0]}
                 animationDuration={1200}
-                background={{ fill: 'rgba(241, 245, 249, 0.45)', radius: [6, 6, 0, 0] }}
+                background={{ fill: 'rgba(241, 245, 249, 0.45)', radius: 6 }}
               >
                 {reportChartData.map((entry, index) => {
                   const isSubmitted = Number(entry.submitted) === 1;

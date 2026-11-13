@@ -65,7 +65,7 @@ export const GET = withApiHandler(async (request, context) => {
     id: currentActorId || user.id,
     name: matchedUser
       ? `${matchedUser.first_name || ''} ${matchedUser.last_name || ''}`.trim() || matchedUser.email
-      : (user.name || user.email || 'Employee'),
+      : (`${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || 'Employee'),
     email: matchedUser?.email || user.email || '',
     role: rawRole,
     department: matchedEmp?.department || 'Engineering',

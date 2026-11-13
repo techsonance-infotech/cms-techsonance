@@ -39,7 +39,7 @@ export const GET = withApiHandler(async (request, context) => {
 
     // Employees can only view projects they are assigned to
     if (!isManagerOrAdmin) {
-      let authUserId = user?.providerUserId || (typeof user?.id === 'string' && user.id.includes('-') ? user.id : null);
+      let authUserId = (user as any)?.providerUserId || (typeof (user as any)?.id === 'string' && (user as any).id.includes('-') ? (user as any).id : null);
       if (!authUserId && user) {
         const { data: dbUser } = await supabase
           .from('users')
@@ -95,7 +95,7 @@ export const GET = withApiHandler(async (request, context) => {
 
   // For regular employees: restrict query to only assigned projects
   if (!isManagerOrAdmin) {
-    let authUserId = user?.providerUserId || (typeof user?.id === 'string' && user.id.includes('-') ? user.id : null);
+    let authUserId = (user as any)?.providerUserId || (typeof (user as any)?.id === 'string' && (user as any).id.includes('-') ? (user as any).id : null);
     if (!authUserId && user) {
       const { data: dbUser } = await supabase
         .from('users')

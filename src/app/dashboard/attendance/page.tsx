@@ -64,6 +64,8 @@ interface LeaveRequest {
   status: string;
   createdAt: string;
   employeeId: number;
+  leavePeriod?: string;
+  leave_period?: string;
 }
 
 interface Attendance {

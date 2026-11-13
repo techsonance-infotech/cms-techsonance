@@ -202,7 +202,7 @@ export const POST = withApiHandler(async (request, context) => {
 
       // Sync corresponding wfh_requests if request_number matches
       if (updatedReqs && updatedReqs.length > 0) {
-        const reqNumbers = updatedReqs.map(r => r.request_number).filter(Boolean);
+        const reqNumbers = updatedReqs.map((r: any) => r.request_number).filter(Boolean);
         if (reqNumbers.length > 0) {
           const wfhUpdate: any = {
             status: newStatus,

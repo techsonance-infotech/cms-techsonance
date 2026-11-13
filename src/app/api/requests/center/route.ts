@@ -553,7 +553,7 @@ export const POST = withApiHandler(async (request, context) => {
 
   // 1. Resolve authentic UUID for current user
   const actorUuid = await resolveActorUuid(context, supabase);
-  const effectiveAuthUserId = actorUuid || (await resolveUserUuid(supabase, user.id, user.email)) || user.id;
+  const effectiveAuthUserId = actorUuid || (await resolveUserUuid(supabase, user.id, user.email)) || (user.id ? String(user.id) : null);
 
   const userRole = (user.role || '').toLowerCase().replace(/[^a-z0-9_]/g, '');
   const isSuperAdminOrAdmin = ['super_admin', 'superadmin', 'admin', 'business_owner', 'owner'].includes(userRole);
@@ -566,7 +566,7 @@ export const POST = withApiHandler(async (request, context) => {
     targetUserUuid = await resolveUserUuid(supabase, userId);
   }
   if (!targetUserUuid) {
-    targetUserUuid = effectiveAuthUserId;
+    targetUserUuid = effectiveAuthUserId ? String(effectiveAuthUserId) : null;
   }
 
   if (!targetUserUuid || !UUID_REGEX.test(targetUserUuid)) {
