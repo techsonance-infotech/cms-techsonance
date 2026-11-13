@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { 
   DollarSign, 
   TrendingUp, 
@@ -78,6 +79,7 @@ export interface InvoiceRecord {
 }
 
 export default function InvoicingBillingPage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
   const [clients, setClients] = useState<ClientRecord[]>([]);
@@ -531,17 +533,10 @@ export default function InvoicingBillingPage() {
 
             <Button 
               size="sm" 
-              className="bg-indigo-600 text-white hover:bg-indigo-500 border-none shadow-md shadow-indigo-600/30" 
-              onClick={() => {
-                setFormInvoiceNumber(generateInvoiceNumber());
-                setFormDueDate(new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0]);
-                if (clients.length > 0) {
-                  setFormClientId(String(clients[0].id));
-                }
-                setCreateModalOpen(true);
-              }}
+              className="bg-indigo-600 text-white hover:bg-indigo-500 border-none shadow-md shadow-indigo-600/30 font-bold gap-1.5" 
+              onClick={() => router.push('/dashboard/finance/invoices/new')}
             >
-              <Plus className="mr-1.5 h-4 w-4" /> Create Invoice
+              <Plus className="h-4 w-4" /> Create Invoice (with Live PDF Preview)
             </Button>
           </div>
         </div>
@@ -741,6 +736,16 @@ export default function InvoicingBillingPage() {
 
                         <Button
                           size="sm"
+                          variant="outline"
+                          className="text-[11px] h-7 px-2 border-indigo-200 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 rounded-lg flex items-center gap-1 font-semibold"
+                          onClick={() => router.push(`/dashboard/finance/invoices/new?invoiceId=${inv.id}`)}
+                          title="View Official PDF Preview"
+                        >
+                          <FileText className="h-3 w-3" /> PDF
+                        </Button>
+
+                        <Button
+                          size="sm"
                           variant="ghost"
                           className="h-7 w-7 p-0 text-slate-400 hover:text-rose-600"
                           onClick={() => handleDeleteInvoice(inv.id, inv.invoiceNumber)}
@@ -766,14 +771,10 @@ export default function InvoicingBillingPage() {
               <div className="flex items-center justify-center gap-2 pt-2">
                 <Button 
                   size="sm" 
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs rounded-xl"
-                  onClick={() => {
-                    setFormInvoiceNumber(generateInvoiceNumber());
-                    setFormDueDate(new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0]);
-                    setCreateModalOpen(true);
-                  }}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs rounded-xl font-bold"
+                  onClick={() => router.push('/dashboard/finance/invoices/new')}
                 >
-                  <Plus className="mr-1 h-3.5 w-3.5" /> Create New Invoice
+                  <Plus className="mr-1 h-3.5 w-3.5" /> Create New Invoice (Live Preview)
                 </Button>
                 
                 <Button 

@@ -204,7 +204,7 @@ export default function EmployeeWellnessPage() {
         });
       }
 
-      const authHeader = token ? { 'Authorization': `Bearer ${token}` } : {};
+      const authHeader: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
 
       // 1. Fetch main wellness data
       const res = await fetch('/api/employees/wellness', { headers: authHeader });
@@ -389,7 +389,7 @@ export default function EmployeeWellnessPage() {
     try {
       const token = getStoredSessionToken();
       const res = await fetch(`/api/employees/wellness/programs/participants?programId=${prog.id}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined
       });
       if (res.ok) {
         const data = await res.json();
@@ -410,7 +410,7 @@ export default function EmployeeWellnessPage() {
       const token = getStoredSessionToken();
       const res = await fetch(`/api/employees/wellness/programs/participants?appointmentId=${appointmentId}`, {
         method: 'DELETE',
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined
       });
 
       if (res.ok) {
@@ -504,7 +504,7 @@ export default function EmployeeWellnessPage() {
       const token = getStoredSessionToken();
       const res = await fetch(`/api/employees/wellness/programs?id=${id}`, {
         method: 'DELETE',
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined
       });
 
       if (!res.ok) throw new Error('Failed to delete program');
@@ -589,7 +589,7 @@ export default function EmployeeWellnessPage() {
       const token = getStoredSessionToken();
       const res = await fetch(`/api/employees/wellness?id=${id}`, {
         method: 'DELETE',
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined
       });
 
       if (!res.ok) throw new Error('Failed to cancel appointment');

@@ -11,6 +11,7 @@ import {
   getAdminRouteSupabase,
   normalizeSupabaseEmployeeRecord,
   resolveAuthUserIdFromLegacyUserId,
+  resolveTenantId,
 } from '@/server/supabase/route-helpers';
 import { listSupabaseProfilesByAuthIds } from '@/server/supabase/users';
 
@@ -55,12 +56,14 @@ export const GET = withApiHandler(
     const searchParams = new URL(request.url).searchParams;
     const id = searchParams.get('id');
 
-    const accessToken = context.auth?.accessToken;
-    const tenantId = context.auth?.user.tenantId;
-    if (!accessToken || !tenantId)
-      throw new BadRequestError('Authorization and tenant info required');
-
     const supabase = getAdminRouteSupabase();
+    const accessToken = context.auth?.accessToken;
+    let tenantId = context.auth?.user?.tenantId;
+    if (!tenantId) {
+      tenantId = await resolveTenantId(context, supabase);
+    }
+    if (!tenantId)
+      throw new BadRequestError('Authorization and tenant info required');
 
     if (id) {
       const { data, error } = await supabase
@@ -262,12 +265,14 @@ export const POST = withApiHandler(
   async (request, context) => {
     const payload = createEmployeeSchema.parse(await request.json());
 
-    const accessToken = context.auth?.accessToken;
-    const tenantId = context.auth?.user.tenantId;
-    if (!accessToken || !tenantId)
-      throw new BadRequestError('Authorization and tenant info required');
-
     const supabase = getAdminRouteSupabase();
+    const accessToken = context.auth?.accessToken;
+    let tenantId = context.auth?.user?.tenantId;
+    if (!tenantId) {
+      tenantId = await resolveTenantId(context, supabase);
+    }
+    if (!tenantId)
+      throw new BadRequestError('Authorization and tenant info required');
 
     const authUserId = await resolveAuthUserIdFromLegacyUserId(
       accessToken,
@@ -582,12 +587,14 @@ export const PUT = withApiHandler(
 
     const payload = updateEmployeeSchema.parse(body);
 
-    const accessToken = context.auth?.accessToken;
-    const tenantId = context.auth?.user.tenantId;
-    if (!accessToken || !tenantId)
-      throw new BadRequestError('Authorization and tenant info required');
-
     const supabase = getAdminRouteSupabase();
+    const accessToken = context.auth?.accessToken;
+    let tenantId = context.auth?.user?.tenantId;
+    if (!tenantId) {
+      tenantId = await resolveTenantId(context, supabase);
+    }
+    if (!tenantId)
+      throw new BadRequestError('Authorization and tenant info required');
 
     const { data: existingEmployee } = await supabase
       .from('employees')
@@ -895,12 +902,14 @@ export const DELETE = withApiHandler(
     if (!Number.isInteger(id) || id <= 0)
       throw new BadRequestError('Valid employee id is required');
 
-    const accessToken = context.auth?.accessToken;
-    const tenantId = context.auth?.user.tenantId;
-    if (!accessToken || !tenantId)
-      throw new BadRequestError('Authorization and tenant info required');
-
     const supabase = getAdminRouteSupabase();
+    const accessToken = context.auth?.accessToken;
+    let tenantId = context.auth?.user?.tenantId;
+    if (!tenantId) {
+      tenantId = await resolveTenantId(context, supabase);
+    }
+    if (!tenantId)
+      throw new BadRequestError('Authorization and tenant info required');
     const { data, error } = await supabase
       .from('employees')
       .update({

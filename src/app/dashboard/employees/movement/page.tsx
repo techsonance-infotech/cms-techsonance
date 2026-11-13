@@ -17,7 +17,7 @@ import {
   Building2, Briefcase, DollarSign, GitMerge, History, CheckCircle2,
   Clock, ShieldAlert, FileText, Download, SendHorizontal, RefreshCw,
   Search, Filter, ChevronRight, AlertCircle, Sparkles, UserPlus,
-  ArrowRight, ShieldCheck, Check, XCircle, Award, Zap
+  ArrowRight, ShieldCheck, Check, XCircle, Award, Zap, Star
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getStoredSessionToken } from '@/lib/client-session';
@@ -151,17 +151,27 @@ export default function EmployeeMovementPage() {
         const data = await res.json();
         if (data.employeeRoster) {
           setRoster(data.employeeRoster);
-          if (data.employeeRoster.length > 0 && !selectedEmployeeId) {
-            const first = data.employeeRoster[0];
-            setSelectedEmployeeId(first.id);
-            setTargetDept(first.department);
-            setTargetBranch(first.branch);
-            setTargetBusinessUnit(first.businessUnit || 'Enterprise Solutions');
-            setTargetManagerName(first.managerName || 'Department Head');
-            setTargetDesignation(`Senior ${first.designation}`);
-            setTargetGrade(first.grade || 'L5');
-            setTargetSalary(first.salary > 0 ? Math.round(first.salary * 1.15) : 50000);
-            setHistorySearchEmpId(first.id);
+          let targetEmp = null;
+          if (typeof window !== 'undefined') {
+            const urlParams = new URLSearchParams(window.location.search);
+            const queryEmpId = urlParams.get('employeeId');
+            if (queryEmpId) {
+              targetEmp = data.employeeRoster.find((e: any) => String(e.id) === String(queryEmpId) || String(e.employeeTableId) === String(queryEmpId) || String(e.userId) === String(queryEmpId));
+            }
+          }
+          if (!targetEmp && data.employeeRoster.length > 0 && !selectedEmployeeId) {
+            targetEmp = data.employeeRoster[0];
+          }
+          if (targetEmp) {
+            setSelectedEmployeeId(targetEmp.id);
+            setTargetDept(targetEmp.department);
+            setTargetBranch(targetEmp.branch);
+            setTargetBusinessUnit(targetEmp.businessUnit || 'Enterprise Solutions');
+            setTargetManagerName(targetEmp.managerName || 'Department Head');
+            setTargetDesignation(`Senior ${targetEmp.designation}`);
+            setTargetGrade(targetEmp.grade || 'L5');
+            setTargetSalary(targetEmp.salary > 0 ? Math.round(targetEmp.salary * 1.15) : 50000);
+            setHistorySearchEmpId(targetEmp.id);
           }
         }
         if (data.departmentsList) setDepartmentsList(data.departmentsList);
@@ -351,6 +361,15 @@ export default function EmployeeMovementPage() {
                 <p className="text-slate-400 text-xs md:text-sm font-medium mt-0.5">
                   Manage Transfers, Promotions, Department/Branch/BU Shifts, Salary Revisions & Workflow Approvals
                 </p>
+                <div className="pt-2">
+                  <a
+                    href="/dashboard/employees/reviews"
+                    className="inline-flex items-center gap-1.5 text-xs text-orange-400 hover:text-orange-300 bg-orange-500/10 hover:bg-orange-500/20 px-3 py-1 rounded-xl border border-orange-500/30 font-semibold transition"
+                  >
+                    <Star className="h-3 w-3" />
+                    ← View Performance Reviews & Appraisals (PMS)
+                  </a>
+                </div>
               </div>
             </div>
           </div>

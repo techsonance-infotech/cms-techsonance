@@ -6,13 +6,15 @@ export const createInvoiceSchema = z.object({
   invoiceNumber: z.string().trim().min(1).max(100),
   clientId: z.coerce.number().int().positive(),
   projectId: z.coerce.number().int().positive().optional().nullable(),
-  amount: z.coerce.number().int().min(0),
-  tax: z.coerce.number().int().min(0),
-  totalAmount: z.coerce.number().int().min(0),
+  amount: z.coerce.number().min(0),
+  tax: z.coerce.number().min(0),
+  totalAmount: z.coerce.number().min(0),
   dueDate: z.string().date(),
   paidDate: z.string().date().optional().nullable(),
   notes: z.string().trim().max(2000).optional().nullable(),
   status: invoiceStatusSchema.optional(),
+  termsAndConditions: z.string().trim().max(2000).optional().nullable(),
+  paymentTerms: z.string().trim().max(200).optional().nullable(),
 });
 
 export const updateInvoiceSchema = createInvoiceSchema.partial();

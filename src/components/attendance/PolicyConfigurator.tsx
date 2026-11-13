@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import { Loader2, Settings, Plus, Sparkles, Copy, Trash2, Save, FileText, CheckCircle } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { getStoredSessionToken } from '@/lib/client-session';
 
 interface PolicyConfiguratorProps {
   tenantId: string;
@@ -61,7 +62,10 @@ export default function PolicyConfigurator({ tenantId }: PolicyConfiguratorProps
   const fetchPolicies = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/attendance/policies');
+      const token = getStoredSessionToken();
+      const response = await fetch('/api/attendance/policies', {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined
+      });
       if (response.ok) {
         const data = await response.json();
         setPolicies(data || []);
@@ -215,9 +219,13 @@ export default function PolicyConfigurator({ tenantId }: PolicyConfiguratorProps
         }
       };
 
+      const token = getStoredSessionToken();
       const response = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
         body: JSON.stringify(payload),
       });
 
@@ -247,8 +255,10 @@ export default function PolicyConfigurator({ tenantId }: PolicyConfiguratorProps
 
     setSaving(true);
     try {
+      const token = getStoredSessionToken();
       const response = await fetch(`/api/attendance/policies?id=${selectedPolicy.id}`, {
         method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined
       });
 
       if (response.ok) {

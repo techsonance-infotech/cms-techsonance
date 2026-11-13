@@ -1,26 +1,45 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import {
   FileText, ShieldCheck, AlertTriangle, Plus, Trash2, Eye, ExternalLink, Calendar, Search, Filter, Check, X,
-  ShieldAlert, RefreshCw, Share2, FileSignature, Cpu, History, User, Lock, ArrowRight, EyeOff, Shield, CheckCircle2
+  ShieldAlert, RefreshCw, Share2, FileSignature, Cpu, History, User, Lock, ArrowRight, EyeOff, Shield, CheckCircle2,
+  Upload, Clock
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
-import { getStoredSessionToken } from '@/lib/client-session';
+import { getStoredSessionToken, getStoredUser } from '@/lib/client-session';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 export default function DocumentVaultPage() {
   const router = useRouter();
-  const [isForbidden, setIsForbidden] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(true);
   const [documents, setDocuments] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Re-upload state for rejected / updated documents
+  const [showReuploadModal, setShowReuploadModal] = useState(false);
+  const [reuploadDoc, setReuploadDoc] = useState<any | null>(null);
+  const [reuploadFileUrl, setReuploadFileUrl] = useState('');
+  const [reuploadFileName, setReuploadFileName] = useState('');
+  const [reuploadingFile, setReuploadingFile] = useState(false);
+
+  // Employee upload new document state
+  const [showEmpUploadModal, setShowEmpUploadModal] = useState(false);
 
   // New category form
   const [newCatName, setNewCatName] = useState('');
@@ -156,16 +175,11 @@ export default function DocumentVaultPage() {
 
   useEffect(() => {
     try {
-      const stored = localStorage.getItem('user');
-      if (stored) {
-        const u = JSON.parse(stored);
-        const role = (u.role || '').toLowerCase();
-        const isAdminOrManager = ['admin', 'super_admin', 'owner', 'ceo', 'cto', 'business_owner', 'hr_manager'].includes(role);
-        if (!isAdminOrManager) {
-          setIsForbidden(true);
-          setLoading(false);
-          return;
-        }
+      const u = getStoredUser();
+      if (u) {
+        const role = (u.role || '').toLowerCase().replace(/[\s-]+/g, '_');
+        const isAdminOrManager = ['admin', 'super_admin', 'superadmin', 'owner', 'ceo', 'cto', 'business_owner', 'hr_manager', 'project_manager'].includes(role);
+        setIsAdmin(isAdminOrManager);
       }
     } catch {
       // ignore
@@ -306,6 +320,13 @@ export default function DocumentVaultPage() {
 
   const handleVerify = async (id: number, status: string) => {
     try {
+      let rejectionReason: string | null = null;
+      if (status === 'rejected') {
+        const inputReason = window.prompt('Please provide a reason for rejecting this document (e.g. blurry scan, expired, wrong document type):');
+        if (inputReason === null) return; // User cancelled prompt
+        rejectionReason = inputReason.trim() || 'Document does not meet verification requirements. Please upload a clear copy.';
+      }
+
       const token = getStoredSessionToken();
       const res = await fetch('/api/documents/verify', {
         method: 'PUT',
@@ -313,7 +334,7 @@ export default function DocumentVaultPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ id, verificationStatus: status })
+        body: JSON.stringify({ id, verificationStatus: status, rejectionReason })
       });
       if (res.ok) {
         toast.success(`Document marked as ${status}`);
@@ -323,6 +344,148 @@ export default function DocumentVaultPage() {
       }
     } catch {
       toast.error('Connection error');
+    }
+  };
+
+  // Re-upload handlers for employees
+  const openReuploadModal = (doc: any) => {
+    setReuploadDoc(doc);
+    setReuploadFileUrl('');
+    setReuploadFileName('');
+    setShowReuploadModal(true);
+  };
+
+  const handleReuploadFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const fileNameLower = file.name.toLowerCase();
+    const mimeType = file.type;
+    
+    const isImage = mimeType === 'image/jpeg' || mimeType === 'image/png' || mimeType === 'image/jpg' || 
+                    fileNameLower.endsWith('.jpg') || fileNameLower.endsWith('.jpeg') || fileNameLower.endsWith('.png');
+    const isPdf = mimeType === 'application/pdf' || fileNameLower.endsWith('.pdf');
+    const isDocx = mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || fileNameLower.endsWith('.docx');
+    
+    if (!isImage && !isPdf && !isDocx) {
+      toast.error('Only PDF, DOCX, and images (JPG, JPEG, PNG) are accepted.');
+      return;
+    }
+    
+    const fileLimit = isImage ? 1 * 1024 * 1024 : 2 * 1024 * 1024;
+    if (file.size > fileLimit) {
+      toast.error(`File size exceeds the limit of ${isImage ? '1 MB' : '2 MB'}`);
+      return;
+    }
+
+    try {
+      setReuploadingFile(true);
+      const token = getStoredSessionToken();
+      const payload = new FormData();
+      payload.append('file', file);
+      payload.append('kind', 'employee_document');
+
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: payload
+      });
+
+      if (!res.ok) throw new Error('File upload failed');
+      const data = await res.json();
+      const url = data.data?.url || data.url;
+
+      setReuploadFileUrl(url);
+      setReuploadFileName(file.name);
+      toast.success(`File "${file.name}" uploaded successfully! Ready to submit.`);
+    } catch (err: any) {
+      toast.error(err.message || 'Error occurred during file upload');
+    } finally {
+      setReuploadingFile(false);
+    }
+  };
+
+  const handleReuploadSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reuploadDoc || !reuploadFileUrl) {
+      toast.error('Please choose and upload a replacement file first');
+      return;
+    }
+
+    setSubmittingForm(true);
+    try {
+      const token = getStoredSessionToken();
+      const res = await fetch('/api/documents', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          id: reuploadDoc.id,
+          fileUrl: reuploadFileUrl,
+          documentName: reuploadDoc.document_name || reuploadDoc.name,
+          categoryId: reuploadDoc.category_id
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || 'Failed to submit document');
+      }
+
+      toast.success(`"${reuploadDoc.document_name || reuploadDoc.name}" re-uploaded successfully and submitted for HR review!`);
+      setShowReuploadModal(false);
+      setReuploadDoc(null);
+      setReuploadFileUrl('');
+      setReuploadFileName('');
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message || 'Error occurred while re-uploading document');
+    } finally {
+      setSubmittingForm(false);
+    }
+  };
+
+  const handleEmpUploadSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!docName || !docUrl) {
+      toast.error('Please specify document name and upload a file');
+      return;
+    }
+
+    setSubmittingForm(true);
+    try {
+      const token = getStoredSessionToken();
+      const res = await fetch('/api/documents', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          categoryId: selectedCategoryId,
+          documentName: docName,
+          fileUrl: docUrl,
+          expiryDate: docExpiry || null
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || 'Failed to upload document');
+      }
+
+      toast.success('Document uploaded successfully and queued for verification');
+      setShowEmpUploadModal(false);
+      setDocName('');
+      setDocUrl('');
+      setDocExpiry('');
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message || 'Error occurred while uploading document');
+    } finally {
+      setSubmittingForm(false);
     }
   };
 
@@ -418,24 +581,402 @@ export default function DocumentVaultPage() {
     );
   }
 
-  if (isForbidden) {
+  if (!isAdmin) {
+    const rejectedDocs = documents.filter(d => d.verification_status === 'rejected');
+    const verifiedDocs = documents.filter(d => d.verification_status === 'verified');
+    const pendingDocs = documents.filter(d => d.verification_status === 'pending');
+
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 text-center max-w-lg mx-auto">
-        <div className="w-16 h-16 rounded-2xl bg-rose-500/10 flex items-center justify-center text-rose-500 mb-4 shadow-sm border border-rose-500/20">
-          <ShieldAlert className="w-8 h-8" />
-        </div>
-        <h2 className="text-2xl font-bold tracking-tight text-foreground">Access Restricted</h2>
-        <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-          The Document Management System (DMS Vault) is restricted to Administrators and HR Managers. Normal users and employees do not have access to company-wide document repositories.
-        </p>
-        <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
-          <Button variant="outline" onClick={() => router.push('/dashboard')}>
-            Return to Dashboard
+      <div className="p-6 space-y-6 max-w-6xl mx-auto animate-fadeIn">
+        {/* Employee Top Banner */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gradient-to-br from-slate-900 via-slate-800 to-zinc-950 p-6 rounded-3xl border border-slate-800 shadow-xl text-white">
+          <div>
+            <div className="flex items-center gap-2 text-xs text-slate-400 font-semibold mb-1">
+              <span>Employee Portal</span>
+              <span>/</span>
+              <span className="text-[#f87941]">My Documents</span>
+            </div>
+            <h1 className="text-2xl md:text-3xl font-black tracking-tight text-white flex items-center gap-2.5">
+              <FileText className="h-7 w-7 text-[#f87941]" />
+              My Document Vault &amp; Verification
+            </h1>
+            <p className="text-xs md:text-sm text-slate-400 mt-1 max-w-2xl">
+              View your onboarding records, track HR verification status, and re-upload any rejected documents.
+            </p>
+          </div>
+          <Button
+            onClick={() => setShowEmpUploadModal(true)}
+            className="bg-[#f87941] hover:bg-[#e06634] text-white font-bold text-xs h-9 px-4 rounded-xl flex items-center gap-1.5 shadow-md shadow-[#f87941]/20"
+          >
+            <Plus className="h-3.5 w-3.5" /> Upload Document
           </Button>
-          <Button className="bg-[#F87941] hover:bg-[#e06632] text-white" onClick={() => router.push('/dashboard/employees/requests')}>
-            Request Official Letters & Certificates
-          </Button>
         </div>
+
+        {/* Action Required Banner for Rejected Documents */}
+        {rejectedDocs.length > 0 && (
+          <div className="p-5 rounded-2xl bg-rose-500/10 border-2 border-rose-500/30 text-rose-700 dark:text-rose-400 space-y-3 shadow-sm">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-xl bg-rose-500/20 text-rose-600 dark:text-rose-400 shrink-0">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-black tracking-tight">
+                  Action Required: {rejectedDocs.length} Document{rejectedDocs.length > 1 ? 's' : ''} Rejected by HR
+                </h3>
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                  HR review rejected {rejectedDocs.map(d => `"${d.document_name}"`).join(', ')}. Please click <strong>Re-upload Document</strong> on the rejected card below to provide an updated copy.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Status Indicators */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card className="rounded-2xl border-slate-200 dark:border-zinc-850 shadow-sm">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="p-2.5 bg-[#f87941]/10 rounded-xl text-[#f87941]">
+                <FileText className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Documents</p>
+                <h4 className="text-xl font-black">{documents.length}</h4>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl border-slate-200 dark:border-zinc-850 shadow-sm">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="p-2.5 bg-emerald-500/10 rounded-xl text-emerald-600">
+                <CheckCircle2 className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Verified</p>
+                <h4 className="text-xl font-black text-emerald-600">{verifiedDocs.length}</h4>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl border-slate-200 dark:border-zinc-850 shadow-sm">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="p-2.5 bg-amber-500/10 rounded-xl text-amber-600">
+                <Clock className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Under Review</p>
+                <h4 className="text-xl font-black text-amber-600">{pendingDocs.length}</h4>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className={`rounded-2xl shadow-sm ${rejectedDocs.length > 0 ? 'border-rose-500/40 bg-rose-50/30 dark:bg-rose-950/10' : 'border-slate-200 dark:border-zinc-850'}`}>
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className={`p-2.5 rounded-xl ${rejectedDocs.length > 0 ? 'bg-rose-500/20 text-rose-600' : 'bg-slate-100 text-slate-400'}`}>
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Action Required</p>
+                <h4 className={`text-xl font-black ${rejectedDocs.length > 0 ? 'text-rose-600' : 'text-slate-600'}`}>
+                  {rejectedDocs.length}
+                </h4>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Document Cards Roster */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-extrabold flex items-center gap-2">
+              <ShieldCheck className="h-4.5 w-4.5 text-[#f87941]" />
+              My Submitted Documents
+            </h2>
+            <Badge className="bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-slate-300 border-none font-bold text-xs">
+              {documents.length} Records
+            </Badge>
+          </div>
+
+          {documents.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {documents.map((doc: any) => {
+                const isRejected = doc.verification_status === 'rejected';
+                const isVerified = doc.verification_status === 'verified';
+                const catName = doc.document_categories?.name || doc.document_type || 'Identity Proof';
+
+                return (
+                  <Card
+                    key={doc.id}
+                    className={`rounded-2xl transition-all ${
+                      isRejected
+                        ? 'border-2 border-rose-500/60 bg-rose-50/10 dark:bg-rose-950/20 shadow-md'
+                        : 'border-slate-200 dark:border-zinc-800 shadow-sm'
+                    }`}
+                  >
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="space-y-1">
+                          <CardTitle className="text-base font-black flex items-center gap-2">
+                            <FileText className={`h-4.5 w-4.5 ${isRejected ? 'text-rose-500' : 'text-[#f87941]'}`} />
+                            {doc.document_name}
+                          </CardTitle>
+                          <div className="flex items-center gap-2 flex-wrap pt-0.5">
+                            <Badge className="bg-slate-100 text-slate-700 dark:bg-zinc-800 dark:text-slate-200 border border-slate-200/60 dark:border-zinc-700/60 text-[10px] font-bold px-2 py-0.5 uppercase">
+                              {catName}
+                            </Badge>
+                            {doc.version && doc.version > 1 && (
+                              <Badge className="bg-purple-500/10 text-purple-600 border border-purple-500/20 text-[10px] font-bold px-1.5 py-0.5">
+                                v{doc.version}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+
+                        <Badge
+                          className={`text-[10px] font-bold border px-2.5 py-1 uppercase rounded-xl ${
+                            isVerified
+                              ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
+                              : isRejected
+                              ? 'bg-rose-500/15 text-rose-600 border-rose-500/30'
+                              : 'bg-amber-500/10 text-amber-600 border-amber-500/30'
+                          }`}
+                        >
+                          {isVerified ? 'VERIFIED' : isRejected ? 'REJECTED' : 'PENDING'}
+                        </Badge>
+                      </div>
+                    </CardHeader>
+
+                    <CardContent className="space-y-3 pb-3 text-xs">
+                      {isRejected && (
+                        <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-xs space-y-1">
+                          <p className="font-bold text-rose-700 dark:text-rose-400 flex items-center gap-1.5">
+                            <AlertTriangle className="h-3.5 w-3.5" /> Rejection Feedback from HR:
+                          </p>
+                          <p className="text-slate-700 dark:text-slate-300 text-[11px] pl-5">
+                            {doc.rejection_reason || 'Document does not satisfy compliance standards. Please re-upload a clear, readable copy.'}
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between text-slate-500 text-[11px] pt-1 border-t border-slate-100 dark:border-zinc-800">
+                        <span>Submitted: {doc.created_at ? new Date(doc.created_at).toLocaleDateString() : 'Recent'}</span>
+                        {doc.expiry_date && (
+                          <span className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3 text-[#f87941]" />
+                            Expires: {doc.expiry_date}
+                          </span>
+                        )}
+                      </div>
+                    </CardContent>
+
+                    <CardFooter className="pt-2 border-t border-slate-100 dark:border-zinc-850 flex items-center justify-between gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={(e) => handleViewFile(e, doc.file_url)}
+                        className="h-8 px-3 text-xs font-bold rounded-xl flex items-center gap-1.5"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" /> View File
+                      </Button>
+
+                      {isRejected ? (
+                        <Button
+                          size="sm"
+                          onClick={() => openReuploadModal(doc)}
+                          className="h-8 px-3.5 text-xs font-extrabold rounded-xl bg-[#f87941] hover:bg-[#e06634] text-white flex items-center gap-1.5 shadow-md shadow-[#f87941]/20"
+                        >
+                          <Upload className="h-3.5 w-3.5" /> Re-upload Document
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => openReuploadModal(doc)}
+                          className="h-8 px-3 text-xs font-bold rounded-xl text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-1.5"
+                        >
+                          <Upload className="h-3.5 w-3.5" /> Update File
+                        </Button>
+                      )}
+                    </CardFooter>
+                  </Card>
+                );
+              })}
+            </div>
+          ) : (
+            <Card className="rounded-2xl border-dashed border-2 p-12 text-center space-y-3">
+              <FileText className="h-10 w-10 text-slate-300 mx-auto" />
+              <h3 className="font-bold text-sm">No documents submitted yet</h3>
+              <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                Submit your identity proof, certificates, or address verification records using the button below.
+              </p>
+              <Button
+                onClick={() => setShowEmpUploadModal(true)}
+                className="bg-[#f87941] hover:bg-[#e06634] text-white font-bold text-xs h-9 px-4 rounded-xl"
+              >
+                <Plus className="h-3.5 w-3.5 mr-1" /> Upload Document
+              </Button>
+            </Card>
+          )}
+        </div>
+
+        {/* RE-UPLOAD MODAL */}
+        <Dialog open={showReuploadModal} onOpenChange={setShowReuploadModal}>
+          <DialogContent className="rounded-3xl max-w-lg border-slate-200 dark:border-zinc-800">
+            <DialogHeader>
+              <DialogTitle className="text-base font-black flex items-center gap-2">
+                <Upload className="h-5 w-5 text-[#f87941]" />
+                Re-upload {reuploadDoc?.document_name}
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                Upload your updated or corrected document copy for HR verification.
+              </DialogDescription>
+            </DialogHeader>
+
+            <form onSubmit={handleReuploadSubmit} className="space-y-4 pt-2">
+              {reuploadDoc?.rejection_reason && (
+                <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-xs space-y-1">
+                  <p className="font-bold text-rose-600 dark:text-rose-400 text-[11px]">HR Reason for Rejection:</p>
+                  <p className="text-slate-600 dark:text-slate-300 text-[11px]">{reuploadDoc.rejection_reason}</p>
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold">Select Replacement File</Label>
+                <Input
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg,.docx"
+                  onChange={handleReuploadFileChange}
+                  className="rounded-xl text-xs file:mr-3 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#f87941]/10 file:text-[#f87941]"
+                />
+                <p className="text-[10px] text-slate-400">Accepted: PDF, DOCX, PNG, JPG (Max 2MB)</p>
+              </div>
+
+              {reuploadingFile && (
+                <div className="flex items-center gap-2 text-xs text-[#f87941] font-semibold p-2 bg-[#f87941]/5 rounded-xl">
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  <span>Uploading file to secure cloud storage...</span>
+                </div>
+              )}
+
+              {reuploadFileName && !reuploadingFile && (
+                <div className="flex items-center gap-2 text-xs text-emerald-600 font-semibold p-2.5 bg-emerald-500/10 rounded-xl">
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  <span className="truncate">Ready: {reuploadFileName}</span>
+                </div>
+              )}
+
+              <DialogFooter className="pt-2 border-t border-slate-100 dark:border-zinc-800">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowReuploadModal(false)}
+                  className="rounded-xl text-xs font-bold"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={!reuploadFileUrl || submittingForm || reuploadingFile}
+                  className="bg-[#f87941] hover:bg-[#e06634] text-white font-bold text-xs rounded-xl"
+                >
+                  {submittingForm ? 'Submitting...' : 'Submit Re-upload'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* EMPLOYEE UPLOAD NEW DOCUMENT MODAL */}
+        <Dialog open={showEmpUploadModal} onOpenChange={setShowEmpUploadModal}>
+          <DialogContent className="rounded-3xl max-w-lg border-slate-200 dark:border-zinc-800">
+            <DialogHeader>
+              <DialogTitle className="text-base font-black flex items-center gap-2">
+                <Plus className="h-5 w-5 text-[#f87941]" />
+                Upload New Document
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                Submit onboarding documents, identity cards, or certifications to HR.
+              </DialogDescription>
+            </DialogHeader>
+
+            <form onSubmit={handleEmpUploadSubmit} className="space-y-4 pt-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold">Category</Label>
+                <select
+                  value={selectedCategoryId || ''}
+                  onChange={(e) => setSelectedCategoryId(Number(e.target.value))}
+                  className="w-full text-xs p-2.5 border rounded-xl bg-background"
+                >
+                  {categories.map((c: any) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold">Document Title</Label>
+                <Input
+                  value={docName}
+                  onChange={(e) => setDocName(e.target.value)}
+                  placeholder="e.g. Passport, Pan Card, Degree Certificate"
+                  className="rounded-xl text-xs"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold">Expiry Date (Optional)</Label>
+                <Input
+                  type="date"
+                  value={docExpiry}
+                  onChange={(e) => setDocExpiry(e.target.value)}
+                  className="rounded-xl text-xs"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold">Choose File</Label>
+                <Input
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg,.docx"
+                  onChange={handleFileChange}
+                  className="rounded-xl text-xs file:mr-3 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#f87941]/10 file:text-[#f87941]"
+                />
+                <p className="text-[10px] text-slate-400">Accepted: PDF, DOCX, PNG, JPG (Max 2MB)</p>
+              </div>
+
+              {uploadingFileState && (
+                <div className="flex items-center gap-2 text-xs text-[#f87941] font-semibold p-2 bg-[#f87941]/5 rounded-xl">
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  <span>Uploading file...</span>
+                </div>
+              )}
+
+              {docUrl && !uploadingFileState && (
+                <div className="flex items-center gap-2 text-xs text-emerald-600 font-semibold p-2.5 bg-emerald-500/10 rounded-xl">
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  <span className="truncate">Attached: {docName}</span>
+                </div>
+              )}
+
+              <DialogFooter className="pt-2 border-t border-slate-100 dark:border-zinc-800">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowEmpUploadModal(false)}
+                  className="rounded-xl text-xs font-bold"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={!docUrl || submittingForm || uploadingFileState}
+                  className="bg-[#f87941] hover:bg-[#e06634] text-white font-bold text-xs rounded-xl"
+                >
+                  {submittingForm ? 'Uploading...' : 'Submit to HR'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }

@@ -4,6 +4,7 @@ import { BadRequestError, ConflictError, NotFoundError } from '@/server/http/err
 import { createInvoiceSchema, invoiceStatusSchema, updateInvoiceSchema } from '@/server/validation/billing';
 import {
   getAdminRouteSupabase,
+  resolveTenantId,
 } from '@/server/supabase/route-helpers';
 import { safeInsert } from '@/server/supabase/safe-insert';
 
@@ -54,10 +55,12 @@ export const GET = withApiHandler(async (request, context) => {
   const id = searchParams.get('id');
 
   const accessToken = context.auth?.accessToken;
-  const tenantId = context.auth?.user.tenantId;
-  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
-  
   const supabase = getAdminRouteSupabase();
+  let tenantId = context.auth?.user?.tenantId;
+  if (!tenantId) {
+    tenantId = await resolveTenantId(context, supabase);
+  }
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
 
   if (id) {
     const { data, error } = await supabase
@@ -127,6 +130,8 @@ export const POST = withApiHandler(async (request, context) => {
     status: payload.status ?? 'draft',
     paid_date: payload.paidDate ?? null,
     notes: payload.notes ?? null,
+    terms_and_conditions: payload.termsAndConditions ?? null,
+    payment_terms: payload.paymentTerms ?? null,
     tenant_id: tenantId,
     created_at: now,
     updated_at: now,
@@ -141,10 +146,12 @@ export const PUT = withApiHandler(async (request, context) => {
   const payload = updateInvoiceSchema.parse(await request.json());
 
   const accessToken = context.auth?.accessToken;
-  const tenantId = context.auth?.user.tenantId;
-  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
-  
   const supabase = getAdminRouteSupabase();
+  let tenantId = context.auth?.user?.tenantId;
+  if (!tenantId) {
+    tenantId = await resolveTenantId(context, supabase);
+  }
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
   const { data: existingInvoice } = await supabase
     .from('invoices')
     .select('*')
@@ -175,6 +182,8 @@ export const PUT = withApiHandler(async (request, context) => {
     ...(payload.dueDate !== undefined ? { due_date: payload.dueDate } : {}),
     ...(payload.paidDate !== undefined ? { paid_date: payload.paidDate ?? null } : {}),
     ...(payload.notes !== undefined ? { notes: payload.notes ?? null } : {}),
+    ...(payload.termsAndConditions !== undefined ? { terms_and_conditions: payload.termsAndConditions ?? null } : {}),
+    ...(payload.paymentTerms !== undefined ? { payment_terms: payload.paymentTerms ?? null } : {}),
     ...(payload.status !== undefined ? { status: payload.status } : {}),
     updated_at: new Date().toISOString(),
   })
@@ -191,10 +200,12 @@ export const DELETE = withApiHandler(async (request, context) => {
   if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('Valid invoice id is required');
 
   const accessToken = context.auth?.accessToken;
-  const tenantId = context.auth?.user.tenantId;
-  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
-  
   const supabase = getAdminRouteSupabase();
+  let tenantId = context.auth?.user?.tenantId;
+  if (!tenantId) {
+    tenantId = await resolveTenantId(context, supabase);
+  }
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
   const { data, error } = await supabase
     .from('invoices')
     .delete()

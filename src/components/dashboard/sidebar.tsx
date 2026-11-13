@@ -239,7 +239,7 @@ const categories: NavCategory[] = [
       { name: 'Leaves & Time Off', href: '/dashboard/leaves', icon: Calendar, roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] },
       { name: 'Work From Home', href: '/dashboard/employees/wfh', icon: Home, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] },
       { name: 'Holiday Calendar', href: '/dashboard/employees/holidays', icon: CalendarDays, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
-      { name: 'Attendance Policies', href: '/dashboard/attendance/policies', icon: ScrollText, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] }
+      { name: 'Attendance Policies', href: '/dashboard/attendance/policies', icon: ScrollText, roles: ['admin', 'super_admin', 'superadmin', 'owner', 'ceo', 'cto', 'business_owner', 'hr_manager', 'project_manager', 'management', 'director', 'cms_administrator'] }
     ]
   },
   {
@@ -250,7 +250,7 @@ const categories: NavCategory[] = [
       { name: 'HR Service Desk', href: '/dashboard/hr-service-desk', icon: HelpCircle, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] },
       { name: 'Employee Request Center', href: '/dashboard/employees/requests', icon: MessageSquare, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee'] },
       { name: 'Company Announcements', href: '/dashboard/employees/broadcast', icon: Inbox, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] },
-      { name: 'Document Vault', href: '/dashboard/employees/documents', icon: FileText, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
+      { name: 'Document Vault', href: '/dashboard/employees/documents', icon: FileText, roles: ['admin', 'super_admin', 'superadmin', 'owner', 'ceo', 'cto', 'business_owner', 'hr_manager', 'project_manager', 'management', 'developer', 'employee', 'intern'] },
       { name: 'Asset Tracker', href: '/dashboard/employees/assets', icon: Laptop, roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'] },
       { name: 'Training & Skills', href: '/dashboard/employees/training', icon: GraduationCap, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] },
       { name: 'Wellness Operations', href: '/dashboard/employees/wellness', icon: HeartHandshake, roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'] },
@@ -607,7 +607,6 @@ export function DashboardSidebar({ user, isMobile = false, onClose, companyName:
               if (
                 item.href === '/dashboard/employees/holidays' ||
                 item.href === '/dashboard/employees/assets' ||
-                item.href === '/dashboard/employees/documents' ||
                 item.href === '/dashboard/employees/directory' ||
                 item.href === '/dashboard/projects' ||
                 item.href === '/dashboard/tasks/sprint-planning'

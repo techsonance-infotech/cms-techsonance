@@ -1,15 +1,14 @@
 import { NextResponse } from 'next/server';
 import { withApiHandler } from '@/server/http/handler';
 import { BadRequestError, NotFoundError } from '@/server/http/errors';
-import { getAdminRouteSupabase, getCurrentSupabaseActor } from '@/server/supabase/route-helpers';
+import { getAdminRouteSupabase, getCurrentSupabaseActor, resolveTenantId } from '@/server/supabase/route-helpers';
 import { attendancePolicySchema } from '@/server/validation/attendance-admin';
 import { logAuditAction, publishDomainEvent } from '@/server/events/dispatcher';
 
 export const GET = withApiHandler(async (request, context) => {
-  const tenantId = context.auth?.user.tenantId;
-  if (!tenantId) throw new BadRequestError('Tenant info required');
-
   const supabase = getAdminRouteSupabase();
+  const tenantId = await resolveTenantId(context, supabase);
+  if (!tenantId) throw new BadRequestError('Tenant info required');
 
   let { data: policies, error } = await supabase
     .from('attendance_policies')
@@ -68,11 +67,10 @@ export const GET = withApiHandler(async (request, context) => {
 
 export const POST = withApiHandler(async (request, context) => {
   const payload = attendancePolicySchema.parse(await request.json());
-  const tenantId = context.auth?.user.tenantId;
+  const supabase = getAdminRouteSupabase();
+  const tenantId = await resolveTenantId(context, supabase);
   const accessToken = context.auth?.accessToken;
   if (!tenantId) throw new BadRequestError('Tenant info required');
-
-  const supabase = getAdminRouteSupabase();
 
   let actorLegacyId = context.auth?.user?.id ? String(context.auth.user.id) : null;
   if (accessToken) {
@@ -152,11 +150,10 @@ export const PUT = withApiHandler(async (request, context) => {
   if (!policyId) throw new BadRequestError('Policy ID query parameter is required');
 
   const payload = attendancePolicySchema.parse(await request.json());
-  const tenantId = context.auth?.user.tenantId;
+  const supabase = getAdminRouteSupabase();
+  const tenantId = await resolveTenantId(context, supabase);
   const accessToken = context.auth?.accessToken;
   if (!tenantId) throw new BadRequestError('Tenant info required');
-
-  const supabase = getAdminRouteSupabase();
 
   let actorLegacyId = context.auth?.user?.id ? String(context.auth.user.id) : null;
   if (accessToken) {
@@ -235,11 +232,10 @@ export const DELETE = withApiHandler(async (request, context) => {
   const policyId = url.searchParams.get('id');
   if (!policyId) throw new BadRequestError('Policy ID query parameter is required');
 
-  const tenantId = context.auth?.user.tenantId;
+  const supabase = getAdminRouteSupabase();
+  const tenantId = await resolveTenantId(context, supabase);
   const accessToken = context.auth?.accessToken;
   if (!tenantId) throw new BadRequestError('Tenant info required');
-
-  const supabase = getAdminRouteSupabase();
 
   let actorLegacyId = context.auth?.user?.id ? String(context.auth.user.id) : null;
   if (accessToken) {
