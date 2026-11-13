@@ -8,7 +8,7 @@ export const GET = withApiHandler(async (request, context) => {
   const supabase = getAdminRouteSupabase();
 
   // Resolve user UUID and tenant ID robustly
-  let authUserId = user.providerUserId || (typeof user.id === 'string' && user.id.includes('-') ? user.id : null);
+  let authUserId = user.providerUserId || (typeof (user as any).id === 'string' && (user as any).id.includes('-') ? (user as any).id : null);
   let tenantId = user.tenantId;
 
   if (!authUserId || !tenantId) {

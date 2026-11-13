@@ -112,8 +112,8 @@ export const POST = withApiHandler(async (request, context) => {
   const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const actorUuid = await resolveActorUuid(context, supabase);
   const createdByUuid =
-    (user.id && typeof user.id === 'string' && UUID_REGEX.test(user.id))
-      ? user.id
+    ((user as any).id && typeof (user as any).id === 'string' && UUID_REGEX.test((user as any).id))
+      ? (user as any).id
       : (actorUuid && UUID_REGEX.test(actorUuid))
       ? actorUuid
       : (user.providerUserId && typeof user.providerUserId === 'string' && UUID_REGEX.test(user.providerUserId))

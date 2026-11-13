@@ -179,7 +179,7 @@ export const GET = withApiHandler(async (request, context) => {
         currentEmpData?.user_id ? String(currentEmpData.user_id) : null,
         currentEmployee.id && UUID_REGEX.test(currentEmployee.id) ? String(currentEmployee.id) : null,
         user.providerUserId && UUID_REGEX.test(user.providerUserId) ? String(user.providerUserId) : null,
-        user.id && typeof user.id === 'string' && UUID_REGEX.test(user.id) ? String(user.id) : null
+        (user as any).id && typeof (user as any).id === 'string' && UUID_REGEX.test((user as any).id) ? String((user as any).id) : null
       ].filter(id => id && UUID_REGEX.test(id)) as string[];
 
       const validMatchUuids = Array.from(new Set(candidateUuids));

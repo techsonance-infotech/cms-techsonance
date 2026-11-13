@@ -182,7 +182,7 @@ export const GET = withApiHandler(async (request, context) => {
         currentUserRecord?.id ? String(currentUserRecord.id) : null,
         currentEmpData?.user_id ? String(currentEmpData.user_id) : null,
         user.providerUserId ? String(user.providerUserId) : null,
-        typeof user.id === 'string' && UUID_REGEX.test(user.id) ? user.id : null
+        typeof (user as any).id === 'string' && UUID_REGEX.test((user as any).id) ? (user as any).id : null
       ];
       // hr_service_tickets.user_id is a UUID column; filter out non-UUID values to prevent PostgreSQL syntax errors
       const matchIds = Array.from(new Set(candidates.filter((id): id is string => Boolean(id && UUID_REGEX.test(id)))));
@@ -311,7 +311,7 @@ export const POST = withApiHandler(async (request, context) => {
 
     const userUuid = (user.providerUserId && UUID_REGEX.test(user.providerUserId))
       ? user.providerUserId
-      : (typeof user.id === 'string' && UUID_REGEX.test(user.id) ? user.id : null);
+      : (typeof (user as any).id === 'string' && UUID_REGEX.test((user as any).id) ? (user as any).id : null);
 
     if (userUuid && user.email) {
       uQuery = uQuery.or(`id.eq.${userUuid},email.eq.${user.email}`);
