@@ -4,7 +4,7 @@ import { BadRequestError, ForbiddenError, NotFoundError } from '@/server/http/er
 import { getAdminRouteSupabase, resolveTenantId, resolveActorUuid } from '@/server/supabase/route-helpers';
 
 // Catalog of 11 Supported Employee Wellness Operations
-export const WELLNESS_SERVICES_CATALOG = [
+const WELLNESS_SERVICES_CATALOG = [
   { category: 'Health Checkups', name: 'Annual Executive Health Checkup', description: 'Comprehensive diagnostic blood work, ECG, vision screening, and physician consultation.', slaHours: 24, iconName: 'Activity' },
   { category: 'Mental Wellness', name: 'Mindfulness & Meditation Workshops', description: 'Weekly guided stress reduction, breathwork, and mental clarity sessions.', slaHours: 12, iconName: 'Brain' },
   { category: 'Counselling', name: '1-on-1 Confidential Professional Counselling', description: 'Private 45-minute sessions with licensed clinical psychologists and counselors.', slaHours: 12, iconName: 'HeartHandshake' },

@@ -7,6 +7,7 @@
 import type { AuthContext } from '@/server/auth/session';
 import type { UserRole, ModulePermissions } from '@/lib/rbac/types';
 import { mapAppRoleToUserRole } from '@/server/rbac/mapper';
+import { ROLE_DEFINITIONS } from '@/lib/rbac/roles';
 import { UnauthorizedError } from '@/server/http/errors';
 
 export interface RBACAuthContext extends AuthContext {
@@ -19,10 +20,10 @@ type ActionKey = 'create' | 'read' | 'update' | 'delete' | 'approve' | 'export';
 
 /**
  * Check if authenticated user has permission for a specific module action
- * Uses existing AppRole hierarchy until database migration
+ * Uses granular RBAC definitions with AppRole fallback
  * @param authContext - Authentication context
- * @param module - Module name (e.g., 'users', 'projects')
- * @param action - Action type (e.g., 'create', 'update')
+ * @param module - Module name (e.g., 'users', 'projects', 'finance')
+ * @param action - Action type (e.g., 'create', 'update', 'delete', 'approve', 'export')
  * @returns Boolean indicating if user has permission
  */
 export function hasRBACPermission(
@@ -33,11 +34,23 @@ export function hasRBACPermission(
   if (!authContext) return false;
 
   try {
-    // For now, use AppRole hierarchy - this can be migrated to database after deployment
+    const rawRole = authContext.user.rawRole || authContext.user.role;
     const appRole = authContext.user.role;
     
     // SuperAdmin has access to everything
     if (appRole === 'SuperAdmin') return true;
+
+    // Check granular UserRole definitions first
+    const userRole = mapAppRoleToUserRole(rawRole);
+    const roleDef = ROLE_DEFINITIONS[userRole];
+
+    if (roleDef && roleDef.permissions && roleDef.permissions[module]) {
+      const perms = roleDef.permissions[module];
+      const hasPerm = perms[action];
+      if (typeof hasPerm === 'boolean') {
+        return hasPerm;
+      }
+    }
     
     // Map role to capabilities based on module and action
     const getRoleCapabilities = (role: string, module: ModuleKey, action: ActionKey) => {

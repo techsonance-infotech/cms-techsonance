@@ -177,10 +177,10 @@ async function processAttendanceData(
   return result;
 }
 
-async function authorizePollRequest(request: Request) {
+async function authorizePollRequest(request: Request): Promise<{ source: 'cron' | 'manual'; tenantId: string | null }> {
   const authHeader = request.headers.get('authorization');
   const isCron = Boolean(env.CRON_SECRET && authHeader === `Bearer ${env.CRON_SECRET}`);
-  if (isCron) return 'cron';
+  if (isCron) return { source: 'cron', tenantId: null };
 
   const origin = request.headers.get('origin');
   const host = request.headers.get('host');
@@ -188,28 +188,35 @@ async function authorizePollRequest(request: Request) {
   const isSameOrigin = Boolean((origin && host && origin.includes(host)) || (referer && host && referer.includes(host)));
 
   if (isSameOrigin) {
-    await authenticateRequest(request, { required: true, roles: ['Admin'] });
-    return 'manual';
+    const auth = await authenticateRequest(request, { required: true, roles: ['Admin'] });
+    return { source: 'manual', tenantId: auth?.user?.tenantId || null };
   }
 
   if (env.NODE_ENV === 'production') {
     throw new UnauthorizedError('Unauthorized');
   }
 
-  await authenticateRequest(request, { required: true, roles: ['Admin'] });
-  return 'manual';
+  const auth = await authenticateRequest(request, { required: true, roles: ['Admin'] });
+  return { source: 'manual', tenantId: auth?.user?.tenantId || null };
 }
 
 export async function GET(request: Request) {
   const startedAt = Date.now();
   try {
-    const source = await authorizePollRequest(request);
-    logger.info('firebase_poll_started', { source });
+    const { source, tenantId: callerTenantId } = await authorizePollRequest(request);
+    logger.info('firebase_poll_started', { source, tenantId: callerTenantId });
 
     const supabase = getSupabaseAdminClient() as any;
+    let empQuery = supabase.from('employees').select('id, tenant_id, employee_id, nfc_card_id');
+    let tagQuery = supabase.from('nfc_tags').select('tag_uid, employee_id');
+
+    if (callerTenantId) {
+      empQuery = empQuery.eq('tenant_id', callerTenantId);
+    }
+
     const [{ data: allEmployees, error: employeeError }, { data: allTags, error: tagError }] = await Promise.all([
-      supabase.from('employees').select('id, tenant_id, employee_id, nfc_card_id'),
-      supabase.from('nfc_tags').select('tag_uid, employee_id'),
+      empQuery,
+      tagQuery,
     ]);
     if (employeeError) throw employeeError;
     if (tagError) throw tagError;

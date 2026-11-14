@@ -206,6 +206,20 @@ export const DELETE = withApiHandler(async (request, context) => {
     tenantId = await resolveTenantId(context, supabase);
   }
   if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+
+  // Check if invoice exists and verify financial state
+  const { data: existingInvoice } = await supabase
+    .from('invoices')
+    .select('id, status')
+    .eq('id', id)
+    .eq('tenant_id', tenantId)
+    .single();
+
+  if (!existingInvoice) throw new NotFoundError('Invoice not found');
+  if (existingInvoice.status === 'paid') {
+    throw new BadRequestError('Cannot delete a paid commercial invoice. Create a credit note or adjustment instead.');
+  }
+
   const { data, error } = await supabase
     .from('invoices')
     .delete()
@@ -215,4 +229,4 @@ export const DELETE = withApiHandler(async (request, context) => {
     .single();
   if (error || !data) throw new NotFoundError('Invoice not found');
   return NextResponse.json({ message: 'Invoice deleted successfully', invoice: normalizeSupabaseInvoiceRow(data) });
-}, { requireAuth: true, roles: ['Employee'] });
+}, { requireAuth: true, roles: ['Admin'] });

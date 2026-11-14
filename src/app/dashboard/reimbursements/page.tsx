@@ -23,7 +23,7 @@ import {
 import { toast } from 'sonner';
 
 // Define the 15 Expense Categories
-export const EXPENSE_CATEGORIES = [
+const EXPENSE_CATEGORIES = [
   { id: 'Travel', name: 'Business Travel & Flights' },
   { id: 'Fuel', name: 'Fuel & Mileage Allowance' },
   { id: 'Food', name: 'Meals & Dining' },
@@ -42,7 +42,7 @@ export const EXPENSE_CATEGORIES = [
   { id: 'Custom', name: 'Custom Expense Category' }
 ];
 
-export interface RosterEmp {
+interface RosterEmp {
   id: string;
   name: string;
   email: string;
@@ -50,7 +50,7 @@ export interface RosterEmp {
   designation: string;
 }
 
-export interface ClaimRecord {
+interface ClaimRecord {
   id: string;
   userId: string;
   claimCode: string;

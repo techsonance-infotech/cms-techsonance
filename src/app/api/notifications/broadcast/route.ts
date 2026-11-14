@@ -33,7 +33,7 @@ async function resolveUserUuid(supabase: any, rawId: any, email?: string): Promi
   return null;
 }
 
-export const DEFAULT_BROADCAST_CATEGORIES = [
+const DEFAULT_BROADCAST_CATEGORIES = [
   {
     id: 'company-announcement',
     name: 'Company Announcement',
@@ -96,7 +96,7 @@ export const DEFAULT_BROADCAST_CATEGORIES = [
   }
 ];
 
-export const DEFAULT_BROADCAST_GATEWAYS = [
+const DEFAULT_BROADCAST_GATEWAYS = [
   { id: 'gw-email', name: 'Corporate Email (SMTP/SES)', channel_key: 'email', status: 'Connected', uptime: '99.98%', speed: '2,500 msg/min' },
   { id: 'gw-sms', name: 'SMS Carrier Gateway (Twilio)', channel_key: 'sms', status: 'Connected', uptime: '99.92%', speed: '1,200 msg/min' },
   { id: 'gw-wa', name: 'WhatsApp Business API', channel_key: 'whatsapp', status: 'Connected', uptime: '99.85%', speed: '800 msg/min' },

@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-export const SHIFT_TYPES = [
+const SHIFT_TYPES = [
   { id: 'general', name: 'General Shift (09:00 - 18:00)', icon: Sun, color: 'bg-blue-500/10 text-blue-600' },
   { id: 'morning', name: 'Morning Shift (06:00 - 15:00)', icon: Sunrise, color: 'bg-amber-500/10 text-amber-600' },
   { id: 'evening', name: 'Evening Shift (14:00 - 23:00)', icon: Sunset, color: 'bg-orange-500/10 text-orange-600' },
@@ -31,7 +31,7 @@ export const SHIFT_TYPES = [
   { id: 'custom', name: 'Custom Shift', icon: Sliders, color: 'bg-cyan-500/10 text-cyan-600' }
 ];
 
-export interface RosterEmp {
+interface RosterEmp {
   id: string;
   name: string;
   email: string;
@@ -39,7 +39,7 @@ export interface RosterEmp {
   designation: string;
 }
 
-export interface ShiftDef {
+interface ShiftDef {
   id: string;
   shift_code: string;
   name: string;
@@ -50,7 +50,7 @@ export interface ShiftDef {
   differential_pay_percentage: number;
 }
 
-export interface SwapReq {
+interface SwapReq {
   id: string;
   requesterName: string;
   targetName: string;

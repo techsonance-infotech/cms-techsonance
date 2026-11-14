@@ -8,7 +8,7 @@ import { normalizeAppRole } from '@/server/auth/rbac';
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Default Knowledge Base articles and FAQs
-export const DEFAULT_KB_ARTICLES = [
+const DEFAULT_KB_ARTICLES = [
   {
     articleNumber: 'KB-101',
     category: 'Payroll & Benefits',
@@ -48,7 +48,7 @@ export const DEFAULT_KB_ARTICLES = [
 ];
 
 // Escalation Matrix Tiers
-export const ESCALATION_MATRIX = [
+const ESCALATION_MATRIX = [
   { level: 1, tier: 'L1 Helpdesk Agent', slaHours: 12, targetRole: 'HR Operations Associate', autoEscalateAfter: '12 hours unresolved' },
   { level: 2, tier: 'L2 HR Manager', slaHours: 24, targetRole: 'Senior HR Business Partner', autoEscalateAfter: '24 hours unresolved' },
   { level: 3, tier: 'L3 VP & HR Director', slaHours: 48, targetRole: 'VP of People & Culture', autoEscalateAfter: '48 hours unresolved' }

@@ -90,13 +90,18 @@ async function resolveTenantUserByLegacyUserId(legacyUserId: number) {
   return data as SupabaseUserRow;
 }
 
-async function getJobById(jobId: number) {
+async function getJobById(jobId: number, tenantId?: string) {
   const supabase = getAdmin();
-  const { data, error } = await supabase
+  let query = supabase
     .from('payroll_jobs')
     .select('*')
-    .eq('id', jobId)
-    .single();
+    .eq('id', jobId);
+
+  if (tenantId) {
+    query = query.eq('tenant_id', tenantId);
+  }
+
+  const { data, error } = await query.single();
 
   if (error || !data) {
     throw new NotFoundError('Payroll job not found');
@@ -404,19 +409,21 @@ export async function processPayrollJob(jobId: number) {
     throw error;
   }
 
-  return getPayrollJob(jobId);
+  return getPayrollJob(jobId, job.tenant_id);
 }
 
-export async function getPayrollJob(jobId: number) {
-  return normalizeJob(await getJobById(jobId));
+export async function getPayrollJob(jobId: number, tenantId?: string) {
+  return normalizeJob(await getJobById(jobId, tenantId));
 }
 
-export async function getPayrollQueueStatus() {
+export async function getPayrollQueueStatus(tenantId?: string) {
   const supabase = getAdmin();
+  const applyTenant = (q: any) => (tenantId ? q.eq('tenant_id', tenantId) : q);
+
   const [{ count: pending }, { count: processing }, { count: failed }] = await Promise.all([
-    supabase.from('payroll_jobs').select('id', { head: true, count: 'exact' }).eq('status', toQueueStatus('pending')),
-    supabase.from('payroll_jobs').select('id', { head: true, count: 'exact' }).eq('status', toQueueStatus('processing')),
-    supabase.from('payroll_jobs').select('id', { head: true, count: 'exact' }).eq('status', toQueueStatus('failed')),
+    applyTenant(supabase.from('payroll_jobs').select('id', { head: true, count: 'exact' }).eq('status', toQueueStatus('pending'))),
+    applyTenant(supabase.from('payroll_jobs').select('id', { head: true, count: 'exact' }).eq('status', toQueueStatus('processing'))),
+    applyTenant(supabase.from('payroll_jobs').select('id', { head: true, count: 'exact' }).eq('status', toQueueStatus('failed'))),
   ]);
 
   return {

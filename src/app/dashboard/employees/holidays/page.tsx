@@ -13,7 +13,7 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import {
-  Calendar, Globe, Landmark, Building2, Layers, GitMerge, Sparkles,
+  Calendar, Globe, Landmark, MapPin, Building2, Layers, GitMerge, Sparkles,
   Plus, Download, Upload, Bell, BarChart3, TrendingUp, CheckCircle2,
   RefreshCw, SendHorizontal, AlertCircle, Filter, Check, Search, Award,
   Gift, Sun, Plane, Clock, Inbox, Trash2, ShieldAlert
@@ -22,7 +22,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
 // Define the 11 Scope Types
-export const HOLIDAY_SCOPES = [
+const HOLIDAY_SCOPES = [
   { id: 'global', name: 'Global Holiday (Universal)', icon: Globe, color: 'bg-rose-500/10 text-rose-600' },
   { id: 'country', name: 'Country Public Holiday', icon: Landmark, color: 'bg-blue-500/10 text-blue-600' },
   { id: 'state', name: 'State / Regional Holiday', icon: MapPin, color: 'bg-indigo-500/10 text-indigo-600' },
@@ -36,9 +36,7 @@ export const HOLIDAY_SCOPES = [
   { id: 'company', name: 'Company Foundation Day', icon: Gift, color: 'bg-orange-500/10 text-orange-600' }
 ];
 
-import { MapPin } from 'lucide-react';
-
-export interface HolidayRecord {
+interface HolidayRecord {
   id: string;
   title: string;
   holidayDate: string;

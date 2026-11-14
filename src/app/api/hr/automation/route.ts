@@ -6,7 +6,7 @@ import { generateLiveAiWorkforceDigest } from '@/server/hr-automation/ai-digest-
 import { getAiPerformanceSnapshot } from '@/server/ai/performance-monitor';
 
 // Catalog of all 21 Supported HR Automation Triggers & Executions
-export const HR_AUTOMATION_TRIGGERS = [
+const HR_AUTOMATION_TRIGGERS = [
   { category: 'Attendance Reminder', name: 'Daily Attendance Punch Reminder', defaultSchedule: 'Mon-Fri at 08:45 AM', channel: 'In-App & Email', iconName: 'Clock', template: 'Good morning! Please remember to check-in on the HR Portal before 09:00 AM.' },
   { category: 'Missing Punch Reminder', name: 'Missing Check-Out Punch Alert', defaultSchedule: 'Daily at 07:00 PM', channel: 'In-App & Email', iconName: 'AlertCircle', template: 'Notice: Your check-out punch is missing for today. Click to submit punch correction.' },
   { category: 'Late Arrival Alert', name: 'Late Arrival & Grace Period Alert', defaultSchedule: 'Real-time (09:15 AM)', channel: 'WhatsApp & In-App', iconName: 'Flame', template: 'Late Arrival Recorded: Grace period expired. Attendance logged with 15-min delay.' },

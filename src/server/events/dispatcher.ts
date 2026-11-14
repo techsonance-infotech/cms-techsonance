@@ -43,7 +43,7 @@ function parseUserAgent(uaStr?: string | null) {
 }
 
 /**
- * Creates an immutable record in the compliance audit log table.
+ * Creates a record in the system audit log table.
  */
 export async function logAuditAction(
   supabase: any,
@@ -52,27 +52,35 @@ export async function logAuditAction(
   try {
     const { browser, os } = parseUserAgent(params.userAgent);
 
+    const details = {
+      employeeId: params.employeeId ?? null,
+      recordId: params.recordId ?? null,
+      previousValues: params.previousValues ?? null,
+      updatedValues: params.updatedValues ?? null,
+      clientIp: params.clientIp ?? null,
+      userAgent: params.userAgent ?? null,
+      gpsCoordinates: params.gpsCoordinates ?? null,
+      browser,
+      operatingSystem: os,
+      ...(params.metadata ?? {}),
+    };
+
     const { error } = await supabase
-      .from('immutable_audit_logs')
+      .from('audit_logs')
       .insert({
         tenant_id: params.tenantId,
-        employee_id: params.employeeId ?? null,
-        actor_id: params.actorId ?? null,
-        action_type: params.actionType,
-        attendance_record_id: params.recordId ?? null,
-        previous_values: params.previousValues ?? null,
-        updated_values: params.updatedValues ?? null,
-        client_ip: params.clientIp ?? null,
-        user_agent: params.userAgent ?? null,
-        gps_coordinates: params.gpsCoordinates ?? null,
-        browser,
-        operating_system: os,
-        metadata: params.metadata ?? {},
+        actor_user_id: params.actorId ?? null,
+        action: `ATTENDANCE_${String(params.actionType).toUpperCase()}`,
+        resource_type: 'attendance',
+        resource_id: params.recordId ? String(params.recordId) : null,
+        method: 'POST',
+        path: '/api/attendance',
+        details,
         created_at: new Date().toISOString(),
       });
 
     if (error) {
-      logger.error('Failed to write immutable audit log:', { error: error.message, action: params.actionType });
+      logger.error('Failed to write audit log:', { error: error.message, action: params.actionType });
     }
   } catch (err: any) {
     logger.error('Error during audit logging dispatch:', { error: err.message });
@@ -80,31 +88,21 @@ export async function logAuditAction(
 }
 
 /**
- * Publishes a domain event to the database queue for asynchronous downstream syncs.
+ * Publishes a domain event for asynchronous processing and telemetry.
  */
 export async function publishDomainEvent(
-  supabase: any,
+  _supabase: any,
   tenantId: string,
   eventName: string,
   payload: Record<string, any>
 ): Promise<void> {
   try {
-    const { error } = await supabase
-      .from('domain_events')
-      .insert({
-        tenant_id: tenantId,
-        event_name: eventName,
-        payload,
-        processed: false,
-        created_at: new Date().toISOString(),
-      });
-
-    if (error) {
-      logger.error('Failed to publish domain event:', { error: error.message, eventName });
-    } else {
-      // Simulate real-time background event trigger for demonstration/dashboard updates
-      logger.info(`Domain event emitted: ${eventName}`, { tenantId, keys: Object.keys(payload) });
-    }
+    logger.info(`Domain event emitted: ${eventName}`, {
+      tenantId,
+      eventName,
+      keys: Object.keys(payload),
+      timestamp: new Date().toISOString(),
+    });
   } catch (err: any) {
     logger.error('Error during domain event dispatch:', { error: err.message });
   }

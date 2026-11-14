@@ -12,29 +12,53 @@ import type { UserRole } from '@/lib/rbac/types';
  * @returns New UserRole key
  */
 export function mapAppRoleToUserRole(appRole: AppRole | string): UserRole {
-  const roleMap: Record<string, UserRole> = {
-    // Old roles to new roles mapping
-    'SuperAdmin': 'admin',
-    'Admin': 'admin',
-    'Manager': 'project_manager',
-    'Employee': 'developer', // Default for employees
-    'Viewer': 'client',
+  const normalized = (appRole || '').toString().toLowerCase().trim();
 
-    // Direct new role mappings (for future use)
-    'admin': 'admin',
-    'project_manager': 'project_manager',
-    'developer': 'developer',
-    'designer': 'designer',
-    'content_editor': 'content_editor',
-    'qa_tester': 'qa_tester',
-    'client': 'client',
-    'support_team': 'support_team',
-    'devops_engineer': 'devops_engineer',
-    'business_analyst': 'business_analyst',
-    'finance_admin': 'finance_admin',
+  const roleMap: Record<string, UserRole> = {
+    // Admin / Executive
+    superadmin: 'admin',
+    super_admin: 'admin',
+    admin: 'admin',
+    owner: 'admin',
+    business_owner: 'admin',
+    tenant_owner: 'admin',
+    management: 'admin',
+    ceo: 'admin',
+    cto: 'admin',
+    director: 'admin',
+    hr_manager: 'admin',
+
+    // Finance / Accounting
+    accountant: 'finance_admin',
+    finance: 'finance_admin',
+    finance_admin: 'finance_admin',
+    billing: 'finance_admin',
+
+    // Management
+    manager: 'project_manager',
+    project_manager: 'project_manager',
+    business_analyst: 'business_analyst',
+
+    // Technical & Creative
+    developer: 'developer',
+    engineer: 'developer',
+    designer: 'designer',
+    content_editor: 'content_editor',
+    cms_administrator: 'content_editor',
+    qa_tester: 'qa_tester',
+    qa: 'qa_tester',
+    devops_engineer: 'devops_engineer',
+    devops: 'devops_engineer',
+    support_team: 'support_team',
+    support: 'support_team',
+
+    // Client & Viewer
+    client: 'client',
+    viewer: 'client',
+    employee: 'developer',
   };
 
-  return roleMap[appRole as string] || 'client';
+  return roleMap[normalized] || 'client';
 }
 
 /**
