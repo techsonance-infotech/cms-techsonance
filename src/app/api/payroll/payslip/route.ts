@@ -114,7 +114,7 @@ export const GET = withApiHandler(async (request, context) => {
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(20);
   pdf.setTextColor(15, 23, 42); // slate-900
-  pdf.text(String((settings as any)?.business_name || 'Techsonance CMS'), left, y);
+  pdf.text(String((settings as any)?.company_name || (settings as any)?.business_name || 'Company'), left, y);
 
   y += 18;
   pdf.setFont('helvetica', 'normal');

@@ -1948,6 +1948,12 @@ export default function SettingsPage() {
 
   // Load backend credentials/settings on init
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const sig = localStorage.getItem('tenant_signature_url');
+      if (sig === '/branding/tenant-signature.png') localStorage.removeItem('tenant_signature_url');
+      const st = localStorage.getItem('tenant_stamp_url');
+      if (st === '/branding/tenant-stamp.png') localStorage.removeItem('tenant_stamp_url');
+    }
     fetchInitialData();
   }, []);
 
@@ -2447,7 +2453,18 @@ export default function SettingsPage() {
         qrCodeEnabled: backendWorkspace.qrCodeEnabled !== undefined ? backendWorkspace.qrCodeEnabled : (backendCompany.qrCodeEnabled !== undefined ? backendCompany.qrCodeEnabled : false),
         qrCodeUrl: backendWorkspace.qrCodeUrl || backendCompany.qrCodeUrl || '',
         digitalSignatureEnabled: backendWorkspace.digitalSignatureEnabled !== undefined ? backendWorkspace.digitalSignatureEnabled : (backendCompany.digitalSignatureEnabled !== undefined ? backendCompany.digitalSignatureEnabled : false),
-        digitalSignatureUrl: backendWorkspace.digitalSignatureUrl || backendCompany.digitalSignatureUrl || '',
+        digitalSignatureUrl: (() => {
+          const sig = backendWorkspace.digitalSignatureUrl || backendCompany.digitalSignatureUrl || '';
+          return sig === '/branding/tenant-signature.png' ? '' : sig;
+        })(),
+        stampUrl: (() => {
+          const st = backendWorkspace.stampUrl || backendCompany.stampUrl || '';
+          return st === '/branding/tenant-stamp.png' ? '' : st;
+        })(),
+        signatoryName: backendWorkspace.signatoryName || backendCompany.signatoryName || '',
+        signatoryTitle: backendWorkspace.signatoryTitle || backendCompany.signatoryTitle || '',
+        tagline: backendWorkspace.tagline || backendCompany.tagline || '',
+        bankDetails: backendWorkspace.bankDetails || backendCompany.bankDetails || {},
         invoiceTemplate: backendWorkspace.invoiceTemplate || 'modern',
         multiCurrencyEnabled: backendWorkspace.multiCurrencyEnabled !== undefined ? backendWorkspace.multiCurrencyEnabled : false,
         supportedCurrencies: Array.isArray(backendWorkspace.supportedCurrencies) ? backendWorkspace.supportedCurrencies : [],
@@ -2501,13 +2518,18 @@ export default function SettingsPage() {
   };
 
   // State Change triggers Draft mode
+  const updateDraftFields = (fields: Partial<WorkspaceState>) => {
+    setUndoStack(prev => [...prev.slice(-30), workspaceDraft]);
+    setRedoStack([]);
+    setWorkspaceDraft(prev => ({ ...prev, ...fields }));
+    setHasUnsavedChanges(true);
+  };
+
   const updateDraftField = (field: keyof WorkspaceState, value: any) => {
-    // Push current draft to undo stack
     setUndoStack(prev => [...prev.slice(-30), workspaceDraft]); // Cap undo stack at 30
     setRedoStack([]); // Clear redo stack on manual edit
 
-    const updated = { ...workspaceDraft, [field]: value };
-    setWorkspaceDraft(updated);
+    setWorkspaceDraft(prev => ({ ...prev, [field]: value }));
     setHasUnsavedChanges(true);
   };
 
@@ -2779,9 +2801,15 @@ export default function SettingsPage() {
         setUndoStack([]);
         setRedoStack([]);
         toast.success(`Published changes successfully: ${callsMade.join(', ')}`);
-        if (typeof window !== 'undefined' && workspaceDraft.logoUrl) {
-          localStorage.setItem('tenant_logo_url', workspaceDraft.logoUrl);
+        if (typeof window !== 'undefined') {
+          if (workspaceDraft.logoUrl) localStorage.setItem('tenant_logo_url', workspaceDraft.logoUrl);
+          if (workspaceDraft.stampUrl) localStorage.setItem('tenant_stamp_url', workspaceDraft.stampUrl);
+          if (workspaceDraft.digitalSignatureUrl) localStorage.setItem('tenant_signature_url', workspaceDraft.digitalSignatureUrl);
+          if (workspaceDraft.signatoryName) localStorage.setItem('tenant_signatory_name', workspaceDraft.signatoryName);
+          if (workspaceDraft.signatoryTitle) localStorage.setItem('tenant_signatory_title', workspaceDraft.signatoryTitle);
+          if (workspaceDraft.tagline) localStorage.setItem('tenant_tagline', workspaceDraft.tagline);
           window.dispatchEvent(new CustomEvent('logo-updated', { detail: { logoUrl: workspaceDraft.logoUrl } }));
+          window.dispatchEvent(new CustomEvent('branding-updated', { detail: workspaceDraft }));
         }
       } else {
         toast.error('Some updates failed to synchronize.');
@@ -2820,6 +2848,7 @@ export default function SettingsPage() {
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = '';
 
     const isImage = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'].includes(file.type) || 
                     file.name.toLowerCase().endsWith('.png') || 
@@ -2852,7 +2881,7 @@ export default function SettingsPage() {
       }
     }
 
-    const kind = targetField === 'documents' ? 'employee_document' : 'avatar';
+    const kind = targetField === 'documents' ? 'employee_document' : 'logo';
     const formData = new FormData();
     formData.append('file', file);
     formData.append('kind', kind);
@@ -2884,13 +2913,38 @@ export default function SettingsPage() {
             localStorage.setItem('tenant_logo_url', fileUrl);
             window.dispatchEvent(new CustomEvent('logo-updated', { detail: { logoUrl: fileUrl } }));
           }
+          fetch('/api/workspace-settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+            body: JSON.stringify({ logoUrl: fileUrl })
+          }).catch(() => {});
         } else if (targetField === 'faviconUrl') {
           updateDraftField('faviconUrl', fileUrl);
         } else if (targetField === 'stampUrl') {
           updateDraftField('stampUrl', fileUrl);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('tenant_stamp_url', fileUrl);
+            window.dispatchEvent(new CustomEvent('branding-updated', { detail: { stampUrl: fileUrl } }));
+          }
+          fetch('/api/workspace-settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+            body: JSON.stringify({ stampUrl: fileUrl })
+          }).catch(() => {});
         } else if (targetField === 'digitalSignatureUrl') {
-          updateDraftField('digitalSignatureUrl', fileUrl);
-          updateDraftField('digitalSignatureEnabled', true);
+          updateDraftFields({
+            digitalSignatureUrl: fileUrl,
+            digitalSignatureEnabled: true
+          });
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('tenant_signature_url', fileUrl);
+            window.dispatchEvent(new CustomEvent('branding-updated', { detail: { digitalSignatureUrl: fileUrl, digitalSignatureEnabled: true } }));
+          }
+          fetch('/api/workspace-settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+            body: JSON.stringify({ digitalSignatureUrl: fileUrl, digitalSignatureEnabled: true })
+          }).catch(() => {});
         } else if (targetField === 'documents') {
           // Format file size
           const formatBytes = (bytes: number) => {
@@ -2919,8 +2973,10 @@ export default function SettingsPage() {
             updateDraftField('stampUrl', base64Url);
             toast.success(`${file.name} loaded (client preview)`);
           } else if (targetField === 'digitalSignatureUrl') {
-            updateDraftField('digitalSignatureUrl', base64Url);
-            updateDraftField('digitalSignatureEnabled', true);
+            updateDraftFields({
+              digitalSignatureUrl: base64Url,
+              digitalSignatureEnabled: true
+            });
             toast.success(`${file.name} loaded (client preview)`);
           } else if (targetField === 'logoUrl') {
             updateDraftField('logoUrl', base64Url);
@@ -2940,8 +2996,10 @@ export default function SettingsPage() {
           updateDraftField('stampUrl', base64Url);
           toast.success(`${file.name} loaded (offline preview)`);
         } else if (targetField === 'digitalSignatureUrl') {
-          updateDraftField('digitalSignatureUrl', base64Url);
-          updateDraftField('digitalSignatureEnabled', true);
+          updateDraftFields({
+            digitalSignatureUrl: base64Url,
+            digitalSignatureEnabled: true
+          });
           toast.success(`${file.name} loaded (offline preview)`);
         } else {
           toast.error('Network dispatch connection failure during upload');
@@ -5978,8 +6036,10 @@ export default function SettingsPage() {
                             className="text-xs rounded-xl h-8"
                             value={workspaceDraft.digitalSignatureUrl || ''}
                             onChange={e => {
-                              updateDraftField('digitalSignatureUrl', e.target.value);
-                              if (e.target.value) updateDraftField('digitalSignatureEnabled', true);
+                              updateDraftFields({
+                                digitalSignatureUrl: e.target.value,
+                                digitalSignatureEnabled: Boolean(e.target.value)
+                              });
                             }}
                           />
                         </div>

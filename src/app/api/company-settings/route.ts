@@ -57,8 +57,8 @@ function normalizeSupabaseCompanySettings(row: Record<string, unknown>) {
     qrCodeEnabled: row.qr_code_enabled ?? false,
     qrCodeUrl: row.qr_code_url ?? null,
     digitalSignatureEnabled: row.digital_signature_enabled ?? false,
-    digitalSignatureUrl: row.digital_signature_url ?? null,
-    stampUrl: row.stamp_url ?? null,
+    digitalSignatureUrl: row.digital_signature_url && row.digital_signature_url !== '/branding/tenant-signature.png' ? (row.digital_signature_url as string) : null,
+    stampUrl: row.stamp_url && row.stamp_url !== '/branding/tenant-stamp.png' ? (row.stamp_url as string) : null,
     signatoryName: row.signatory_name ?? null,
     signatoryTitle: row.signatory_title ?? null,
     tagline: row.tagline ?? null,
@@ -93,6 +93,33 @@ export const GET = withApiHandler(async (_request, context) => {
     .maybeSingle();
 
   const normalizedSettings = settings ? normalizeSupabaseCompanySettings(settings) : null;
+
+  // 3. Overlay custom fields from workspace settings.json if Supabase company_settings columns are missing
+  if (normalizedSettings) {
+    try {
+      const fs = await import('fs/promises');
+      const path = await import('path');
+      const settingsFilePath = path.join(process.cwd(), 'src/app/api/workspace-settings/settings.json');
+      const raw = await fs.readFile(settingsFilePath, 'utf-8');
+      const allWs = JSON.parse(raw);
+      const tenantWs = allWs[tenantId];
+      if (tenantWs) {
+        if (!normalizedSettings.stampUrl && tenantWs.stampUrl && tenantWs.stampUrl !== '/branding/tenant-stamp.png') {
+          normalizedSettings.stampUrl = tenantWs.stampUrl;
+        }
+        if (!normalizedSettings.digitalSignatureUrl && tenantWs.digitalSignatureUrl && tenantWs.digitalSignatureUrl !== '/branding/tenant-signature.png') {
+          normalizedSettings.digitalSignatureUrl = tenantWs.digitalSignatureUrl;
+        }
+        if (!normalizedSettings.signatoryName && tenantWs.signatoryName) normalizedSettings.signatoryName = tenantWs.signatoryName;
+        if (!normalizedSettings.signatoryTitle && tenantWs.signatoryTitle) normalizedSettings.signatoryTitle = tenantWs.signatoryTitle;
+        if (!normalizedSettings.tagline && tenantWs.tagline) normalizedSettings.tagline = tenantWs.tagline;
+        if ((!normalizedSettings.bankDetails || Object.keys(normalizedSettings.bankDetails).length === 0) && tenantWs.bankDetails) {
+          normalizedSettings.bankDetails = tenantWs.bankDetails;
+        }
+        if (!normalizedSettings.logoUrl && tenantWs.logoUrl) normalizedSettings.logoUrl = tenantWs.logoUrl;
+      }
+    } catch {}
+  }
   const tenantDetails = tenant ? {
     id: tenant.id,
     name: tenant.name,
@@ -113,20 +140,37 @@ export const GET = withApiHandler(async (_request, context) => {
 }, { requireAuth: true, roles: ['Employee'] });
 
 export const POST = withApiHandler(async (request, context) => {
-  const payload = companySettingsSchema.parse(await request.json());
-
+  const rawBody = await request.json();
   const accessToken = context.auth?.accessToken;
   const tenantId = context.auth?.user.tenantId;
   if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
   const supabase = getAdminRouteSupabase();
+
   const { data: existing } = await supabase
     .from('company_settings')
     .select('id')
     .eq('tenant_id', tenantId)
     .limit(1)
     .maybeSingle();
+
+  // If company settings already exist for this tenant, route seamlessly to PUT/update logic
   if (existing) {
-    throw new ConflictError('Company settings already exist. Use PUT to update the current record.');
+    const payload = updateCompanySettingsSchema.parse(rawBody);
+    return handleCompanySettingsPut(payload, tenantId, supabase, existing);
+  }
+
+  // If not existing, parse creation schema with tenant defaults if companyName or email is missing
+  let payload: any;
+  try {
+    payload = companySettingsSchema.parse(rawBody);
+  } catch {
+    const { data: tenant } = await supabase.from('tenants').select('name').eq('id', tenantId).maybeSingle();
+    const defaultedBody = {
+      companyName: tenant?.name || 'Company',
+      email: context.auth?.user.email || 'company@example.com',
+      ...rawBody,
+    };
+    payload = companySettingsSchema.parse(defaultedBody);
   }
 
   const now = new Date().toISOString();
@@ -295,23 +339,7 @@ export const POST = withApiHandler(async (request, context) => {
   return apiSuccess(normalizeSupabaseCompanySettings(created), 'Company settings created successfully', { status: 201 });
 }, { requireAuth: true, roles: ['Admin'] });
 
-export const PUT = withApiHandler(async (request, context) => {
-  const payload = updateCompanySettingsSchema.parse(await request.json());
-  if (Object.keys(payload).length === 0) {
-    throw new BadRequestError('At least one field is required to update company settings');
-  }
-
-  const accessToken = context.auth?.accessToken;
-  const tenantId = context.auth?.user.tenantId;
-  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
-  const supabase = getAdminRouteSupabase();
-  const { data: existing } = await supabase
-    .from('company_settings')
-    .select('id')
-    .eq('tenant_id', tenantId)
-    .limit(1)
-    .maybeSingle();
-
+async function handleCompanySettingsPut(payload: any, tenantId: string, supabase: any, existingRow?: any) {
   // If workspaceName (slug) is updated, sync it with the tenants table slug
   if (payload.workspaceName !== undefined && payload.workspaceName !== null && payload.workspaceName.trim()) {
     const slug = payload.workspaceName.trim();
@@ -324,6 +352,36 @@ export const PUT = withApiHandler(async (request, context) => {
       console.error('Failed to update tenant slug:', tenantUpdateError);
     }
   }
+
+  // Also sync branding and signatory fields to workspace settings.json
+  try {
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    const settingsFilePath = path.join(process.cwd(), 'src/app/api/workspace-settings/settings.json');
+    const raw = await fs.readFile(settingsFilePath, 'utf-8');
+    const allWs = JSON.parse(raw);
+    allWs[tenantId] = allWs[tenantId] || {};
+    if (payload.stampUrl !== undefined) allWs[tenantId].stampUrl = payload.stampUrl;
+    if (payload.digitalSignatureUrl !== undefined) allWs[tenantId].digitalSignatureUrl = payload.digitalSignatureUrl;
+    if (payload.digitalSignatureEnabled !== undefined) allWs[tenantId].digitalSignatureEnabled = payload.digitalSignatureEnabled;
+    if (payload.signatoryName !== undefined) allWs[tenantId].signatoryName = payload.signatoryName;
+    if (payload.signatoryTitle !== undefined) allWs[tenantId].signatoryTitle = payload.signatoryTitle;
+    if (payload.tagline !== undefined) allWs[tenantId].tagline = payload.tagline;
+    if (payload.bankDetails !== undefined) allWs[tenantId].bankDetails = payload.bankDetails;
+    if (payload.logoUrl !== undefined) allWs[tenantId].logoUrl = payload.logoUrl;
+    await fs.writeFile(settingsFilePath, JSON.stringify(allWs, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('Failed to sync to settings.json during company-settings update:', err);
+  }
+
+  const existing = existingRow !== undefined
+    ? existingRow
+    : (await supabase
+        .from('company_settings')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .limit(1)
+        .maybeSingle()).data;
 
   if (!existing) {
     // Dynamic Upsert Fallback: Insert a new row if settings don't exist yet
@@ -683,4 +741,17 @@ export const PUT = withApiHandler(async (request, context) => {
 
   if (!updated) throw new Error('Failed to update company settings');
   return apiSuccess(normalizeSupabaseCompanySettings(updated), 'Company settings updated successfully');
+}
+
+export const PUT = withApiHandler(async (request, context) => {
+  const payload = updateCompanySettingsSchema.parse(await request.json());
+  if (Object.keys(payload).length === 0) {
+    throw new BadRequestError('At least one field is required to update company settings');
+  }
+
+  const accessToken = context.auth?.accessToken;
+  const tenantId = context.auth?.user.tenantId;
+  if (!accessToken || !tenantId) throw new BadRequestError('Authorization and tenant info required');
+  const supabase = getAdminRouteSupabase();
+  return handleCompanySettingsPut(payload, tenantId, supabase);
 }, { requireAuth: true, roles: ['Admin'] });

@@ -153,23 +153,23 @@ export const POST = withApiHandler(
       const fileNameLower = uFile.name.toLowerCase();
       const mimeType = uFile.type;
       
-      const isImage = mimeType === 'image/jpeg' || mimeType === 'image/png' || mimeType === 'image/jpg' || 
-                      fileNameLower.endsWith('.jpg') || fileNameLower.endsWith('.jpeg') || fileNameLower.endsWith('.png');
+      const isImage = mimeType === 'image/jpeg' || mimeType === 'image/png' || mimeType === 'image/jpg' || mimeType === 'image/webp' ||
+                      fileNameLower.endsWith('.jpg') || fileNameLower.endsWith('.jpeg') || fileNameLower.endsWith('.png') || fileNameLower.endsWith('.webp');
                       
       const isPdf = mimeType === 'application/pdf' || fileNameLower.endsWith('.pdf');
       
       const isDocx = mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || fileNameLower.endsWith('.docx');
       
       if (!isImage && !isPdf && !isDocx) {
-        throw new BadRequestError(`Invalid file type for '${uFile.name}'. Only PDF, DOCX, and images (JPG, JPEG, PNG) are accepted.`);
+        throw new BadRequestError(`Invalid file type for '${uFile.name}'. Only PDF, DOCX, and images (JPG, JPEG, PNG, WEBP) are accepted.`);
       }
       
-      if (isImage && uFile.size > 1 * 1024 * 1024) {
-        throw new BadRequestError(`File '${uFile.name}' exceeds the 1MB limit for images.`);
+      if (isImage && uFile.size > 5 * 1024 * 1024) {
+        throw new BadRequestError(`File '${uFile.name}' exceeds the 5MB limit for images.`);
       }
       
-      if ((isPdf || isDocx) && uFile.size > 2 * 1024 * 1024) {
-        throw new BadRequestError(`File '${uFile.name}' exceeds the 2MB limit for documents.`);
+      if ((isPdf || isDocx) && uFile.size > 5 * 1024 * 1024) {
+        throw new BadRequestError(`File '${uFile.name}' exceeds the 5MB limit for documents.`);
       }
     }
 

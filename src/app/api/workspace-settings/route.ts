@@ -249,12 +249,12 @@ async function getOrCreateTenantSettings(tenantId: string, supabase: any): Promi
     if (company.qr_code_enabled !== undefined && company.qr_code_enabled !== null) merged.qrCodeEnabled = Boolean(company.qr_code_enabled);
     if (company.qr_code_url !== undefined && company.qr_code_url !== null) merged.qrCodeUrl = company.qr_code_url;
     if (company.digital_signature_enabled !== undefined && company.digital_signature_enabled !== null) merged.digitalSignatureEnabled = Boolean(company.digital_signature_enabled);
-    if (company.digital_signature_url !== undefined && company.digital_signature_url !== null) merged.digitalSignatureUrl = company.digital_signature_url;
-    if (company.stamp_url !== undefined && company.stamp_url !== null) merged.stampUrl = company.stamp_url;
-    if (company.signatory_name !== undefined && company.signatory_name !== null) merged.signatoryName = company.signatory_name;
-    if (company.signatory_title !== undefined && company.signatory_title !== null) merged.signatoryTitle = company.signatory_title;
-    if (company.tagline !== undefined && company.tagline !== null) merged.tagline = company.tagline;
-    if (company.bank_details !== undefined && company.bank_details !== null) merged.bankDetails = company.bank_details;
+    if (company.digital_signature_url) merged.digitalSignatureUrl = company.digital_signature_url;
+    if (company.stamp_url) merged.stampUrl = company.stamp_url;
+    if (company.signatory_name) merged.signatoryName = company.signatory_name;
+    if (company.signatory_title) merged.signatoryTitle = company.signatory_title;
+    if (company.tagline) merged.tagline = company.tagline;
+    if (company.bank_details && typeof company.bank_details === 'object' && Object.keys(company.bank_details).length > 0) merged.bankDetails = company.bank_details;
     if (company.invoice_template !== undefined && company.invoice_template !== null) merged.invoiceTemplate = company.invoice_template;
     if (company.multi_currency_enabled !== undefined && company.multi_currency_enabled !== null) merged.multiCurrencyEnabled = Boolean(company.multi_currency_enabled);
     if (company.supported_currencies !== undefined && company.supported_currencies !== null) merged.supportedCurrencies = company.supported_currencies;
@@ -314,6 +314,7 @@ export const PUT = withApiHandler(async (request, context) => {
     'gstEnabled', 'gstRateDefault', 'taxConfiguration', 'invoiceDecimal', 'invoiceFooter',
     'invoiceTerms', 'defaultPaymentTerms', 'paymentGateway', 'paymentGatewayConfig',
     'qrCodeEnabled', 'qrCodeUrl', 'digitalSignatureEnabled', 'digitalSignatureUrl',
+    'stampUrl', 'signatoryName', 'signatoryTitle', 'tagline', 'bankDetails',
     'invoiceTemplate', 'multiCurrencyEnabled', 'supportedCurrencies'
   ];
   for (const key of allowedKeys) {
@@ -327,6 +328,8 @@ export const PUT = withApiHandler(async (request, context) => {
           fileUrl: String(doc.fileUrl).replace(/<[^>]*>/g, '').trim(),
           expiry: String(doc.expiry).replace(/<[^>]*>/g, '').trim()
         }));
+      } else if (key === 'bankDetails' && typeof val === 'object' && val !== null) {
+        sanitized[key] = val;
       } else if (['notificationTemplates', 'escalationRules', 'reminderRules'].includes(key)) {
         sanitized[key] = Array.isArray(val) ? val : [];
       } else if (Array.isArray(val)) {
@@ -517,14 +520,31 @@ export const PUT = withApiHandler(async (request, context) => {
       'invoicePrefix', 'invoiceNumberStart', 'quotationPrefix', 'purchasePrefix', 'creditNotePrefix',
       'gstEnabled', 'gstRateDefault', 'taxConfiguration', 'invoiceDecimal', 'invoiceFooter',
       'invoiceTerms', 'defaultPaymentTerms', 'paymentGateway', 'paymentGatewayConfig',
-      'qrCodeEnabled', 'qrCodeUrl', 'digitalSignatureEnabled', 'digitalSignatureUrl',
+      'qrCodeEnabled', 'qrCodeUrl',
       'invoiceTemplate', 'multiCurrencyEnabled', 'supportedCurrencies'
     );
   }
 
+  const preservedKeys = new Set([
+    'stampUrl', 'digitalSignatureUrl', 'digitalSignatureEnabled',
+    'signatoryName', 'signatoryTitle', 'tagline', 'bankDetails', 'logoUrl'
+  ]);
+
   for (const key of dbFieldKeys) {
-    delete jsonOnlySettings[key];
+    if (!preservedKeys.has(key)) {
+      delete jsonOnlySettings[key];
+    }
   }
+
+  // Ensure dynamic branding and signatory fields are always explicitly preserved in settings.json
+  if (merged.stampUrl !== undefined) jsonOnlySettings.stampUrl = merged.stampUrl;
+  if (merged.digitalSignatureUrl !== undefined) jsonOnlySettings.digitalSignatureUrl = merged.digitalSignatureUrl;
+  if (merged.digitalSignatureEnabled !== undefined) jsonOnlySettings.digitalSignatureEnabled = merged.digitalSignatureEnabled;
+  if (merged.signatoryName !== undefined) jsonOnlySettings.signatoryName = merged.signatoryName;
+  if (merged.signatoryTitle !== undefined) jsonOnlySettings.signatoryTitle = merged.signatoryTitle;
+  if (merged.tagline !== undefined) jsonOnlySettings.tagline = merged.tagline;
+  if (merged.bankDetails !== undefined) jsonOnlySettings.bankDetails = merged.bankDetails;
+  if (merged.logoUrl !== undefined) jsonOnlySettings.logoUrl = merged.logoUrl;
 
   allSettings[tenantId] = jsonOnlySettings;
   await fs.writeFile(SETTINGS_FILE_PATH, JSON.stringify(allSettings, null, 2), 'utf-8');

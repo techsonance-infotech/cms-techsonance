@@ -52,13 +52,13 @@ interface UploadConfig {
 
 const UPLOAD_CONFIGS: Record<StorageKind, UploadConfig> = {
   avatar: {
-    maxSize: 1 * 1024 * 1024, // 1MB
+    maxSize: 10 * 1024 * 1024, // 10MB
     allowedMimeTypes: new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']),
     allowedExtensions: new Set(['jpg', 'jpeg', 'png', 'gif', 'webp']),
     defaultAccessLevel: 'public',
   },
   logo: {
-    maxSize: 2 * 1024 * 1024, // 2MB
+    maxSize: 10 * 1024 * 1024, // 10MB
     allowedMimeTypes: new Set(['image/jpeg', 'image/png', 'image/svg+xml', 'image/webp']),
     allowedExtensions: new Set(['jpg', 'jpeg', 'png', 'svg', 'webp']),
     defaultAccessLevel: 'public',
