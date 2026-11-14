@@ -69,3 +69,5 @@ def check_file(path):
 check_file('cms-techsonance/src/app/dashboard/payroll/page.tsx')
 check_file('cms-techsonance/src/app/api/payroll/send-payslip/route.ts')
 
+
+check_file('cms-techsonance/src/components/dashboard/header.tsx')

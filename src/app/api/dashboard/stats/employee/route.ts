@@ -84,33 +84,44 @@ export const GET = withApiHandler(async (request, context) => {
 
   // 3. Project Metrics
   // Get all project IDs where user is a member or has tasks assigned
-  const memberConditions: string[] = [];
-  if (authUserId) memberConditions.push(`user_id.eq.${authUserId}`);
-  if (user?.id && String(user.id) !== String(authUserId)) memberConditions.push(`user_id.eq.${user.id}`);
-  if (employeeId) memberConditions.push(`user_id.eq.${employeeId}`);
+  const validUuids = [
+    authUserId,
+    user.providerUserId,
+    (user as any)?.id,
+    (employee as any)?.user_id,
+  ].filter(
+    (id) => typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+  );
+  const uniqueUuids = Array.from(new Set(validUuids));
 
   let memberRows: any[] = [];
   try {
-    const { data } = await supabase
-      .from('project_members')
-      .select('project_id, assigned_at')
-      .eq('tenant_id', tenantId)
-      .or(memberConditions.join(','))
-      .order('assigned_at', { ascending: false });
-    if (data) memberRows = data;
+    if (uniqueUuids.length > 0) {
+      const orCond = uniqueUuids.map((u) => `user_id.eq.${u}`).join(',');
+      const { data, error } = await supabase
+        .from('project_members')
+        .select('project_id')
+        .eq('tenant_id', tenantId)
+        .or(orCond);
+      if (data) memberRows = data;
+      if (error) console.warn('Project members query error:', error);
+    }
   } catch (err) {
     console.warn('Project members query info:', err);
   }
 
   let taskProjectRows: any[] = [];
   try {
-    const taskConditions = memberConditions.map(c => c.replace('user_id.', 'assigned_to.'));
-    const { data } = await supabase
-      .from('tasks')
-      .select('project_id, created_at')
-      .eq('tenant_id', tenantId)
-      .or(taskConditions.join(','));
-    if (data) taskProjectRows = data;
+    if (uniqueUuids.length > 0) {
+      const orCond = uniqueUuids.map((u) => `assigned_to.eq.${u}`).join(',');
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('project_id, created_at')
+        .eq('tenant_id', tenantId)
+        .or(orCond);
+      if (data) taskProjectRows = data;
+      if (error) console.warn('Tasks projects query error:', error);
+    }
   } catch (err) {
     console.warn('Tasks projects query info:', err);
   }
@@ -118,7 +129,7 @@ export const GET = withApiHandler(async (request, context) => {
   const projectIds = Array.from(new Set([
     ...memberRows.map((m: any) => Number(m.project_id)),
     ...taskProjectRows.map((t: any) => Number(t.project_id))
-  ])).filter(pId => Boolean(pId) && !isNaN(pId));
+  ])).filter(pId => Boolean(pId) && !isNaN(pId) && pId > 0);
 
   let activeProjects = 0;
   let totalAssignedProjects = projectIds.length;
@@ -132,19 +143,18 @@ export const GET = withApiHandler(async (request, context) => {
       .eq('tenant_id', tenantId);
 
     if (projectsData) {
+      totalAssignedProjects = projectsData.length;
       activeProjects = projectsData.filter((p: any) => 
-        (p.status === 'in_progress' || p.status === 'planning' || p.status === 'active') && p.is_active !== false
+        (p.status === 'in_progress' || p.status === 'planning' || p.status === 'active' || p.status === 'todo') && p.is_active !== false
       ).length;
       
       // Merge with assignment date and sort
       recentProjects = (projectsData || [])
         .map((p: any) => ({
           ...p,
-          assignedAt: memberRows.find((m: any) => Number(m.project_id) === Number(p.id))?.assigned_at || 
-                      taskProjectRows.find((t: any) => Number(t.project_id) === Number(p.id))?.created_at || 
-                      p.created_at
+          assignedAt: taskProjectRows.find((t: any) => Number(t.project_id) === Number(p.id))?.created_at || p.created_at
         }))
-        .sort((a: any, b: any) => new Date(b.assignedAt).getTime() - new Date(a.assignedAt).getTime())
+        .sort((a: any, b: any) => new Date(b.assignedAt || 0).getTime() - new Date(a.assignedAt || 0).getTime())
         .slice(0, 5);
     }
   }

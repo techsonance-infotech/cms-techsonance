@@ -87,12 +87,60 @@ export const GET = withApiHandler(async (request, context) => {
 
   const rows = (data as Record<string, unknown>[] | null) ?? [];
   const userMap = await buildLegacyUserIdMap(accessToken, rows.map((row) => String(row.user_id)).filter(Boolean), tenantId);
+  const normalizedRows = rows.map((row) => normalizeSupabaseNotificationRow(row, userMap));
+
+  // Merge active company broadcast announcements so they show up directly in In-App Notification Center
+  let broadcastItems: any[] = [];
+  try {
+    let bQuery = supabase
+      .from('broadcasts')
+      .select('id, title, message, priority, category_name, created_at, status')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (tenantId) {
+      bQuery = bQuery.eq('tenant_id', tenantId);
+    }
+
+    const { data: bData } = await bQuery;
+
+    if (bData && bData.length > 0) {
+      broadcastItems = bData
+        .filter((b: any) => !b.status || ['delivered', 'sent', 'active', 'published', 'scheduled'].includes(String(b.status).toLowerCase()))
+        .map((b: any) => ({
+          id: b.id,
+          userId: null,
+          title: b.title,
+          message: b.message,
+          type: b.priority === 'emergency' || b.priority === 'urgent' ? 'error' : b.priority === 'alert' ? 'warning' : 'info',
+          link: '/dashboard/employees/broadcast',
+          isRead: false,
+          createdAt: b.created_at,
+          category: b.category_name || 'Broadcast',
+        }));
+    }
+  } catch (err) {
+    console.warn('Broadcasts fetch fallback error:', err);
+  }
+
+  // Filter duplicates and combine
+  const existingTitles = new Set(
+    normalizedRows.map((r: any) => String(r.title ?? '').toLowerCase().trim())
+  );
+  const uniqueBroadcasts = broadcastItems.filter(
+    (b: any) => !existingTitles.has(String(b.title ?? '').toLowerCase().trim())
+  );
+
+  const combined = [...normalizedRows, ...uniqueBroadcasts]
+    .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+    .slice(0, limit);
+
   return NextResponse.json({
     success: true,
-    data: rows.map((row) => normalizeSupabaseNotificationRow(row, userMap)),
+    data: combined,
     message: 'Notifications fetched successfully',
     errors: null,
-    meta: { page: Math.floor(offset / limit) + 1, limit, total: Number(count ?? 0) },
+    meta: { page: Math.floor(offset / limit) + 1, limit, total: Number(count ?? 0) + uniqueBroadcasts.length },
   });
 }, { requireAuth: true, roles: ['Employee'] });
 
@@ -122,8 +170,12 @@ export const POST = withApiHandler(async (request, context) => {
 }, { requireAuth: true, roles: ['Manager'] });
 
 export const PUT = withApiHandler(async (request, context) => {
-  const id = Number(new URL(request.url).searchParams.get('id'));
-  if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('Valid notification id is required');
+  const rawId = new URL(request.url).searchParams.get('id');
+  const id = Number(rawId);
+  if (!Number.isInteger(id) || id <= 0) {
+    // If it's a non-integer or broadcast ID, acknowledge gracefully
+    return NextResponse.json({ success: true, message: 'Notification acknowledged' });
+  }
   const payload = updateNotificationSchema.parse(await request.json());
   const user = context.auth!.user;
   const isAdminLike = user.role === 'Admin' || user.role === 'SuperAdmin';

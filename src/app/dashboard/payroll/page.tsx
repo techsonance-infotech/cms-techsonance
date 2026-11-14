@@ -202,6 +202,8 @@ export interface SlipRecord extends Omit<SalarySlipFormState, 'manager' | 'signa
 export const getCurrentYearMonth = (d = new Date()) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 
+export const currentYm = getCurrentYearMonth();
+
 export const getTodayDateString = (d = new Date()) =>
   d.toISOString().slice(0, 10);
 
@@ -355,6 +357,7 @@ function amountWords(num: number): string {
 }
 
 export default function PayrollPage() {
+  const currentYm = getCurrentYearMonth();
   const [activeTab, setActiveTab] = useState<'generator' | 'ledger'>('generator');
 
   // Master Data state
@@ -662,7 +665,7 @@ export default function PayrollPage() {
     const phone = emp.phone || user?.phone || '';
 
     // Calculate month days & public holidays for current form.salaryMonth
-    const month = form.salaryMonth || getCurrentYearMonth();
+    const month = form.salaryMonth || currentYm || getCurrentYearMonth();
     const calDays = daysInMonth(month);
     const [y, m] = month.split('-').map(Number);
 
@@ -943,10 +946,44 @@ export default function PayrollPage() {
     window.print();
   };
 
+  // Helper to safely extract live rendered base64 from on-screen DOM elements
+  const getRenderedImageDataUri = (selector: string): string => {
+    try {
+      const img = document.querySelector(selector) as HTMLImageElement | null;
+      if (!img) return '';
+      if (img.src && img.src.startsWith('data:image/')) return img.src;
+      if (!img.complete || img.naturalWidth === 0) return '';
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return '';
+      ctx.drawImage(img, 0, 0);
+      return canvas.toDataURL('image/png');
+    } catch {
+      return '';
+    }
+  };
+
   // In-memory base64 converter to guarantee canvas is never tainted
   const toDataUri = async (url: string): Promise<string> => {
     if (!url || url.startsWith('data:')) return url;
     try {
+      const token = getStoredSessionToken();
+      const headers: Record<string, string> = { Accept: 'application/json' };
+      if (token && token !== 'null') headers['Authorization'] = `Bearer ${token}`;
+
+      if (url.includes('/api/upload')) {
+        try {
+          const jsonRes = await fetch(url, { credentials: 'include', headers });
+          if (jsonRes.ok) {
+            const body = await jsonRes.json();
+            const resolvedUrl = body?.data?.url || body?.data?.secureUrl || body?.secureUrl;
+            if (resolvedUrl) url = resolvedUrl;
+          }
+        } catch {}
+      }
+
       const res = await fetch(url, { credentials: 'include' });
       if (!res.ok) return url;
       const blob = await res.blob();
@@ -992,7 +1029,19 @@ export default function PayrollPage() {
         // Strip out screen-only buttons (like "Change", "Upload here")
         clone.querySelectorAll('.screen-only').forEach((el) => el.remove());
 
-        // 2. Pre-convert all images in the clone to local base64 data URIs
+        // 2. Pre-inject live on-screen canvas base64 images to bypass network/CORS entirely
+        const liveLogo = getRenderedImageDataUri('#printArea .brand img');
+        const liveStamp = getRenderedImageDataUri('#printArea .seal img');
+        const liveSig = getRenderedImageDataUri('#printArea .signature img');
+
+        const brandImg = clone.querySelector('.brand img') as HTMLImageElement | null;
+        if (brandImg && liveLogo) brandImg.src = liveLogo;
+        const sealImg = clone.querySelector('.seal img') as HTMLImageElement | null;
+        if (sealImg && liveStamp) sealImg.src = liveStamp;
+        const sigImg = clone.querySelector('.signature img') as HTMLImageElement | null;
+        if (sigImg && liveSig) sigImg.src = liveSig;
+
+        // Pre-convert any remaining images in the clone to local base64 data URIs
         const imgs = Array.from(clone.querySelectorAll('img'));
         await Promise.all(
           imgs.map(async (img) => {
@@ -1063,13 +1112,18 @@ export default function PayrollPage() {
       setIsSendingEmail(true);
       toast.loading(`Capturing exact salary slip PDF & sending to ${form.email}...`);
 
+      // 0. Extract live rendered base64 from on-screen DOM elements
+      const liveLogo = getRenderedImageDataUri('#printArea .brand img');
+      const liveStamp = getRenderedImageDataUri('#printArea .seal img');
+      const liveSig = getRenderedImageDataUri('#printArea .signature img');
+
       // 1. Capture exact A4 PDF from currently displayed preview (#printArea)
       const pdfBase64 = await generateSlipPdfSnapshot();
 
       const [logoDataUri, stampDataUri, sigDataUri] = await Promise.all([
-        companySettings.logoUrl ? toDataUri(companySettings.logoUrl) : Promise.resolve(''),
-        companySettings.stampUrl ? toDataUri(companySettings.stampUrl) : Promise.resolve(''),
-        companySettings.signatureUrl ? toDataUri(companySettings.signatureUrl) : Promise.resolve(''),
+        liveLogo ? Promise.resolve(liveLogo) : (companySettings.logoUrl ? toDataUri(companySettings.logoUrl) : Promise.resolve('')),
+        liveStamp ? Promise.resolve(liveStamp) : (companySettings.stampUrl ? toDataUri(companySettings.stampUrl) : Promise.resolve('')),
+        liveSig ? Promise.resolve(liveSig) : (companySettings.signatureUrl ? toDataUri(companySettings.signatureUrl) : Promise.resolve('')),
       ]);
 
       const token = getStoredSessionToken();
@@ -1996,44 +2050,46 @@ export default function PayrollPage() {
                 style={{ fontFamily: 'Inter, Arial, Helvetica, sans-serif' }}
               >
                 {/* Header */}
-                <div className="slip-head grid grid-cols-3 gap-2.5 pb-2 border-b-2 border-[#071A4D]">
+                <div className="slip-head flex items-start justify-between gap-3 pb-3 mb-1 border-b-2 border-[#071A4D]">
                   {/* Brand (Dynamic) */}
-                  <div className="brand flex items-center gap-2.5">
+                  <div className="brand flex items-start gap-2.5 max-w-[42%] min-w-0">
                     {companySettings.logoUrl ? (
                       <img
                         src={companySettings.logoUrl}
                         alt={companySettings.companyName || 'Logo'}
-                        className="w-12 h-12 object-contain"
+                        className="w-12 h-12 object-contain shrink-0 mt-0.5"
                       />
                     ) : (
-                      <div className="w-12 h-12 rounded border border-slate-200 bg-slate-50 flex items-center justify-center text-slate-400 shrink-0">
+                      <div className="w-12 h-12 rounded border border-slate-200 bg-slate-50 flex items-center justify-center text-slate-400 shrink-0 mt-0.5">
                         <Building2 className="w-6 h-6" />
                       </div>
                     )}
-                    <div>
-                      <h1 className="text-[14px] font-bold text-[#071A4D] leading-tight m-0">
+                    <div className="min-w-0">
+                      <h1 className="text-[13px] font-bold text-[#071A4D] leading-tight m-0 break-words">
                         {companySettings.companyName || 'Company Name'}
                       </h1>
-                      <p className="text-[7.5px] text-[#475467] leading-[1.35] m-0 mt-0.5 whitespace-pre-line">
+                      <div className="text-[7.2px] text-[#475467] leading-[1.35] m-0 mt-0.5 break-words">
                         {companySettings.address ? (
-                          companySettings.address
+                          <div>{companySettings.address}</div>
                         ) : (
-                          <span className="italic text-slate-400">Address not configured</span>
+                          <div className="italic text-slate-400">Address not configured</div>
                         )}
-                        {companySettings.email && <><br />Email: {companySettings.email}</>}
-                        {companySettings.website && <> • {companySettings.website}</>}
+                        {(companySettings.email || companySettings.website) && (
+                          <div className="truncate">
+                            {[companySettings.email && `Email: ${companySettings.email}`, companySettings.website].filter(Boolean).join(' • ')}
+                          </div>
+                        )}
                         {(companySettings.gstin || companySettings.llpin) && (
-                          <>
-                            <br />
+                          <div className="truncate font-medium">
                             {[companySettings.gstin && `GSTIN: ${companySettings.gstin}`, companySettings.llpin && `LLPIN/CIN: ${companySettings.llpin}`].filter(Boolean).join(' • ')}
-                          </>
+                          </div>
                         )}
-                      </p>
+                      </div>
                     </div>
                   </div>
 
                   {/* Title */}
-                  <div className="title text-center flex flex-col justify-center">
+                  <div className="title text-center flex flex-col justify-center min-w-[26%] shrink-0">
                     <h2 className="text-[17px] font-black tracking-wider text-[#071A4D] m-0">
                       SALARY SLIP
                     </h2>
@@ -2043,7 +2099,7 @@ export default function PayrollPage() {
                   </div>
 
                   {/* Meta */}
-                  <div className="meta text-right text-[8px] leading-[1.55] flex flex-col justify-center">
+                  <div className="meta text-right text-[8px] leading-[1.55] flex flex-col justify-center min-w-[28%] shrink-0">
                     <div>
                       <b className="text-[#071A4D]">Slip No:</b> <span>{form.slipNo || '—'}</span>
                     </div>

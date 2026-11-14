@@ -304,7 +304,7 @@ export default function DashboardPage() {
                 </Card>
               </div>
             ) : (
-              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+              <div className="grid gap-4 md:grid-cols-3">
                 <Card className="overflow-hidden border-none shadow-md bg-brand-gradient text-white">
                   <CardHeader className="pb-1">
                     <CardTitle className="text-xs font-semibold opacity-90 uppercase tracking-wider">Hours Month</CardTitle>
@@ -331,32 +331,6 @@ export default function DashboardPage() {
                   </CardContent>
                 </Card>
 
-                <Card className="overflow-hidden border border-border bg-card text-card-foreground shadow-xs">
-                  <CardHeader className="pb-1">
-                    <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Active Projects</CardTitle>
-                  </CardHeader>
-                  <CardContent className="relative">
-                    <div className="text-3xl font-black text-foreground">{employeeStats.stats.activeProjects ?? 0}</div>
-                    <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">Currently active</p>
-                    <div className="absolute right-4 bottom-4 p-2 bg-accent-cyan/10 rounded-lg text-primary-dark dark:text-accent-cyan">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card className="overflow-hidden border border-border bg-card text-card-foreground shadow-xs">
-                  <CardHeader className="pb-1">
-                    <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Assigned</CardTitle>
-                  </CardHeader>
-                  <CardContent className="relative">
-                    <div className="text-3xl font-black text-foreground">{employeeStats.stats.totalAssignedProjects ?? 0}</div>
-                    <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">Lifetime projects</p>
-                    <div className="absolute right-4 bottom-4 p-2 bg-secondary rounded-lg text-primary">
-                      <Briefcase className="h-4 w-4" />
-                    </div>
-                  </CardContent>
-                </Card>
-                
                 <Card className="overflow-hidden border border-border bg-card text-card-foreground shadow-xs">
                   <CardHeader className="pb-1">
                     <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Assigned To Me</CardTitle>

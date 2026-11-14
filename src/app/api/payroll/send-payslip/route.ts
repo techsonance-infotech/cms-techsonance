@@ -11,6 +11,63 @@ function formatINR(val: number | string | undefined | null): string {
   return 'Rs. ' + num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// Helper to resolve images (Cloudinary, Supabase, /api/upload?fileId=...) into embedded base64 data URIs
+async function resolveImageToDataUri(
+  rawUrl: string | undefined | null,
+  supabaseClient: any
+): Promise<string | null> {
+  if (!rawUrl || typeof rawUrl !== 'string') return null;
+  if (rawUrl.startsWith('data:image/')) return rawUrl;
+
+  try {
+    let targetUrl = rawUrl;
+
+    // 1. If it's a local / public asset path
+    if (targetUrl.startsWith('/') && !targetUrl.includes('fileId=')) {
+      try {
+        const fs = await import('fs/promises');
+        const path = await import('path');
+        const localPath = path.join(process.cwd(), 'public', targetUrl);
+        const fileBytes = await fs.readFile(localPath);
+        const ext = path.extname(localPath).toLowerCase().replace('.', '');
+        const mime = ext === 'png' ? 'image/png' : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'image/png';
+        return `data:${mime};base64,${fileBytes.toString('base64')}`;
+      } catch {}
+    }
+
+    // 2. If it's a file metadata reference
+    if (rawUrl.includes('fileId=')) {
+      const match = rawUrl.match(/fileId=([a-zA-Z0-9_-]+)/);
+      if (match && match[1]) {
+        const fileId = match[1];
+        const { data } = await supabaseClient
+          .from('file_metadata')
+          .select('secure_url')
+          .eq('id', fileId)
+          .maybeSingle();
+
+        if (data?.secure_url) {
+          targetUrl = data.secure_url;
+        }
+      }
+    }
+
+    // 3. Fetch remote or local HTTP URL
+    if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {
+      const res = await fetch(targetUrl);
+      if (res.ok) {
+        const contentType = res.headers.get('content-type') || 'image/png';
+        const arrayBuf = await res.arrayBuffer();
+        const b64 = Buffer.from(arrayBuf).toString('base64');
+        return `data:${contentType};base64,${b64}`;
+      }
+    }
+  } catch (err) {
+    console.warn('Could not resolve image to data URI:', rawUrl, err);
+  }
+  return null;
+}
+
 export const POST = withApiHandler(async (request, context) => {
   const tenantId = context.auth?.user.tenantId;
   if (!tenantId) throw new BadRequestError('Tenant context missing');
@@ -92,7 +149,7 @@ export const POST = withApiHandler(async (request, context) => {
   // Load tenant's provisioned company & SMTP settings
   const { data: settings } = await supabase
     .from('company_settings')
-    .select('company_name, email, address, website, gstin, cin_number, smtp_host, smtp_port, smtp_user, smtp_password, signatory_name, signatory_title, logo_url, stamp_url, signature_url')
+    .select('company_name, email, address, website, gstin, cin_number, smtp_host, smtp_port, smtp_user, smtp_password, signatory_name, signatory_title, logo_url, stamp_url, digital_signature_url')
     .eq('tenant_id', tenantId)
     .maybeSingle();
 
@@ -112,9 +169,22 @@ export const POST = withApiHandler(async (request, context) => {
   let pdfBuffer: Buffer;
 
   if (pdfBase64 && typeof pdfBase64 === 'string') {
-    const cleanBase64 = pdfBase64.replace(/^data:application\/pdf;base64,/, '');
-    pdfBuffer = Buffer.from(cleanBase64, 'base64');
+    const base64Data = pdfBase64.includes(';base64,')
+      ? pdfBase64.split(';base64,')[1]
+      : pdfBase64.replace(/^data:application\/pdf;base64,/, '');
+    pdfBuffer = Buffer.from(base64Data, 'base64');
   } else {
+    // Resolve all image assets (Cloudinary, Supabase, /api/upload?fileId=...) into base64 data URIs
+    const effectiveLogoRaw = logoUrl || settings?.logo_url;
+    const effectiveStampRaw = stampUrl || settings?.stamp_url;
+    const effectiveSigRaw = signatureUrl || settings?.digital_signature_url;
+
+    const [resolvedLogo, resolvedStamp, resolvedSig] = await Promise.all([
+      resolveImageToDataUri(effectiveLogoRaw, supabase),
+      resolveImageToDataUri(effectiveStampRaw, supabase),
+      resolveImageToDataUri(effectiveSigRaw, supabase),
+    ]);
+
     // Generate identical A4 Salary Slip PDF matching Image 2 exactly
     const doc = new jsPDF({ unit: 'pt', format: 'a4' });
     const left = 32;
@@ -138,12 +208,11 @@ export const POST = withApiHandler(async (request, context) => {
     let y = 30;
 
     // Left: Company Brand & Details
-    const effectiveLogo = logoUrl || settings?.logo_url;
     let brandTextX = left;
-    if (effectiveLogo && typeof effectiveLogo === 'string' && effectiveLogo.startsWith('data:image/')) {
+    if (resolvedLogo) {
       try {
-        const fmt = effectiveLogo.includes('image/png') ? 'PNG' : 'JPEG';
-        doc.addImage(effectiveLogo, fmt, left, y, 36, 36);
+        const fmt = resolvedLogo.includes('image/png') ? 'PNG' : 'JPEG';
+        doc.addImage(resolvedLogo, fmt, left, y, 36, 36);
         brandTextX = left + 42;
       } catch (err) {
         console.warn('Could not add logo to PDF:', err);
@@ -151,34 +220,48 @@ export const POST = withApiHandler(async (request, context) => {
     }
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(13.5);
+    doc.setFontSize(12.5);
     doc.setTextColor(7, 26, 77); // #071A4D
-    doc.text(companyName, brandTextX, y + 14);
+    doc.text(companyName, brandTextX, y + 12);
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(6.8);
     doc.setTextColor(71, 84, 103);
-    const subParts = [
-      companyAddress ? companyAddress.replace(/\n/g, ', ') : '',
-      companyEmail ? `Email: ${companyEmail}` : '',
-      companyWebsite || '',
-      companyGstin ? `GSTIN: ${companyGstin}` : '',
-      companyLlpin ? `LLPIN: ${companyLlpin}` : '',
-    ].filter(Boolean);
-    if (subParts.length > 0) {
-      doc.text(subParts.join(' • '), brandTextX, y + 25, { maxWidth: 210 - (brandTextX - left) });
+
+    // Address lines - strictly bounded to 160pt width so it NEVER collides with center title
+    let curDetailY = y + 21;
+    if (companyAddress) {
+      const addressLines = doc.splitTextToSize(companyAddress.replace(/\n/g, ', '), 160);
+      doc.text(addressLines, brandTextX, curDetailY);
+      curDetailY += addressLines.length * 8;
+    }
+
+    // Email & Website line
+    const contactParts = [companyEmail ? `Email: ${companyEmail}` : '', companyWebsite || ''].filter(Boolean);
+    if (contactParts.length > 0) {
+      const contactText = doc.splitTextToSize(contactParts.join(' • '), 160);
+      doc.text(contactText, brandTextX, curDetailY);
+      curDetailY += contactText.length * 8;
+    }
+
+    // GSTIN & CIN line
+    const regParts = [companyGstin ? `GSTIN: ${companyGstin}` : '', companyLlpin ? `LLPIN: ${companyLlpin}` : ''].filter(Boolean);
+    if (regParts.length > 0) {
+      const regText = doc.splitTextToSize(regParts.join(' • '), 160);
+      doc.text(regText, brandTextX, curDetailY);
+      curDetailY += regText.length * 8;
     }
 
     // Center: SALARY SLIP
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(16);
     doc.setTextColor(7, 26, 77);
-    doc.text('SALARY SLIP', 295, y + 15, { align: 'center' });
+    doc.text('SALARY SLIP', 300, y + 15, { align: 'center' });
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
     doc.setTextColor(102, 112, 133);
-    doc.text(`Salary Month: ${salaryMonth || 'Monthly Slip'}`, 295, y + 28, { align: 'center' });
+    doc.text(`Salary Month: ${salaryMonth || 'Monthly Slip'}`, 300, y + 28, { align: 'center' });
 
     // Right: Slip Metadata
     doc.setFont('helvetica', 'bold');
@@ -188,12 +271,15 @@ export const POST = withApiHandler(async (request, context) => {
     doc.text(`Pay Date: ${payDate || '—'}`, right, y + 23, { align: 'right' });
     doc.text(`Tax Regime: ${body.taxRegime === 'new' ? 'New Tax Regime' : 'Old Tax Regime'}`, right, y + 34, { align: 'right' });
 
+    // Dynamic header height so text NEVER overlaps the divider line (minimum 14pt clearance)!
+    const headerBottomY = Math.max(curDetailY + 14, y + 54);
+
     // Header divider line (navy 2px)
     doc.setDrawColor(7, 26, 77);
     doc.setLineWidth(2);
-    doc.line(left, y + 46, right, y + 46);
+    doc.line(left, headerBottomY, right, headerBottomY);
 
-    y += 54;
+    y = headerBottomY + 10;
 
     // --- 1. EMPLOYEE INFORMATION ---
     y = drawSectionHeader('Employee Information', y);
@@ -592,16 +678,25 @@ export const POST = withApiHandler(async (request, context) => {
     doc.setLineWidth(0.8);
 
     // Left: Corporate Stamp
-    const effectiveStamp = stampUrl || settings?.stamp_url;
     let stampDrawn = false;
-    if (effectiveStamp && typeof effectiveStamp === 'string' && effectiveStamp.startsWith('data:image/')) {
+    if (resolvedStamp) {
       try {
-        const fmt = effectiveStamp.includes('image/png') ? 'PNG' : 'JPEG';
-        doc.addImage(effectiveStamp, fmt, left + 35, y - 4, 65, 42);
+        const fmt = resolvedStamp.includes('image/png') ? 'PNG' : 'JPEG';
+        doc.addImage(resolvedStamp, fmt, left + 35, y - 4, 65, 42);
         stampDrawn = true;
       } catch (err) {
         console.warn('Could not render stamp image to PDF:', err);
       }
+    }
+    if (!stampDrawn) {
+      try {
+        const fs = await import('fs/promises');
+        const path = await import('path');
+        const stampPath = path.join(process.cwd(), 'public/branding/tenant-stamp.png');
+        const bytes = await fs.readFile(stampPath);
+        doc.addImage(`data:image/png;base64,${bytes.toString('base64')}`, 'PNG', left + 35, y - 4, 65, 42);
+        stampDrawn = true;
+      } catch {}
     }
     if (!stampDrawn) {
       doc.roundedRect(left + 30, y - 4, 75, 42, 3, 3, 'D');
@@ -613,14 +708,25 @@ export const POST = withApiHandler(async (request, context) => {
 
     // Center: Authorized Signatory
     const signCenterX = 295;
-    const effectiveSig = signatureUrl || settings?.signature_url;
-    if (effectiveSig && typeof effectiveSig === 'string' && effectiveSig.startsWith('data:image/')) {
+    let sigDrawn = false;
+    if (resolvedSig) {
       try {
-        const fmt = effectiveSig.includes('image/png') ? 'PNG' : 'JPEG';
-        doc.addImage(effectiveSig, fmt, signCenterX - 25, sigBottomY - 32, 50, 28);
+        const fmt = resolvedSig.includes('image/png') ? 'PNG' : 'JPEG';
+        doc.addImage(resolvedSig, fmt, signCenterX - 25, sigBottomY - 32, 50, 28);
+        sigDrawn = true;
       } catch (err) {
         console.warn('Could not render signature image to PDF:', err);
       }
+    }
+    if (!sigDrawn) {
+      try {
+        const fs = await import('fs/promises');
+        const path = await import('path');
+        const sigPath = path.join(process.cwd(), 'public/branding/tenant-signature.png');
+        const bytes = await fs.readFile(sigPath);
+        doc.addImage(`data:image/png;base64,${bytes.toString('base64')}`, 'PNG', signCenterX - 25, sigBottomY - 32, 50, 28);
+        sigDrawn = true;
+      } catch {}
     }
     doc.line(signCenterX - 65, sigBottomY, signCenterX + 65, sigBottomY);
     doc.setFont('helvetica', 'bold');
