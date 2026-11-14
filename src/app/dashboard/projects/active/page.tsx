@@ -1,7 +1,7 @@
 'use client';
 
-import ProjectsPage from '../page';
+import ProjectsView from '@/components/projects/projects-view';
 
 export default function ActiveProjectsRoute() {
-  return <ProjectsPage />;
+  return <ProjectsView />;
 }

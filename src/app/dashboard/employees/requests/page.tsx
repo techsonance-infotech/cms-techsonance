@@ -22,14 +22,14 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-export const ICON_REGISTRY: Record<string, any> = {
+const ICON_REGISTRY: Record<string, any> = {
   Clock, Calendar, Home, ArrowRightLeft, Building2, TrendingUp, IndianRupee,
   FileText, UserCog, Laptop, RotateCcw, BadgeCheck, CreditCard, ScrollText,
   Award, ShieldCheck, BookOpen, Receipt, FileCheck, Landmark, Wallet,
   Plane, HelpCircle
 };
 
-export interface CatalogItem {
+interface CatalogItem {
   name: string;
   groupType: string;
   slaHours: number;
@@ -37,7 +37,7 @@ export interface CatalogItem {
   description: string;
 }
 
-export interface RosterEmp {
+interface RosterEmp {
   id: string;
   name: string;
   email: string;
@@ -45,7 +45,7 @@ export interface RosterEmp {
   designation: string;
 }
 
-export interface RequestRecord {
+interface RequestRecord {
   id: string;
   userId: string;
   employeeName: string;

@@ -21,13 +21,13 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-export const ICON_MAP: Record<string, any> = {
+const ICON_MAP: Record<string, any> = {
   Clock, AlertCircle, Flame, CalendarDays, Gift, Award, FileText, Globe,
   ShieldCheck, GraduationCap, Hourglass, UserCheck, IndianRupee,
   ClipboardList, RefreshCw, Smile, Sparkles, LogOut, Users, ShieldAlert, Bot
 };
 
-export interface AutomationRuleRecord {
+interface AutomationRuleRecord {
   id: string;
   name: string;
   category: string;
@@ -39,7 +39,7 @@ export interface AutomationRuleRecord {
   templateBody: string;
 }
 
-export interface AutomationLogRecord {
+interface AutomationLogRecord {
   id: string;
   ruleCategory: string;
   recipientName: string;

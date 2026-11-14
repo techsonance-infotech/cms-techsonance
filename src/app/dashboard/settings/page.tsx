@@ -23,6 +23,10 @@ import {
 import { DetailedPageSkeleton } from '@/components/ui/dashboard-skeleton';
 import { toast } from 'sonner';
 import { DynamicSchemaTab } from '@/components/settings/dynamic-schema-tab';
+import { SecurityTab } from '@/components/settings/tabs/security-tab';
+import { ComplianceTab } from '@/components/settings/tabs/compliance-tab';
+import { BackupTab } from '@/components/settings/tabs/backup-tab';
+import { AuditTab } from '@/components/settings/tabs/audit-tab';
 import { Switch } from '@/components/ui/switch';
 
 import { passwordChangeFormSchema, type PasswordChangeFormValues } from '@/lib/forms/schemas';
@@ -583,9 +587,9 @@ export default function SettingsPage() {
       });
       const json = await res.json();
       if (res.ok && json.success) {
-        toast.success(json.message);
+        toast.info(json.message || 'Restore request received');
       } else {
-        toast.error('Snapshot restore rejected by sandbox');
+        toast.error(json.message || 'Snapshot restore rejected');
       }
     } catch (err) {
       toast.error('Snapshot restore execution error');
@@ -7218,253 +7222,21 @@ export default function SettingsPage() {
 
           {/* TAB 14: Security Center */}
           {activeTab === 'security' && (
-            <div className="space-y-6">
-              {/* Policies config card */}
-              <Card className="border-border shadow-xs">
-                <CardHeader>
-                  <CardTitle className="text-lg font-bold">Security Center & IAM Controls</CardTitle>
-                  <CardDescription>Configure password parameters, MFA settings, and whitelisted IP locations.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Minimum Password Length</Label>
-                      <Input 
-                        type="number" 
-                        min="6" 
-                        max="32" 
-                        className="text-xs rounded-xl"
-                        value={securityDraft.min_password_length || 8}
-                        onChange={e => setSecurityDraft({ ...securityDraft, min_password_length: Number(e.target.value) })}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between p-3 border rounded-xl bg-slate-50/20">
-                      <div className="space-y-0.5">
-                        <Label className="text-xs font-bold">Require Special Symbols</Label>
-                        <p className="text-[9px] text-muted-foreground">Passphrases must contain numbers and symbols.</p>
-                      </div>
-                      <Switch 
-                        checked={!!securityDraft.require_symbols}
-                        onCheckedChange={(checked: boolean) => setSecurityDraft({ ...securityDraft, require_symbols: checked })}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="flex items-center justify-between p-3 border rounded-xl bg-slate-50/20">
-                      <div className="space-y-0.5">
-                        <Label className="text-xs font-bold">Two-Factor Authentication (2FA / MFA)</Label>
-                        <p className="text-[9px] text-muted-foreground">Force users to verify logins via Google Authenticator.</p>
-                      </div>
-                      <Switch 
-                        checked={!!securityDraft.mfa_enabled}
-                        onCheckedChange={(checked: boolean) => setSecurityDraft({ ...securityDraft, mfa_enabled: checked })}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between p-3 border rounded-xl bg-slate-50/20">
-                      <div className="space-y-0.5">
-                        <Label className="text-xs font-bold">SSO Federated Identities</Label>
-                        <p className="text-[9px] text-muted-foreground">Enable login bindings for Google Workspace & Azure AD.</p>
-                      </div>
-                      <Switch 
-                        checked={!!securityDraft.sso_enabled}
-                        onCheckedChange={(checked: boolean) => setSecurityDraft({ ...securityDraft, sso_enabled: checked })}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">IP Address Restriction Range (Comma separated)</Label>
-                    <textarea 
-                      rows={2} 
-                      placeholder="e.g. 192.168.1.1, 157.48.92.0/24"
-                      className="w-full text-xs rounded-xl border border-border p-3 outline-none focus-visible:ring-primary/20 bg-background font-mono"
-                      value={securityDraft.allowed_ips || ''}
-                      onChange={e => setSecurityDraft({ ...securityDraft, allowed_ips: e.target.value })}
-                    />
-                  </div>
-
-                  <Button 
-                    size="sm" 
-                    className="text-[10px] rounded-lg h-9 font-bold px-4"
-                    onClick={handleSaveSecurity}
-                  >
-                    Save Security Settings
-                  </Button>
-                </CardContent>
-              </Card>
-
-              {/* Login history logs */}
-              <Card className="border-border shadow-xs">
-                <CardHeader>
-                  <CardTitle className="text-lg font-bold">Corporate Login Session History</CardTitle>
-                  <CardDescription>Auditing failed/successful workspace authentication activities logs.</CardDescription>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left font-sans text-xs">
-                      <thead className="bg-slate-50 dark:bg-zinc-900/40 text-[10px] font-bold text-muted-foreground uppercase tracking-wider border-b">
-                        <tr>
-                          <th className="p-3">User Email</th>
-                          <th className="p-3">Status</th>
-                          <th className="p-3">IP Address</th>
-                          <th className="p-3">Browser / OS</th>
-                          <th className="p-3">Timestamp</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border">
-                        {loginHistoryList.length === 0 ? (
-                          <tr>
-                            <td colSpan={5} className="p-8 text-center text-xs text-muted-foreground">
-                              No login activity recorded for this tenant yet.
-                            </td>
-                          </tr>
-                        ) : (
-                          loginHistoryList.map((log: any) => (
-                            <tr key={log.id} className="hover:bg-slate-50/50 dark:hover:bg-zinc-900/10">
-                              <td className="p-3 font-bold">{log.email}</td>
-                              <td className="p-3">
-                                {log.status === 'success' ? (
-                                  <Badge className="bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 font-bold border-none text-[8px] rounded-md">Success</Badge>
-                                ) : (
-                                  <Badge className="bg-red-100 dark:bg-red-950/30 text-red-700 dark:text-red-400 font-bold border-none text-[8px] rounded-md">Failed</Badge>
-                                )}
-                              </td>
-                              <td className="p-3 font-mono">{log.ip_address}</td>
-                              <td className="p-3 text-muted-foreground">{log.user_agent} ({log.device_info})</td>
-                              <td className="p-3 text-muted-foreground">{new Date(log.created_at).toLocaleString()}</td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+            <SecurityTab
+              securityDraft={securityDraft}
+              loginHistoryList={loginHistoryList}
+              onChangeSecurityDraft={setSecurityDraft}
+              onSaveSecurity={handleSaveSecurity}
+            />
           )}
 
           {/* TAB 15: Compliance */}
           {activeTab === 'compliance' && (
-            <div className="space-y-6">
-              <Card className="border-border shadow-xs">
-                <CardHeader>
-                  <CardTitle className="text-lg font-bold">Regulatory & Consent Frameworks</CardTitle>
-                  <CardDescription>Govern data processing compliance and local data residency partitions.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between p-3 border rounded-xl bg-slate-50/20">
-                        <div className="space-y-0.5">
-                          <Label className="text-xs font-bold">GDPR Compliance Flag</Label>
-                          <p className="text-[9px] text-muted-foreground">Enforce cookies consent and data removal logs.</p>
-                        </div>
-                        <Switch 
-                          checked={!!complianceDraft.gdpr_enabled}
-                          onCheckedChange={(checked: boolean) => setComplianceDraft({ ...complianceDraft, gdpr_enabled: checked })}
-                        />
-                      </div>
-
-                      <div className="flex items-center justify-between p-3 border rounded-xl bg-slate-50/20">
-                        <div className="space-y-0.5">
-                          <Label className="text-xs font-bold">SOC2 Audit Framework</Label>
-                          <p className="text-[9px] text-muted-foreground">Enforce storage lifecycle logs compliance checks.</p>
-                        </div>
-                        <Switch 
-                          checked={!!complianceDraft.soc2_enabled}
-                          onCheckedChange={(checked: boolean) => setComplianceDraft({ ...complianceDraft, soc2_enabled: checked })}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between p-3 border rounded-xl bg-slate-50/20">
-                        <div className="space-y-0.5">
-                          <Label className="text-xs font-bold">ISO 27001 Certification</Label>
-                          <p className="text-[9px] text-muted-foreground">Track structural settings change history.</p>
-                        </div>
-                        <Switch 
-                          checked={!!complianceDraft.iso_enabled}
-                          onCheckedChange={(checked: boolean) => setComplianceDraft({ ...complianceDraft, iso_enabled: checked })}
-                        />
-                      </div>
-
-                      <div className="flex items-center justify-between p-3 border rounded-xl bg-slate-50/20">
-                        <div className="space-y-0.5">
-                          <Label className="text-xs font-bold">HIPAA Health Standards</Label>
-                          <p className="text-[9px] text-muted-foreground">Strict encryption key rotations for health records.</p>
-                        </div>
-                        <Switch 
-                          checked={!!complianceDraft.hipaa_enabled}
-                          onCheckedChange={(checked: boolean) => setComplianceDraft({ ...complianceDraft, hipaa_enabled: checked })}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Database Data Residency Region</Label>
-                      <select 
-                        className="w-full text-xs rounded-xl border border-border px-3 outline-none focus-visible:ring-primary/20 bg-background font-sans h-10"
-                        value={complianceDraft.data_residency || 'US-East'}
-                        onChange={e => setComplianceDraft({ ...complianceDraft, data_residency: e.target.value })}
-                      >
-                        <option value="US-East">US East (N. Virginia)</option>
-                        <option value="EU-West">EU West (Ireland)</option>
-                        <option value="AP-South">Asia Pacific (Mumbai)</option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Legal Data Retention Policy (Years)</Label>
-                      <Input 
-                        type="number" 
-                        min="1" 
-                        max="25" 
-                        className="text-xs rounded-xl h-10"
-                        value={complianceDraft.retention_years || 7}
-                        onChange={e => setComplianceDraft({ ...complianceDraft, retention_years: Number(e.target.value) })}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 border rounded-xl bg-slate-50/20">
-                    <div className="space-y-0.5">
-                      <Label className="text-xs font-bold">Explicit Cookie consent agreement</Label>
-                      <p className="text-[9px] text-muted-foreground">Display cookies disclaimer to guest visitors.</p>
-                    </div>
-                    <Switch 
-                      checked={!!complianceDraft.consent_required}
-                      onCheckedChange={(checked: boolean) => setComplianceDraft({ ...complianceDraft, consent_required: checked })}
-                    />
-                  </div>
-
-                  {complianceDraft.consent_required && (
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Cookie Consent Message Body</Label>
-                      <textarea 
-                        rows={3} 
-                        className="w-full text-xs rounded-xl border border-border p-3 outline-none focus-visible:ring-primary/20 bg-background"
-                        value={complianceDraft.cookie_policy || ''}
-                        onChange={e => setComplianceDraft({ ...complianceDraft, cookie_policy: e.target.value })}
-                      />
-                    </div>
-                  )}
-
-                  <Button 
-                    size="sm" 
-                    className="text-[10px] rounded-lg h-9 font-bold px-4"
-                    onClick={handleSaveCompliance}
-                  >
-                    Save Compliance Policies
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
+            <ComplianceTab
+              complianceDraft={complianceDraft}
+              onChangeComplianceDraft={setComplianceDraft}
+              onSaveCompliance={handleSaveCompliance}
+            />
           )}
 
           {/* TAB 16: Billing & Subscription */}
@@ -8125,68 +7897,10 @@ export default function SettingsPage() {
 
           {/* TAB 18: Audit Logs */}
           {activeTab === 'audit' && (
-            <div className="space-y-6">
-              <Card className="border-border shadow-xs">
-                <CardHeader>
-                  <CardTitle className="text-lg font-bold">Workspace Configuration Auditing</CardTitle>
-                  <CardDescription>Chronological sequence logs of settings table adjustments and operations.</CardDescription>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left font-sans text-xs">
-                      <thead className="bg-slate-50 dark:bg-zinc-900/40 text-[10px] font-bold text-muted-foreground uppercase tracking-wider border-b">
-                        <tr>
-                          <th className="p-3">Actor / Who</th>
-                          <th className="p-3">Action / What</th>
-                          <th className="p-3">Old Value</th>
-                          <th className="p-3">New Value</th>
-                          <th className="p-3">IP & Client Device</th>
-                          <th className="p-3">Timestamp</th>
-                          <th className="p-3 text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border">
-                        {auditLogsList.length === 0 ? (
-                          <tr>
-                            <td colSpan={7} className="p-4 text-center text-muted-foreground/60 italic">
-                              No settings changes recorded yet in audit system.
-                            </td>
-                          </tr>
-                        ) : (
-                          auditLogsList.map((log: any) => (
-                            <tr key={log.id} className="hover:bg-slate-50/50 dark:hover:bg-zinc-900/10">
-                              <td className="p-3 font-bold">{log.action_by}</td>
-                              <td className="p-3">{log.action_name}</td>
-                              <td className="p-3 font-mono text-[10px] max-w-[120px] truncate">{log.old_value || '—'}</td>
-                              <td className="p-3 font-mono text-[10px] max-w-[120px] truncate text-primary">{log.new_value || '—'}</td>
-                              <td className="p-3">
-                                <span className="font-mono">{log.ip_address || '127.0.0.1'}</span>
-                                {log.device_info && <p className="text-[9px] text-muted-foreground mt-0.5">{log.device_info}</p>}
-                              </td>
-                              <td className="p-3 text-muted-foreground">{new Date(log.created_at).toLocaleString()}</td>
-                              <td className="p-3 text-right">
-                                {log.old_value ? (
-                                  <Button 
-                                    size="sm" 
-                                    variant="outline" 
-                                    className="h-7 text-[10px] rounded-lg font-bold border-primary/20 text-primary hover:bg-primary/5 px-2.5"
-                                    onClick={() => handleUndoAudit(log.id)}
-                                  >
-                                    Undo
-                                  </Button>
-                                ) : (
-                                  <span className="text-muted-foreground text-[10px]">—</span>
-                                )}
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+            <AuditTab
+              auditLogsList={auditLogsList}
+              onUndoAudit={handleUndoAudit}
+            />
           )}
 
           {/* TAB 19: Organization Documents */}
@@ -8489,122 +8203,13 @@ export default function SettingsPage() {
 
           {/* TAB 20: Backup & Recovery */}
           {activeTab === 'backup' && (
-            <div className="space-y-6">
-              {/* Trigger and Schedule options */}
-              <Card className="border-border shadow-xs">
-                <CardHeader>
-                  <CardTitle className="text-lg font-bold">Cloud Snapshots & Backups</CardTitle>
-                  <CardDescription>Configure auto recurrence frequencies and trigger manual target recovery points.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center p-4 bg-slate-50 dark:bg-zinc-900/30 border border-border rounded-2xl gap-4">
-                    <div>
-                      <h4 className="font-bold text-xs">Automated Cloud Backups Frequency</h4>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">Encrypts and relays schema structures to corporate cloud repositories.</p>
-                    </div>
-                    <select 
-                      className="text-xs rounded-xl border border-border px-3 outline-none focus-visible:ring-primary/20 bg-background font-sans h-9"
-                      value={backupInterval}
-                      onChange={e => handleToggleBackupSchedule(e.target.value)}
-                    >
-                      <option value="daily">Daily Cron schedule</option>
-                      <option value="weekly">Weekly Cron schedule</option>
-                      <option value="monthly">Monthly Cron schedule</option>
-                      <option value="none">Deactivated / Off</option>
-                    </select>
-                  </div>
-
-                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center p-4 bg-slate-50 dark:bg-zinc-900/30 border border-border rounded-2xl gap-4">
-                    <div>
-                      <h4 className="font-bold text-xs">Execute Manual Database Snapshot</h4>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">Generate a complete system restore point snapshot targeting current workspace state immediately.</p>
-                    </div>
-                    <Button 
-                      size="sm" 
-                      className="text-[10px] font-bold h-9 px-4 rounded-lg"
-                      onClick={handleCreateBackup}
-                    >
-                      Snapshot Now
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Snapshots Table */}
-              <Card className="border-border shadow-xs">
-                <CardHeader>
-                  <CardTitle className="text-lg font-bold">Available Recovery Snapshots</CardTitle>
-                  <CardDescription>Select past restore points to roll back database structures.</CardDescription>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left font-sans text-xs">
-                      <thead className="bg-slate-50 dark:bg-zinc-900/40 text-[10px] font-bold text-muted-foreground uppercase tracking-wider border-b">
-                        <tr>
-                          <th className="p-3">File name</th>
-                          <th className="p-3">Sizing</th>
-                          <th className="p-3">Backup Type</th>
-                          <th className="p-3">Status</th>
-                          <th className="p-3">Created At</th>
-                          <th className="p-3 text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border">
-                        {backupsList.length === 0 ? (
-                          <tr>
-                            <td colSpan={6} className="p-4 text-center text-muted-foreground/60 italic">
-                              No snapshots created yet. Click "Snapshot Now" to build one!
-                            </td>
-                          </tr>
-                        ) : (
-                          backupsList.map((bk: any) => (
-                            <tr key={bk.id} className="hover:bg-slate-50/50 dark:hover:bg-zinc-900/10">
-                              <td className="p-3 font-bold font-mono truncate max-w-xs">{bk.file_name}</td>
-                              <td className="p-3 font-mono">{bk.file_size}</td>
-                              <td className="p-3">
-                                <Badge className="bg-slate-100 dark:bg-zinc-800 text-muted-foreground border-none font-bold text-[8px] rounded-md capitalize">{bk.backup_type}</Badge>
-                              </td>
-                              <td className="p-3">
-                                {bk.status === 'completed' ? (
-                                  <Badge className="bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 font-bold border-none text-[8px] rounded-md">Completed</Badge>
-                                ) : bk.status === 'in_progress' ? (
-                                  <Badge className="bg-amber-100 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 font-bold border-none text-[8px] rounded-md">In Progress</Badge>
-                                ) : (
-                                  <Badge className="bg-red-100 dark:bg-red-950/30 text-red-700 dark:text-red-400 font-bold border-none text-[8px] rounded-md">Failed</Badge>
-                                )}
-                              </td>
-                              <td className="p-3 text-muted-foreground">{new Date(bk.created_at).toLocaleString()}</td>
-                              <td className="p-3 text-right flex justify-end gap-1.5">
-                                {bk.download_url && (
-                                  <Button 
-                                    size="sm" 
-                                    variant="ghost" 
-                                    className="h-7 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/10 rounded-lg px-2 text-[10px] font-bold"
-                                    onClick={() => toast.success(`Starting download: ${bk.file_name}`)}
-                                  >
-                                    Download
-                                  </Button>
-                                )}
-                                {bk.status === 'completed' && (
-                                  <Button 
-                                    size="sm" 
-                                    variant="outline" 
-                                    className="h-7 border-primary/20 text-primary hover:bg-primary/5 rounded-lg px-2 text-[10px] font-bold"
-                                    onClick={() => handleRestoreBackup(bk.id)}
-                                  >
-                                    Restore
-                                  </Button>
-                                )}
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+            <BackupTab
+              backupInterval={backupInterval}
+              backupsList={backupsList}
+              onToggleBackupSchedule={handleToggleBackupSchedule}
+              onCreateBackup={handleCreateBackup}
+              onRestoreBackup={handleRestoreBackup}
+            />
           )}
 
           {/* TAB 21: Advanced Settings */}

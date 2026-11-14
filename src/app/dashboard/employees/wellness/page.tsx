@@ -20,12 +20,12 @@ import {
 import { toast } from 'sonner';
 import { getStoredSessionToken, getStoredUser } from '@/lib/client-session';
 
-export const ICON_MAP: Record<string, any> = {
+const ICON_MAP: Record<string, any> = {
   Activity, Brain, HeartHandshake, PhoneCall, Syringe, Apple, Dumbbell,
   ClipboardList, Flame, Smile, Sparkles
 };
 
-export interface ServiceItem {
+interface ServiceItem {
   category: string;
   name: string;
   description: string;
@@ -33,7 +33,7 @@ export interface ServiceItem {
   iconName: string;
 }
 
-export interface ProgramRecord {
+interface ProgramRecord {
   id: string;
   title: string;
   category: string;
@@ -45,7 +45,7 @@ export interface ProgramRecord {
   scheduleDate: string;
 }
 
-export interface AppointmentRecord {
+interface AppointmentRecord {
   id: string;
   userId: string;
   programId?: string;
@@ -62,7 +62,7 @@ export interface AppointmentRecord {
   createdAt: string;
 }
 
-export interface SurveyRecord {
+interface SurveyRecord {
   id: string;
   userId: string;
   employeeName: string;
@@ -76,7 +76,7 @@ export interface SurveyRecord {
   createdAt: string;
 }
 
-export interface RosterEmp {
+interface RosterEmp {
   id: string;
   name: string;
   email: string;

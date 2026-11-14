@@ -43,50 +43,6 @@ export const GET = withApiHandler(async (request, context) => {
       throw error;
     }
 
-    // Auto-seed travel requests if empty in real DB
-    if (!requests || requests.length === 0) {
-      const actorUuid = await resolveActorUuid(context, supabase);
-      if (actorUuid) {
-        const seeds = [
-          {
-            tenant_id: tenantId,
-            employee_id: actorUuid,
-            destination: 'San Francisco, USA',
-            purpose: 'Annual Partner Conference & Product Launch keynotes',
-            departure_date: '2026-11-15',
-            return_date: '2026-11-22',
-            status: 'Pending',
-            visa_required: true,
-            visa_status: 'Pending',
-            advance_amount: 80000.00,
-            advance_status: 'Requested'
-          },
-          {
-            tenant_id: tenantId,
-            employee_id: actorUuid,
-            destination: 'Bangalore, India',
-            purpose: 'Workforce Onboarding & Team Alignment Meetups',
-            departure_date: '2026-10-10',
-            return_date: '2026-10-15',
-            status: 'Approved',
-            visa_required: false,
-            visa_status: 'N/A',
-            advance_amount: 15000.00,
-            advance_status: 'Disbursed'
-          }
-        ];
-
-        const { data: inserted, error: insertErr } = await supabase
-          .from('travel_requests')
-          .insert(seeds)
-          .select('*, employee:employee_id(first_name, last_name, email)');
-
-        if (!insertErr && inserted) {
-          requests = inserted;
-        }
-      }
-    }
-
     return NextResponse.json({
       success: true,
       data: requests || [],

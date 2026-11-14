@@ -22,7 +22,7 @@ import {
 import { toast } from 'sonner';
 import { getStoredSessionToken, getStoredUser } from '@/lib/client-session';
 
-export const HR_CASE_CATEGORIES = [
+const HR_CASE_CATEGORIES = [
   'Payroll & Benefits',
   'Policy Inquiry',
   'Grievance & Legal',
@@ -31,7 +31,7 @@ export const HR_CASE_CATEGORIES = [
   'Leave & Attendance'
 ];
 
-export interface KbItem {
+interface KbItem {
   articleNumber: string;
   category: string;
   title: string;
@@ -41,7 +41,7 @@ export interface KbItem {
   helpfulCount: number;
 }
 
-export interface EscalationTier {
+interface EscalationTier {
   level: number;
   tier: string;
   slaHours: number;
@@ -49,7 +49,7 @@ export interface EscalationTier {
   autoEscalateAfter: string;
 }
 
-export interface RosterEmp {
+interface RosterEmp {
   id: string;
   name: string;
   email: string;
@@ -57,7 +57,7 @@ export interface RosterEmp {
   designation: string;
 }
 
-export interface HrTicketRecord {
+interface HrTicketRecord {
   id: string;
   userId: string;
   employeeName: string;
