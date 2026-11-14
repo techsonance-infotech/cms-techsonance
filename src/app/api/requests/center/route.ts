@@ -4,7 +4,7 @@ import { BadRequestError } from '@/server/http/errors';
 import { getAdminRouteSupabase, resolveActorUuid } from '@/server/supabase/route-helpers';
 
 // Catalog definition for all 23 Request Types organized in 7 groups
-export const REQUEST_CATALOG_DEFAULTS = [
+const REQUEST_CATALOG_DEFAULTS = [
   // Time & Attendance
   { name: 'Attendance Correction', groupType: 'Time & Attendance', slaHours: 24, iconName: 'Clock', description: 'Request check-in/check-out time correction for missed punches' },
   { name: 'Leave', groupType: 'Time & Attendance', slaHours: 24, iconName: 'Calendar', description: 'Submit annual, casual, medical, or unpaid leave request' },

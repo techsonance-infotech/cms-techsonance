@@ -68,95 +68,16 @@ const globalRequestsMap = new Map<string, TravelRequestRecord[]>();
 const globalItinerariesMap = new Map<string, TravelItineraryRecord[]>();
 const globalExpensesMap = new Map<string, TravelExpenseRecord[]>();
 
-function getInitialRequests(tenantId: string, user?: any): TravelRequestRecord[] {
-  const empName = `${user?.firstName || 'Current'} ${user?.lastName || 'Employee'}`.trim();
-  const empEmail = user?.email || 'employee@company.com';
-  const empId = user?.id ? String(user.id) : 'emp-self';
-
-  return [
-    {
-      id: 'tr-req-001',
-      tenant_id: tenantId,
-      employee_id: empId,
-      destination: 'San Francisco, USA',
-      purpose: 'Annual Partner Conference & Product Keynote presentation',
-      departure_date: '2026-11-15',
-      return_date: '2026-11-22',
-      status: 'Pending',
-      visa_required: true,
-      visa_status: 'Pending',
-      advance_amount: 80000.00,
-      advance_status: 'Requested',
-      employee: {
-        first_name: user?.firstName || 'Current',
-        last_name: user?.lastName || 'Employee',
-        email: empEmail
-      },
-      created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
-      updated_at: new Date(Date.now() - 86400000 * 2).toISOString()
-    },
-    {
-      id: 'tr-req-002',
-      tenant_id: tenantId,
-      employee_id: empId,
-      destination: 'Bangalore, India',
-      purpose: 'Workforce Onboarding & Engineering Team Alignment Meetups',
-      departure_date: '2026-10-10',
-      return_date: '2026-10-15',
-      status: 'Approved',
-      visa_required: false,
-      visa_status: 'N/A',
-      advance_amount: 15000.00,
-      advance_status: 'Disbursed',
-      employee: {
-        first_name: user?.firstName || 'Current',
-        last_name: user?.lastName || 'Employee',
-        email: empEmail
-      },
-      created_at: new Date(Date.now() - 86400000 * 20).toISOString(),
-      updated_at: new Date(Date.now() - 86400000 * 20).toISOString()
-    }
-  ];
+function getInitialRequests(_tenantId: string, _user?: any): TravelRequestRecord[] {
+  return [];
 }
 
-function getInitialItineraries(tenantId: string, requestId: string): TravelItineraryRecord[] {
-  return [
-    {
-      id: `ti-${requestId}-01`,
-      tenant_id: tenantId,
-      travel_request_id: requestId,
-      flight_train_details: 'Indigo 6E-2415 (Departing Surat 06:10 AM - Arriving Bangalore 08:20 AM)',
-      accommodation_details: 'Grand Hyatt, Bangalore Main Wing Room 402',
-      ticket_file_url: 'https://example.com/tickets/flight-ticket.pdf',
-      hotel_booking_url: 'https://booking.com/hotels/grand-hyatt',
-      created_at: new Date().toISOString()
-    }
-  ];
+function getInitialItineraries(_tenantId: string, _requestId: string): TravelItineraryRecord[] {
+  return [];
 }
 
-function getInitialExpenses(tenantId: string, requestId: string): TravelExpenseRecord[] {
-  return [
-    {
-      id: `te-${requestId}-01`,
-      tenant_id: tenantId,
-      travel_request_id: requestId,
-      description: 'Client Dinner & Partner Networking Event',
-      amount: 4500.00,
-      receipt_url: 'https://example.com/receipts/dinner.jpg',
-      status: 'Pending',
-      created_at: new Date().toISOString()
-    },
-    {
-      id: `te-${requestId}-02`,
-      tenant_id: tenantId,
-      travel_request_id: requestId,
-      description: 'Airport Transit Cab & Highway Toll Fees',
-      amount: 1800.00,
-      receipt_url: 'https://example.com/receipts/cab.jpg',
-      status: 'Approved',
-      created_at: new Date().toISOString()
-    }
-  ];
+function getInitialExpenses(_tenantId: string, _requestId: string): TravelExpenseRecord[] {
+  return [];
 }
 
 export const travelMemoryStore = {

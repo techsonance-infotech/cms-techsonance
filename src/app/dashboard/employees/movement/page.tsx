@@ -23,7 +23,7 @@ import { toast } from 'sonner';
 import { getStoredSessionToken } from '@/lib/client-session';
 
 // Define the 9 Movement Types
-export const MOVEMENT_TYPES = [
+const MOVEMENT_TYPES = [
   { id: 'transfer', name: 'Transfer (Location/Branch)', icon: Landmark, color: 'text-teal-500 bg-teal-500/10' },
   { id: 'promotion', name: 'Promotion (Level/Grade)', icon: TrendingUp, color: 'text-amber-500 bg-amber-500/10' },
   { id: 'department', name: 'Department Change', icon: Layers, color: 'text-indigo-500 bg-indigo-500/10' },
@@ -35,7 +35,7 @@ export const MOVEMENT_TYPES = [
   { id: 'salary_revision', name: 'Salary Revision Trigger', icon: DollarSign, color: 'text-rose-500 bg-rose-500/10' }
 ];
 
-export interface RosterEmployee {
+interface RosterEmployee {
   id: string;
   userId?: string;
   employeeTableId?: string;
@@ -53,7 +53,7 @@ export interface RosterEmployee {
   dateOfJoining?: string;
 }
 
-export interface MovementOrder {
+interface MovementOrder {
   id: string;
   movementCode: string;
   userId?: string;

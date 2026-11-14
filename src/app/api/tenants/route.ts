@@ -1,36 +1,34 @@
 import { NextResponse } from 'next/server';
 import { withApiHandler } from '@/server/http/handler';
-import { BadRequestError, NotFoundError } from '@/server/http/errors';
+import { BadRequestError, NotFoundError, ForbiddenError } from '@/server/http/errors';
 import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
 
 export const GET = withApiHandler(async (request, context) => {
   const accessToken = context.auth?.accessToken;
   const tenantId = context.auth?.user.tenantId;
+  const userRole = context.auth?.user.role;
   if (!accessToken || !tenantId) throw new BadRequestError('Authorization required');
 
   const supabase = getAdminRouteSupabase();
+  const isSuperAdmin = userRole === 'SuperAdmin';
 
-  // Fetch all tenants
-  const { data: tenants, error: tenantsError } = await supabase
-    .from('tenants')
-    .select('*')
-    .order('created_at', { ascending: false });
+  // SuperAdmin sees all tenants; tenant Admin only sees their own organization
+  let query = supabase.from('tenants').select('*').order('created_at', { ascending: false });
+  if (!isSuperAdmin) {
+    query = query.eq('id', tenantId);
+  }
 
+  const { data: tenants, error: tenantsError } = await query;
   if (tenantsError) throw new Error(tenantsError.message);
 
   // Fetch tenant user memberships to count users
-  const { data: tenantUsers, error: usersError } = await supabase
-    .from('tenant_users')
-    .select('tenant_id');
-
-  const mockIndustries = ['IT Services', 'Construction', 'Real Estate'];
+  let usersQuery = supabase.from('tenant_users').select('tenant_id');
+  if (!isSuperAdmin) {
+    usersQuery = usersQuery.eq('tenant_id', tenantId);
+  }
+  const { data: tenantUsers } = await usersQuery;
 
   const mappedTenants = (tenants || []).map((t: any) => {
-    // Generate deterministic mock industry, revenue, health based on string lengths/hashes
-    const nameLength = t.name.length;
-    const industry = mockIndustries[nameLength % mockIndustries.length];
-    const revenue = t.status === 'active' ? (nameLength * 13800) % 250000 + 45000 : 0;
-    const health = t.status === 'active' ? 90 + (nameLength % 11) : 75;
     const usersCount = tenantUsers ? tenantUsers.filter((tu: any) => tu.tenant_id === t.id).length : 0;
 
     return {
@@ -39,10 +37,7 @@ export const GET = withApiHandler(async (request, context) => {
       slug: t.slug,
       status: t.status,
       created_at: t.created_at,
-      industry,
-      revenue,
       users: usersCount,
-      health,
     };
   });
 
@@ -52,14 +47,27 @@ export const GET = withApiHandler(async (request, context) => {
 export const PUT = withApiHandler(async (request, context) => {
   const accessToken = context.auth?.accessToken;
   const tenantId = context.auth?.user.tenantId;
+  const userRole = context.auth?.user.role;
   if (!accessToken || !tenantId) throw new BadRequestError('Authorization required');
 
   const searchParams = new URL(request.url).searchParams;
   const id = searchParams.get('id');
   if (!id) throw new BadRequestError('Tenant ID is required');
 
+  const isSuperAdmin = userRole === 'SuperAdmin';
+
+  // Non-superadmins cannot modify other tenants
+  if (!isSuperAdmin && id !== tenantId) {
+    throw new ForbiddenError('You can only modify your own organization settings');
+  }
+
   const payload = await request.json();
   const { name, status } = payload;
+
+  // Only SuperAdmin can alter tenant subscription status (e.g. active / suspended)
+  if (status !== undefined && !isSuperAdmin) {
+    throw new ForbiddenError('Only Super Administrators can change organization lifecycle status');
+  }
 
   const supabase = getAdminRouteSupabase();
 
@@ -75,7 +83,7 @@ export const PUT = withApiHandler(async (request, context) => {
     .from('tenants')
     .update({
       ...(name !== undefined ? { name: name.trim() } : {}),
-      ...(status !== undefined ? { status } : {}),
+      ...(status !== undefined && isSuperAdmin ? { status } : {}),
       updated_at: new Date().toISOString(),
     })
     .eq('id', id)
@@ -89,8 +97,13 @@ export const PUT = withApiHandler(async (request, context) => {
 
 export const DELETE = withApiHandler(async (request, context) => {
   const accessToken = context.auth?.accessToken;
-  const tenantId = context.auth?.user.tenantId;
-  if (!accessToken || !tenantId) throw new BadRequestError('Authorization required');
+  const userRole = context.auth?.user.role;
+  if (!accessToken) throw new BadRequestError('Authorization required');
+
+  // Deleting an organization is restricted strictly to SuperAdmin
+  if (userRole !== 'SuperAdmin') {
+    throw new ForbiddenError('Only platform Super Administrators can delete tenants');
+  }
 
   const searchParams = new URL(request.url).searchParams;
   const id = searchParams.get('id');
@@ -114,4 +127,4 @@ export const DELETE = withApiHandler(async (request, context) => {
   if (error) throw new Error(error.message);
 
   return NextResponse.json({ success: true, message: 'Tenant deleted successfully' });
-}, { requireAuth: true, roles: ['Admin', 'SuperAdmin'] });
+}, { requireAuth: true, roles: ['SuperAdmin'] });

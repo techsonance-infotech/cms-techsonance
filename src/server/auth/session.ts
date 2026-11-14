@@ -92,13 +92,6 @@ export async function authenticateRequest(request: Request, options?: { required
     bearerToken = null;
   }
 
-  if (!bearerToken) {
-    try {
-      const url = new URL(request.url);
-      bearerToken = url.searchParams.get('token') || url.searchParams.get('auth_token');
-    } catch {}
-  }
-
   if (!bearerToken || bearerToken === 'null' || bearerToken === 'undefined') {
     if (options?.required) throw new UnauthorizedError();
     return null;

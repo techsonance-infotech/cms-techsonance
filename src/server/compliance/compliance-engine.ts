@@ -1,6 +1,6 @@
 import { getAdminRouteSupabase } from '@/server/supabase/route-helpers';
 import { detectComplianceViolations, type ComplianceViolation } from './violation-detector';
-import { COMPLIANCE_DOMAINS } from '@/app/api/compliance/operations/route';
+import { COMPLIANCE_DOMAINS } from './constants';
 
 export interface DepartmentComplianceScore {
   department: string;
