@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { 
@@ -29,7 +30,8 @@ import {
   TrendingUp,
   HeartHandshake,
   Headphones,
-  Inbox
+  Inbox,
+  FileText
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -69,6 +71,11 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [aiResponse, setAiResponse] = useState<string | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!openPalette) {
@@ -185,7 +192,7 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
     if (n.link) {
       router.push(n.link);
     } else {
-      router.push('/dashboard/notifications');
+      router.push('/dashboard/employees/broadcast');
     }
   };
 
@@ -332,7 +339,11 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
     return 'Good evening';
   };
 
-  // Command Palette items & actions definition
+  // Role helper for role-based navigation and permissions
+  const normalizedRole = (user?.role || '').toLowerCase().replace(/[^a-z0-9_]/g, '');
+  const isAdminOrManager = ['admin', 'superadmin', 'super_admin', 'owner', 'ceo', 'cto', 'business_owner', 'hr_manager', 'project_manager', 'management'].includes(normalizedRole);
+
+  // Command Palette items & actions definition with role access matching sidebar
   const staticItems = [
     {
       id: 'nav-dashboard',
@@ -340,7 +351,8 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
       description: 'Workspace main overview and KPIs',
       category: 'Navigation',
       icon: Building,
-      action: () => router.push('/dashboard')
+      action: () => router.push('/dashboard'),
+      roles: ['admin', 'project_manager', 'developer', 'client', 'hr_manager', 'accountant', 'business_development', 'employee', 'intern', 'ceo', 'cto', 'business_owner'],
     },
     {
       id: 'nav-projects',
@@ -348,39 +360,71 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
       description: 'Kanban board, sprints, and tasks',
       category: 'Navigation',
       icon: Briefcase,
-      action: () => router.push('/dashboard/projects')
+      action: () => router.push('/dashboard/projects'),
+      roles: ['admin', 'project_manager', 'developer', 'client', 'hr_manager', 'accountant', 'business_development', 'employee', 'intern', 'ceo', 'cto', 'business_owner'],
     },
     {
-      id: 'nav-clients',
-      title: 'Go to Clients',
-      description: 'Customer list and communication panel',
+      id: 'nav-tasks',
+      title: 'Go to Tasks Board',
+      description: 'My assigned work and sprint tasks',
       category: 'Navigation',
-      icon: Users,
-      action: () => router.push('/dashboard/clients')
+      icon: Briefcase,
+      action: () => router.push('/dashboard/tasks'),
+      roles: ['admin', 'project_manager', 'developer', 'employee', 'intern', 'ceo', 'cto', 'business_owner'],
     },
     {
-      id: 'nav-employees',
-      title: 'Go to Employees Roster',
-      description: 'Employee details, document vault, and hierarchy',
+      id: 'nav-attendance',
+      title: 'Go to My Attendance',
+      description: 'Check-in, attendance register & work logs',
       category: 'Navigation',
-      icon: UserIcon,
-      action: () => router.push('/dashboard/employees')
+      icon: Clock,
+      action: () => router.push('/dashboard/attendance/register'),
+      roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'],
+    },
+    {
+      id: 'nav-leaves',
+      title: 'Go to Leaves & Time Off',
+      description: 'Request leaves, PTO & view leave balance',
+      category: 'Navigation',
+      icon: Calendar,
+      action: () => router.push('/dashboard/leaves'),
+      roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'],
+    },
+    {
+      id: 'nav-wfh',
+      title: 'Go to Work From Home',
+      description: 'Submit remote work requests & track days',
+      category: 'Navigation',
+      icon: Building,
+      action: () => router.push('/dashboard/employees/wfh'),
+      roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'],
+    },
+    {
+      id: 'nav-broadcast',
+      title: 'Go to Company Announcements',
+      description: 'Corporate broadcasts, notices & updates',
+      category: 'Navigation',
+      icon: Inbox,
+      action: () => router.push('/dashboard/employees/broadcast'),
+      roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'],
     },
     {
       id: 'nav-reimbursements',
       title: 'Go to Claims & Reimbursements',
-      description: 'Submit and approve team expense claims',
+      description: 'Submit and view expense reimbursement claims',
       category: 'Navigation',
       icon: Wallet,
-      action: () => router.push('/dashboard/reimbursements')
+      action: () => router.push('/dashboard/reimbursements'),
+      roles: ['admin', 'project_manager', 'hr_manager', 'accountant', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'],
     },
     {
       id: 'nav-requests',
       title: 'Go to Employee Request Center',
-      description: 'Submit & approve requests, hardware, leaves & WFH',
+      description: 'Submit hardware, letters & general requests',
       category: 'Navigation',
       icon: Inbox,
-      action: () => router.push('/dashboard/employees/requests')
+      action: () => router.push('/dashboard/employees/requests'),
+      roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'],
     },
     {
       id: 'nav-service-desk',
@@ -388,15 +432,54 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
       description: 'Support tickets, HR cases, KB articles & SLAs',
       category: 'Navigation',
       icon: Headphones,
-      action: () => router.push('/dashboard/hr-service-desk')
+      action: () => router.push('/dashboard/hr-service-desk'),
+      roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'],
     },
     {
       id: 'nav-wellness',
       title: 'Go to Employee Wellness Operations',
-      description: 'EAP hotline, mental health, pulse surveys & burnout radar',
+      description: 'Wellness hotline, pulse surveys & support',
       category: 'Navigation',
       icon: HeartHandshake,
-      action: () => router.push('/dashboard/employees/wellness')
+      action: () => router.push('/dashboard/employees/wellness'),
+      roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'],
+    },
+    {
+      id: 'nav-org-chart',
+      title: 'Go to Organization Chart',
+      description: 'Company hierarchy and reporting lines',
+      category: 'Navigation',
+      icon: Network,
+      action: () => router.push('/dashboard/employees/org-chart'),
+      roles: ['admin', 'project_manager', 'hr_manager', 'ceo', 'cto', 'business_owner', 'developer', 'employee', 'intern'],
+    },
+    {
+      id: 'nav-documents',
+      title: 'Go to Document Vault',
+      description: 'Personal records, letters & certificates',
+      category: 'Navigation',
+      icon: FileText,
+      action: () => router.push('/dashboard/employees/documents'),
+      roles: ['admin', 'super_admin', 'superadmin', 'owner', 'ceo', 'cto', 'business_owner', 'hr_manager', 'project_manager', 'management', 'developer', 'employee', 'intern'],
+    },
+    // Admin & Manager exclusive navigation
+    {
+      id: 'nav-clients',
+      title: 'Go to Clients',
+      description: 'Customer list and communication panel',
+      category: 'Navigation',
+      icon: Users,
+      action: () => router.push('/dashboard/clients'),
+      roles: ['admin', 'super_admin', 'superadmin', 'owner', 'ceo', 'cto', 'business_owner', 'project_manager', 'business_development'],
+    },
+    {
+      id: 'nav-employees',
+      title: 'Go to Employees Roster',
+      description: 'Employee details, document vault, and hierarchy',
+      category: 'Navigation',
+      icon: UserIcon,
+      action: () => router.push('/dashboard/employees'),
+      roles: ['admin', 'super_admin', 'superadmin', 'owner', 'ceo', 'cto', 'business_owner', 'hr_manager', 'project_manager'],
     },
     {
       id: 'nav-compliance',
@@ -404,7 +487,8 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
       description: '14 compliance domains, audit findings & CAPA plans',
       category: 'Navigation',
       icon: ShieldCheck,
-      action: () => router.push('/dashboard/employees/compliance')
+      action: () => router.push('/dashboard/employees/compliance'),
+      roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'],
     },
     {
       id: 'nav-automation',
@@ -412,15 +496,8 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
       description: '21 automated triggers, execution logs & AI daily digest',
       category: 'Navigation',
       icon: Cpu,
-      action: () => router.push('/dashboard/hr-automation')
-    },
-    {
-      id: 'nav-ai-copilot',
-      title: 'Go to AI Copilot Hub',
-      description: '19 AI engines, NL Assistant & Fraud Shields',
-      category: 'Navigation',
-      icon: Bot,
-      action: () => router.push('/dashboard/ai-copilot')
+      action: () => router.push('/dashboard/hr-automation'),
+      roles: ['admin', 'hr_manager', 'ceo', 'cto', 'business_owner'],
     },
     {
       id: 'nav-analytics',
@@ -428,7 +505,8 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
       description: '14 operational dashboards, SLAs, WFH & expense trends',
       category: 'Navigation',
       icon: TrendingUp,
-      action: () => router.push('/dashboard/analytics')
+      action: () => router.push('/dashboard/analytics'),
+      roles: ['admin', 'hr_manager', 'project_manager', 'ceo', 'cto', 'business_owner'],
     },
     {
       id: 'nav-settings',
@@ -436,7 +514,17 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
       description: 'Organization info, policies, and schemas',
       category: 'Navigation',
       icon: Settings,
-      action: () => router.push('/dashboard/settings')
+      action: () => router.push('/dashboard/settings'),
+      roles: ['admin', 'super_admin', 'superadmin', 'owner', 'ceo', 'cto', 'business_owner'],
+    },
+    {
+      id: 'nav-ai-copilot',
+      title: 'Go to AI Copilot Hub',
+      description: '19 AI engines, NL Assistant & Fraud Shields',
+      category: 'Navigation',
+      icon: Bot,
+      action: () => router.push('/dashboard/ai-copilot'),
+      roles: ['admin', 'project_manager', 'developer', 'client', 'hr_manager', 'accountant', 'business_development', 'employee', 'intern', 'ceo', 'cto', 'business_owner'],
     },
     {
       id: 'action-theme',
@@ -469,8 +557,8 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
     action: () => router.push(`/dashboard/projects`)
   }));
 
-  // Dynamic client search filtering
-  const filteredClients = allClients.filter((c: any) =>
+  // Dynamic client search filtering (Only for Admin/Managers, hidden for Employees)
+  const filteredClients = isAdminOrManager ? allClients.filter((c: any) =>
     c.companyName.toLowerCase().includes(paletteSearch.toLowerCase()) ||
     (c.contactName || '').toLowerCase().includes(paletteSearch.toLowerCase())
   ).map((c: any) => ({
@@ -480,11 +568,17 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
     category: 'Clients',
     icon: Users,
     action: () => router.push(`/dashboard/clients`)
-  }));
+  })) : [];
+
+  // Filter static navigation items strictly by what the current user's role can access in the sidebar
+  const visibleStaticItems = staticItems.filter((item: any) => {
+    if (!item.roles || item.roles.length === 0) return true;
+    return item.roles.includes(normalizedRole) || (isAdminOrManager && item.roles.includes('admin'));
+  });
 
   // Combine static actions with matching projects & clients
   const matchingItems = [
-    ...staticItems.filter(item => 
+    ...visibleStaticItems.filter(item => 
       item.title.toLowerCase().includes(paletteSearch.toLowerCase()) ||
       item.description.toLowerCase().includes(paletteSearch.toLowerCase())
     ),
@@ -636,7 +730,7 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
               )}
             </div>
             <div className="p-2 border-t border-muted text-center">
-              <Link href="/dashboard/notifications">
+              <Link href="/dashboard/employees/broadcast">
                 <span className="text-[10px] font-bold text-[#f87941] hover:underline block cursor-pointer">
                   View All Notifications
                 </span>
@@ -708,19 +802,23 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
               </Link>
             </DropdownMenuItem>
             
-            <DropdownMenuItem asChild className="p-2.5 rounded-lg hover:bg-accent cursor-pointer transition-colors">
-              <Link href="/dashboard/settings" className="flex items-center gap-2 w-full text-xs font-medium">
-                <Settings className="h-4 w-4 text-muted-foreground" />
-                <span>Agency Settings</span>
-              </Link>
-            </DropdownMenuItem>
+            {isAdminOrManager && (
+              <>
+                <DropdownMenuItem asChild className="p-2.5 rounded-lg hover:bg-accent cursor-pointer transition-colors">
+                  <Link href="/dashboard/settings" className="flex items-center gap-2 w-full text-xs font-medium">
+                    <Settings className="h-4 w-4 text-muted-foreground" />
+                    <span>Agency Settings</span>
+                  </Link>
+                </DropdownMenuItem>
 
-            <DropdownMenuItem asChild className="p-2.5 rounded-lg hover:bg-accent cursor-pointer transition-colors">
-              <Link href="/dashboard" className="flex items-center gap-2 w-full text-xs font-medium">
-                <Building className="h-4 w-4 text-muted-foreground" />
-                <span>Workspace Hub</span>
-              </Link>
-            </DropdownMenuItem>
+                <DropdownMenuItem asChild className="p-2.5 rounded-lg hover:bg-accent cursor-pointer transition-colors">
+                  <Link href="/dashboard" className="flex items-center gap-2 w-full text-xs font-medium">
+                    <Building className="h-4 w-4 text-muted-foreground" />
+                    <span>Workspace Hub</span>
+                  </Link>
+                </DropdownMenuItem>
+              </>
+            )}
 
             <DropdownMenuSeparator className="my-1 bg-muted/60" />
             
@@ -741,18 +839,18 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
       </div>
 
     {/* Global Command Palette Modal */}
-    {openPalette && (
+    {mounted && openPalette && typeof document !== 'undefined' && createPortal(
       <div 
-        className="fixed inset-0 bg-zinc-950/60 backdrop-blur-sm z-50 flex items-start justify-center pt-[15vh] p-4 animate-in fade-in duration-200"
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-start justify-center pt-[15vh] p-4 animate-in fade-in duration-200"
         onClick={() => setOpenPalette(false)}
       >
         <div 
           id="command-palette-card"
-          className="bg-card/95 border border-border rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden backdrop-blur-md flex flex-col max-h-[70vh] animate-in fade-in zoom-in-95 duration-200"
+          className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[70vh] animate-in fade-in zoom-in-95 duration-200"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Search Input Area */}
-          <div className="flex items-center gap-3 px-4 py-4 border-b border-border/60">
+          <div className="flex items-center gap-3 px-4 py-4 border-b border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
             <Search className="h-5 w-5 text-muted-foreground" />
             <input
               type="text"
@@ -769,7 +867,7 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
           </div>
 
           {/* Scrollable Results List */}
-          <div className="overflow-y-auto p-2 space-y-4 max-h-[50vh]">
+          <div className="overflow-y-auto p-2 space-y-4 max-h-[50vh] bg-white dark:bg-zinc-900">
             {isAiLoading && (
               <div className="py-12 px-6 flex flex-col items-center justify-center gap-4">
                 <Sparkles className="h-10 w-10 text-primary animate-spin" />
@@ -894,7 +992,7 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
           </div>
 
           {/* Footer help guide */}
-          <div className="px-4 py-3 border-t border-slate-200 dark:border-zinc-800/80 bg-muted/10 flex items-center justify-between text-[10px] text-muted-foreground font-semibold">
+          <div className="px-4 py-3 border-t border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/80 flex items-center justify-between text-[10px] text-muted-foreground font-semibold">
             <div className="flex items-center gap-4">
               <span>↑↓ to navigate</span>
               <span>↵ to select</span>
@@ -905,7 +1003,8 @@ export function DashboardHeader({ user, onMenuClick }: DashboardHeaderProps) {
             </div>
           </div>
         </div>
-      </div>
+      </div>,
+      document.body
     )}
   </header>
   );

@@ -28,7 +28,6 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  TECHSONANCE_COMPANY,
   CURRENCY_SYMBOLS,
   INVOICE_SUBTITLES,
   InvoiceLineItem,
@@ -100,28 +99,28 @@ function InvoiceGeneratorInner() {
   const [paymentInstructions, setPaymentInstructions] = useState<string>('Please mention the invoice number in the payment reference and share payment confirmation after transfer.');
   const [refundPolicy, setRefundPolicy] = useState<string>('Payments are subject to the applicable project agreement, cancellation terms and approved scope of work.');
 
-  // Dynamic Tenant Branding & Signatory Profile
-  const [companyName, setCompanyName] = useState<string>(TECHSONANCE_COMPANY.name);
-  const [companyLogo, setCompanyLogo] = useState<string>(TECHSONANCE_COMPANY.logoUrl);
-  const [companyTagline, setCompanyTagline] = useState<string>(TECHSONANCE_COMPANY.tagline);
-  const [companyAddress, setCompanyAddress] = useState<string>(TECHSONANCE_COMPANY.address);
-  const [companyEmail, setCompanyEmail] = useState<string>(TECHSONANCE_COMPANY.email);
-  const [companyWebsite, setCompanyWebsite] = useState<string>(TECHSONANCE_COMPANY.website);
-  const [companyGstin, setCompanyGstin] = useState<string>(TECHSONANCE_COMPANY.gstin);
-  const [companyLlpin, setCompanyLlpin] = useState<string>(TECHSONANCE_COMPANY.llpin);
-  const [companyStampUrl, setCompanyStampUrl] = useState<string>(TECHSONANCE_COMPANY.stampUrl);
-  const [companySignatureUrl, setCompanySignatureUrl] = useState<string>(TECHSONANCE_COMPANY.signatureUrl);
-  const [signatoryName, setSignatoryName] = useState<string>(TECHSONANCE_COMPANY.signatory.name);
-  const [signatoryTitle, setSignatoryTitle] = useState<string>(TECHSONANCE_COMPANY.signatory.title);
+  // Dynamic Tenant Branding & Signatory Profile (No hardcoded fallback)
+  const [companyName, setCompanyName] = useState<string>('');
+  const [companyLogo, setCompanyLogo] = useState<string>('');
+  const [companyTagline, setCompanyTagline] = useState<string>('');
+  const [companyAddress, setCompanyAddress] = useState<string>('');
+  const [companyEmail, setCompanyEmail] = useState<string>('');
+  const [companyWebsite, setCompanyWebsite] = useState<string>('');
+  const [companyGstin, setCompanyGstin] = useState<string>('');
+  const [companyLlpin, setCompanyLlpin] = useState<string>('');
+  const [companyStampUrl, setCompanyStampUrl] = useState<string>('');
+  const [companySignatureUrl, setCompanySignatureUrl] = useState<string>('');
+  const [signatoryName, setSignatoryName] = useState<string>('');
+  const [signatoryTitle, setSignatoryTitle] = useState<string>('');
   const [stampEnabled, setStampEnabled] = useState<boolean>(true);
   const [digitalSignatureEnabled, setDigitalSignatureEnabled] = useState<boolean>(true);
   const [brandingSectionOpen, setBrandingSectionOpen] = useState<boolean>(false);
   const [bankDetails, setBankDetails] = useState({
-    name: TECHSONANCE_COMPANY.bank.name,
-    accountName: TECHSONANCE_COMPANY.bank.accountName,
-    accountNo: TECHSONANCE_COMPANY.bank.accountNo,
-    ifsc: TECHSONANCE_COMPANY.bank.ifsc,
-    upiId: TECHSONANCE_COMPANY.bank.upiId,
+    name: '',
+    accountName: '',
+    accountNo: '',
+    ifsc: '',
+    upiId: '',
   });
 
   const stampFileRef = useRef<HTMLInputElement>(null);
@@ -138,6 +137,33 @@ function InvoiceGeneratorInner() {
     fetchClients();
     loadLocalHistory();
     fetchCompanySettings();
+
+    const handleBrandingUpdate = (e: any) => {
+      const detail = e.detail;
+      if (!detail) {
+        fetchCompanySettings();
+        return;
+      }
+      if (detail.stampUrl !== undefined) setCompanyStampUrl(detail.stampUrl === '/branding/tenant-stamp.png' ? '' : detail.stampUrl);
+      if (detail.digitalSignatureUrl !== undefined) setCompanySignatureUrl(detail.digitalSignatureUrl === '/branding/tenant-signature.png' ? '' : detail.digitalSignatureUrl);
+      if (detail.logoUrl !== undefined) setCompanyLogo(detail.logoUrl === '/branding/tenant-logo.png' ? '' : detail.logoUrl);
+      if (detail.signatoryName !== undefined) setSignatoryName(detail.signatoryName);
+      if (detail.signatoryTitle !== undefined) setSignatoryTitle(detail.signatoryTitle);
+      if (detail.tagline !== undefined) setCompanyTagline(detail.tagline);
+      if (detail.digitalSignatureEnabled !== undefined) setDigitalSignatureEnabled(Boolean(detail.digitalSignatureEnabled));
+      if (detail.bankDetails) setBankDetails((prev) => ({ ...prev, ...detail.bankDetails }));
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('branding-updated', handleBrandingUpdate);
+      window.addEventListener('logo-updated', handleBrandingUpdate);
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('branding-updated', handleBrandingUpdate);
+        window.removeEventListener('logo-updated', handleBrandingUpdate);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -150,9 +176,9 @@ function InvoiceGeneratorInner() {
     if (!id || isNaN(id)) return;
     try {
       const token = getStoredSessionToken();
-      const headers: Record<string, string> = {};
-      if (token && token !== 'null') headers['Authorization'] = `Bearer ${token}`;
-      const res = await fetch(`/api/invoices?id=${id}`, { headers, credentials: 'include' });
+      const reqHeaders: Record<string, string> = {};
+      if (token && token !== 'null') reqHeaders['Authorization'] = `Bearer ${token}`;
+      const res = await fetch(`/api/invoices?id=${id}`, { headers: reqHeaders as HeadersInit, credentials: 'include' });
       if (res.ok) {
         const inv = await res.json();
         setInvoiceNo(inv.invoiceNumber || `TS-INV-${id}`);
@@ -165,7 +191,7 @@ function InvoiceGeneratorInner() {
         if (inv.amount) setAmountReceived(String(inv.amount));
 
         // Line items
-        const itemsRes = await fetch(`/api/invoice-items?invoiceId=${id}`, { headers, credentials: 'include' });
+        const itemsRes = await fetch(`/api/invoice-items?invoiceId=${id}`, { headers: reqHeaders as HeadersInit, credentials: 'include' });
         if (itemsRes.ok) {
           const itemsJson = await itemsRes.json();
           const list = itemsJson.data || itemsJson || [];
@@ -191,44 +217,60 @@ function InvoiceGeneratorInner() {
 
     // Company Name
     const cName =
-      found.companyName ||
-      found.company_name ||
-      found.name ||
-      found.contactPerson ||
-      found.contact_person ||
-      (found.email ? found.email.split('@')[0] : '');
+      (found.companyName && String(found.companyName).trim()) ||
+      (found.company_name && String(found.company_name).trim()) ||
+      (found.clientName && String(found.clientName).trim()) ||
+      (found.client_name && String(found.client_name).trim()) ||
+      (found.name && String(found.name).trim()) ||
+      (found.contactPerson && String(found.contactPerson).trim()) ||
+      (found.contact_person && String(found.contact_person).trim()) ||
+      (found.email ? String(found.email).split('@')[0] : '');
     setClientName(cName);
 
     // Email
-    const cEmail = found.email || found.companyEmail || found.company_email || '';
+    const cEmail =
+      (found.email && String(found.email).trim()) ||
+      (found.companyEmail && String(found.companyEmail).trim()) ||
+      (found.company_email && String(found.company_email).trim()) ||
+      (found.billingEmail && String(found.billingEmail).trim()) ||
+      '';
     setClientEmail(cEmail);
 
     // Contact Person
     const cContact =
-      found.contactPerson ||
-      found.contact_person ||
-      found.contactName ||
-      found.contact_name ||
-      found.name ||
+      (found.contactPerson && String(found.contactPerson).trim()) ||
+      (found.contact_person && String(found.contact_person).trim()) ||
+      (found.contactName && String(found.contactName).trim()) ||
+      (found.contact_name && String(found.contact_name).trim()) ||
+      (found.name && String(found.name).trim()) ||
       cName;
     setContactPerson(cContact);
 
     // Phone
-    const cPhone = found.phone || found.companyPhone || found.company_phone || '';
+    const cPhone =
+      (found.phone && String(found.phone).trim()) ||
+      (found.companyPhone && String(found.companyPhone).trim()) ||
+      (found.company_phone && String(found.company_phone).trim()) ||
+      (found.contactNumber && String(found.contactNumber).trim()) ||
+      (found.mobile && String(found.mobile).trim()) ||
+      '';
     setContactNumber(cPhone);
 
     // Country
-    const cCountry = found.country || 'India';
+    const cCountry = (found.country && String(found.country).trim()) || 'India';
     setCountry(cCountry);
 
     // State
-    const cState = found.state || 'Gujarat';
+    const cState = (found.state && String(found.state).trim()) || 'Gujarat';
     setState(cState);
 
     // Address
-    const rawAddr = found.address || '';
-    const cCity = found.city || '';
-    const cPostal = found.postalCode || found.postal_code || '';
+    const rawAddr = (found.address && String(found.address).trim()) || '';
+    const cCity = (found.city && String(found.city).trim()) || '';
+    const cPostal =
+      (found.postalCode && String(found.postalCode).trim()) ||
+      (found.postal_code && String(found.postal_code).trim()) ||
+      '';
     let formattedAddress = rawAddr;
     if (!formattedAddress && (cCity || cState || cCountry)) {
       formattedAddress = [cCity, cState, cPostal, cCountry].filter(Boolean).join(', ');
@@ -236,7 +278,13 @@ function InvoiceGeneratorInner() {
     setClientAddress(formattedAddress || (cState && cCountry ? `${cState}, ${cCountry}` : ''));
 
     // Tax ID (GST / VAT / TRN)
-    const cTax = found.taxId || found.tax_id || found.gstin || found.vat || found.trn || '';
+    const cTax =
+      (found.taxId && String(found.taxId).trim()) ||
+      (found.tax_id && String(found.tax_id).trim()) ||
+      (found.gstin && String(found.gstin).trim()) ||
+      (found.vat && String(found.vat).trim()) ||
+      (found.trn && String(found.trn).trim()) ||
+      '';
     if (cTax) setTaxId(cTax);
 
     // Currency
@@ -264,8 +312,13 @@ function InvoiceGeneratorInner() {
         const list = Array.isArray(json) ? json : json.data || [];
         setClients(list);
         if (list.length > 0 && !selectedClientId && !clientName) {
-          setSelectedClientId(String(list[0].id));
-          populateClientFields(list[0]);
+          const first = list[0];
+          const firstId =
+            first.id !== undefined && first.id !== null && first.id !== ''
+              ? String(first.id)
+              : (first.client_id || first.email || '0');
+          setSelectedClientId(firstId);
+          populateClientFields(first);
         }
       }
     } catch (err) {
@@ -294,13 +347,47 @@ function InvoiceGeneratorInner() {
     }
   };
 
+  const sanitizeSig = (v?: string | null) => (!v || v === '/branding/tenant-signature.png' ? '' : v);
+  const sanitizeStamp = (v?: string | null) => (!v || v === '/branding/tenant-stamp.png' ? '' : v);
+  const sanitizeLogo = (v?: string | null) => (!v || v === '/branding/tenant-logo.png' ? '' : v);
+
   const fetchCompanySettings = async () => {
+    // 1. Instant hydration from client storage cache
+    if (typeof window !== 'undefined') {
+      const rawCachedSig = localStorage.getItem('tenant_signature_url');
+      if (rawCachedSig === '/branding/tenant-signature.png') {
+        localStorage.removeItem('tenant_signature_url');
+      }
+      const rawCachedStamp = localStorage.getItem('tenant_stamp_url');
+      if (rawCachedStamp === '/branding/tenant-stamp.png') {
+        localStorage.removeItem('tenant_stamp_url');
+      }
+      const rawCachedLogo = localStorage.getItem('tenant_logo_url');
+      if (rawCachedLogo === '/branding/tenant-logo.png') {
+        localStorage.removeItem('tenant_logo_url');
+      }
+
+      const cachedLogo = sanitizeLogo(localStorage.getItem('tenant_logo_url'));
+      const cachedStamp = sanitizeStamp(localStorage.getItem('tenant_stamp_url'));
+      const cachedSig = sanitizeSig(localStorage.getItem('tenant_signature_url'));
+      const cachedSigName = localStorage.getItem('tenant_signatory_name');
+      const cachedSigTitle = localStorage.getItem('tenant_signatory_title');
+      const cachedTagline = localStorage.getItem('tenant_tagline');
+
+      if (cachedLogo) setCompanyLogo(cachedLogo);
+      if (cachedStamp) setCompanyStampUrl(cachedStamp);
+      if (cachedSig) setCompanySignatureUrl(cachedSig);
+      if (cachedSigName) setSignatoryName(cachedSigName);
+      if (cachedSigTitle) setSignatoryTitle(cachedSigTitle);
+      if (cachedTagline) setCompanyTagline(cachedTagline);
+    }
+
     try {
       const token = getStoredSessionToken();
       const headers: Record<string, string> = {};
       if (token && token !== 'null') headers['Authorization'] = `Bearer ${token}`;
 
-      // 1. Fetch Company Settings
+      // 2. Fetch Company Settings
       const res = await fetch('/api/company-settings', { headers, credentials: 'include' });
       if (res.ok) {
         const json = await res.json();
@@ -308,15 +395,15 @@ function InvoiceGeneratorInner() {
         if (data) {
           const tenantName = data.companyName || data.legalName || data.tenant?.name;
           if (tenantName) setCompanyName(tenantName);
-          if (data.logoUrl) setCompanyLogo(data.logoUrl);
+          if (data.logoUrl) setCompanyLogo(sanitizeLogo(data.logoUrl));
           if (data.tagline) setCompanyTagline(data.tagline);
           if (data.address) setCompanyAddress(data.address);
           if (data.email) setCompanyEmail(data.email);
           if (data.website) setCompanyWebsite(data.website);
           if (data.gstin) setCompanyGstin(data.gstin);
           if (data.cinNumber || data.llpin) setCompanyLlpin(data.cinNumber || data.llpin);
-          if (data.stampUrl) setCompanyStampUrl(data.stampUrl);
-          if (data.digitalSignatureUrl) setCompanySignatureUrl(data.digitalSignatureUrl);
+          if (data.stampUrl) setCompanyStampUrl(sanitizeStamp(data.stampUrl));
+          if (data.digitalSignatureUrl) setCompanySignatureUrl(sanitizeSig(data.digitalSignatureUrl));
           if (data.signatoryName) setSignatoryName(data.signatoryName);
           if (data.signatoryTitle) setSignatoryTitle(data.signatoryTitle);
           if (data.digitalSignatureEnabled !== undefined && data.digitalSignatureEnabled !== null) {
@@ -328,14 +415,15 @@ function InvoiceGeneratorInner() {
         }
       }
 
-      // 2. Fetch Workspace Settings for extended custom fields
+      // 3. Fetch Workspace Settings for extended custom fields
       const wsRes = await fetch('/api/workspace-settings', { headers, credentials: 'include' });
       if (wsRes.ok) {
         const wsJson = await wsRes.json();
         const wsData = wsJson.data || wsJson;
         if (wsData) {
-          if (wsData.stampUrl) setCompanyStampUrl(wsData.stampUrl);
-          if (wsData.digitalSignatureUrl) setCompanySignatureUrl(wsData.digitalSignatureUrl);
+          if (wsData.logoUrl) setCompanyLogo(sanitizeLogo(wsData.logoUrl));
+          if (wsData.stampUrl) setCompanyStampUrl(sanitizeStamp(wsData.stampUrl));
+          if (wsData.digitalSignatureUrl) setCompanySignatureUrl(sanitizeSig(wsData.digitalSignatureUrl));
           if (wsData.signatoryName) setSignatoryName(wsData.signatoryName);
           if (wsData.signatoryTitle) setSignatoryTitle(wsData.signatoryTitle);
           if (wsData.tagline) setCompanyTagline(wsData.tagline);
@@ -352,6 +440,7 @@ function InvoiceGeneratorInner() {
   const handleInlineUpload = async (e: React.ChangeEvent<HTMLInputElement>, target: 'stamp' | 'signature' | 'logo') => {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = '';
 
     if (!file.type.startsWith('image/')) {
       toast.error('Please select an image file (PNG, JPG, WebP).');
@@ -364,11 +453,14 @@ function InvoiceGeneratorInner() {
       if (target === 'stamp') {
         setCompanyStampUrl(dataUrl);
         setStampEnabled(true);
+        if (typeof window !== 'undefined') localStorage.setItem('tenant_stamp_url', dataUrl);
       } else if (target === 'signature') {
         setCompanySignatureUrl(dataUrl);
         setDigitalSignatureEnabled(true);
+        if (typeof window !== 'undefined') localStorage.setItem('tenant_signature_url', dataUrl);
       } else if (target === 'logo') {
         setCompanyLogo(dataUrl);
+        if (typeof window !== 'undefined') localStorage.setItem('tenant_logo_url', dataUrl);
       }
     };
     reader.readAsDataURL(file);
@@ -376,7 +468,7 @@ function InvoiceGeneratorInner() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('kind', 'avatar');
+      formData.append('kind', 'logo');
       const token = getStoredSessionToken();
       const headers: Record<string, string> = {};
       if (token && token !== 'null') headers['Authorization'] = `Bearer ${token}`;
@@ -386,9 +478,21 @@ function InvoiceGeneratorInner() {
         const json = await res.json();
         const uploadedUrl = json.data?.url || json.url;
         if (uploadedUrl) {
-          if (target === 'stamp') setCompanyStampUrl(uploadedUrl);
-          if (target === 'signature') setCompanySignatureUrl(uploadedUrl);
-          if (target === 'logo') setCompanyLogo(uploadedUrl);
+          if (target === 'stamp') {
+            setCompanyStampUrl(uploadedUrl);
+            if (typeof window !== 'undefined') localStorage.setItem('tenant_stamp_url', uploadedUrl);
+          }
+          if (target === 'signature') {
+            setCompanySignatureUrl(uploadedUrl);
+            if (typeof window !== 'undefined') localStorage.setItem('tenant_signature_url', uploadedUrl);
+          }
+          if (target === 'logo') {
+            setCompanyLogo(uploadedUrl);
+            if (typeof window !== 'undefined') localStorage.setItem('tenant_logo_url', uploadedUrl);
+          }
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('branding-updated', { detail: { target, url: uploadedUrl } }));
+          }
         }
       }
       toast.success(`${target === 'stamp' ? 'Corporate Stamp' : target === 'signature' ? 'Signature' : 'Logo'} updated!`);
@@ -400,11 +504,32 @@ function InvoiceGeneratorInner() {
   // 2. Handle Client Selection from Dropdown
   const handleSelectClient = (cid: string) => {
     setSelectedClientId(cid);
-    if (!cid) return;
-    const found = clients.find((c) => String(c.id) === cid);
+    if (!cid) {
+      setClientName('');
+      setClientAddress('');
+      setTaxId('');
+      setClientEmail('');
+      setContactPerson('');
+      setContactNumber('');
+      return;
+    }
+    const found = clients.find((c, idx) => {
+      const cIdStr =
+        c.id !== undefined && c.id !== null && c.id !== ''
+          ? String(c.id)
+          : (c.client_id || c.email || `client-${idx}`);
+      return cIdStr === cid || String(c.id) === cid || String(c.client_id) === cid || c.email === cid;
+    });
     if (found) {
       populateClientFields(found);
-      const displayName = found.companyName || found.company_name || found.email || 'Client';
+      const displayName =
+        found.companyName ||
+        found.company_name ||
+        found.clientName ||
+        found.name ||
+        found.contactPerson ||
+        found.email ||
+        'Client';
       toast.success(`Client details for "${displayName}" auto-filled!`);
     }
   };
@@ -566,6 +691,7 @@ function InvoiceGeneratorInner() {
 
   // Reset to New
   const handleReset = () => {
+    setSelectedClientId('');
     setInvoiceType('Advance Payment');
     setCurrency('INR');
     setPaymentTerms('Advance Payment');
@@ -1157,14 +1283,14 @@ function InvoiceGeneratorInner() {
           <div className="no-print bg-gradient-to-r from-[#061a3a] via-[#0b2b5d] to-[#1268e8] text-white rounded-2xl p-4 md:p-6 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 bg-white rounded-xl p-1.5 flex items-center justify-center shadow-md">
-                <img src={companyLogo || TECHSONANCE_COMPANY.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+                {companyLogo ? <img src={companyLogo} alt="Logo" className="w-full h-full object-contain" /> : <Building2 className="w-8 h-8 text-indigo-500" />}
               </div>
               <div>
                 <h1 className="text-xl md:text-2xl font-black tracking-tight">
-                  {companyName || 'TechSonance'} Invoice Generator & Live PDF
+                  {companyName || 'Enterprise'} Invoice Generator & Live PDF
                 </h1>
                 <p className="text-xs text-blue-100/80 mt-0.5">
-                  Prepare, preview, record in database and generate official {companyName || 'TechSonance'} Client Invoices.
+                  Prepare, preview, record in database and generate official {companyName || 'Organization'} Client Invoices.
                 </p>
               </div>
             </div>
@@ -1348,7 +1474,7 @@ function InvoiceGeneratorInner() {
                             type="text"
                             value={signatoryName}
                             onChange={(e) => setSignatoryName(e.target.value)}
-                            placeholder="e.g. Sajeshkumar Adeya"
+                            placeholder="e.g. Authorized Signatory Name"
                             className="w-full border rounded-lg px-2.5 py-1.5 bg-white dark:bg-zinc-800 text-xs outline-none border-slate-200 dark:border-zinc-700"
                           />
                         </div>
@@ -1360,7 +1486,7 @@ function InvoiceGeneratorInner() {
                             type="text"
                             value={signatoryTitle}
                             onChange={(e) => setSignatoryTitle(e.target.value)}
-                            placeholder="e.g. Co-Founder & CTO · Authorized Signatory"
+                            placeholder="e.g. Director / Authorized Signatory"
                             className="w-full border rounded-lg px-2.5 py-1.5 bg-white dark:bg-zinc-800 text-xs outline-none border-slate-200 dark:border-zinc-700"
                           />
                         </div>
@@ -1369,7 +1495,7 @@ function InvoiceGeneratorInner() {
                       {/* Logo upload trigger */}
                       <div className="flex items-center justify-between pt-1 text-[11px] text-slate-500">
                         <span className="flex items-center gap-1.5">
-                          <img src={companyLogo || TECHSONANCE_COMPANY.logoUrl} alt="Logo" className="w-5 h-5 object-contain rounded" />
+                          {companyLogo ? <img src={companyLogo} alt="Logo" className="w-5 h-5 object-contain rounded" /> : <Building2 className="w-4 h-4 text-slate-400" />}
                           <span>Tenant Logo active</span>
                         </span>
                         <button
@@ -1528,17 +1654,23 @@ function InvoiceGeneratorInner() {
                         className="w-full border rounded-lg px-2.5 py-1.5 bg-white dark:bg-zinc-850 text-xs font-semibold outline-none border-blue-300 dark:border-blue-800 shadow-sm text-slate-800 dark:text-slate-100"
                       >
                         <option value="">-- Direct / Custom Client Entry --</option>
-                        {clients.map((c) => {
+                        {clients.map((c, idx) => {
+                          const cid =
+                            c.id !== undefined && c.id !== null && c.id !== ''
+                              ? String(c.id)
+                              : (c.client_id || c.email || `client-${idx}`);
                           const company =
-                            c.companyName ||
-                            c.company_name ||
-                            c.contactPerson ||
-                            c.contact_person ||
-                            c.name ||
-                            (c.email ? c.email.split('@')[0] : 'Client');
+                            (c.companyName && String(c.companyName).trim()) ||
+                            (c.company_name && String(c.company_name).trim()) ||
+                            (c.clientName && String(c.clientName).trim()) ||
+                            (c.contactPerson && String(c.contactPerson).trim()) ||
+                            (c.contact_person && String(c.contact_person).trim()) ||
+                            (c.name && String(c.name).trim()) ||
+                            (c.email ? String(c.email).split('@')[0] : 'Client');
+                          const emailDisplay = c.email ? `(${c.email})` : '';
                           return (
-                            <option key={c.id} value={c.id}>
-                              {company} {c.email ? `(${c.email})` : ''}
+                            <option key={cid} value={cid}>
+                              {company} {emailDisplay}
                             </option>
                           );
                         })}
@@ -2111,10 +2243,16 @@ function InvoiceGeneratorInner() {
                   {/* INVOICE HEADER */}
                   <div className="inv-header">
                     <div className="inv-brand">
-                      <img src={companyLogo || TECHSONANCE_COMPANY.logoUrl} alt={`${companyName || 'Company'} Logo`} />
+                      {companyLogo ? (
+                        <img src={companyLogo} alt={`${companyName || 'Company'} Logo`} />
+                      ) : (
+                        <div className="w-12 h-12 rounded border border-slate-200 bg-slate-50 flex items-center justify-center text-slate-400 shrink-0">
+                          <Building2 className="w-6 h-6" />
+                        </div>
+                      )}
                       <div>
-                        <div className="inv-brand-name">{companyName || TECHSONANCE_COMPANY.name}</div>
-                        <div className="inv-tagline">{companyTagline || TECHSONANCE_COMPANY.tagline}</div>
+                        <div className="inv-brand-name">{companyName || 'Company Name'}</div>
+                        {companyTagline && <div className="inv-tagline">{companyTagline}</div>}
                       </div>
                     </div>
 
@@ -2131,23 +2269,19 @@ function InvoiceGeneratorInner() {
                     <div>
                       <div className="inv-block-title">Issued By</div>
                       <div className="inv-party">
-                        <strong>{companyName || TECHSONANCE_COMPANY.name}</strong><br />
-                        {companyAddress ? (
+                        <strong>{companyName || 'Company Name'}</strong><br />
+                        {companyAddress && (
                           companyAddress.split('\n').map((line, idx) => (
                             <React.Fragment key={idx}>
                               {line}<br />
                             </React.Fragment>
                           ))
-                        ) : (
-                          <>
-                            UG-15, Palladium Plaza, VIP Road, Vesu,<br />
-                            Surat, Gujarat - 395007, India<br />
-                          </>
                         )}
-                        {[companyEmail || TECHSONANCE_COMPANY.email, companyWebsite || TECHSONANCE_COMPANY.website].filter(Boolean).join(' · ')}<br />
+                        {[companyEmail, companyWebsite].filter(Boolean).join(' · ')}
+                        {([companyEmail, companyWebsite].filter(Boolean).length > 0) && <br />}
                         {[
-                          (companyGstin || TECHSONANCE_COMPANY.gstin) && `GSTIN: ${companyGstin || TECHSONANCE_COMPANY.gstin}`,
-                          (companyLlpin || TECHSONANCE_COMPANY.llpin) && `LLPIN/CIN: ${companyLlpin || TECHSONANCE_COMPANY.llpin}`
+                          companyGstin && `GSTIN: ${companyGstin}`,
+                          companyLlpin && `LLPIN/CIN: ${companyLlpin}`
                         ].filter(Boolean).join(' · ')}
                       </div>
                     </div>
@@ -2311,34 +2445,65 @@ function InvoiceGeneratorInner() {
                     <div>
                       <div className="inv-block-title">Payment Details</div>
                       <div className="inv-bank">
-                        <b>Bank:</b> {bankDetails.name || TECHSONANCE_COMPANY.bank.name}<br />
-                        <b>Account Name:</b> {bankDetails.accountName || companyName || TECHSONANCE_COMPANY.bank.accountName}<br />
-                        <b>Account No.:</b> {bankDetails.accountNo || TECHSONANCE_COMPANY.bank.accountNo} · <b>IFSC/SWIFT:</b> {bankDetails.ifsc || TECHSONANCE_COMPANY.bank.ifsc}<br />
-                        {(bankDetails.upiId || TECHSONANCE_COMPANY.bank.upiId) && (
-                          <><b>UPI ID:</b> {bankDetails.upiId || TECHSONANCE_COMPANY.bank.upiId}</>
+                        {bankDetails.name && <><b>Bank:</b> {bankDetails.name}<br /></>}
+                        {(bankDetails.accountName || companyName) && <><b>Account Name:</b> {bankDetails.accountName || companyName}<br /></>}
+                        {bankDetails.accountNo && <><b>Account No.:</b> {bankDetails.accountNo} {bankDetails.ifsc && <>· <b>IFSC/SWIFT:</b> {bankDetails.ifsc}</>}<br /></>}
+                        {bankDetails.upiId && <><b>UPI ID:</b> {bankDetails.upiId}</>}
+                        {!bankDetails.name && !bankDetails.accountNo && (
+                          <span className="text-slate-400 text-[10px]">Bank details not configured in Settings</span>
                         )}
                       </div>
 
                       <div className="inv-sign-area">
                         <div className="inv-sig-stack">
-                          {stampEnabled && (companyStampUrl || TECHSONANCE_COMPANY.stampUrl) && (
-                            <img
-                              className="inv-stamp-img"
-                              src={companyStampUrl || TECHSONANCE_COMPANY.stampUrl}
-                              alt="Official Corporate Stamp"
-                            />
+                          {stampEnabled && (
+                            companyStampUrl ? (
+                              <img
+                                className="inv-stamp-img"
+                                src={companyStampUrl}
+                                alt="Official Corporate Stamp"
+                              />
+                            ) : (
+                              <div className="border border-dashed border-amber-300 dark:border-amber-600/50 bg-amber-50/80 dark:bg-amber-950/20 rounded p-1.5 text-center text-amber-700 dark:text-amber-300 text-[8px] screen-only mb-1">
+                                <span className="font-semibold">Stamp not uploaded</span>
+                                <br />
+                                <a
+                                  href="/dashboard/settings"
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="underline font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800"
+                                >
+                                  Upload stamp from Settings
+                                </a>
+                              </div>
+                            )
                           )}
-                          {digitalSignatureEnabled && (companySignatureUrl || TECHSONANCE_COMPANY.signatureUrl) && (
-                            <img
-                              className="inv-sig-img"
-                              src={companySignatureUrl || TECHSONANCE_COMPANY.signatureUrl}
-                              alt="Authorized Signatory"
-                            />
+                          {digitalSignatureEnabled && (
+                            companySignatureUrl ? (
+                              <img
+                                className="inv-sig-img"
+                                src={companySignatureUrl}
+                                alt="Authorized Signatory"
+                              />
+                            ) : (
+                              <div className="border border-dashed border-amber-300 dark:border-amber-600/50 bg-amber-50/80 dark:bg-amber-950/20 rounded p-1.5 text-center text-amber-700 dark:text-amber-300 text-[8px] screen-only mb-1">
+                                <span className="font-semibold">Signature not uploaded</span>
+                                <br />
+                                <a
+                                  href="/dashboard/settings"
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="underline font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800"
+                                >
+                                  Upload signature from Settings
+                                </a>
+                              </div>
+                            )
                           )}
                         </div>
                         <div className="inv-sign-line">
-                          <strong>{signatoryName || TECHSONANCE_COMPANY.signatory.name}</strong>
-                          {signatoryTitle || TECHSONANCE_COMPANY.signatory.title}
+                          <strong>{signatoryName || 'Authorized Signatory'}</strong>
+                          <span>{signatoryTitle || 'Designation'}</span>
                         </div>
                       </div>
                     </div>
@@ -2372,7 +2537,7 @@ function InvoiceGeneratorInner() {
                   {/* FOOTER */}
                   <div className="inv-footer">
                     <span>Thank you for your business.</span>
-                    <span>{companyName || TECHSONANCE_COMPANY.name} · Confidential Commercial Document</span>
+                    <span>{companyName || 'Company'} · Confidential Commercial Document</span>
                   </div>
 
                 </div>
