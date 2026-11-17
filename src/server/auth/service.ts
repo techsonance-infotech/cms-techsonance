@@ -123,16 +123,24 @@ export async function loginUser(input: {
   const userId = user.legacy_user_id;
 
   if (user.is_email_verified === false) {
-    await writeAuthTelemetry({
-      action: 'auth.login',
-      request: input.request,
-      requestId: input.requestId,
-      userId,
-      email: user.email,
-      status: 'failed',
-      details: { reason: 'email_unverified', provider: 'supabase' },
-    });
-    throw new UnauthorizedError('EMAIL_NOT_VERIFIED');
+    if (!user.verification_token) {
+      // Organization-invited or admin-provisioned users do not have a public registration token.
+      // Auto-heal their verification status so workspace team members can log in immediately.
+      await updateSupabaseProfileByAuthUserId(user.id, {
+        is_email_verified: true,
+      } as any).catch(() => null);
+    } else {
+      await writeAuthTelemetry({
+        action: 'auth.login',
+        request: input.request,
+        requestId: input.requestId,
+        userId,
+        email: user.email,
+        status: 'failed',
+        details: { reason: 'email_unverified', provider: 'supabase' },
+      });
+      throw new UnauthorizedError('EMAIL_NOT_VERIFIED');
+    }
   }
 
   if (!user.is_active) {

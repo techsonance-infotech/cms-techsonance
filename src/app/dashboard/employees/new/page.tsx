@@ -25,6 +25,17 @@ import {
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { getStoredSessionToken } from '@/lib/client-session';
+import {
+  personalStepSchema,
+  workStepSchema,
+  payrollStepSchema,
+  accessStepSchema,
+  emergencyStepSchema,
+  additionalStepSchema,
+  UPLOAD_LIMITS,
+  validatePersonalIdByGovtId,
+  getGovtIdPlaceholder,
+} from '@/shared/validation/employee';
 
 interface Manager {
   id: number;
@@ -170,6 +181,7 @@ export default function NewEmployeePage() {
     maritalStatus: '',
     bloodGroup: '',
     nationality: '',
+    govtIdType: 'Aadhaar Card',
     personalIdNumber: '',
     department: '',
     designation: '',
@@ -263,6 +275,9 @@ export default function NewEmployeePage() {
         if (res.ok) {
           const employee = await res.json();
           if (employee) {
+            if (employee.govtIdType) {
+              setGovtIdType(employee.govtIdType);
+            }
             setFormData({
               userId: employee.userId ? String(employee.userId) : '',
               firstName: employee.firstName || '',
@@ -279,6 +294,7 @@ export default function NewEmployeePage() {
               maritalStatus: employee.maritalStatus || '',
               bloodGroup: employee.bloodGroup || '',
               nationality: employee.nationality || '',
+              govtIdType: employee.govtIdType || 'Aadhaar Card',
               personalIdNumber: employee.personalIdNumber || '',
               department: employee.department || '',
               designation: employee.designation || '',
@@ -434,51 +450,119 @@ export default function NewEmployeePage() {
     fetchManagers();
   }, []);
 
-  // Step-specific validation for wizard navigation
+  // Step-specific validation using shared Zod schemas
   const validateStep = (stepId: string): Record<string, string> => {
-    const newErrors: Record<string, string> = {};
+    const stepErrors: Record<string, string> = {};
+    let result: any = null;
 
     if (stepId === 'personal') {
-      if (!formData.firstName.trim()) newErrors.firstName = 'First name is required';
-      if (!formData.lastName.trim()) newErrors.lastName = 'Last name is required';
-      if (!formData.email.trim()) {
-        newErrors.email = 'Personal email is required';
-      } else if (!/\S+@\S+\.\S+/.test(formData.email.trim())) {
-        newErrors.email = 'Valid personal email is required';
-      }
+      result = personalStepSchema.safeParse({
+        firstName: formData.firstName,
+        middleName: formData.middleName,
+        lastName: formData.lastName,
+        email: formData.email,
+        phone: formData.phone,
+        gender: formData.gender,
+        dateOfBirth: formData.dateOfBirth,
+        maritalStatus: formData.maritalStatus,
+        bloodGroup: formData.bloodGroup,
+        nationality: formData.nationality,
+        govtIdType: formData.govtIdType || govtIdType,
+        personalIdNumber: formData.personalIdNumber,
+      });
     } else if (stepId === 'work') {
-      if (!formData.employeeId.trim()) newErrors.employeeId = 'Employee ID is required';
-      if (!formData.department.trim()) newErrors.department = 'Department is required';
-      if (!formData.designation.trim()) newErrors.designation = 'Designation is required';
-      if (!formData.dateOfJoining) newErrors.dateOfJoining = 'Joining Date is required';
+      result = workStepSchema.safeParse({
+        employeeId: formData.employeeId,
+        department: formData.department,
+        designation: formData.designation,
+        employmentType: formData.employmentType,
+        dateOfJoining: formData.dateOfJoining,
+        dateOfBirth: formData.dateOfBirth,
+        managerId: formData.managerId,
+        buddy: formData.buddy,
+        mentor: formData.mentor,
+        status: formData.status,
+        probationPeriod: formData.probationPeriod,
+        confirmationDate: formData.confirmationDate,
+        workLocation: formData.workLocation,
+        workShift: formData.workShift,
+        noticePeriod: formData.noticePeriod,
+      });
+    } else if (stepId === 'payroll') {
+      result = payrollStepSchema.safeParse({
+        salary: formData.salary,
+        hourlyRate: formData.hourlyRate,
+        ctc: formData.ctc,
+        currency: formData.currency,
+        bankName: formData.bankName,
+        bankAccountNumber: formData.bankAccountNumber,
+        ifscCode: formData.ifscCode,
+        branchName: formData.branchName,
+        pfNumber: formData.pfNumber,
+        uanNumber: formData.uanNumber,
+        esiNumber: formData.esiNumber,
+        panNumber: formData.panNumber,
+        aadhaarNumber: formData.aadhaarNumber,
+      });
     } else if (stepId === 'access') {
-      const trimmedUsername = (formData.username || '').trim();
-      const trimmedOfficeEmail = (formData.officeEmail || '').trim();
-      const trimmedPassword = (formData.password || '').trim();
+      result = accessStepSchema(Boolean(employeeEditId)).safeParse({
+        role: formData.role,
+        username: formData.username,
+        officeEmail: formData.officeEmail,
+        password: formData.password,
+      });
+    } else if (stepId === 'emergency') {
+      result = emergencyStepSchema.safeParse({
+        emergencyContactName: formData.emergencyContactName,
+        emergencyContactRelationship: formData.emergencyContactRelationship,
+        emergencyContactPhone: formData.emergencyContactPhone,
+        emergencyContactAddress: formData.emergencyContactAddress,
+        employeePhone: formData.phone,
+      });
+    } else if (stepId === 'additional') {
+      result = additionalStepSchema.safeParse({
+        languagesKnown: formData.languagesKnown,
+        linkedinProfile: formData.linkedinProfile,
+        githubProfile: formData.githubProfile,
+        previousCompany: formData.previousCompany,
+        referralSource: formData.referralSource,
+        notes: formData.notes,
+      });
+    }
 
-      if (!employeeEditId) {
-        if (!trimmedPassword) {
-          newErrors.password = 'Initial password is required (minimum 6 characters)';
-        } else if (trimmedPassword.length < 6) {
-          newErrors.password = 'Password must be at least 6 characters';
+    if (result && !result.success) {
+      for (const issue of result.error.issues) {
+        const field = issue.path[0] as string;
+        if (field && !stepErrors[field]) {
+          stepErrors[field] = issue.message;
         }
-      } else {
-        if (trimmedPassword && trimmedPassword.length < 6) {
-          newErrors.password = 'New password must be at least 6 characters';
-        }
-      }
-
-      if (trimmedUsername && !/^[a-zA-Z0-9._-]+$/.test(trimmedUsername)) {
-        newErrors.username = 'Username must contain only letters, numbers, dots, hyphens, or underscores';
-      }
-
-      if (trimmedOfficeEmail && !/\S+@\S+\.\S+/.test(trimmedOfficeEmail)) {
-        newErrors.officeEmail = 'Valid office email is required (e.g. name@company.com)';
       }
     }
 
-    setErrors(newErrors);
-    return newErrors;
+    setErrors((prev) => {
+      // Clear previous errors for this step's schema keys, then apply new errors
+      const updated = { ...prev };
+      if (result && result.error) {
+        Object.assign(updated, stepErrors);
+      }
+      return updated;
+    });
+
+    return stepErrors;
+  };
+
+  // Inline blur handler for immediate field-level feedback
+  const handleFieldBlur = (name: string) => {
+    const stepErrors = validateStep(activeStep);
+    if (stepErrors[name]) {
+      setErrors((prev) => ({ ...prev, [name]: stepErrors[name] }));
+    } else {
+      setErrors((prev) => {
+        const copy = { ...prev };
+        delete copy[name];
+        return copy;
+      });
+    }
   };
 
   const handlePrevStep = () => {
@@ -535,28 +619,28 @@ export default function NewEmployeePage() {
     }
   };
 
-  // Document Upload Handler (real Supabase Storage endpoint)
+  // Document Upload Handler using unified shared upload limits
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, fieldName: string) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const fileNameLower = file.name.toLowerCase();
-    const mimeType = file.type;
-    
-    const isImage = mimeType === 'image/jpeg' || mimeType === 'image/png' || mimeType === 'image/jpg' || 
-                    fileNameLower.endsWith('.jpg') || fileNameLower.endsWith('.jpeg') || fileNameLower.endsWith('.png');
-                    
-    const isPdf = mimeType === 'application/pdf' || fileNameLower.endsWith('.pdf');
-    const isDocx = mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || fileNameLower.endsWith('.docx');
-    
-    if (!isImage && !isPdf && !isDocx) {
-      toast.error('Only PDF, DOCX, and images (JPG, JPEG, PNG) are accepted.');
+    const hasAllowedExtension = UPLOAD_LIMITS.ALLOWED_EXTENSIONS.some(ext => fileNameLower.endsWith(ext));
+    const hasAllowedMime = (UPLOAD_LIMITS.ALLOWED_MIME_TYPES as readonly string[]).includes(file.type) ||
+                           file.type.startsWith('image/') ||
+                           file.type === 'application/pdf' ||
+                           file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+    if (!hasAllowedExtension || !hasAllowedMime) {
+      toast.error('Only PDF, DOCX, and images (JPG, JPEG, PNG, WEBP) are accepted.');
       return;
     }
-    
-    const fileLimit = isImage ? 1 * 1024 * 1024 : 2 * 1024 * 1024;
-    if (file.size > fileLimit) {
-      toast.error(`File size exceeds the limit of ${isImage ? '1 MB' : '2 MB'}`);
+
+    const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp)$/i.test(file.name);
+    const maxSize = isImage ? UPLOAD_LIMITS.MAX_IMAGE_SIZE_BYTES : UPLOAD_LIMITS.MAX_DOCUMENT_SIZE_BYTES;
+    if (file.size > maxSize) {
+      const limitMb = Math.round(maxSize / (1024 * 1024));
+      toast.error(`File size exceeds the limit of ${limitMb} MB`);
       return;
     }
 
@@ -600,66 +684,32 @@ export default function NewEmployeePage() {
     }
   };
 
-  const validateForm = () => {
-    const newErrors: Record<string, string> = {};
+  const validateForm = (): { allErrors: Record<string, string>; firstStep: string | null } => {
+    const allErrors: Record<string, string> = {};
+    let firstStep: string | null = null;
+    const stepOrder = ['personal', 'work', 'payroll', 'documents', 'access', 'emergency', 'additional'];
 
-    // Personal info
-    if (!formData.firstName.trim()) newErrors.firstName = 'First name is required';
-    if (!formData.lastName.trim()) newErrors.lastName = 'Last name is required';
-    if (!formData.email.trim()) {
-      newErrors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'Valid email is required';
-    }
-
-    // Work info
-    if (!formData.employeeId.trim()) newErrors.employeeId = 'Employee ID is required';
-    if (!formData.department.trim()) newErrors.department = 'Department is required';
-    if (!formData.designation.trim()) newErrors.designation = 'Designation is required';
-    if (!formData.dateOfJoining) newErrors.dateOfJoining = 'Joining Date is required';
-
-    // System access
-    const trimmedUsername = (formData.username || '').trim();
-    const trimmedOfficeEmail = (formData.officeEmail || '').trim();
-    const trimmedPassword = (formData.password || '').trim();
-
-    if (!employeeEditId) {
-      if (!trimmedPassword) {
-        newErrors.password = 'Initial password is required (minimum 6 characters)';
-      } else if (trimmedPassword.length < 6) {
-        newErrors.password = 'Password must be at least 6 characters';
-      }
-    } else {
-      if (trimmedPassword && trimmedPassword.length < 6) {
-        newErrors.password = 'New password must be at least 6 characters';
+    for (const step of stepOrder) {
+      const stepErrors = validateStep(step);
+      if (Object.keys(stepErrors).length > 0) {
+        Object.assign(allErrors, stepErrors);
+        if (!firstStep) {
+          firstStep = step;
+        }
       }
     }
 
-    if (trimmedUsername && !/^[a-zA-Z0-9._-]+$/.test(trimmedUsername)) {
-      newErrors.username = 'Username must contain only letters, numbers, dots, hyphens, or underscores';
-    }
-    if (trimmedOfficeEmail && !/\S+@\S+\.\S+/.test(trimmedOfficeEmail)) {
-      newErrors.officeEmail = 'Valid office email is required';
-    }
-
-    setErrors(newErrors);
-    return newErrors;
+    setErrors(allErrors);
+    return { allErrors, firstStep };
   };
 
   const handleSubmit = async () => {
-    const formErrors = validateForm();
+    const { allErrors: formErrors, firstStep } = validateForm();
     if (Object.keys(formErrors).length > 0) {
       const errorMsg = Object.values(formErrors).join(' • ');
       toast.error(`Please fix validation errors: ${errorMsg}`);
-      // Scroll to the first error section
-      if (formErrors.firstName || formErrors.lastName || formErrors.email) {
-        setActiveStep('personal');
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      } else if (formErrors.employeeId || formErrors.department || formErrors.designation || formErrors.dateOfJoining) {
-        setActiveStep('work');
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      } else if (formErrors.password || formErrors.username || formErrors.officeEmail) {
-        setActiveStep('access');
+      if (firstStep) {
+        setActiveStep(firstStep);
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
       return;
@@ -939,7 +989,17 @@ export default function NewEmployeePage() {
       }
     } catch (err: any) {
       console.error(err);
-      toast.error(err.message || 'An error occurred during submission.');
+      const msg = err.message || 'An error occurred during submission.';
+      toast.error(msg);
+      if (msg.toLowerCase().includes('email')) {
+        setErrors((prev) => ({ ...prev, email: msg }));
+        setActiveStep('personal');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else if (msg.toLowerCase().includes('phone')) {
+        setErrors((prev) => ({ ...prev, phone: msg }));
+        setActiveStep('personal');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
     } finally {
       setSubmitting(false);
     }
@@ -1030,6 +1090,7 @@ export default function NewEmployeePage() {
                     name="firstName" 
                     value={formData.firstName}
                     onChange={handleInputChange}
+                    onBlur={() => handleFieldBlur('firstName')}
                     className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
                     placeholder="Enter first name"
                   />
@@ -1042,9 +1103,11 @@ export default function NewEmployeePage() {
                     name="middleName" 
                     value={formData.middleName}
                     onChange={handleInputChange}
+                    onBlur={() => handleFieldBlur('middleName')}
                     className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
                     placeholder="Enter middle name"
                   />
+                  {errors.middleName && <span className="text-xs text-red-500 mt-1 block">{errors.middleName}</span>}
                 </div>
                 <div>
                   <Label htmlFor="lastName" className="text-slate-700 dark:text-[#fdfcfc]">Last Name <span className="text-[#f87941]">*</span></Label>
@@ -1053,6 +1116,7 @@ export default function NewEmployeePage() {
                     name="lastName" 
                     value={formData.lastName}
                     onChange={handleInputChange}
+                    onBlur={() => handleFieldBlur('lastName')}
                     className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
                     placeholder="Enter last name"
                   />
@@ -1066,21 +1130,24 @@ export default function NewEmployeePage() {
                     type="email"
                     value={formData.email}
                     onChange={handleInputChange}
+                    onBlur={() => handleFieldBlur('email')}
                     className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
                     placeholder="personal@company.com"
                   />
                   {errors.email && <span className="text-xs text-red-500 mt-1 block">{errors.email}</span>}
                 </div>
                 <div>
-                  <Label htmlFor="phone" className="text-slate-700 dark:text-[#fdfcfc]">Phone Number</Label>
+                  <Label htmlFor="phone" className="text-slate-700 dark:text-[#fdfcfc]">Phone Number <span className="text-[#f87941]">*</span></Label>
                   <Input 
                     id="phone" 
                     name="phone" 
                     value={formData.phone}
                     onChange={handleInputChange}
+                    onBlur={() => handleFieldBlur('phone')}
                     className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
-                    placeholder="Enter phone number"
+                    placeholder="Enter 10-digit mobile number"
                   />
+                  {errors.phone && <span className="text-xs text-red-500 mt-1 block">{errors.phone}</span>}
                 </div>
                 <div>
                   <Label htmlFor="gender" className="text-slate-700 dark:text-[#fdfcfc]">Gender</Label>
@@ -1104,8 +1171,10 @@ export default function NewEmployeePage() {
                     type="date"
                     value={formData.dateOfBirth}
                     onChange={handleInputChange}
+                    onBlur={() => handleFieldBlur('dateOfBirth')}
                     className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] focus:border-[#f87941] mt-2" 
                   />
+                  {errors.dateOfBirth && <span className="text-xs text-red-500 mt-1 block">{errors.dateOfBirth}</span>}
                 </div>
                 <div>
                   <Label htmlFor="maritalStatus" className="text-slate-700 dark:text-[#fdfcfc]">Marital Status</Label>
@@ -1168,8 +1237,27 @@ export default function NewEmployeePage() {
                   <Label htmlFor="govtIdType" className="text-slate-700 dark:text-[#fdfcfc]">Govt ID Type</Label>
                   <select 
                     id="govtIdType" 
-                    value={govtIdType}
-                    onChange={(e) => setGovtIdType(e.target.value)}
+                    value={formData.govtIdType || govtIdType}
+                    onChange={(e) => {
+                      const newType = e.target.value;
+                      setGovtIdType(newType);
+                      setFormData((prev) => ({ ...prev, govtIdType: newType }));
+                      if (formData.personalIdNumber) {
+                        const err = validatePersonalIdByGovtId(formData.personalIdNumber, newType);
+                        setErrors((prev) => {
+                          const copy = { ...prev };
+                          if (err) copy.personalIdNumber = err;
+                          else delete copy.personalIdNumber;
+                          return copy;
+                        });
+                      } else if (errors.personalIdNumber) {
+                        setErrors((prev) => {
+                          const copy = { ...prev };
+                          delete copy.personalIdNumber;
+                          return copy;
+                        });
+                      }
+                    }}
                     className="flex h-10 w-full rounded-md border border-gray-200 dark:border-zinc-800 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-[#fdfcfc] focus:border-[#f87941] mt-2 outline-none"
                   >
                     <option value="Aadhaar Card">Aadhaar Card</option>
@@ -1181,15 +1269,17 @@ export default function NewEmployeePage() {
                   </select>
                 </div>
                 <div className="col-span-1 md:col-span-3">
-                  <Label htmlFor="personalIdNumber" className="text-slate-700 dark:text-[#fdfcfc]">Personal ID Number ({govtIdType})</Label>
+                  <Label htmlFor="personalIdNumber" className="text-slate-700 dark:text-[#fdfcfc]">Personal ID Number ({formData.govtIdType || govtIdType})</Label>
                   <Input 
                     id="personalIdNumber" 
                     name="personalIdNumber" 
                     value={formData.personalIdNumber}
                     onChange={handleInputChange}
+                    onBlur={() => handleFieldBlur('personalIdNumber')}
                     className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
-                    placeholder={`Enter ${govtIdType} identification number`}
+                    placeholder={getGovtIdPlaceholder(formData.govtIdType || govtIdType)}
                   />
+                  {errors.personalIdNumber && <span className="text-xs text-red-500 mt-1 block">{errors.personalIdNumber}</span>}
                 </div>
                 {/* Wizard Navigation Footer */}
                 <div className="col-span-1 md:col-span-3 flex justify-between items-center mt-8 pt-6 border-t border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
@@ -1233,6 +1323,7 @@ export default function NewEmployeePage() {
                     name="employeeId" 
                     value={formData.employeeId}
                     onChange={handleInputChange}
+                    onBlur={() => handleFieldBlur('employeeId')}
                     className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
                     placeholder="EMP-0000"
                   />
@@ -1245,6 +1336,7 @@ export default function NewEmployeePage() {
                     name="department" 
                     value={formData.department}
                     onChange={handleInputChange}
+                    onBlur={() => handleFieldBlur('department')}
                     className="flex h-10 w-full rounded-md border border-gray-200 dark:border-zinc-800 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-[#fdfcfc] focus:border-[#f87941] mt-2 outline-none"
                   >
                     <option value="" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Select Department</option>
@@ -1267,6 +1359,7 @@ export default function NewEmployeePage() {
                     name="designation" 
                     value={formData.designation}
                     onChange={handleInputChange}
+                    onBlur={() => handleFieldBlur('designation')}
                     className="flex h-10 w-full rounded-md border border-gray-200 dark:border-zinc-800 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-[#fdfcfc] focus:border-[#f87941] mt-2 outline-none"
                   >
                     <option value="" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">Select Designation</option>
@@ -1309,6 +1402,7 @@ export default function NewEmployeePage() {
                     type="date"
                     value={formData.dateOfJoining}
                     onChange={handleInputChange}
+                    onBlur={() => handleFieldBlur('dateOfJoining')}
                     className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] focus:border-[#f87941] mt-2" 
                   />
                   {errors.dateOfJoining && <span className="text-xs text-red-500 mt-1 block">{errors.dateOfJoining}</span>}
@@ -1562,9 +1656,11 @@ export default function NewEmployeePage() {
                     name="bankAccountNumber" 
                     value={formData.bankAccountNumber}
                     onChange={handleInputChange}
+                    onBlur={() => handleFieldBlur('bankAccountNumber')}
                     className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
                     placeholder="Enter account number"
                   />
+                  {errors.bankAccountNumber && <span className="text-xs text-red-500 mt-1 block">{errors.bankAccountNumber}</span>}
                 </div>
                 <div>
                   <Label htmlFor="ifscCode" className="text-slate-700 dark:text-[#fdfcfc]">IFSC Code</Label>
@@ -1573,9 +1669,11 @@ export default function NewEmployeePage() {
                     name="ifscCode" 
                     value={formData.ifscCode}
                     onChange={handleInputChange}
+                    onBlur={() => handleFieldBlur('ifscCode')}
                     className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
                     placeholder="HDFC0001234"
                   />
+                  {errors.ifscCode && <span className="text-xs text-red-500 mt-1 block">{errors.ifscCode}</span>}
                 </div>
                 <div>
                   <Label htmlFor="branchName" className="text-slate-700 dark:text-[#fdfcfc]">Branch Name</Label>
@@ -1628,9 +1726,11 @@ export default function NewEmployeePage() {
                     name="panNumber" 
                     value={formData.panNumber}
                     onChange={handleInputChange}
+                    onBlur={() => handleFieldBlur('panNumber')}
                     className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
                     placeholder="ABCDE1234F"
                   />
+                  {errors.panNumber && <span className="text-xs text-red-500 mt-1 block">{errors.panNumber}</span>}
                 </div>
                 <div>
                   <Label htmlFor="aadhaarNumber" className="text-slate-700 dark:text-[#fdfcfc]">Aadhaar Number</Label>
@@ -1639,9 +1739,11 @@ export default function NewEmployeePage() {
                     name="aadhaarNumber" 
                     value={formData.aadhaarNumber}
                     onChange={handleInputChange}
+                    onBlur={() => handleFieldBlur('aadhaarNumber')}
                     className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
                     placeholder="12-digit number"
                   />
+                  {errors.aadhaarNumber && <span className="text-xs text-red-500 mt-1 block">{errors.aadhaarNumber}</span>}
                 </div>
                 {/* Wizard Navigation Footer */}
                 <div className="col-span-1 md:col-span-3 flex justify-between items-center mt-8 pt-6 border-t border-[#e6e4e6]/30 dark:border-[#2f3035]/30">
@@ -1753,6 +1855,7 @@ export default function NewEmployeePage() {
                     name="username" 
                     value={formData.username}
                     onChange={handleInputChange}
+                    onBlur={() => handleFieldBlur('username')}
                     className={`bg-white dark:bg-slate-950 border text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2 ${
                       errors.username ? 'border-red-500' : 'border-gray-200 dark:border-zinc-800'
                     }`}
@@ -1768,6 +1871,7 @@ export default function NewEmployeePage() {
                     type="email"
                     value={formData.officeEmail}
                     onChange={handleInputChange}
+                    onBlur={() => handleFieldBlur('officeEmail')}
                     className={`bg-white dark:bg-slate-950 border text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2 ${
                       errors.officeEmail ? 'border-red-500' : 'border-gray-200 dark:border-zinc-800'
                     }`}
@@ -1785,6 +1889,7 @@ export default function NewEmployeePage() {
                     type="password"
                     value={formData.password}
                     onChange={handleInputChange}
+                    onBlur={() => handleFieldBlur('password')}
                     className={`bg-white dark:bg-slate-950 border text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2 ${
                       errors.password ? 'border-red-500' : 'border-gray-200 dark:border-zinc-800'
                     }`}
@@ -1925,9 +2030,11 @@ export default function NewEmployeePage() {
                     name="emergencyContactName" 
                     value={formData.emergencyContactName}
                     onChange={handleInputChange}
+                    onBlur={() => handleFieldBlur('emergencyContactName')}
                     className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
                     placeholder="Enter full name"
                   />
+                  {errors.emergencyContactName && <span className="text-xs text-red-500 mt-1 block">{errors.emergencyContactName}</span>}
                 </div>
                 <div>
                   <Label htmlFor="emergencyContactRelationship" className="text-slate-700 dark:text-[#fdfcfc]">Relationship</Label>
@@ -1936,9 +2043,11 @@ export default function NewEmployeePage() {
                     name="emergencyContactRelationship" 
                     value={formData.emergencyContactRelationship}
                     onChange={handleInputChange}
+                    onBlur={() => handleFieldBlur('emergencyContactRelationship')}
                     className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
                     placeholder="e.g. Spouse, Father"
                   />
+                  {errors.emergencyContactRelationship && <span className="text-xs text-red-500 mt-1 block">{errors.emergencyContactRelationship}</span>}
                 </div>
                 <div>
                   <Label htmlFor="emergencyContactPhone" className="text-slate-700 dark:text-[#fdfcfc]">Phone Number</Label>
@@ -1947,9 +2056,11 @@ export default function NewEmployeePage() {
                     name="emergencyContactPhone" 
                     value={formData.emergencyContactPhone}
                     onChange={handleInputChange}
+                    onBlur={() => handleFieldBlur('emergencyContactPhone')}
                     className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
                     placeholder="Enter phone number"
                   />
+                  {errors.emergencyContactPhone && <span className="text-xs text-red-500 mt-1 block">{errors.emergencyContactPhone}</span>}
                 </div>
                 <div className="md:col-span-3">
                   <Label htmlFor="emergencyContactAddress" className="text-slate-700 dark:text-[#fdfcfc]">Full Residential Address</Label>
@@ -2015,9 +2126,11 @@ export default function NewEmployeePage() {
                     name="linkedinProfile" 
                     value={formData.linkedinProfile}
                     onChange={handleInputChange}
+                    onBlur={() => handleFieldBlur('linkedinProfile')}
                     className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
                     placeholder="https://linkedin.com/in/..."
                   />
+                  {errors.linkedinProfile && <span className="text-xs text-red-500 mt-1 block">{errors.linkedinProfile}</span>}
                 </div>
                 <div>
                   <Label htmlFor="githubProfile" className="text-slate-700 dark:text-[#fdfcfc]">GitHub Profile URL</Label>
@@ -2026,9 +2139,11 @@ export default function NewEmployeePage() {
                     name="githubProfile" 
                     value={formData.githubProfile}
                     onChange={handleInputChange}
+                    onBlur={() => handleFieldBlur('githubProfile')}
                     className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
                     placeholder="https://github.com/..."
                   />
+                  {errors.githubProfile && <span className="text-xs text-red-500 mt-1 block">{errors.githubProfile}</span>}
                 </div>
                 <div>
                   <Label htmlFor="previousCompany" className="text-slate-700 dark:text-[#fdfcfc]">Previous Company</Label>

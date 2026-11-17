@@ -6,6 +6,7 @@ import { createSignedTenantFileUrl } from '@/server/supabase/storage';
 import { getCurrentSupabaseActor } from '@/server/supabase/route-helpers';
 import { FileStorageService, StorageKind } from '@/server/services/file-storage.service';
 import type { UserRole } from '@/lib/permissions';
+import { UPLOAD_LIMITS, verifyMagicBytes } from '@/shared/validation/employee';
 
 const VALID_KINDS = new Set([
   'avatar',
@@ -148,28 +149,24 @@ export const POST = withApiHandler(
       throw new BadRequestError('At least one file upload is required');
     }
 
-    // Server-side type and size validation
+    // Server-side type and size validation using shared constants
     for (const uFile of uploadedFiles) {
       const fileNameLower = uFile.name.toLowerCase();
-      const mimeType = uFile.type;
-      
-      const isImage = mimeType === 'image/jpeg' || mimeType === 'image/png' || mimeType === 'image/jpg' || mimeType === 'image/webp' ||
-                      fileNameLower.endsWith('.jpg') || fileNameLower.endsWith('.jpeg') || fileNameLower.endsWith('.png') || fileNameLower.endsWith('.webp');
-                      
-      const isPdf = mimeType === 'application/pdf' || fileNameLower.endsWith('.pdf');
-      
-      const isDocx = mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || fileNameLower.endsWith('.docx');
-      
-      if (!isImage && !isPdf && !isDocx) {
+      const hasAllowedExtension = UPLOAD_LIMITS.ALLOWED_EXTENSIONS.some(ext => fileNameLower.endsWith(ext));
+      const hasAllowedMime = (UPLOAD_LIMITS.ALLOWED_MIME_TYPES as readonly string[]).includes(uFile.type) || 
+                             uFile.type.startsWith('image/') || 
+                             uFile.type === 'application/pdf' || 
+                             uFile.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+      if (!hasAllowedExtension || !hasAllowedMime) {
         throw new BadRequestError(`Invalid file type for '${uFile.name}'. Only PDF, DOCX, and images (JPG, JPEG, PNG, WEBP) are accepted.`);
       }
-      
-      if (isImage && uFile.size > 5 * 1024 * 1024) {
-        throw new BadRequestError(`File '${uFile.name}' exceeds the 5MB limit for images.`);
-      }
-      
-      if ((isPdf || isDocx) && uFile.size > 5 * 1024 * 1024) {
-        throw new BadRequestError(`File '${uFile.name}' exceeds the 5MB limit for documents.`);
+
+      const isImage = uFile.type.startsWith('image/') || /\.(jpg|jpeg|png|webp)$/i.test(uFile.name);
+      const maxSize = isImage ? UPLOAD_LIMITS.MAX_IMAGE_SIZE_BYTES : UPLOAD_LIMITS.MAX_DOCUMENT_SIZE_BYTES;
+      if (uFile.size > maxSize) {
+        const limitMb = Math.round(maxSize / (1024 * 1024));
+        throw new BadRequestError(`File '${uFile.name}' exceeds the ${limitMb}MB limit.`);
       }
     }
 
@@ -192,6 +189,12 @@ export const POST = withApiHandler(
     for (const uFile of uploadedFiles) {
       const bytes = await uFile.arrayBuffer();
       const buffer = Buffer.from(bytes);
+
+      // Verify file content against magic bytes to prevent file extension spoofing
+      const magicCheck = verifyMagicBytes(buffer);
+      if (!magicCheck.valid) {
+        throw new BadRequestError(`File '${uFile.name}' failed magic-byte verification. Content does not match accepted formats (PDF, DOCX, JPG, PNG, WEBP).`);
+      }
 
       const record = await FileStorageService.uploadFile(
         buffer,

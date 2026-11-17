@@ -298,6 +298,51 @@ export const POST = withApiHandler(
 
     if (duplicate) throw new ConflictError('Employee with this employeeId already exists');
 
+    // Per-tenant uniqueness check for PAN Number
+    if (payload.panNumber && !payload.panNumber.includes('X')) {
+      const cleanPan = payload.panNumber.trim().toUpperCase();
+      const { data: duplicatePan } = await supabase
+        .from('employees')
+        .select('id')
+        .eq('pan_number', cleanPan)
+        .eq('tenant_id', tenantId)
+        .maybeSingle();
+
+      if (duplicatePan) {
+        throw new ConflictError('An employee with this PAN number already exists in your organization');
+      }
+    }
+
+    // Per-tenant uniqueness check for Aadhaar Number
+    if (payload.aadhaarNumber && !payload.aadhaarNumber.includes('X')) {
+      const cleanAadhaar = payload.aadhaarNumber.replace(/\D/g, '');
+      const { data: duplicateAadhaar } = await supabase
+        .from('employees')
+        .select('id')
+        .eq('aadhaar_number', cleanAadhaar)
+        .eq('tenant_id', tenantId)
+        .maybeSingle();
+
+      if (duplicateAadhaar) {
+        throw new ConflictError('An employee with this Aadhaar number already exists in your organization');
+      }
+    }
+
+    // Per-tenant uniqueness check for Bank Account Number
+    if (payload.bankAccountNumber && !payload.bankAccountNumber.includes('X')) {
+      const cleanBank = payload.bankAccountNumber.replace(/\D/g, '');
+      const { data: duplicateBank } = await supabase
+        .from('employees')
+        .select('id')
+        .eq('bank_account_number', cleanBank)
+        .eq('tenant_id', tenantId)
+        .maybeSingle();
+
+      if (duplicateBank) {
+        throw new ConflictError('An employee with this bank account number already exists in your organization');
+      }
+    }
+
     let managerAuthId = null;
     if (payload.managerId) {
       managerAuthId = await resolveAuthUserIdFromLegacyUserId(
@@ -616,6 +661,48 @@ export const PUT = withApiHandler(
       if (duplicate) throw new ConflictError('Employee with this employeeId already exists');
     }
 
+    // Per-tenant uniqueness check for PAN Number in PUT
+    if (payload.panNumber && !payload.panNumber.includes('X')) {
+      const cleanPan = payload.panNumber.trim().toUpperCase();
+      const { data: duplicatePan } = await supabase
+        .from('employees')
+        .select('id')
+        .eq('pan_number', cleanPan)
+        .eq('tenant_id', tenantId)
+        .neq('id', id)
+        .maybeSingle();
+
+      if (duplicatePan) throw new ConflictError('An employee with this PAN number already exists in your organization');
+    }
+
+    // Per-tenant uniqueness check for Aadhaar Number in PUT
+    if (payload.aadhaarNumber && !payload.aadhaarNumber.includes('X')) {
+      const cleanAadhaar = payload.aadhaarNumber.replace(/\D/g, '');
+      const { data: duplicateAadhaar } = await supabase
+        .from('employees')
+        .select('id')
+        .eq('aadhaar_number', cleanAadhaar)
+        .eq('tenant_id', tenantId)
+        .neq('id', id)
+        .maybeSingle();
+
+      if (duplicateAadhaar) throw new ConflictError('An employee with this Aadhaar number already exists in your organization');
+    }
+
+    // Per-tenant uniqueness check for Bank Account Number in PUT
+    if (payload.bankAccountNumber && !payload.bankAccountNumber.includes('X')) {
+      const cleanBank = payload.bankAccountNumber.replace(/\D/g, '');
+      const { data: duplicateBank } = await supabase
+        .from('employees')
+        .select('id')
+        .eq('bank_account_number', cleanBank)
+        .eq('tenant_id', tenantId)
+        .neq('id', id)
+        .maybeSingle();
+
+      if (duplicateBank) throw new ConflictError('An employee with this bank account number already exists in your organization');
+    }
+
     let managerAuthId = undefined;
     if ('managerId' in payload) {
       managerAuthId = payload.managerId
@@ -671,7 +758,9 @@ export const PUT = withApiHandler(
       payload.bankAccountNumber !== undefined &&
       columns.includes('bank_account_number')
     ) {
-      updates.bank_account_number = payload.bankAccountNumber?.trim() ?? null;
+      if (!(typeof payload.bankAccountNumber === 'string' && payload.bankAccountNumber.includes('X'))) {
+        updates.bank_account_number = payload.bankAccountNumber?.trim() ?? null;
+      }
     }
     if ('ifscCode' in payload && payload.ifscCode !== undefined && columns.includes('ifsc_code')) {
       updates.ifsc_code = payload.ifscCode?.trim() ?? null;
@@ -736,6 +825,10 @@ export const PUT = withApiHandler(
     Object.entries(newFieldsMapping).forEach(([camelKey, dbColumn]) => {
       const value = (payload as any)[camelKey];
       if (value !== undefined) {
+        // Do not overwrite stored sensitive data if masked representation was passed back
+        if (typeof value === 'string' && value.includes('X') && (camelKey === 'panNumber' || camelKey === 'aadhaarNumber' || camelKey === 'bankAccountNumber')) {
+          return;
+        }
         if (columns.includes(dbColumn)) {
           updates[dbColumn] = value;
           delete extraFields[camelKey];

@@ -43,6 +43,13 @@ export default function LoginPage() {
 
   useEffect(() => {
     setRememberMe(shouldRememberSession());
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const emailParam = params.get('email');
+      if (emailParam) {
+        setEmail(emailParam);
+      }
+    }
   }, []);
 
   useEffect(() => {

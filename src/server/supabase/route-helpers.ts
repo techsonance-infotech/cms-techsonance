@@ -5,6 +5,7 @@ import {
   getSupabaseProfileByLegacyUserId,
   listSupabaseProfilesByAuthIds,
 } from '@/server/supabase/users';
+import { maskPan, maskAadhaar, maskBankAccount } from '@/shared/validation/employee';
 
 export function getRouteSupabase(accessToken: string) {
   return getSupabaseServerClient(accessToken) as any;
@@ -224,7 +225,8 @@ export function normalizeSupabaseEmployeeRecord(
     pfNumber: getField('pf_number', 'pfNumber'),
     uanNumber: getField('uan_number', 'uanNumber'),
     bankName: getField('bank_name', 'bankName'),
-    bankAccountNumber: getField('bank_account_number', 'bankAccountNumber'),
+    bankAccountNumber: maskBankAccount(getField('bank_account_number', 'bankAccountNumber')),
+    rawBankAccountNumber: undefined,
     ifscCode: getField('ifsc_code', 'ifscCode'),
     managerId: managerAuthId ? (legacyUserIdMap.get(managerAuthId) ?? null) : null,
 
@@ -239,8 +241,8 @@ export function normalizeSupabaseEmployeeRecord(
     bloodGroup: getField('blood_group', 'bloodGroup'),
     nationality: getField('nationality', 'nationality'),
     personalIdNumber:
-      getField('personal_id_number', 'personalIdNumber') ||
-      getField('aadhaar_number', 'aadhaarNumber') ||
+      maskAadhaar(getField('personal_id_number', 'personalIdNumber')) ||
+      maskAadhaar(getField('aadhaar_number', 'aadhaarNumber')) ||
       null,
 
     // Work details
@@ -254,8 +256,8 @@ export function normalizeSupabaseEmployeeRecord(
     currency: getField('currency', 'currency', 'INR'),
     branchName: getField('branch_name', 'branchName'),
     esiNumber: getField('esi_number', 'esiNumber'),
-    panNumber: getField('pan_number', 'panNumber'),
-    aadhaarNumber: getField('aadhaar_number', 'aadhaarNumber'),
+    panNumber: maskPan(getField('pan_number', 'panNumber')),
+    aadhaarNumber: maskAadhaar(getField('aadhaar_number', 'aadhaarNumber')),
 
     // Document URLs
     aadhaarCardUrl: getField('aadhaar_card_url', 'aadhaarCardUrl'),

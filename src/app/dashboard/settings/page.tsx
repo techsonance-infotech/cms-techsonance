@@ -2270,7 +2270,7 @@ export default function SettingsPage() {
       });
 
       if (response.ok) {
-        toast.success(`User invited successfully!`, { id: 'user-invite' });
+        toast.success(`User invited successfully! Invitation email sent with credentials.`, { id: 'user-invite' });
         setShowInviteModal(false);
         setInviteForm({
           email: '',

@@ -1,4 +1,17 @@
 import { z } from 'zod';
+import {
+  optionalPanSchema,
+  optionalAadhaarSchema,
+  optionalIfscSchema,
+  optionalBankAccountSchema,
+  optionalIndianPhoneSchema,
+  optionalDobSchema,
+  optionalLinkedinUrlSchema,
+  optionalGithubUrlSchema,
+  isJoiningDateValidForDob,
+  cleanIndianPhone,
+  validatePersonalIdByGovtId,
+} from '../../shared/validation/employee';
 
 const safeNumber = z.preprocess((val) => {
   if (val === null || val === undefined || val === '') return null;
@@ -29,71 +42,160 @@ export const employeeStatusSchema = z.string().trim().optional().nullable().tran
 
 export const employmentTypeSchema = z.string().trim().optional().nullable().default('full_time');
 
-export const createEmployeeSchema = z.object({
-  userId: z.coerce.number().int().positive(),
-  employeeId: z.string().trim().min(1).max(100),
-  department: z.string().trim().min(1).max(100),
-  designation: z.string().trim().min(1).max(100),
-  dateOfJoining: z.string().trim().optional().nullable().or(z.literal('')),
-  dateOfBirth: z.string().trim().optional().nullable().or(z.literal('')),
-  skills: z.any().optional().nullable(),
-  employmentType: employmentTypeSchema,
-  salary: safeNumber,
-  hourlyRate: safeNumber,
-  ctc: safeNumber,
-  pfNumber: z.string().trim().max(100).optional().nullable(),
-  uanNumber: z.string().trim().max(100).optional().nullable(),
-  bankName: z.string().trim().max(150).optional().nullable(),
-  bankAccountNumber: z.string().trim().max(50).optional().nullable(),
-  ifscCode: z.string().trim().max(20).optional().nullable(),
-  managerId: safeInt,
-  status: employeeStatusSchema,
-  gender: z.string().trim().optional().nullable().or(z.literal('')),
-  // Personal Info
-  maritalStatus: z.string().trim().optional().nullable(),
-  bloodGroup: z.string().trim().optional().nullable(),
-  nationality: z.string().trim().optional().nullable(),
-  personalIdNumber: z.string().trim().optional().nullable(),
-  middleName: z.string().trim().optional().nullable(),
-  officeEmail: z.string().trim().optional().nullable(),
-  // Work Info
-  probationPeriod: safeInt,
-  confirmationDate: z.string().trim().optional().nullable().or(z.literal('')),
-  workLocation: z.string().trim().optional().nullable(),
-  workShift: z.string().trim().optional().nullable(),
-  noticePeriod: safeInt,
-  // Financials / Compliance
-  currency: z.string().trim().optional().nullable(),
-  branchName: z.string().trim().optional().nullable(),
-  esiNumber: z.string().trim().optional().nullable(),
-  panNumber: z.string().trim().optional().nullable(),
-  aadhaarNumber: z.string().trim().optional().nullable(),
-  // Documents (Urls)
-  aadhaarCardUrl: z.string().trim().optional().nullable(),
-  panCardUrl: z.string().trim().optional().nullable(),
-  addressProofUrl: z.string().trim().optional().nullable(),
-  educationCertificateUrl: z.string().trim().optional().nullable(),
-  experienceCertificateUrl: z.string().trim().optional().nullable(),
-  resumeUrl: z.string().trim().optional().nullable(),
-  // Permissions
-  permissions: z.any().optional().nullable(),
-  // Emergency Contact
-  emergencyContactName: z.string().trim().optional().nullable(),
-  emergencyContactRelationship: z.string().trim().optional().nullable(),
-  emergencyContactPhone: z.string().trim().optional().nullable(),
-  emergencyContactAddress: z.string().trim().optional().nullable(),
-  // Additional Info
-  languagesKnown: z.string().trim().optional().nullable(),
-  linkedinProfile: z.string().trim().optional().nullable(),
-  githubProfile: z.string().trim().optional().nullable(),
-  previousCompany: z.string().trim().optional().nullable(),
-  referralSource: z.string().trim().optional().nullable(),
-  notes: z.string().trim().optional().nullable(),
-  // Hierarchy / Onboarding references
-  buddy: z.string().trim().optional().nullable(),
-  buddyName: z.string().trim().optional().nullable(),
-  mentor: z.string().trim().optional().nullable(),
-  mentorName: z.string().trim().optional().nullable(),
-}).passthrough();
+export const baseEmployeeSchema = z
+  .object({
+    userId: z.coerce.number().int().positive(),
+    employeeId: z.string().trim().min(1, 'Employee ID is required').max(100, 'Employee ID cannot exceed 100 characters'),
+    department: z.string().trim().min(1, 'Department is required').max(100, 'Department cannot exceed 100 characters'),
+    designation: z.string().trim().min(1, 'Designation is required').max(100, 'Designation cannot exceed 100 characters'),
+    dateOfJoining: z.string().trim().optional().nullable().or(z.literal('')),
+    dateOfBirth: optionalDobSchema,
+    skills: z.any().optional().nullable(),
+    employmentType: employmentTypeSchema,
+    salary: safeNumber,
+    hourlyRate: safeNumber,
+    ctc: safeNumber,
+    pfNumber: z.string().trim().max(100, 'PF number cannot exceed 100 characters').optional().nullable(),
+    uanNumber: z.string().trim().max(100, 'UAN number cannot exceed 100 characters').optional().nullable(),
+    bankName: z.string().trim().max(150, 'Bank name cannot exceed 150 characters').optional().nullable(),
+    bankAccountNumber: optionalBankAccountSchema,
+    ifscCode: optionalIfscSchema,
+    managerId: safeInt,
+    status: employeeStatusSchema,
+    gender: z.string().trim().max(50).optional().nullable().or(z.literal('')),
+    // Personal Info
+    maritalStatus: z.string().trim().max(50).optional().nullable(),
+    bloodGroup: z.string().trim().max(10).optional().nullable(),
+    nationality: z.string().trim().max(50).optional().nullable(),
+    govtIdType: z.string().trim().optional().nullable(),
+    personalIdNumber: z.string().trim().max(100, 'Personal ID cannot exceed 100 characters').optional().nullable(),
+    middleName: z.string().trim().max(100, 'Middle name cannot exceed 100 characters').optional().nullable(),
+    officeEmail: z.string().trim().max(255, 'Office email cannot exceed 255 characters').optional().nullable(),
+    phone: optionalIndianPhoneSchema,
+    // Work Info
+    probationPeriod: safeInt,
+    confirmationDate: z.string().trim().optional().nullable().or(z.literal('')),
+    workLocation: z.string().trim().max(100, 'Work location cannot exceed 100 characters').optional().nullable(),
+    workShift: z.string().trim().max(100, 'Work shift cannot exceed 100 characters').optional().nullable(),
+    noticePeriod: safeInt,
+    // Financials / Compliance
+    currency: z.string().trim().max(10).optional().nullable(),
+    branchName: z.string().trim().max(100, 'Branch name cannot exceed 100 characters').optional().nullable(),
+    esiNumber: z.string().trim().max(100, 'ESI number cannot exceed 100 characters').optional().nullable(),
+    panNumber: optionalPanSchema,
+    aadhaarNumber: optionalAadhaarSchema,
+    // Documents (Urls)
+    aadhaarCardUrl: z.string().trim().max(1000).optional().nullable(),
+    panCardUrl: z.string().trim().max(1000).optional().nullable(),
+    addressProofUrl: z.string().trim().max(1000).optional().nullable(),
+    educationCertificateUrl: z.string().trim().max(1000).optional().nullable(),
+    experienceCertificateUrl: z.string().trim().max(1000).optional().nullable(),
+    resumeUrl: z.string().trim().max(1000).optional().nullable(),
+    // Permissions
+    permissions: z.any().optional().nullable(),
+    // Emergency Contact
+    emergencyContactName: z.string().trim().max(100, 'Emergency contact name cannot exceed 100 characters').optional().nullable(),
+    emergencyContactRelationship: z.string().trim().max(50, 'Emergency contact relationship cannot exceed 50 characters').optional().nullable(),
+    emergencyContactPhone: optionalIndianPhoneSchema,
+    emergencyContactAddress: z.string().trim().max(500, 'Emergency contact address cannot exceed 500 characters').optional().nullable(),
+    // Additional Info
+    languagesKnown: z.string().trim().max(255, 'Languages known cannot exceed 255 characters').optional().nullable(),
+    linkedinProfile: optionalLinkedinUrlSchema,
+    githubProfile: optionalGithubUrlSchema,
+    previousCompany: z.string().trim().max(255, 'Previous company cannot exceed 255 characters').optional().nullable(),
+    referralSource: z.string().trim().max(100, 'Referral source cannot exceed 100 characters').optional().nullable(),
+    notes: z.string().trim().max(2000, 'Notes cannot exceed 2000 characters').optional().nullable(),
+    // Hierarchy / Onboarding references
+    buddy: z.string().trim().max(100).optional().nullable(),
+    buddyName: z.string().trim().max(100).optional().nullable(),
+    mentor: z.string().trim().max(100).optional().nullable(),
+    mentorName: z.string().trim().max(100).optional().nullable(),
+  })
+  .passthrough();
 
-export const updateEmployeeSchema = createEmployeeSchema.omit({ userId: true }).partial().passthrough();
+export const createEmployeeSchema = baseEmployeeSchema
+  .refine(
+    (data) => {
+      if (data.dateOfBirth && data.dateOfJoining) {
+        return isJoiningDateValidForDob(data.dateOfBirth, data.dateOfJoining);
+      }
+      return true;
+    },
+    {
+      message: 'Joining date must be at least 18 years after date of birth',
+      path: ['dateOfJoining'],
+    }
+  )
+  .refine(
+    (data) => {
+      if (data.emergencyContactPhone && data.phone) {
+        const cleanEmergency = cleanIndianPhone(data.emergencyContactPhone);
+        const cleanEmp = cleanIndianPhone(data.phone);
+        if (cleanEmergency && cleanEmp && cleanEmergency === cleanEmp) {
+          return false;
+        }
+      }
+      return true;
+    },
+    {
+      message: 'Emergency contact phone number cannot be identical to employee phone number',
+      path: ['emergencyContactPhone'],
+    }
+  )
+  .superRefine((data, ctx) => {
+    if (data.personalIdNumber) {
+      const err = validatePersonalIdByGovtId(data.personalIdNumber, data.govtIdType);
+      if (err) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: err,
+          path: ['personalIdNumber'],
+        });
+      }
+    }
+  });
+
+export const updateEmployeeSchema = baseEmployeeSchema
+  .omit({ userId: true })
+  .partial()
+  .passthrough()
+  .refine(
+    (data) => {
+      if (data.dateOfBirth && data.dateOfJoining) {
+        return isJoiningDateValidForDob(data.dateOfBirth, data.dateOfJoining);
+      }
+      return true;
+    },
+    {
+      message: 'Joining date must be at least 18 years after date of birth',
+      path: ['dateOfJoining'],
+    }
+  )
+  .refine(
+    (data) => {
+      if (data.emergencyContactPhone && data.phone) {
+        const cleanEmergency = cleanIndianPhone(data.emergencyContactPhone);
+        const cleanEmp = cleanIndianPhone(data.phone);
+        if (cleanEmergency && cleanEmp && cleanEmergency === cleanEmp) {
+          return false;
+        }
+      }
+      return true;
+    },
+    {
+      message: 'Emergency contact phone number cannot be identical to employee phone number',
+      path: ['emergencyContactPhone'],
+    }
+  )
+  .superRefine((data, ctx) => {
+    if (data.personalIdNumber && data.govtIdType) {
+      const err = validatePersonalIdByGovtId(data.personalIdNumber, data.govtIdType);
+      if (err) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: err,
+          path: ['personalIdNumber'],
+        });
+      }
+    }
+  });

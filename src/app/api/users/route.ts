@@ -6,6 +6,8 @@ import { getSupabaseAdminClient } from '@/server/supabase/admin';
 import { getCurrentSupabaseActor, getAdminRouteSupabase } from '@/server/supabase/route-helpers';
 import { getSupabaseProfileByEmail, getSupabaseProfileByLegacyUserId, getSupabaseProfileByAuthUserId } from '@/server/supabase/users';
 import { normalizeAppRole } from '@/server/auth/rbac';
+import { sendUserInvitationEmail } from '@/server/mail/verification';
+import { cleanIndianPhone } from '@/shared/validation/employee';
 
 let usersColumnsCache: string[] | null = null;
 async function getUsersColumns(supabase: any) {
@@ -15,7 +17,7 @@ async function getUsersColumns(supabase: any) {
     usersColumnsCache = Object.keys(data[0]);
     return usersColumnsCache;
   }
-  return ['id', 'tenant_id', 'legacy_user_id', 'email', 'first_name', 'last_name', 'role', 'avatar_url', 'phone', 'last_login', 'is_active', 'two_factor_enabled', 'failed_login_attempts', 'locked_until', 'created_at', 'updated_at'];
+  return ['id', 'tenant_id', 'legacy_user_id', 'email', 'first_name', 'last_name', 'role', 'avatar_url', 'phone', 'last_login', 'is_active', 'two_factor_enabled', 'failed_login_attempts', 'locked_until', 'created_at', 'updated_at', 'is_email_verified'];
 }
 
 function normalizeSupabaseUser(user: Record<string, unknown>) {
@@ -159,7 +161,23 @@ export const POST = withApiHandler(async (request, context) => {
     .eq('tenant_id', tenantId)
     .maybeSingle();
   if (existingUser) {
-    throw new ConflictError('Email already exists');
+    throw new ConflictError('This email address is already registered.');
+  }
+
+  // Duplicate phone number check per-tenant
+  if (payload.phone) {
+    const cleanPhone = cleanIndianPhone(payload.phone);
+    if (cleanPhone) {
+      const { data: existingPhoneUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('phone', cleanPhone)
+        .eq('tenant_id', tenantId)
+        .maybeSingle();
+      if (existingPhoneUser) {
+        throw new ConflictError('This phone number is already registered.');
+      }
+    }
   }
 
   const legacyUserId = await getNextLegacyUserId(tenantId);
@@ -215,6 +233,7 @@ export const POST = withApiHandler(async (request, context) => {
     phone: payload.phone?.trim() || null,
     two_factor_enabled: payload.twoFactorEnabled ?? false,
     is_active: payload.isActive ?? true,
+    is_email_verified: true,
     created_at: now,
     updated_at: now,
     last_login: null,
@@ -229,6 +248,40 @@ export const POST = withApiHandler(async (request, context) => {
   const { data, error } = await admin.from('users').insert(usersInsertPayload).select('*').single();
 
   if (error || !data) throw error ?? new Error('Failed to create user');
+
+  // Dispatch branded workspace invitation email to the newly created user
+  try {
+    let companyName = 'TechSonance CMS';
+    const { data: comp } = await supabase
+      .from('company_settings')
+      .select('company_name')
+      .eq('tenant_id', actor.tenantId)
+      .maybeSingle();
+
+    if (comp?.company_name) {
+      companyName = comp.company_name;
+    } else {
+      const { data: tenant } = await supabase
+        .from('tenants')
+        .select('name')
+        .eq('id', actor.tenantId)
+        .maybeSingle();
+      if (tenant?.name) {
+        companyName = tenant.name;
+      }
+    }
+
+    await sendUserInvitationEmail({
+      email: normalizedEmail,
+      name: `${payload.firstName} ${payload.lastName}`.trim(),
+      role: payload.role,
+      temporaryPassword: payload.password,
+      companyName,
+    });
+  } catch (emailErr) {
+    console.error('Failed to dispatch user invitation email:', emailErr);
+  }
+
   return NextResponse.json(normalizeSupabaseUser(data), { status: 201 });
 }, { requireAuth: true, roles: ['Admin'] });
 
@@ -287,9 +340,26 @@ export const PUT = withApiHandler(async (request, context) => {
       useAdmin: true 
     }).catch(() => null);
     if (emailOwner && emailOwner.id !== existingUser.id) {
-      throw new ConflictError('Email already exists');
+      throw new ConflictError('This email address is already registered.');
     }
     updates.email = normalizedEmail;
+  }
+
+  if (payload.phone !== undefined && payload.phone) {
+    const cleanPhone = cleanIndianPhone(payload.phone);
+    if (cleanPhone) {
+      const { data: phoneOwner } = await admin
+        .from('users')
+        .select('id')
+        .eq('phone', cleanPhone)
+        .eq('tenant_id', tenantId)
+        .neq('id', existingUser.id)
+        .maybeSingle();
+      if (phoneOwner) {
+        throw new ConflictError('This phone number is already registered.');
+      }
+      updates.phone = cleanPhone;
+    }
   }
 
   if (payload.firstName !== undefined) updates.first_name = payload.firstName.trim();
