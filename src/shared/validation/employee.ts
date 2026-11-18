@@ -171,6 +171,116 @@ export function cleanIndianPhone(val: string | null | undefined): string {
   return cleaned;
 }
 
+export function cleanUsername(val: string | null | undefined): string {
+  return (val ?? '').trim().toLowerCase();
+}
+
+/**
+ * Generates a clean base username from firstName, lastName (and optional middleName)
+ * following the workspace username formula ('first.last' | 'first_l' | 'first.middle.last').
+ */
+export function buildBaseUsername(
+  firstName: string | null | undefined,
+  lastName: string | null | undefined,
+  middleName?: string | null,
+  pattern: string = 'first.last'
+): string {
+  const sanitizePart = (part: string | null | undefined): string =>
+    (part ?? '')
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+
+  const first = sanitizePart(firstName);
+  const middle = sanitizePart(middleName);
+  const last = sanitizePart(lastName);
+
+  if (!first && !last) return '';
+
+  let base = '';
+  switch ((pattern ?? 'first.last').trim().toLowerCase()) {
+    case 'first_l':
+      base = first && last ? `${first}_${last[0]}` : (first || last);
+      break;
+    case 'first.middle.last':
+      base = [first, middle, last].filter(Boolean).join('.');
+      break;
+    case 'first.last':
+    default:
+      base = [first, last].filter(Boolean).join('.');
+      break;
+  }
+
+  base = base
+    .replace(/\.{2,}/g, '.')
+    .replace(/_{2,}/g, '_')
+    .replace(/^[._-]+|[._-]+$/g, '')
+    .slice(0, 45);
+
+  return base.length >= 3 ? base : '';
+}
+
+export const VALID_SYSTEM_ROLES = [
+  'admin',
+  'hr_manager',
+  'cms_administrator',
+  'project_manager',
+  'developer',
+  'qa_engineer',
+  'devops_engineer',
+  'ui_ux_designer',
+  'intern',
+  'business_development',
+  'digital_marketing',
+  'business_analyst',
+  'management',
+  'architect',
+  'client',
+] as const;
+
+/**
+ * Resolves a stored or RBAC-normalized role string into a valid System Access role option.
+ */
+export function resolveSystemRole(
+  rawRole: string | null | undefined,
+  designation?: string | null
+): string {
+  const norm = (rawRole ?? '').trim().toLowerCase().replace(/[\s/]+/g, '_');
+  if ((VALID_SYSTEM_ROLES as readonly string[]).includes(norm)) {
+    return norm;
+  }
+
+  if (norm === 'superadmin' || norm === 'super_admin' || norm === 'owner' || norm === 'tenant_owner') {
+    return 'admin';
+  }
+  if (norm === 'manager') {
+    return 'project_manager';
+  }
+  if (norm === 'viewer') {
+    return 'client';
+  }
+
+  // Fallback for collapsed RBAC role ('employee') or empty role: infer from designation when available
+  const desig = (designation ?? '').trim().toLowerCase();
+  if (desig) {
+    if (desig.includes('qa') || desig.includes('quality') || desig.includes('test')) return 'qa_engineer';
+    if (desig.includes('devops') || desig.includes('sre') || desig.includes('infra')) return 'devops_engineer';
+    if (desig.includes('ui') || desig.includes('ux') || desig.includes('design')) return 'ui_ux_designer';
+    if (desig.includes('intern') || desig.includes('trainee')) return 'intern';
+    if (desig.includes('architect')) return 'architect';
+    if (desig.includes('hr') || desig.includes('human resource') || desig.includes('recruit')) return 'hr_manager';
+    if (desig.includes('project manager') || desig.includes('scrum')) return 'project_manager';
+    if (desig.includes('business analyst') || desig.includes('analyst')) return 'business_analyst';
+    if (desig.includes('business dev') || desig.includes('sales') || desig.includes('bde')) return 'business_development';
+    if (desig.includes('marketing') || desig.includes('seo')) return 'digital_marketing';
+    if (desig.includes('director') || desig.includes('vp') || desig.includes('chief') || desig.includes('head')) return 'management';
+    if (desig.includes('dev') || desig.includes('engineer') || desig.includes('program')) return 'developer';
+  }
+
+  return 'developer';
+}
+
 // ============================================================================
 // MASKING HELPERS (PII PROTECTION)
 // ============================================================================
@@ -428,7 +538,7 @@ export const ifscSchema = z
 export const optionalIfscSchema = optionalWhenEmpty(ifscSchema);
 
 /**
- * Bank Account Number: 9 to 18 digits.
+ * Bank Account Number: 9 to 18 digits (cannot be all zeroes).
  * Input is auto-trimmed, spaces and hyphens removed. Also accepts masked bank account (e.g. XXXXXXXX1234).
  */
 export const bankAccountSchema = z
@@ -438,12 +548,224 @@ export const bankAccountSchema = z
     z
       .string()
       .refine(
-        (val) => /^X+\d{4}$/i.test(val) || /^\d{9,18}$/.test(val),
-        'Bank account number must be between 9 and 18 digits'
+        (val) => /^X+\d{4}$/i.test(val) || (/^\d{9,18}$/.test(val) && !/^0+$/.test(val)),
+        'Bank account number must be a valid 9 to 18 digit number'
       )
   );
 
 export const optionalBankAccountSchema = optionalWhenEmpty(bankAccountSchema);
+
+// ============================================================================
+// PAYROLL, COMPENSATION, BANKING & STATUTORY COMPLIANCE SCHEMAS
+// ============================================================================
+
+export const SUPPORTED_CURRENCIES = ['INR', 'USD', 'EUR', 'GBP', 'AED', 'SGD', 'CAD', 'AUD'] as const;
+
+export const COMPENSATION_LIMITS = {
+  MAX_MONTHLY_SALARY: 100_000_000, // 10 Crore / 100M max per month
+  MAX_HOURLY_RATE: 1_000_000,      // 10 Lakh / 1M max per hour
+  MAX_ANNUAL_CTC: 1_000_000_000,   // 100 Crore / 1B max per year
+} as const;
+
+/**
+ * Factory for optional monetary/compensation inputs (accepts string or number, empty -> undefined).
+ * Rejects negative values, non-numeric input, > 2 decimal places, scientific notation, and out-of-range values.
+ */
+export function createOptionalCompensationSchema(options: {
+  label: string;
+  max: number;
+}) {
+  const { label, max } = options;
+  return z
+    .union([z.string(), z.number()])
+    .optional()
+    .nullable()
+    .transform((val) => {
+      if (val === null || val === undefined) return undefined;
+      if (typeof val === 'number') return String(val);
+      const trimmed = val.trim().replace(/,/g, '');
+      return trimmed === '' ? undefined : trimmed;
+    })
+    .superRefine((val, ctx) => {
+      if (val === undefined) return;
+      if (val.startsWith('-')) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `${label} cannot be negative.`,
+        });
+        return;
+      }
+      if (!/^\d+(\.\d{1,2})?$/.test(val)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `${label} must be a valid positive number with up to 2 decimal places.`,
+        });
+        return;
+      }
+      const num = Number(val);
+      if (!Number.isFinite(num)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `${label} must be a valid finite number.`,
+        });
+        return;
+      }
+      if (num > max) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `${label} cannot exceed ${max.toLocaleString('en-US')}.`,
+        });
+      }
+    })
+    .transform((val) => (val === undefined ? undefined : Number(val)));
+}
+
+export const optionalSalarySchema = createOptionalCompensationSchema({
+  label: 'Monthly base salary',
+  max: COMPENSATION_LIMITS.MAX_MONTHLY_SALARY,
+});
+
+export const optionalHourlyRateSchema = createOptionalCompensationSchema({
+  label: 'Hourly rate',
+  max: COMPENSATION_LIMITS.MAX_HOURLY_RATE,
+});
+
+export const optionalCtcSchema = createOptionalCompensationSchema({
+  label: 'Annual CTC',
+  max: COMPENSATION_LIMITS.MAX_ANNUAL_CTC,
+});
+
+export const optionalCurrencySchema = optionalWhenEmpty(
+  z
+    .string()
+    .transform((val) => val.trim().toUpperCase())
+    .refine(
+      (val) => (SUPPORTED_CURRENCIES as readonly string[]).includes(val),
+      `Currency must be one of: ${SUPPORTED_CURRENCIES.join(', ')}`
+    )
+);
+
+/**
+ * Bank Name: 2–100 chars, alphabets, spaces, dots, hyphens, ampersands, apostrophes, parentheses.
+ */
+export const bankNameSchema = z
+  .string()
+  .transform((val) => (val ?? '').trim().replace(/\s+/g, ' '))
+  .superRefine((val, ctx) => {
+    if (val.length < 2 || val.length > 100) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Bank name must contain 2–100 characters.',
+      });
+      return;
+    }
+    if (!/^[A-Za-z][A-Za-z\s.&'()-]*$/.test(val) || /(.)\1{3,}/i.test(val)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Please enter a valid bank name (letters, spaces, and standard punctuation only).',
+      });
+    }
+  });
+
+export const optionalBankNameSchema = optionalWhenEmpty(bankNameSchema);
+
+/**
+ * Branch Name: 2–100 chars, alphanumeric + address punctuation, must include at least 2 letters,
+ * rejects keyboard-mash repetitions (e.g. "wwww...") or unbroken 25+ char nonsense tokens.
+ */
+export const branchNameSchema = z
+  .string()
+  .transform((val) => (val ?? '').trim().replace(/\s+/g, ' '))
+  .superRefine((val, ctx) => {
+    if (val.length < 2 || val.length > 100) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Branch name must contain 2–100 characters.',
+      });
+      return;
+    }
+    if (
+      !/^[A-Za-z0-9][A-Za-z0-9\s.,'&()/-]*$/.test(val) ||
+      !/[A-Za-z].*[A-Za-z]/.test(val) ||
+      /(.)\1{3,}/i.test(val) ||
+      val.split(/[\s,/()-]+/).some((word) => word.length > 25)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Please enter a valid bank branch name (e.g. MG Road Branch, Bengaluru).',
+      });
+    }
+  });
+
+export const optionalBranchNameSchema = optionalWhenEmpty(branchNameSchema);
+
+export function cleanPfNumber(val: string | null | undefined): string {
+  return (val ?? '').trim().toUpperCase().replace(/\s+/g, '');
+}
+
+/**
+ * Indian EPFO Provident Fund (PF) Member ID / Account Number:
+ * Format: 2-letter State + 3-letter Regional Office + 5-7 digit Establishment + optional 3-char Extension + 5-7 digit Account No.
+ * Examples: MH/BAN/0012345/000/0000123, MHBAN00123450000000123, TN/MAS/0012345/0000123
+ */
+export const pfNumberSchema = z
+  .string()
+  .transform(cleanPfNumber)
+  .pipe(
+    z
+      .string()
+      .regex(
+        /^[A-Z]{2}[/-]?[A-Z]{3}[/-]?[0-9]{5,7}([/-]?[0-9A-Z]{3})?[/-]?[0-9]{5,7}$/,
+        'Invalid PF number format (e.g. MH/BAN/0012345/000/0000123)'
+      )
+  );
+
+export const optionalPfNumberSchema = optionalWhenEmpty(pfNumberSchema);
+
+export function cleanUan(val: string | null | undefined): string {
+  return (val ?? '').replace(/[\s\-]/g, '').trim();
+}
+
+/**
+ * Indian EPFO Universal Account Number (UAN):
+ * Exactly 12 digits, cannot start with 0, cannot be all identical digits.
+ */
+export const uanNumberSchema = z
+  .string()
+  .transform(cleanUan)
+  .pipe(
+    z
+      .string()
+      .refine(
+        (val) => /^[1-9]\d{11}$/.test(val) && !/^(\d)\1{11}$/.test(val),
+        'UAN must be a valid 12-digit number (cannot start with 0, e.g. 100123456789)'
+      )
+  );
+
+export const optionalUanNumberSchema = optionalWhenEmpty(uanNumberSchema);
+
+export function cleanEsi(val: string | null | undefined): string {
+  return (val ?? '').replace(/[\s\-]/g, '').trim();
+}
+
+/**
+ * Indian ESIC Number:
+ * 10-digit Employee IP Number (e.g. 3112345678) or 17-digit ESIC Code (e.g. 31-00-123456-000-0001).
+ * Cannot be all zeroes or all identical digits.
+ */
+export const esiNumberSchema = z
+  .string()
+  .transform(cleanEsi)
+  .pipe(
+    z
+      .string()
+      .refine(
+        (val) => (/^\d{10}$/.test(val) || /^\d{17}$/.test(val)) && !/^(\d)\1+$/.test(val),
+        'ESI number must be a valid 10-digit IP number or 17-digit ESIC code'
+      )
+  );
+
+export const optionalEsiNumberSchema = optionalWhenEmpty(esiNumberSchema);
 
 /**
  * Indian Mobile Phone: Mandatory, exactly 10 digits starting with 6, 7, 8, or 9.
@@ -804,32 +1126,55 @@ export const workStepSchema = z.object({
   }
 );
 
-export const payrollStepSchema = z.object({
-  salary: z.any().optional().nullable(),
-  hourlyRate: z.any().optional().nullable(),
-  ctc: z.any().optional().nullable(),
-  currency: z.string().trim().max(10).optional().nullable(),
-  bankName: z.string().trim().max(150, 'Bank name cannot exceed 150 characters').optional().nullable(),
-  bankAccountNumber: optionalBankAccountSchema,
-  ifscCode: optionalIfscSchema,
-  branchName: z.string().trim().max(100, 'Branch name cannot exceed 100 characters').optional().nullable(),
-  pfNumber: z.string().trim().max(100, 'PF number cannot exceed 100 characters').optional().nullable(),
-  uanNumber: z.string().trim().max(100, 'UAN number cannot exceed 100 characters').optional().nullable(),
-  esiNumber: z.string().trim().max(100, 'ESI number cannot exceed 100 characters').optional().nullable(),
-  panNumber: optionalPanSchema,
-  aadhaarNumber: optionalAadhaarSchema,
-});
+export const payrollStepSchema = z
+  .object({
+    salary: optionalSalarySchema,
+    hourlyRate: optionalHourlyRateSchema,
+    ctc: optionalCtcSchema,
+    currency: optionalCurrencySchema,
+    bankName: optionalBankNameSchema,
+    bankAccountNumber: optionalBankAccountSchema,
+    ifscCode: optionalIfscSchema,
+    branchName: optionalBranchNameSchema,
+    pfNumber: optionalPfNumberSchema,
+    uanNumber: optionalUanNumberSchema,
+    esiNumber: optionalEsiNumberSchema,
+    panNumber: optionalPanSchema,
+    aadhaarNumber: optionalAadhaarSchema,
+  })
+  .superRefine((data, ctx) => {
+    if (
+      typeof data.salary === 'number' &&
+      data.salary > 0 &&
+      typeof data.ctc === 'number' &&
+      data.ctc > 0 &&
+      data.ctc < data.salary * 12
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Annual CTC cannot be less than 12 × Monthly Base Salary.',
+        path: ['ctc'],
+      });
+    }
+  });
+
+export const usernameSchema = z
+  .string()
+  .transform(cleanUsername)
+  .pipe(
+    z
+      .string()
+      .min(3, 'Username must be at least 3 characters')
+      .max(50, 'Username cannot exceed 50 characters')
+      .regex(/^[a-z0-9._-]+$/, 'Username can only contain letters, numbers, dots, hyphens, and underscores')
+  );
+
+export const optionalUsernameSchema = optionalWhenEmpty(usernameSchema);
 
 export const accessStepSchema = (isEditMode: boolean = false) =>
   z.object({
     role: z.string().trim().min(1, 'System role is required').max(50),
-    username: optionalWhenEmpty(
-      z
-        .string()
-        .trim()
-        .max(50, 'Username cannot exceed 50 characters')
-        .regex(/^[a-zA-Z0-9._-]+$/, 'Username can only contain letters, numbers, dots, hyphens, and underscores')
-    ),
+    username: optionalUsernameSchema,
     officeEmail: optionalEmailSchema,
     password: isEditMode
       ? optionalStrongPasswordSchema
@@ -866,5 +1211,96 @@ export const additionalStepSchema = z.object({
   previousCompany: z.string().trim().max(255, 'Previous company cannot exceed 255 characters').optional().nullable(),
   referralSource: z.string().trim().max(100, 'Referral source cannot exceed 100 characters').optional().nullable(),
   notes: z.string().trim().max(2000, 'Notes cannot exceed 2000 characters').optional().nullable(),
+});
+
+// ============================================================================
+// EMPLOYEE DRAFT HELPERS & SCHEMA (DATABASE-BACKED MULTI-EMPLOYEE DRAFTS)
+// ============================================================================
+
+export const EMPLOYEE_DRAFT_STEPS = [
+  'personal',
+  'work',
+  'payroll',
+  'documents',
+  'access',
+  'emergency',
+  'additional',
+  'review',
+] as const;
+
+export type EmployeeDraftStep = (typeof EMPLOYEE_DRAFT_STEPS)[number];
+
+/**
+ * Strips secrets (such as raw passwords) before persisting employee form drafts.
+ */
+export function sanitizeDraftFormData(data: Record<string, unknown>): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(data ?? {})) {
+    if (key === 'password' || key === 'confirmPassword') continue;
+    if (value === undefined) continue;
+    sanitized[key] = value;
+  }
+  return sanitized;
+}
+
+/**
+ * Derives a human-readable draft title for draft lists and resume banners.
+ */
+export function buildDraftDisplayName(formData: Record<string, unknown>): string {
+  const first = typeof formData.firstName === 'string' ? formData.firstName.trim() : '';
+  const last = typeof formData.lastName === 'string' ? formData.lastName.trim() : '';
+  const fullName = `${first} ${last}`.trim();
+  if (fullName) return fullName;
+
+  const email = typeof formData.email === 'string' ? formData.email.trim() : '';
+  if (email) return email;
+
+  const empId = typeof formData.employeeId === 'string' ? formData.employeeId.trim() : '';
+  if (empId) return `Draft (${empId})`;
+
+  return 'Untitled Employee Draft';
+}
+
+const DRAFT_PROGRESS_FIELDS = [
+  'firstName',
+  'lastName',
+  'email',
+  'phone',
+  'dateOfBirth',
+  'employeeId',
+  'department',
+  'designation',
+  'dateOfJoining',
+  'salary',
+  'bankName',
+  'bankAccountNumber',
+  'ifscCode',
+  'panNumber',
+  'username',
+  'role',
+  'emergencyContactName',
+  'emergencyContactPhone',
+] as const;
+
+/**
+ * Computes completion percentage (0–100) across key employee onboarding fields.
+ */
+export function computeEmployeeDraftCompletion(formData: Record<string, unknown>): number {
+  let filled = 0;
+  for (const field of DRAFT_PROGRESS_FIELDS) {
+    const val = formData[field];
+    if (typeof val === 'string' && val.trim().length > 0) {
+      filled++;
+    } else if (typeof val === 'number' && !Number.isNaN(val)) {
+      filled++;
+    }
+  }
+  return Math.min(100, Math.round((filled / DRAFT_PROGRESS_FIELDS.length) * 100));
+}
+
+export const employeeDraftPayloadSchema = z.object({
+  id: z.string().uuid().optional().nullable(),
+  currentStep: z.enum(EMPLOYEE_DRAFT_STEPS).default('personal'),
+  formData: z.record(z.string(), z.unknown()).default({}),
 });
 

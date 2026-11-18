@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { Label } from '@/components/ui/label';
-import { Loader2, Mail, KeyRound, Lock, Sparkles } from 'lucide-react';
+import { Loader2, Mail, KeyRound, Lock, Sparkles, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 
 type ResetStep = 1 | 2 | 3;
@@ -20,6 +20,8 @@ export default function ForgotPasswordPage() {
   const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const stepItems = useMemo(() => ([
@@ -283,11 +285,11 @@ export default function ForgotPasswordPage() {
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-primary transition-colors" />
                   <Input
                     id="new-password"
-                    type="password"
+                    type={showNewPassword ? 'text' : 'password'}
                     placeholder="Enter your new password"
                     value={newPassword}
                     onChange={(event) => setNewPassword(event.target.value)}
-                    className="pl-11 h-12 border-border bg-card focus-visible:ring-primary focus-visible:border-primary rounded-xl hover:border-muted-foreground/30 transition-colors duration-200"
+                    className="pl-11 pr-11 h-12 border-border bg-card focus-visible:ring-primary focus-visible:border-primary rounded-xl hover:border-muted-foreground/30 transition-colors duration-200"
                     autoComplete="new-password"
                     autoCapitalize="none"
                     autoCorrect="off"
@@ -298,6 +300,19 @@ export default function ForgotPasswordPage() {
                     required
                     disabled={loading}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword((prev) => !prev)}
+                    aria-label={showNewPassword ? 'Hide new password' : 'Show new password'}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors cursor-pointer"
+                    disabled={loading}
+                  >
+                    {showNewPassword ? (
+                      <EyeOff className="h-5 w-5" />
+                    ) : (
+                      <Eye className="h-5 w-5" />
+                    )}
+                  </button>
                 </div>
               </div>
 
@@ -307,11 +322,11 @@ export default function ForgotPasswordPage() {
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-primary transition-colors" />
                   <Input
                     id="confirm-password"
-                    type="password"
+                    type={showConfirmPassword ? 'text' : 'password'}
                     placeholder="Confirm your new password"
                     value={confirmPassword}
                     onChange={(event) => setConfirmPassword(event.target.value)}
-                    className="pl-11 h-12 border-border bg-card focus-visible:ring-primary focus-visible:border-primary rounded-xl hover:border-muted-foreground/30 transition-colors duration-200"
+                    className="pl-11 pr-11 h-12 border-border bg-card focus-visible:ring-primary focus-visible:border-primary rounded-xl hover:border-muted-foreground/30 transition-colors duration-200"
                     autoComplete="new-password"
                     autoCapitalize="none"
                     autoCorrect="off"
@@ -322,6 +337,19 @@ export default function ForgotPasswordPage() {
                     required
                     disabled={loading}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword((prev) => !prev)}
+                    aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors cursor-pointer"
+                    disabled={loading}
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff className="h-5 w-5" />
+                    ) : (
+                      <Eye className="h-5 w-5" />
+                    )}
+                  </button>
                 </div>
               </div>
 

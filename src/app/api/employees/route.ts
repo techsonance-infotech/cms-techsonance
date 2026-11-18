@@ -14,6 +14,7 @@ import {
   resolveTenantId,
 } from '@/server/supabase/route-helpers';
 import { listSupabaseProfilesByAuthIds } from '@/server/supabase/users';
+import { getSupabaseAdminClient } from '@/server/supabase/admin';
 
 let employeesColumnsCache: string[] | null = null;
 async function getEmployeesColumns(supabase: any) {
@@ -87,7 +88,21 @@ export const GET = withApiHandler(
           profile.legacy_user_id,
         ])
       );
-      return NextResponse.json(normalizeSupabaseEmployeeRecord(data, userMap, profilesMap));
+      let authUserRecord: any = null;
+      if (data.user_id) {
+        try {
+          const admin = getSupabaseAdminClient() as any;
+          if (typeof admin.auth?.admin?.getUserById === 'function') {
+            const { data: authData } = await admin.auth.admin.getUserById(String(data.user_id));
+            authUserRecord = authData?.user ?? null;
+          }
+        } catch (authFetchErr) {
+          console.warn('Could not fetch auth user metadata for employee:', authFetchErr);
+        }
+      }
+      return NextResponse.json(
+        normalizeSupabaseEmployeeRecord(data, userMap, profilesMap, authUserRecord)
+      );
     }
 
     const limit = Math.min(Number(searchParams.get('limit') ?? '10'), 100);
@@ -432,7 +447,7 @@ export const POST = withApiHandler(
     });
 
     // Store user-level properties in employees.skills if user table columns do not exist
-    ['middleName', 'officeEmail', 'accountExpiryDate'].forEach(field => {
+    ['middleName', 'officeEmail', 'accountExpiryDate', 'govtIdType'].forEach(field => {
       const value = (payload as any)[field];
       if (value !== undefined) {
         extraFields[field] = value;
@@ -838,7 +853,7 @@ export const PUT = withApiHandler(
       }
     });
 
-    ['middleName', 'officeEmail', 'accountExpiryDate', 'buddy', 'mentor', 'buddyName', 'mentorName'].forEach(field => {
+    ['middleName', 'officeEmail', 'accountExpiryDate', 'govtIdType', 'buddy', 'mentor', 'buddyName', 'mentorName'].forEach(field => {
       const value = (payload as any)[field];
       if (value !== undefined) {
         extraFields[field] = value;

@@ -7,7 +7,7 @@ import { getCurrentSupabaseActor, getAdminRouteSupabase } from '@/server/supabas
 import { getSupabaseProfileByEmail, getSupabaseProfileByLegacyUserId, getSupabaseProfileByAuthUserId } from '@/server/supabase/users';
 import { normalizeAppRole } from '@/server/auth/rbac';
 import { sendUserInvitationEmail } from '@/server/mail/verification';
-import { cleanIndianPhone } from '@/shared/validation/employee';
+import { cleanIndianPhone, cleanUsername } from '@/shared/validation/employee';
 
 let usersColumnsCache: string[] | null = null;
 async function getUsersColumns(supabase: any) {
@@ -57,9 +57,60 @@ async function getNextLegacyUserId(tenantId?: string) {
   return currentMax + 1;
 }
 
+/**
+ * Case-insensitive exact lookup for an existing username across users.
+ * Protects against SQL wildcard characters like `_` in usernames (e.g. john_doe).
+ */
+async function findUsernameOwner(
+  supabase: any,
+  rawUsername: string,
+  excludeIdentifier?: string | number | null
+) {
+  const normalized = cleanUsername(rawUsername);
+  if (!normalized) return null;
+
+  const escapedPattern = normalized.replace(/[%_\\]/g, '\\$&');
+  const { data } = await supabase
+    .from('users')
+    .select('id, legacy_user_id, username')
+    .ilike('username', escapedPattern);
+
+  const excludeStr = excludeIdentifier !== undefined && excludeIdentifier !== null ? String(excludeIdentifier).trim() : null;
+  return ((data as Array<{ id: string; legacy_user_id?: number | null; username?: string | null }> | null) ?? []).find((u) => {
+    if (!u.username || u.username.trim().toLowerCase() !== normalized) return false;
+    if (excludeStr && (String(u.id) === excludeStr || (u.legacy_user_id != null && String(u.legacy_user_id) === excludeStr))) {
+      return false;
+    }
+    return true;
+  }) ?? null;
+}
+
+/**
+ * Suggests a unique available username derived from a base username if it is already allocated.
+ */
+async function suggestAvailableUsername(
+  supabase: any,
+  baseUsername: string,
+  excludeIdentifier?: string | number | null
+): Promise<string> {
+  const cleanBase = cleanUsername(baseUsername).replace(/[^a-z0-9._-]/g, '') || 'user';
+  const baseOwner = await findUsernameOwner(supabase, cleanBase, excludeIdentifier);
+  if (!baseOwner) return cleanBase;
+
+  for (let suffix = 2; suffix <= 99; suffix++) {
+    const candidate = `${cleanBase.slice(0, 46)}${suffix}`;
+    const owner = await findUsernameOwner(supabase, candidate, excludeIdentifier);
+    if (!owner) return candidate;
+  }
+
+  return `${cleanBase.slice(0, 42)}_${Math.floor(1000 + Math.random() * 9000)}`;
+}
+
 export const GET = withApiHandler(async (request, context) => {
   const searchParams = new URL(request.url).searchParams;
   const id = searchParams.get('id');
+  const checkUsername = searchParams.get('checkUsername');
+  const excludeUserId = searchParams.get('excludeUserId');
 
   const accessToken = context.auth?.accessToken;
   let tenantId = context.auth?.user?.tenantId;
@@ -80,6 +131,24 @@ export const GET = withApiHandler(async (request, context) => {
 
   if (!accessToken && !tenantId) throw new BadRequestError('Authorization and tenant info required');
   if (!tenantId) throw new BadRequestError('Tenant isolation ID could not be identified');
+
+  if (checkUsername !== null) {
+    const normalized = cleanUsername(checkUsername);
+    if (!normalized) {
+      return NextResponse.json({ available: true, username: '' });
+    }
+    const owner = await findUsernameOwner(supabase, normalized, excludeUserId);
+    if (owner) {
+      const suggestion = await suggestAvailableUsername(supabase, normalized, excludeUserId);
+      return NextResponse.json({
+        available: false,
+        username: normalized,
+        suggestion,
+        message: 'This username is already allocated to another user.',
+      });
+    }
+    return NextResponse.json({ available: true, username: normalized });
+  }
 
   if (id) {
     let profile: any = null;
@@ -180,6 +249,15 @@ export const POST = withApiHandler(async (request, context) => {
     }
   }
 
+  // Duplicate username check (globally unique so username login and allocation never collide)
+  const normalizedUsername = payload.username ? cleanUsername(payload.username) : null;
+  if (normalizedUsername) {
+    const usernameOwner = await findUsernameOwner(supabase, normalizedUsername);
+    if (usernameOwner) {
+      throw new ConflictError('This username is already taken. Please choose a different username.');
+    }
+  }
+
   const legacyUserId = await getNextLegacyUserId(tenantId);
   const authUserId = crypto.randomUUID();
   const columns = await getUsersColumns(supabase);
@@ -192,7 +270,7 @@ export const POST = withApiHandler(async (request, context) => {
     user_metadata: {
       firstName: payload.firstName.trim(),
       lastName: payload.lastName.trim(),
-      username: payload.username?.trim() || null,
+      username: normalizedUsername,
       middleName: payload.middleName?.trim() || null,
       gender: payload.gender || null,
       officeEmail: payload.officeEmail?.trim() || null,
@@ -230,7 +308,7 @@ export const POST = withApiHandler(async (request, context) => {
     last_name: payload.lastName.trim(),
     role: normalizeAppRole(payload.role),
     avatar_url: payload.avatarUrl?.trim() || null,
-    phone: payload.phone?.trim() || null,
+    phone: payload.phone ? cleanIndianPhone(payload.phone) : null,
     two_factor_enabled: payload.twoFactorEnabled ?? false,
     is_active: payload.isActive ?? true,
     is_email_verified: true,
@@ -239,7 +317,7 @@ export const POST = withApiHandler(async (request, context) => {
     last_login: null,
   };
 
-  if (columns.includes('username') && payload.username) usersInsertPayload.username = payload.username.trim();
+  if (columns.includes('username') && normalizedUsername) usersInsertPayload.username = normalizedUsername;
   if (columns.includes('middle_name') && payload.middleName) usersInsertPayload.middle_name = payload.middleName.trim();
   if (columns.includes('gender') && payload.gender) usersInsertPayload.gender = payload.gender;
   if (columns.includes('office_email') && payload.officeEmail) usersInsertPayload.office_email = payload.officeEmail.trim();
@@ -360,6 +438,19 @@ export const PUT = withApiHandler(async (request, context) => {
       }
       updates.phone = cleanPhone;
     }
+  } else if (payload.phone !== undefined) {
+    updates.phone = null;
+  }
+
+  let normalizedUsernameUpdate: string | null | undefined = undefined;
+  if (payload.username !== undefined) {
+    normalizedUsernameUpdate = payload.username ? cleanUsername(payload.username) : null;
+    if (normalizedUsernameUpdate) {
+      const usernameOwner = await findUsernameOwner(admin, normalizedUsernameUpdate, existingUser.id);
+      if (usernameOwner) {
+        throw new ConflictError('This username is already taken. Please choose a different username.');
+      }
+    }
   }
 
   if (payload.firstName !== undefined) updates.first_name = payload.firstName.trim();
@@ -368,12 +459,13 @@ export const PUT = withApiHandler(async (request, context) => {
     updates.role = normalizeAppRole(payload.role);
   }
   if (payload.avatarUrl !== undefined) updates.avatar_url = payload.avatarUrl?.trim() || null;
-  if (payload.phone !== undefined) updates.phone = payload.phone?.trim() || null;
   if (payload.twoFactorEnabled !== undefined) updates.two_factor_enabled = payload.twoFactorEnabled;
   if (payload.isActive !== undefined) updates.is_active = payload.isActive;
   if (payload.lastLogin !== undefined) updates.last_login = payload.lastLogin;
 
-  if (payload.username !== undefined && columns.includes('username')) updates.username = payload.username?.trim() || null;
+  if (normalizedUsernameUpdate !== undefined && columns.includes('username')) {
+    updates.username = normalizedUsernameUpdate;
+  }
   if (payload.middleName !== undefined && columns.includes('middle_name')) updates.middle_name = payload.middleName?.trim() || null;
   if (payload.gender !== undefined && columns.includes('gender')) updates.gender = payload.gender || null;
   if (payload.officeEmail !== undefined && columns.includes('office_email')) updates.office_email = payload.officeEmail?.trim() || null;
@@ -397,7 +489,7 @@ export const PUT = withApiHandler(async (request, context) => {
         ...existingMeta,
         ...(payload.firstName !== undefined ? { firstName: payload.firstName.trim() } : {}),
         ...(payload.lastName !== undefined ? { lastName: payload.lastName.trim() } : {}),
-        ...(payload.username !== undefined ? { username: payload.username?.trim() || null } : {}),
+        ...(normalizedUsernameUpdate !== undefined ? { username: normalizedUsernameUpdate } : {}),
         ...(payload.middleName !== undefined ? { middleName: payload.middleName?.trim() || null } : {}),
         ...(payload.gender !== undefined ? { gender: payload.gender || null } : {}),
         ...(payload.officeEmail !== undefined ? { officeEmail: payload.officeEmail?.trim() || null } : {}),

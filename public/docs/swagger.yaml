@@ -1400,6 +1400,35 @@ paths:
       responses:
         200:
           description: "Successful request execution."
+  "/api/employees/drafts":
+    get:
+      tags:
+        - employees
+      summary: "GET handler for /api/employees/drafts"
+      responses:
+        200:
+          description: "Successful request execution."
+    post:
+      tags:
+        - employees
+      summary: "POST handler for /api/employees/drafts"
+      responses:
+        200:
+          description: "Successful request execution."
+    put:
+      tags:
+        - employees
+      summary: "PUT handler for /api/employees/drafts"
+      responses:
+        200:
+          description: "Successful request execution."
+    delete:
+      tags:
+        - employees
+      summary: "DELETE handler for /api/employees/drafts"
+      responses:
+        200:
+          description: "Successful request execution."
   "/api/employees/movement/approve":
     post:
       tags:

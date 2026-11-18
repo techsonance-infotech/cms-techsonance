@@ -262,6 +262,55 @@ export default function EmployeeDirectoryPage() {
   const [isForbidden, setIsForbidden] = useState(false);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
+  const [employeeDrafts, setEmployeeDrafts] = useState<
+    Array<{
+      id: string;
+      displayName: string;
+      email?: string | null;
+      department?: string | null;
+      designation?: string | null;
+      currentStep: string;
+      completionPercent: number;
+      updatedAt: string;
+      updatedByName?: string | null;
+    }>
+  >([]);
+  const [showDraftsBanner, setShowDraftsBanner] = useState(false);
+
+  const fetchEmployeeDrafts = async () => {
+    try {
+      const token = getStoredSessionToken();
+      const res = await fetch('/api/employees/drafts', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setEmployeeDrafts(Array.isArray(json.data) ? json.data : []);
+      }
+    } catch {
+      // Silently ignore if drafts table not migrated yet or user lacks manager role
+    }
+  };
+
+  const handleDeleteDirectoryDraft = async (draftId: string) => {
+    try {
+      const token = getStoredSessionToken();
+      const res = await fetch(`/api/employees/drafts?id=${encodeURIComponent(draftId)}`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        setEmployeeDrafts((prev) => prev.filter((d) => d.id !== draftId));
+        toast.success('Draft discarded');
+      }
+    } catch {
+      toast.error('Failed to discard draft');
+    }
+  };
+
+  useEffect(() => {
+    void fetchEmployeeDrafts();
+  }, []);
 
   // Workforce Stats State (from API)
   const [workforceStats, setWorkforceStats] = useState<{
@@ -1058,6 +1107,21 @@ export default function EmployeeDirectoryPage() {
                 <UserPlus className="h-4 w-4" /> Add Employee
               </Button>
             </Link>
+
+            {employeeDrafts.length > 0 && (
+              <Button
+                type="button"
+                onClick={() => setShowDraftsBanner((prev) => !prev)}
+                variant="outline"
+                className="bg-white dark:bg-[#1E1F22] border-[#f87941]/40 text-[#f87941] hover:bg-[#f87941]/10 text-xs font-bold h-9 px-3 rounded-xl flex items-center gap-1.5 cursor-pointer"
+              >
+                <FileText className="h-4 w-4" />
+                Drafts
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-[#f87941] text-white">
+                  {employeeDrafts.length}
+                </span>
+              </Button>
+            )}
             
              <Button 
               onClick={() => setShowImportPreviewModal(true)} 
@@ -1101,6 +1165,75 @@ export default function EmployeeDirectoryPage() {
             </Button>
           </div>
         </div>
+
+        {/* SAVED EMPLOYEE DRAFTS PANEL */}
+        {showDraftsBanner && employeeDrafts.length > 0 && (
+          <Card className="bg-white dark:bg-[#1E1F22] border border-[#f87941]/30 rounded-2xl shadow-sm">
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900 dark:text-[#fdfcfc] flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-[#f87941]" />
+                    Saved Employee Drafts ({employeeDrafts.length})
+                  </h2>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Continue incomplete employee additions from where you left off.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setShowDraftsBanner(false)}
+                  className="h-7 w-7 p-0 text-slate-400 cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {employeeDrafts.map((draft) => (
+                  <div
+                    key={draft.id}
+                    className="rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/60 dark:bg-slate-900/50 p-3 flex flex-col justify-between gap-2.5"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-slate-900 dark:text-[#fdfcfc] truncate">
+                          {draft.displayName}
+                        </span>
+                        <Badge variant="outline" className="text-[10px] border-[#f87941]/30 text-[#f87941]">
+                          {draft.completionPercent}%
+                        </Badge>
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                        {[draft.email, draft.department, draft.designation].filter(Boolean).join(' • ') || `Step: ${draft.currentStep}`}
+                      </p>
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        Saved {new Date(draft.updatedAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 pt-1.5 border-t border-slate-200/60 dark:border-zinc-800/60">
+                      <Link href={`/dashboard/employees/new?draft=${draft.id}`} className="flex-1">
+                        <Button size="sm" className="w-full h-7 text-xs bg-[#f87941] hover:bg-[#e06634] text-white cursor-pointer">
+                          Resume
+                        </Button>
+                      </Link>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => void handleDeleteDirectoryDraft(draft.id)}
+                        className="h-7 w-7 p-0 text-slate-400 hover:text-red-500 cursor-pointer"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* ANALYTICS STATS CARDS GRID */}
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">

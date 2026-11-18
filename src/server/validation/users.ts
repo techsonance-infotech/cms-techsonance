@@ -5,6 +5,7 @@ import {
   lastNameSchema,
   emailSchema,
   optionalIndianPhoneSchema,
+  optionalUsernameSchema,
 } from '../../shared/validation/employee';
 
 export const userRoleSchema = z.string().trim().min(1).optional().nullable();
@@ -19,7 +20,7 @@ export const createUserSchema = z.object({
   phone: optionalIndianPhoneSchema,
   twoFactorEnabled: z.boolean().optional(),
   isActive: z.boolean().optional(),
-  username: z.string().trim().max(50).optional().nullable().or(z.literal('')),
+  username: optionalUsernameSchema,
   middleName: middleNameSchema,
   gender: z.string().trim().optional().nullable().or(z.literal('')),
   officeEmail: z.string().trim().max(255).optional().nullable().or(z.literal('')),

@@ -20,7 +20,15 @@ import {
   Info,
   ChevronRight,
   ChevronLeft,
-  Loader2
+  Loader2,
+  Eye,
+  EyeOff,
+  RefreshCw,
+  Save,
+  FolderOpen,
+  Trash2,
+  Clock,
+  Plus
 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -35,7 +43,90 @@ import {
   UPLOAD_LIMITS,
   validatePersonalIdByGovtId,
   getGovtIdPlaceholder,
+  resolveSystemRole,
+  cleanUsername,
+  buildBaseUsername,
+  sanitizeDraftFormData,
 } from '@/shared/validation/employee';
+
+interface EmployeeDraftSummary {
+  id: string;
+  displayName: string;
+  email?: string | null;
+  department?: string | null;
+  designation?: string | null;
+  employeeIdPreview?: string | null;
+  currentStep: string;
+  completionPercent: number;
+  formData: Record<string, any>;
+  updatedAt: string;
+  createdByName?: string | null;
+  updatedByName?: string | null;
+}
+
+const createInitialFormData = () => ({
+  userId: '',
+  firstName: '',
+  middleName: '',
+  lastName: '',
+  email: '',
+  phone: '',
+  gender: 'Male',
+  username: '',
+  officeEmail: '',
+  password: '',
+  role: 'developer',
+  employeeId: '',
+  maritalStatus: '',
+  bloodGroup: '',
+  nationality: '',
+  govtIdType: 'Aadhaar Card',
+  personalIdNumber: '',
+  department: '',
+  designation: '',
+  employmentType: 'Full-Time',
+  dateOfJoining: new Date().toISOString().split('T')[0],
+  dateOfBirth: '',
+  managerId: '',
+  buddy: '',
+  mentor: '',
+  status: 'active',
+  probationPeriod: '',
+  confirmationDate: '',
+  workLocation: '',
+  workShift: '',
+  noticePeriod: '',
+  salary: '',
+  hourlyRate: '',
+  ctc: '',
+  currency: 'INR',
+  bankName: '',
+  bankAccountNumber: '',
+  ifscCode: '',
+  branchName: '',
+  pfNumber: '',
+  uanNumber: '',
+  esiNumber: '',
+  panNumber: '',
+  aadhaarNumber: '',
+  aadhaarCardUrl: '',
+  panCardUrl: '',
+  addressProofUrl: '',
+  educationCertificateUrl: '',
+  experienceCertificateUrl: '',
+  resumeUrl: '',
+  permissions: '["read:dashboard","read:employees"]',
+  emergencyContactName: '',
+  emergencyContactRelationship: '',
+  emergencyContactPhone: '',
+  emergencyContactAddress: '',
+  languagesKnown: '',
+  linkedinProfile: '',
+  githubProfile: '',
+  previousCompany: '',
+  referralSource: '',
+  notes: '',
+});
 
 interface Manager {
   id: number;
@@ -97,10 +188,57 @@ export default function NewEmployeePage() {
   const [submitting, setSubmitting] = useState(false);
   const [employeeEditId, setEmployeeEditId] = useState<string | null>(null);
   const [govtIdType, setGovtIdType] = useState('Aadhaar Card');
+  const [showPassword, setShowPassword] = useState(false);
+  const [hasExistingAccount, setHasExistingAccount] = useState(false);
+  const [checkingUsername, setCheckingUsername] = useState(false);
+  const [generatingUsername, setGeneratingUsername] = useState(false);
+  const [usernameSuggestion, setUsernameSuggestion] = useState<string | null>(null);
+  const [usernameConflictError, setUsernameConflictError] = useState<string | null>(null);
+  const [usernamePattern, setUsernamePattern] = useState('first.last');
+  const [usernameManuallyEdited, setUsernameManuallyEdited] = useState(false);
+  const [editDataLoaded, setEditDataLoaded] = useState(false);
+  const usernameGenSeqRef = useRef(0);
+
+  // Database Drafts state (multi-employee, multi-device)
+  const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
+  const [savedDrafts, setSavedDrafts] = useState<EmployeeDraftSummary[]>([]);
+  const [loadingDrafts, setLoadingDrafts] = useState(false);
+  const [showDraftsPanel, setShowDraftsPanel] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [lastDraftSavedAt, setLastDraftSavedAt] = useState<string | null>(null);
+  const [draftMigrationPending, setDraftMigrationPending] = useState(false);
+  const draftSaveLockRef = useRef(false);
+  const lastSavedDraftHashRef = useRef<string>('');
+  const draftRestoringRef = useRef(false);
+
+  // Load workspace username pattern in both add and edit modes
+  useEffect(() => {
+    async function loadUsernamePattern() {
+      try {
+        const token = getStoredSessionToken();
+        const settingsRes = await fetch('/api/workspace-settings', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (settingsRes.ok) {
+          const settings = await settingsRes.json();
+          const settingsData = settings.data || settings;
+          if (settingsData?.usernamePattern) {
+            setUsernamePattern(settingsData.usernamePattern);
+          }
+        }
+      } catch (err) {
+        console.error('Error loading username pattern:', err);
+      }
+    }
+    loadUsernamePattern();
+  }, []);
 
   // Auto-generate employee ID and load default probation/notice values on load in creation mode
   useEffect(() => {
-    if (employeeEditId) return;
+    const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    const urlEditId = urlParams?.get('id');
+    const urlDraftId = urlParams?.get('draft');
+    if (employeeEditId || urlEditId || urlDraftId) return;
 
     async function autoGenerateEmployeeId() {
       try {
@@ -243,7 +381,8 @@ export default function NewEmployeePage() {
 
   // Auto-generate password based on Employee ID in creation mode
   useEffect(() => {
-    if (!employeeEditId && formData.employeeId) {
+    const urlEditId = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('id') : null;
+    if (!employeeEditId && !urlEditId && formData.employeeId) {
       setFormData(prev => ({
         ...prev,
         password: `Welcome@${prev.employeeId}`
@@ -256,11 +395,258 @@ export default function NewEmployeePage() {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const editId = params.get('id');
+      const draftId = params.get('draft');
       if (editId) {
         setEmployeeEditId(editId);
+      } else {
+        void fetchSavedDrafts();
+        if (draftId) {
+          void loadDraftById(draftId);
+        }
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const fetchSavedDrafts = async () => {
+    setLoadingDrafts(true);
+    try {
+      const token = getStoredSessionToken();
+      const res = await fetch('/api/employees/drafts', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setSavedDrafts(Array.isArray(json.data) ? json.data : []);
+        if (json.meta?.migrationRequired) {
+          setDraftMigrationPending(true);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching employee drafts:', err);
+    } finally {
+      setLoadingDrafts(false);
+    }
+  };
+
+  const applyDraftToForm = (draft: EmployeeDraftSummary, showToast: boolean = true) => {
+    draftRestoringRef.current = true;
+    const baseDefaults = createInitialFormData();
+    const raw = (draft.formData || {}) as Record<string, any>;
+    const merged: typeof baseDefaults = { ...baseDefaults };
+    (Object.keys(baseDefaults) as Array<keyof typeof baseDefaults>).forEach((key) => {
+      if (key === 'password') return; // Never hydrate password from draft
+      if (raw[key] !== undefined && raw[key] !== null) {
+        merged[key] = String(raw[key]);
+      }
+    });
+    if (merged.employeeId) {
+      merged.password = `Welcome@${merged.employeeId}`;
+    }
+
+    setGovtIdType(merged.govtIdType || 'Aadhaar Card');
+    setUsernameManuallyEdited(Boolean(merged.username));
+    setFormData(merged);
+    setActiveStep(draft.currentStep || 'personal');
+    setActiveDraftId(draft.id);
+    setLastDraftSavedAt(draft.updatedAt || null);
+    setErrors({});
+    setUsernameConflictError(null);
+    setUsernameSuggestion(null);
+    lastSavedDraftHashRef.current = JSON.stringify({
+      currentStep: draft.currentStep || 'personal',
+      formData: sanitizeDraftFormData(merged),
+    });
+
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.set('draft', draft.id);
+      window.history.replaceState(null, '', url.toString());
+    }
+
+    setShowDraftsPanel(false);
+    if (showToast) {
+      toast.success(`Resumed draft: ${draft.displayName}`);
+    }
+    setTimeout(() => {
+      draftRestoringRef.current = false;
+    }, 400);
+  };
+
+  const loadDraftById = async (draftId: string) => {
+    try {
+      const token = getStoredSessionToken();
+      const res = await fetch(`/api/employees/drafts?id=${encodeURIComponent(draftId)}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.data) {
+          applyDraftToForm(json.data, true);
+        }
+      } else {
+        toast.error('Saved draft could not be found.');
+      }
+    } catch (err) {
+      console.error('Error loading draft by ID:', err);
+    }
+  };
+
+  const saveDraftToDatabase = async (options?: { silent?: boolean }) => {
+    if (employeeEditId || draftSaveLockRef.current || draftMigrationPending) return;
+    const sanitized = sanitizeDraftFormData(formData);
+    const snapshotHash = JSON.stringify({ currentStep: activeStep, formData: sanitized });
+
+    if (options?.silent && snapshotHash === lastSavedDraftHashRef.current) {
+      return;
+    }
+
+    draftSaveLockRef.current = true;
+    setSavingDraft(true);
+    try {
+      const token = getStoredSessionToken();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token && token !== 'null' && token !== 'undefined') {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const endpoint = activeDraftId
+        ? `/api/employees/drafts?id=${encodeURIComponent(activeDraftId)}`
+        : '/api/employees/drafts';
+      const method = activeDraftId ? 'PUT' : 'POST';
+
+      const res = await fetch(endpoint, {
+        method,
+        headers,
+        body: JSON.stringify({
+          id: activeDraftId || undefined,
+          currentStep: activeStep,
+          formData: sanitized,
+        }),
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        const msg = errJson.error || errJson.message || 'Failed to save draft';
+        if (msg.toLowerCase().includes('migration')) {
+          setDraftMigrationPending(true);
+        }
+        if (!options?.silent) {
+          toast.error(msg);
+        }
+        return;
+      }
+
+      const json = await res.json();
+      const savedDraft: EmployeeDraftSummary | undefined = json.data;
+      if (savedDraft?.id) {
+        setActiveDraftId(savedDraft.id);
+        setLastDraftSavedAt(savedDraft.updatedAt || new Date().toISOString());
+        lastSavedDraftHashRef.current = snapshotHash;
+
+        if (typeof window !== 'undefined') {
+          const url = new URL(window.location.href);
+          if (url.searchParams.get('draft') !== savedDraft.id) {
+            url.searchParams.set('draft', savedDraft.id);
+            window.history.replaceState(null, '', url.toString());
+          }
+        }
+
+        setSavedDrafts((prev) => {
+          const rest = prev.filter((d) => d.id !== savedDraft.id);
+          return [savedDraft, ...rest];
+        });
+
+        if (!options?.silent) {
+          toast.success('Draft saved! You can resume anytime from any device.');
+        }
+      }
+    } catch (err) {
+      console.error('Error saving employee draft:', err);
+      if (!options?.silent) {
+        toast.error('Unable to save draft right now.');
+      }
+    } finally {
+      draftSaveLockRef.current = false;
+      setSavingDraft(false);
+    }
+  };
+
+  const handleDeleteDraft = async (draftId: string) => {
+    try {
+      const token = getStoredSessionToken();
+      const res = await fetch(`/api/employees/drafts?id=${encodeURIComponent(draftId)}`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        setSavedDrafts((prev) => prev.filter((d) => d.id !== draftId));
+        if (activeDraftId === draftId) {
+          setActiveDraftId(null);
+          setLastDraftSavedAt(null);
+          lastSavedDraftHashRef.current = '';
+          if (typeof window !== 'undefined') {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('draft');
+            window.history.replaceState(null, '', url.toString());
+          }
+        }
+        toast.success('Draft discarded');
+      } else {
+        toast.error('Failed to discard draft');
+      }
+    } catch (err) {
+      console.error('Error deleting draft:', err);
+      toast.error('Failed to discard draft');
+    }
+  };
+
+  const handleStartBlankForm = () => {
+    setActiveDraftId(null);
+    setLastDraftSavedAt(null);
+    lastSavedDraftHashRef.current = '';
+    setUsernameManuallyEdited(false);
+    setErrors({});
+    setUsernameConflictError(null);
+    setUsernameSuggestion(null);
+    setGovtIdType('Aadhaar Card');
+    setFormData((prev) => ({
+      ...createInitialFormData(),
+      employeeId: prev.employeeId,
+      probationPeriod: prev.probationPeriod,
+      noticePeriod: prev.noticePeriod,
+    }));
+    setActiveStep('personal');
+    setShowDraftsPanel(false);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('draft');
+      window.history.replaceState(null, '', url.toString());
+    }
+  };
+
+  // Auto-save draft to database in creation mode (debounced 2.5s after meaningful edits)
+  useEffect(() => {
+    const urlEditId = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('id') : null;
+    if (employeeEditId || urlEditId || submitting || draftRestoringRef.current || draftMigrationPending) return;
+
+    const hasMeaningfulData = Boolean(
+      formData.firstName.trim() ||
+      formData.lastName.trim() ||
+      formData.email.trim() ||
+      formData.phone.trim() ||
+      formData.department.trim() ||
+      formData.designation.trim()
+    );
+    if (!hasMeaningfulData) return;
+
+    const timer = setTimeout(() => {
+      void saveDraftToDatabase({ silent: true });
+    }, 2500);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData, activeStep, employeeEditId, submitting, draftMigrationPending]);
 
   // Fetch employee details when in edit mode
   useEffect(() => {
@@ -278,18 +664,30 @@ export default function NewEmployeePage() {
             if (employee.govtIdType) {
               setGovtIdType(employee.govtIdType);
             }
+            const resolvedRole = resolveSystemRole(employee.role, employee.designation);
+            const resolvedPermissions =
+              Array.isArray(employee.permissions) && employee.permissions.length > 0
+                ? JSON.stringify(employee.permissions)
+                : JSON.stringify(DEFAULT_ROLE_PERMISSIONS[resolvedRole] || ['read:dashboard', 'read:employees']);
+            const resolvedUserId = employee.userId
+              ? String(employee.userId)
+              : (employee.authUserId || employee.user_id || '');
+            setHasExistingAccount(Boolean(employee.hasAccount ?? (resolvedUserId || employee.email)));
+            const existingUsername = (employee.username || '').trim();
+            // Preserve an existing username in edit mode; if blank, allow auto-generation from name
+            setUsernameManuallyEdited(Boolean(existingUsername));
             setFormData({
-              userId: employee.userId ? String(employee.userId) : '',
+              userId: resolvedUserId,
               firstName: employee.firstName || '',
               middleName: employee.middleName || '',
               lastName: employee.lastName || '',
               email: employee.email || '',
               phone: employee.phone || '',
               gender: employee.gender || 'Male',
-              username: employee.username || '',
+              username: existingUsername,
               officeEmail: employee.officeEmail || '',
-              password: '', // Kept empty for editing
-              role: employee.role || 'Employee',
+              password: '', // Kept empty for editing; password is already configured on the account
+              role: resolvedRole,
               employeeId: employee.employeeId || '',
               maritalStatus: employee.maritalStatus || '',
               bloodGroup: employee.bloodGroup || '',
@@ -329,7 +727,7 @@ export default function NewEmployeePage() {
               educationCertificateUrl: employee.educationCertificateUrl || '',
               experienceCertificateUrl: employee.experienceCertificateUrl || '',
               resumeUrl: employee.resumeUrl || '',
-              permissions: employee.permissions ? JSON.stringify(employee.permissions) : '["read:dashboard"]',
+              permissions: resolvedPermissions,
               emergencyContactName: employee.emergencyContactName || '',
               emergencyContactRelationship: employee.emergencyContactRelationship || '',
               emergencyContactPhone: employee.emergencyContactPhone || '',
@@ -341,6 +739,7 @@ export default function NewEmployeePage() {
               referralSource: employee.referralSource || '',
               notes: employee.notes || '',
             });
+            setEditDataLoaded(true);
           }
         }
       } catch (err) {
@@ -539,10 +938,14 @@ export default function NewEmployeePage() {
       }
     }
 
+    if (stepId === 'access' && usernameConflictError && !stepErrors.username) {
+      stepErrors.username = usernameConflictError;
+    }
+
     setErrors((prev) => {
       // Clear previous errors for this step's schema keys, then apply new errors
       const updated = { ...prev };
-      if (result && result.error) {
+      if (Object.keys(stepErrors).length > 0) {
         Object.assign(updated, stepErrors);
       }
       return updated;
@@ -551,17 +954,166 @@ export default function NewEmployeePage() {
     return stepErrors;
   };
 
+  // Real-time uniqueness check for username allocation
+  const checkUsernameAvailability = async (rawValue: string) => {
+    const normalized = cleanUsername(rawValue);
+    if (!normalized) {
+      setUsernameConflictError(null);
+      setUsernameSuggestion(null);
+      return;
+    }
+
+    // Only check backend if format itself is valid
+    const formatCheck = accessStepSchema(true).shape.username.safeParse(normalized);
+    if (!formatCheck.success) {
+      setUsernameConflictError(null);
+      setUsernameSuggestion(null);
+      return;
+    }
+
+    setCheckingUsername(true);
+    try {
+      const token = getStoredSessionToken();
+      const params = new URLSearchParams({ checkUsername: normalized });
+      if (formData.userId && formData.userId.trim()) {
+        params.set('excludeUserId', formData.userId.trim());
+      }
+      const res = await fetch(`/api/users?${params.toString()}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.available === false) {
+          const msg = data.message || 'This username is already taken. Please choose a different username.';
+          setUsernameConflictError(msg);
+          setUsernameSuggestion(data.suggestion || null);
+          setErrors((prev) => ({ ...prev, username: msg }));
+        } else {
+          setUsernameConflictError(null);
+          setUsernameSuggestion(null);
+          setErrors((prev) => {
+            const copy = { ...prev };
+            delete copy.username;
+            return copy;
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Error checking username availability:', err);
+    } finally {
+      setCheckingUsername(false);
+    }
+  };
+
+  // Generate a guaranteed-unique username from first/last/middle name using workspace formula
+  const generateUniqueUsernameFromName = async (
+    firstName: string,
+    lastName: string,
+    middleName?: string,
+    excludeUserId?: string
+  ) => {
+    const base = buildBaseUsername(firstName, lastName, middleName, usernamePattern);
+    if (!base) return;
+
+    const seq = ++usernameGenSeqRef.current;
+    setGeneratingUsername(true);
+    try {
+      const token = getStoredSessionToken();
+      const params = new URLSearchParams({ checkUsername: base });
+      if (excludeUserId && excludeUserId.trim()) {
+        params.set('excludeUserId', excludeUserId.trim());
+      }
+      const res = await fetch(`/api/users?${params.toString()}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+
+      let resolved = base;
+      if (res.ok) {
+        const data = await res.json();
+        resolved =
+          data.available === false && data.suggestion
+            ? data.suggestion
+            : (data.username || base);
+      }
+
+      if (seq !== usernameGenSeqRef.current) return;
+
+      setFormData((prev) => ({ ...prev, username: resolved }));
+      setUsernameConflictError(null);
+      setUsernameSuggestion(null);
+      setErrors((prev) => {
+        if (!prev.username) return prev;
+        const copy = { ...prev };
+        delete copy.username;
+        return copy;
+      });
+    } catch (err) {
+      console.error('Error auto-generating unique username:', err);
+      if (seq === usernameGenSeqRef.current) {
+        setFormData((prev) => ({ ...prev, username: base }));
+      }
+    } finally {
+      if (seq === usernameGenSeqRef.current) {
+        setGeneratingUsername(false);
+      }
+    }
+  };
+
+  // Auto-generate username from First & Last Name (add mode, and edit mode when empty)
+  // Respects manual edits so admins can customize their own username freely
+  useEffect(() => {
+    const urlEditId = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('id') : null;
+    const isEdit = Boolean(employeeEditId || urlEditId);
+    if (isEdit && !editDataLoaded) return;
+    if (usernameManuallyEdited) return;
+
+    const base = buildBaseUsername(formData.firstName, formData.lastName, formData.middleName, usernamePattern);
+    if (!base) return;
+
+    const timer = setTimeout(() => {
+      void generateUniqueUsernameFromName(
+        formData.firstName,
+        formData.lastName,
+        formData.middleName,
+        formData.userId
+      );
+    }, 300);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    formData.firstName,
+    formData.middleName,
+    formData.lastName,
+    formData.userId,
+    usernamePattern,
+    usernameManuallyEdited,
+    employeeEditId,
+    editDataLoaded,
+  ]);
+
   // Inline blur handler for immediate field-level feedback
   const handleFieldBlur = (name: string) => {
     const stepErrors = validateStep(activeStep);
-    if (stepErrors[name]) {
-      setErrors((prev) => ({ ...prev, [name]: stepErrors[name] }));
-    } else {
-      setErrors((prev) => {
-        const copy = { ...prev };
+    setErrors((prev) => {
+      const copy = { ...prev };
+      if (stepErrors[name]) {
+        copy[name] = stepErrors[name];
+      } else {
         delete copy[name];
-        return copy;
-      });
+      }
+      // Keep cross-field CTC error in sync when Monthly Base Salary changes
+      if (name === 'salary') {
+        if (stepErrors.ctc) {
+          copy.ctc = stepErrors.ctc;
+        } else {
+          delete copy.ctc;
+        }
+      }
+      return copy;
+    });
+    if (name === 'username') {
+      void checkUsernameAvailability(formData.username);
     }
   };
 
@@ -610,6 +1162,12 @@ export default function NewEmployeePage() {
       ...prev,
       [name]: value,
     }));
+    if (name === 'username') {
+      // Admin typed a custom username; stop auto-overwriting unless they clear it or click Auto-generate
+      setUsernameManuallyEdited(value.trim().length > 0);
+      setUsernameConflictError(null);
+      setUsernameSuggestion(null);
+    }
     if (errors[name]) {
       setErrors((prev) => {
         const copy = { ...prev };
@@ -742,20 +1300,20 @@ export default function NewEmployeePage() {
           return errorData.error || errorData.message || fallback;
         };
 
-        // 1. Update User (if linked numeric userId exists)
-        if (formData.userId && !isNaN(Number(formData.userId)) && Number(formData.userId) > 0) {
+        // 1. Update User (supports both legacy numeric userId and auth UUID)
+        if (formData.userId && formData.userId.trim()) {
           const userPayload: Record<string, any> = {
             email: formData.email.trim(),
             firstName: formData.firstName.trim(),
             lastName: formData.lastName.trim(),
-            role: formData.role || 'Employee',
+            role: formData.role || 'developer',
             phone: formData.phone?.trim() || null,
             middleName: formData.middleName?.trim() || null,
             gender: formData.gender || null,
+            username: formData.username?.trim() ? cleanUsername(formData.username) : null,
+            officeEmail: formData.officeEmail?.trim() || null,
           };
-          if (formData.username?.trim()) userPayload.username = formData.username.trim();
-          if (formData.officeEmail?.trim()) userPayload.officeEmail = formData.officeEmail.trim();
-          if (formData.password?.trim() && formData.password.trim().length >= 6) {
+          if (formData.password?.trim() && formData.password.trim().length >= 8) {
             userPayload.password = formData.password.trim();
           }
 
@@ -847,6 +1405,7 @@ export default function NewEmployeePage() {
           maritalStatus: formData.maritalStatus || null,
           bloodGroup: formData.bloodGroup || null,
           nationality: formData.nationality || null,
+          govtIdType: formData.govtIdType || govtIdType,
           personalIdNumber: formData.personalIdNumber || null,
           middleName: formData.middleName || null,
           officeEmail: formData.officeEmail || null,
@@ -883,7 +1442,7 @@ export default function NewEmployeePage() {
           lastName: formData.lastName,
           role: formData.role,
           phone: formData.phone || undefined,
-          username: formData.username || undefined,
+          username: formData.username?.trim() ? cleanUsername(formData.username) : undefined,
           middleName: formData.middleName || undefined,
           gender: formData.gender,
           officeEmail: formData.officeEmail || undefined,
@@ -900,7 +1459,7 @@ export default function NewEmployeePage() {
 
         if (!userRes.ok) {
           const errorData = await userRes.json();
-          throw new Error(errorData.message || 'Failed to register authentication user account');
+          throw new Error(errorData.error || errorData.message || 'Failed to register authentication user account');
         }
 
         const createdUser = await userRes.json();
@@ -965,6 +1524,7 @@ export default function NewEmployeePage() {
           maritalStatus: formData.maritalStatus || undefined,
           bloodGroup: formData.bloodGroup || undefined,
           nationality: formData.nationality || undefined,
+          govtIdType: formData.govtIdType || govtIdType,
           personalIdNumber: formData.personalIdNumber || undefined,
           middleName: formData.middleName || undefined,
           officeEmail: formData.officeEmail || undefined,
@@ -984,6 +1544,18 @@ export default function NewEmployeePage() {
           throw new Error(errorData.message || 'Failed to create employee profile mapping');
         }
 
+        // Remove completed draft from database after successful onboarding
+        if (activeDraftId) {
+          try {
+            await fetch(`/api/employees/drafts?id=${encodeURIComponent(activeDraftId)}`, {
+              method: 'DELETE',
+              headers: token ? { Authorization: `Bearer ${token}` } : {},
+            });
+          } catch (draftCleanupErr) {
+            console.warn('Could not clean up submitted draft:', draftCleanupErr);
+          }
+        }
+
         toast.success('Employee successfully onboarded!');
         router.push('/dashboard/employees');
       }
@@ -991,7 +1563,12 @@ export default function NewEmployeePage() {
       console.error(err);
       const msg = err.message || 'An error occurred during submission.';
       toast.error(msg);
-      if (msg.toLowerCase().includes('email')) {
+      if (msg.toLowerCase().includes('username')) {
+        setUsernameConflictError(msg);
+        setErrors((prev) => ({ ...prev, username: msg }));
+        setActiveStep('access');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else if (msg.toLowerCase().includes('email')) {
         setErrors((prev) => ({ ...prev, email: msg }));
         setActiveStep('personal');
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1008,21 +1585,192 @@ export default function NewEmployeePage() {
   return (
     <div className="flex flex-col bg-transparent text-slate-900 dark:text-[#fdfcfc]">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8 border-b border-[#e6e4e6]/30 dark:border-[#2f3035]/30 pb-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6 border-b border-[#e6e4e6]/30 dark:border-[#2f3035]/30 pb-5">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-[#fdfcfc] md:text-3xl">
-            {employeeEditId ? 'Edit Employee Profile' : 'Add New Employee'}
-          </h1>
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-[#fdfcfc] md:text-3xl">
+              {employeeEditId ? 'Edit Employee Profile' : 'Add New Employee'}
+            </h1>
+            {!employeeEditId && activeDraftId && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#f87941]/10 text-[#f87941] border border-[#f87941]/25">
+                <Clock className="h-3 w-3" />
+                {savingDraft
+                  ? 'Saving draft...'
+                  : lastDraftSavedAt
+                    ? `Draft saved ${new Date(lastDraftSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                    : 'Draft active'}
+              </span>
+            )}
+            {!employeeEditId && !activeDraftId && savingDraft && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-slate-300">
+                <Loader2 className="h-3 w-3 animate-spin" /> Saving draft...
+              </span>
+            )}
+          </div>
           <p className="text-sm text-slate-500 dark:text-[#b1b1b1] mt-1">
-            {employeeEditId ? 'Update employee details and system credentials in the organization.' : 'Create a complete employee profile and onboard them into the organization.'}
+            {employeeEditId
+              ? 'Update employee details and system credentials in the organization.'
+              : 'Create a complete employee profile. Progress auto-saves as a draft so you can resume anytime from any device.'}
           </p>
         </div>
-        <Link href={employeeEditId ? `/dashboard/employees/${employeeEditId}` : "/dashboard/employees"}>
-          <Button variant="outline" className="border-[#e6e4e6]/30 dark:border-[#2f3035]/30 hover:bg-[#e6e4e6]/10 dark:hover:bg-[#2f3035]/10 text-slate-700 dark:text-[#fdfcfc] font-semibold flex items-center gap-2">
-            <ArrowLeft className="h-4 w-4" /> {employeeEditId ? 'Back to Employee Profile' : 'Back to Employees'}
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2 flex-wrap">
+          {!employeeEditId && (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowDraftsPanel((prev) => !prev)}
+                className="border-[#e6e4e6]/40 dark:border-[#2f3035]/60 text-slate-700 dark:text-[#fdfcfc] font-semibold flex items-center gap-2 cursor-pointer"
+              >
+                <FolderOpen className="h-4 w-4 text-[#f87941]" />
+                Saved Drafts
+                <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[11px] font-bold bg-[#f87941]/15 text-[#f87941]">
+                  {savedDrafts.length}
+                </span>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={savingDraft || draftMigrationPending}
+                onClick={() => void saveDraftToDatabase({ silent: false })}
+                className="border-[#f87941]/40 text-[#f87941] hover:bg-[#f87941]/10 font-semibold flex items-center gap-2 cursor-pointer"
+              >
+                {savingDraft ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                Save Draft
+              </Button>
+            </>
+          )}
+          <Link href={employeeEditId ? `/dashboard/employees/${employeeEditId}` : "/dashboard/employees"}>
+            <Button variant="outline" className="border-[#e6e4e6]/30 dark:border-[#2f3035]/30 hover:bg-[#e6e4e6]/10 dark:hover:bg-[#2f3035]/10 text-slate-700 dark:text-[#fdfcfc] font-semibold flex items-center gap-2">
+              <ArrowLeft className="h-4 w-4" /> {employeeEditId ? 'Back to Employee Profile' : 'Back to Employees'}
+            </Button>
+          </Link>
+        </div>
       </div>
+
+      {/* Collapsible Saved Drafts Drawer (Multi-employee & multi-device) */}
+      {!employeeEditId && showDraftsPanel && (
+        <Card className="mb-8 bg-white dark:bg-[#1E1F22] border border-[#f87941]/30 shadow-sm animate-in fade-in duration-200">
+          <CardHeader className="pb-3 border-b border-[#e6e4e6]/30 dark:border-[#2f3035]/30 flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-base font-bold text-slate-900 dark:text-[#fdfcfc] flex items-center gap-2">
+                <FolderOpen className="h-4 w-4 text-[#f87941]" />
+                Saved Employee Drafts ({savedDrafts.length})
+              </CardTitle>
+              <CardDescription className="text-xs text-slate-500 dark:text-[#b1b1b1]">
+                Resume an incomplete employee onboarding form from any device, or start a blank form.
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              {activeDraftId && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleStartBlankForm}
+                  className="text-xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Start Blank Form
+                </Button>
+              )}
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => void fetchSavedDrafts()}
+                disabled={loadingDrafts}
+                className="text-xs cursor-pointer"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${loadingDrafts ? 'animate-spin' : ''}`} />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-4">
+            {draftMigrationPending ? (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                Database migration <code>20261118_employee_drafts.sql</code> has not been applied yet. Run the migration in Supabase to enable multi-device database drafts.
+              </p>
+            ) : loadingDrafts ? (
+              <div className="flex items-center gap-2 text-xs text-slate-500 py-4">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading saved drafts...
+              </div>
+            ) : savedDrafts.length === 0 ? (
+              <p className="text-xs text-slate-500 dark:text-[#b1b1b1] py-3">
+                No saved employee drafts yet. Start filling the form or click <strong>Save Draft</strong> to save your progress.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {savedDrafts.map((draft) => {
+                  const stepLabel = STEPS.find((s) => s.id === draft.currentStep)?.name || draft.currentStep;
+                  const isCurrent = activeDraftId === draft.id;
+                  return (
+                    <div
+                      key={draft.id}
+                      className={`rounded-xl border p-3.5 flex flex-col justify-between gap-3 transition-colors ${
+                        isCurrent
+                          ? 'border-[#f87941] bg-[#f87941]/5'
+                          : 'border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-slate-900/40'
+                      }`}
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-bold text-sm text-slate-900 dark:text-[#fdfcfc] truncate">
+                            {draft.displayName}
+                          </span>
+                          {isCurrent && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#f87941] text-white shrink-0">
+                              Active
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                          {[draft.email, draft.department, draft.designation].filter(Boolean).join(' • ') || 'Basic info pending'}
+                        </p>
+                        <div className="pt-1.5">
+                          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mb-1">
+                            <span>Step: <strong className="text-slate-700 dark:text-slate-200">{stepLabel}</strong></span>
+                            <span className="font-semibold text-[#f87941]">{draft.completionPercent}%</span>
+                          </div>
+                          <div className="h-1.5 w-full bg-slate-200 dark:bg-zinc-800 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-[#f87941] rounded-full transition-all"
+                              style={{ width: `${Math.max(4, draft.completionPercent)}%` }}
+                            />
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-slate-400 pt-1">
+                          Updated {new Date(draft.updatedAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                          {draft.updatedByName ? ` by ${draft.updatedByName}` : ''}
+                        </p>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-200/60 dark:border-zinc-800/60">
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => applyDraftToForm(draft, true)}
+                          className="h-7 text-xs bg-[#f87941] hover:bg-[#e06634] text-white flex-1 cursor-pointer"
+                        >
+                          {isCurrent ? 'Continue Editing' : 'Resume Draft'}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => void handleDeleteDraft(draft.id)}
+                          aria-label={`Delete draft ${draft.displayName}`}
+                          className="h-7 w-7 p-0 text-slate-400 hover:text-red-500 cursor-pointer"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start relative">
         {/* Left Side: Sticky Progress Tracker */}
@@ -1589,11 +2337,18 @@ export default function NewEmployeePage() {
                     id="salary" 
                     name="salary" 
                     type="number"
+                    min="0"
+                    max="100000000"
+                    step="0.01"
                     value={formData.salary}
                     onChange={handleInputChange}
-                    className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
-                    placeholder="0.00"
+                    onBlur={() => handleFieldBlur('salary')}
+                    className={`bg-white dark:bg-slate-950 border text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2 ${
+                      errors.salary ? 'border-red-500' : 'border-gray-200 dark:border-zinc-800'
+                    }`}
+                    placeholder="e.g. 50000"
                   />
+                  {errors.salary && <span className="text-xs text-red-500 mt-1 block">{errors.salary}</span>}
                 </div>
                 <div>
                   <Label htmlFor="hourlyRate" className="text-slate-700 dark:text-[#fdfcfc]">Hourly Rate</Label>
@@ -1601,11 +2356,18 @@ export default function NewEmployeePage() {
                     id="hourlyRate" 
                     name="hourlyRate" 
                     type="number"
+                    min="0"
+                    max="1000000"
+                    step="0.01"
                     value={formData.hourlyRate}
                     onChange={handleInputChange}
-                    className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
-                    placeholder="0.00"
+                    onBlur={() => handleFieldBlur('hourlyRate')}
+                    className={`bg-white dark:bg-slate-950 border text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2 ${
+                      errors.hourlyRate ? 'border-red-500' : 'border-gray-200 dark:border-zinc-800'
+                    }`}
+                    placeholder="e.g. 500"
                   />
+                  {errors.hourlyRate && <span className="text-xs text-red-500 mt-1 block">{errors.hourlyRate}</span>}
                 </div>
                 <div>
                   <Label htmlFor="ctc" className="text-slate-700 dark:text-[#fdfcfc]">CTC (Cost to Company) Annual</Label>
@@ -1613,11 +2375,18 @@ export default function NewEmployeePage() {
                     id="ctc" 
                     name="ctc" 
                     type="number"
+                    min="0"
+                    max="1000000000"
+                    step="0.01"
                     value={formData.ctc}
                     onChange={handleInputChange}
-                    className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
-                    placeholder="0.00"
+                    onBlur={() => handleFieldBlur('ctc')}
+                    className={`bg-white dark:bg-slate-950 border text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2 ${
+                      errors.ctc ? 'border-red-500' : 'border-gray-200 dark:border-zinc-800'
+                    }`}
+                    placeholder="e.g. 600000"
                   />
+                  {errors.ctc && <span className="text-xs text-red-500 mt-1 block">{errors.ctc}</span>}
                 </div>
                 <div>
                   <Label htmlFor="currency" className="text-slate-700 dark:text-[#fdfcfc]">Salary Currency</Label>
@@ -1626,7 +2395,10 @@ export default function NewEmployeePage() {
                     name="currency"
                     value={formData.currency}
                     onChange={handleInputChange}
-                    className="flex h-10 w-full rounded-md border border-gray-200 dark:border-zinc-800 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-[#fdfcfc] focus:border-[#f87941] mt-2 outline-none"
+                    onBlur={() => handleFieldBlur('currency')}
+                    className={`flex h-10 w-full rounded-md border bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-[#fdfcfc] focus:border-[#f87941] mt-2 outline-none ${
+                      errors.currency ? 'border-red-500' : 'border-gray-200 dark:border-zinc-800'
+                    }`}
                   >
                     <option value="INR" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">INR (₹)</option>
                     <option value="USD" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">USD ($)</option>
@@ -1637,28 +2409,37 @@ export default function NewEmployeePage() {
                     <option value="CAD" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">CAD ($)</option>
                     <option value="AUD" className="text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-900">AUD ($)</option>
                   </select>
+                  {errors.currency && <span className="text-xs text-red-500 mt-1 block">{errors.currency}</span>}
                 </div>
                 <div>
                   <Label htmlFor="bankName" className="text-slate-700 dark:text-[#fdfcfc]">Bank Name</Label>
                   <Input 
                     id="bankName" 
                     name="bankName" 
+                    maxLength={100}
                     value={formData.bankName}
                     onChange={handleInputChange}
-                    className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
-                    placeholder="e.g. HDFC Bank"
+                    onBlur={() => handleFieldBlur('bankName')}
+                    className={`bg-white dark:bg-slate-950 border text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2 ${
+                      errors.bankName ? 'border-red-500' : 'border-gray-200 dark:border-zinc-800'
+                    }`}
+                    placeholder="e.g. Union Bank of India"
                   />
+                  {errors.bankName && <span className="text-xs text-red-500 mt-1 block">{errors.bankName}</span>}
                 </div>
                 <div>
                   <Label htmlFor="bankAccountNumber" className="text-slate-700 dark:text-[#fdfcfc]">Account Number</Label>
                   <Input 
                     id="bankAccountNumber" 
                     name="bankAccountNumber" 
+                    maxLength={22}
                     value={formData.bankAccountNumber}
                     onChange={handleInputChange}
                     onBlur={() => handleFieldBlur('bankAccountNumber')}
-                    className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
-                    placeholder="Enter account number"
+                    className={`bg-white dark:bg-slate-950 border text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2 ${
+                      errors.bankAccountNumber ? 'border-red-500' : 'border-gray-200 dark:border-zinc-800'
+                    }`}
+                    placeholder="9–18 digit account number"
                   />
                   {errors.bankAccountNumber && <span className="text-xs text-red-500 mt-1 block">{errors.bankAccountNumber}</span>}
                 </div>
@@ -1667,11 +2448,14 @@ export default function NewEmployeePage() {
                   <Input 
                     id="ifscCode" 
                     name="ifscCode" 
+                    maxLength={11}
                     value={formData.ifscCode}
                     onChange={handleInputChange}
                     onBlur={() => handleFieldBlur('ifscCode')}
-                    className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
-                    placeholder="HDFC0001234"
+                    className={`bg-white dark:bg-slate-950 border text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2 uppercase ${
+                      errors.ifscCode ? 'border-red-500' : 'border-gray-200 dark:border-zinc-800'
+                    }`}
+                    placeholder="e.g. SBIN0001234"
                   />
                   {errors.ifscCode && <span className="text-xs text-red-500 mt-1 block">{errors.ifscCode}</span>}
                 </div>
@@ -1680,55 +2464,78 @@ export default function NewEmployeePage() {
                   <Input 
                     id="branchName" 
                     name="branchName" 
+                    maxLength={100}
                     value={formData.branchName}
                     onChange={handleInputChange}
-                    className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
-                    placeholder="Enter branch name"
+                    onBlur={() => handleFieldBlur('branchName')}
+                    className={`bg-white dark:bg-slate-950 border text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2 ${
+                      errors.branchName ? 'border-red-500' : 'border-gray-200 dark:border-zinc-800'
+                    }`}
+                    placeholder="e.g. MG Road Branch, Bengaluru"
                   />
+                  {errors.branchName && <span className="text-xs text-red-500 mt-1 block">{errors.branchName}</span>}
                 </div>
                 <div>
                   <Label htmlFor="pfNumber" className="text-slate-700 dark:text-[#fdfcfc]">Provident Fund (PF) No.</Label>
                   <Input 
                     id="pfNumber" 
                     name="pfNumber" 
+                    maxLength={30}
                     value={formData.pfNumber}
                     onChange={handleInputChange}
-                    className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
-                    placeholder="PF-000000"
+                    onBlur={() => handleFieldBlur('pfNumber')}
+                    className={`bg-white dark:bg-slate-950 border text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2 uppercase ${
+                      errors.pfNumber ? 'border-red-500' : 'border-gray-200 dark:border-zinc-800'
+                    }`}
+                    placeholder="e.g. MH/BAN/0012345/000/0000123"
                   />
+                  {errors.pfNumber && <span className="text-xs text-red-500 mt-1 block">{errors.pfNumber}</span>}
                 </div>
                 <div>
                   <Label htmlFor="uanNumber" className="text-slate-700 dark:text-[#fdfcfc]">Universal Account Number (UAN)</Label>
                   <Input 
                     id="uanNumber" 
                     name="uanNumber" 
+                    maxLength={14}
                     value={formData.uanNumber}
                     onChange={handleInputChange}
-                    className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
-                    placeholder="100XXXXXXXXX"
+                    onBlur={() => handleFieldBlur('uanNumber')}
+                    className={`bg-white dark:bg-slate-950 border text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2 ${
+                      errors.uanNumber ? 'border-red-500' : 'border-gray-200 dark:border-zinc-800'
+                    }`}
+                    placeholder="12-digit UAN (e.g. 100123456789)"
                   />
+                  {errors.uanNumber && <span className="text-xs text-red-500 mt-1 block">{errors.uanNumber}</span>}
                 </div>
                 <div>
                   <Label htmlFor="esiNumber" className="text-slate-700 dark:text-[#fdfcfc]">ESI Number</Label>
                   <Input 
                     id="esiNumber" 
                     name="esiNumber" 
+                    maxLength={21}
                     value={formData.esiNumber}
                     onChange={handleInputChange}
-                    className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
-                    placeholder="ESI No."
+                    onBlur={() => handleFieldBlur('esiNumber')}
+                    className={`bg-white dark:bg-slate-950 border text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2 ${
+                      errors.esiNumber ? 'border-red-500' : 'border-gray-200 dark:border-zinc-800'
+                    }`}
+                    placeholder="10-digit IP No. or 17-digit ESIC"
                   />
+                  {errors.esiNumber && <span className="text-xs text-red-500 mt-1 block">{errors.esiNumber}</span>}
                 </div>
                 <div>
                   <Label htmlFor="panNumber" className="text-slate-700 dark:text-[#fdfcfc]">PAN Number</Label>
                   <Input 
                     id="panNumber" 
                     name="panNumber" 
+                    maxLength={10}
                     value={formData.panNumber}
                     onChange={handleInputChange}
                     onBlur={() => handleFieldBlur('panNumber')}
-                    className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
-                    placeholder="ABCDE1234F"
+                    className={`bg-white dark:bg-slate-950 border text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2 uppercase ${
+                      errors.panNumber ? 'border-red-500' : 'border-gray-200 dark:border-zinc-800'
+                    }`}
+                    placeholder="e.g. ABCDE1234F"
                   />
                   {errors.panNumber && <span className="text-xs text-red-500 mt-1 block">{errors.panNumber}</span>}
                 </div>
@@ -1737,10 +2544,13 @@ export default function NewEmployeePage() {
                   <Input 
                     id="aadhaarNumber" 
                     name="aadhaarNumber" 
+                    maxLength={14}
                     value={formData.aadhaarNumber}
                     onChange={handleInputChange}
                     onBlur={() => handleFieldBlur('aadhaarNumber')}
-                    className="bg-white dark:bg-slate-950 border-gray-200 dark:border-zinc-800 text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2" 
+                    className={`bg-white dark:bg-slate-950 border text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2 ${
+                      errors.aadhaarNumber ? 'border-red-500' : 'border-gray-200 dark:border-zinc-800'
+                    }`}
                     placeholder="12-digit number"
                   />
                   {errors.aadhaarNumber && <span className="text-xs text-red-500 mt-1 block">{errors.aadhaarNumber}</span>}
@@ -1849,7 +2659,27 @@ export default function NewEmployeePage() {
               </CardHeader>
               <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6">
                 <div>
-                  <Label htmlFor="username" className="text-slate-700 dark:text-[#fdfcfc]">Username</Label>
+                  <div className="flex items-center justify-between gap-2">
+                    <Label htmlFor="username" className="text-slate-700 dark:text-[#fdfcfc]">Username</Label>
+                    <button
+                      type="button"
+                      disabled={generatingUsername || (!formData.firstName.trim() && !formData.lastName.trim())}
+                      onClick={() => {
+                        setUsernameManuallyEdited(false);
+                        void generateUniqueUsernameFromName(
+                          formData.firstName,
+                          formData.lastName,
+                          formData.middleName,
+                          formData.userId
+                        );
+                      }}
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#f87941] hover:text-[#e06634] disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                      title="Auto-generate a unique username from First and Last Name"
+                    >
+                      <RefreshCw className={`h-3 w-3 ${generatingUsername ? 'animate-spin' : ''}`} />
+                      Auto-generate
+                    </button>
+                  </div>
                   <Input 
                     id="username" 
                     name="username" 
@@ -1861,7 +2691,41 @@ export default function NewEmployeePage() {
                     }`}
                     placeholder="e.g. john.doe"
                   />
+                  {(checkingUsername || generatingUsername) && (
+                    <span className="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
+                      <Loader2 className="h-3 w-3 animate-spin" /> {generatingUsername ? 'Generating unique username...' : 'Checking username availability...'}
+                    </span>
+                  )}
                   {errors.username && <span className="text-xs text-red-500 mt-1 block">{errors.username}</span>}
+                  {!errors.username && !checkingUsername && !generatingUsername && (
+                    <span className="text-[11px] text-slate-400 mt-1 block">
+                      {!usernameManuallyEdited && formData.username
+                        ? 'Auto-generated from name (editable — you can customize your own).'
+                        : 'You can enter a custom username or click Auto-generate.'}
+                    </span>
+                  )}
+                  {usernameSuggestion && (
+                    <div className="mt-1.5 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                      <span>Available suggestion:</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormData((prev) => ({ ...prev, username: usernameSuggestion }));
+                          setUsernameManuallyEdited(true);
+                          setUsernameConflictError(null);
+                          setUsernameSuggestion(null);
+                          setErrors((prev) => {
+                            const copy = { ...prev };
+                            delete copy.username;
+                            return copy;
+                          });
+                        }}
+                        className="px-2 py-0.5 rounded bg-[#f87941]/10 text-[#f87941] font-semibold hover:bg-[#f87941]/20 transition-colors cursor-pointer"
+                      >
+                        Use {usernameSuggestion}
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="officeEmail" className="text-slate-700 dark:text-[#fdfcfc]">Office/Work Email</Label>
@@ -1880,24 +2744,43 @@ export default function NewEmployeePage() {
                   {errors.officeEmail && <span className="text-xs text-red-500 mt-1 block">{errors.officeEmail}</span>}
                 </div>
                 <div>
-                  <Label htmlFor="password" className="text-slate-700 dark:text-[#fdfcfc]">
-                    {employeeEditId ? 'Change Password (optional)' : 'Initial Password'} {!employeeEditId && <span className="text-[#f87941]">*</span>}
-                  </Label>
-                  <Input 
-                    id="password" 
-                    name="password" 
-                    type="password"
-                    value={formData.password}
-                    onChange={handleInputChange}
-                    onBlur={() => handleFieldBlur('password')}
-                    className={`bg-white dark:bg-slate-950 border text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] mt-2 ${
-                      errors.password ? 'border-red-500' : 'border-gray-200 dark:border-zinc-800'
-                    }`}
-                    placeholder={employeeEditId ? 'Leave blank to keep current' : '••••••••'}
-                  />
+                  <div className="flex items-center justify-between gap-2">
+                    <Label htmlFor="password" className="text-slate-700 dark:text-[#fdfcfc]">
+                      {employeeEditId ? 'Change Password (optional)' : 'Initial Password'} {!employeeEditId && <span className="text-[#f87941]">*</span>}
+                    </Label>
+                    {employeeEditId && hasExistingAccount && (
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                        Configured
+                      </span>
+                    )}
+                  </div>
+                  <div className="relative mt-2">
+                    <Input 
+                      id="password" 
+                      name="password" 
+                      type={showPassword ? 'text' : 'password'}
+                      value={formData.password}
+                      onChange={handleInputChange}
+                      onBlur={() => handleFieldBlur('password')}
+                      className={`bg-white dark:bg-slate-950 border text-slate-900 dark:text-[#fdfcfc] placeholder-slate-400 dark:placeholder-slate-600 focus:border-[#f87941] pr-10 ${
+                        errors.password ? 'border-red-500' : 'border-gray-200 dark:border-zinc-800'
+                      }`}
+                      placeholder={employeeEditId ? '•••••••• (unchanged — enter only to reset)' : '••••••••'}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors cursor-pointer"
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                   {errors.password && <span className="text-xs text-red-500 mt-1 block">{errors.password}</span>}
                   {employeeEditId ? (
-                    <span className="text-[11px] text-slate-400 mt-1 block">Leave empty to keep current password unchanged.</span>
+                    <span className="text-[11px] text-slate-400 mt-1 block">
+                      Password is already set on this account. Leave empty to keep it unchanged.
+                    </span>
                   ) : formData.employeeId ? (
                     <span className="text-[10px] text-[#f87941]/90 mt-1 block font-semibold">
                       Auto-generated: Welcome@{formData.employeeId}

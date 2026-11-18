@@ -36,6 +36,23 @@ import {
   UPLOAD_LIMITS,
   validatePersonalIdByGovtId,
   getGovtIdPlaceholder,
+  cleanUsername,
+  buildBaseUsername,
+  optionalUsernameSchema,
+  resolveSystemRole,
+  optionalSalarySchema,
+  optionalHourlyRateSchema,
+  optionalCtcSchema,
+  optionalCurrencySchema,
+  optionalBankNameSchema,
+  optionalBranchNameSchema,
+  optionalPfNumberSchema,
+  optionalUanNumberSchema,
+  optionalEsiNumberSchema,
+  sanitizeDraftFormData,
+  buildDraftDisplayName,
+  computeEmployeeDraftCompletion,
+  employeeDraftPayloadSchema,
 } from '../src/shared/validation/employee.ts';
 
 // Helper to format local Date as YYYY-MM-DD avoiding UTC skew
@@ -786,4 +803,224 @@ test('Personal Step Schema: dynamically validates personalIdNumber against govtI
     personalIdNumber: '',
   });
   assert.equal(rEmptyId.success, true);
+});
+
+// -------------------------------------------------------------
+// 15. System Access: Username Normalization, Role Resolution & Edit Mode
+// -------------------------------------------------------------
+test('Username Schema: trims, lowercases, and enforces valid characters and length', () => {
+  assert.equal(cleanUsername('  Sai.Kiran_01  '), 'sai.kiran_01');
+  assert.equal(optionalUsernameSchema.safeParse('  John.Doe  ').data, 'john.doe');
+  assert.equal(optionalUsernameSchema.safeParse('').data, undefined);
+  assert.equal(optionalUsernameSchema.safeParse('   ').data, undefined);
+
+  // Too short (< 3)
+  assert.equal(optionalUsernameSchema.safeParse('ab').success, false);
+  // Invalid characters (spaces, @)
+  assert.equal(optionalUsernameSchema.safeParse('john doe').success, false);
+  assert.equal(optionalUsernameSchema.safeParse('john@doe').success, false);
+});
+
+test('System Role Resolution: maps exact roles, RBAC roles, and designations accurately', () => {
+  assert.equal(resolveSystemRole('developer'), 'developer');
+  assert.equal(resolveSystemRole('Developer'), 'developer');
+  assert.equal(resolveSystemRole('HR Manager'), 'hr_manager');
+  assert.equal(resolveSystemRole('Admin'), 'admin');
+  assert.equal(resolveSystemRole('SuperAdmin'), 'admin');
+  assert.equal(resolveSystemRole('Manager'), 'project_manager');
+  assert.equal(resolveSystemRole('Viewer'), 'client');
+  // Collapsed 'Employee' role falls back to designation inference
+  assert.equal(resolveSystemRole('Employee', 'Senior Full Stack Developer'), 'developer');
+  assert.equal(resolveSystemRole('Employee', 'QA Automation Engineer'), 'qa_engineer');
+  assert.equal(resolveSystemRole('Employee', 'UI/UX Designer'), 'ui_ux_designer');
+  assert.equal(resolveSystemRole('Employee', 'DevOps Engineer'), 'devops_engineer');
+  assert.equal(resolveSystemRole(null, 'Software Developer'), 'developer');
+});
+
+test('Access Step Schema: allows blank password in edit mode and requires strong password in create mode', () => {
+  // Edit mode: empty password passes
+  const editValid = accessStepSchema(true).safeParse({
+    role: 'developer',
+    username: 'sai.kiran',
+    officeEmail: 'sai@company.com',
+    password: '',
+  });
+  assert.equal(editValid.success, true);
+  assert.equal(editValid.data.username, 'sai.kiran');
+
+  // Create mode: empty password fails
+  const createInvalid = accessStepSchema(false).safeParse({
+    role: 'developer',
+    username: 'sai.kiran',
+    officeEmail: 'sai@company.com',
+    password: '',
+  });
+  assert.equal(createInvalid.success, false);
+  assert.equal(createInvalid.error.issues[0].path[0], 'password');
+});
+
+// -------------------------------------------------------------
+// 16. Compensation, Banking & Statutory Compliance (Payroll Step)
+// -------------------------------------------------------------
+test('Compensation Fields: enforce bounds, decimals, and non-negative values', () => {
+  // Valid values
+  assert.equal(optionalSalarySchema.safeParse('50000').data, 50000);
+  assert.equal(optionalSalarySchema.safeParse('50000.75').data, 50000.75);
+  assert.equal(optionalSalarySchema.safeParse('').data, undefined);
+  assert.equal(optionalHourlyRateSchema.safeParse('750.50').data, 750.5);
+  assert.equal(optionalCtcSchema.safeParse('600000').data, 600000);
+
+  // Rejects astronomical overflow values
+  assert.equal(optionalSalarySchema.safeParse('5000000000000000000000000').success, false);
+  assert.equal(optionalHourlyRateSchema.safeParse('5000000000000000000000000').success, false);
+  assert.equal(optionalCtcSchema.safeParse('5000000000000000000000000').success, false);
+
+  // Rejects negative and > 2 decimal places
+  assert.equal(optionalSalarySchema.safeParse('-5000').success, false);
+  assert.equal(optionalSalarySchema.safeParse('50000.123').success, false);
+  assert.equal(optionalHourlyRateSchema.safeParse('-100').success, false);
+});
+
+test('Currency, Bank Name & Branch Name: validate realistic entries and reject gibberish', () => {
+  // Currency
+  assert.equal(optionalCurrencySchema.safeParse('INR').data, 'INR');
+  assert.equal(optionalCurrencySchema.safeParse('usd').data, 'USD');
+  assert.equal(optionalCurrencySchema.safeParse('XYZ').success, false);
+
+  // Bank Name
+  assert.equal(optionalBankNameSchema.safeParse('Union Bank Of India').data, 'Union Bank Of India');
+  assert.equal(optionalBankNameSchema.safeParse('HDFC Bank Ltd.').success, true);
+  assert.equal(optionalBankNameSchema.safeParse('Bank@123').success, false);
+  assert.equal(optionalBankNameSchema.safeParse('aaaaaaa').success, false);
+  assert.equal(optionalBankNameSchema.safeParse('').data, undefined);
+
+  // Branch Name
+  assert.equal(optionalBranchNameSchema.safeParse('MG Road Branch, Bengaluru').success, true);
+  assert.equal(optionalBranchNameSchema.safeParse('Sector 62, Noida').success, true);
+  assert.equal(optionalBranchNameSchema.safeParse('wwwwsbhbwhqbbwhqbhwhbhd hw l').success, false);
+  assert.equal(optionalBranchNameSchema.safeParse('12345').success, false);
+  assert.equal(optionalBranchNameSchema.safeParse('').data, undefined);
+
+  // All-zero bank account rejected
+  assert.equal(bankAccountSchema.safeParse('000000000000').success, false);
+});
+
+test('Statutory Numbers: PF, UAN (12 digits), and ESI (10 or 17 digits)', () => {
+  // PF Number
+  assert.equal(optionalPfNumberSchema.safeParse('MH/BAN/0012345/000/0000123').data, 'MH/BAN/0012345/000/0000123');
+  assert.equal(optionalPfNumberSchema.safeParse('mhban00123450000000123').data, 'MHBAN00123450000000123');
+  assert.equal(optionalPfNumberSchema.safeParse('TN/MAS/0012345/0000123').success, true);
+  assert.equal(optionalPfNumberSchema.safeParse('PF-8745145').success, false);
+  assert.equal(optionalPfNumberSchema.safeParse('').data, undefined);
+
+  // UAN (strictly 12 digits, cannot start with 0)
+  assert.equal(optionalUanNumberSchema.safeParse('100123456789').data, '100123456789');
+  assert.equal(optionalUanNumberSchema.safeParse('1001 2345 6789').data, '100123456789');
+  assert.equal(optionalUanNumberSchema.safeParse('48152636958').success, false); // only 11 digits
+  assert.equal(optionalUanNumberSchema.safeParse('012345678901').success, false); // starts with 0
+  assert.equal(optionalUanNumberSchema.safeParse('111111111111').success, false); // all identical
+  assert.equal(optionalUanNumberSchema.safeParse('').data, undefined);
+
+  // ESI (10-digit IP or 17-digit ESIC code)
+  assert.equal(optionalEsiNumberSchema.safeParse('3112345678').data, '3112345678');
+  assert.equal(optionalEsiNumberSchema.safeParse('31-00-123456-000-0001').data, '31001234560000001');
+  assert.equal(optionalEsiNumberSchema.safeParse('0000000000').success, false);
+  assert.equal(optionalEsiNumberSchema.safeParse('12345678').success, false);
+  assert.equal(optionalEsiNumberSchema.safeParse('').data, undefined);
+});
+
+test('Payroll Step Schema: cross-validates CTC >= 12 * Monthly Base Salary', () => {
+  // Invalid: CTC (500,000) < 12 * 50,000 (600,000)
+  const badCtc = payrollStepSchema.safeParse({
+    salary: '50000',
+    ctc: '500000',
+    currency: 'INR',
+  });
+  assert.equal(badCtc.success, false);
+  assert.equal(badCtc.error.issues[0].path[0], 'ctc');
+
+  // Valid complete payroll object
+  const validPayroll = payrollStepSchema.safeParse({
+    salary: '50000',
+    hourlyRate: '500',
+    ctc: '650000',
+    currency: 'INR',
+    bankName: 'Union Bank Of India',
+    bankAccountNumber: '1114087451478962',
+    ifscCode: 'SBIN0001234',
+    branchName: 'MG Road Branch',
+    pfNumber: 'MH/BAN/0012345/000/0000123',
+    uanNumber: '100123456789',
+    esiNumber: '3112345678',
+    panNumber: 'AOLCC1206D',
+  });
+  assert.equal(validPayroll.success, true);
+});
+
+test('Username Auto-Generator: builds clean base usernames from first, middle, and last names', () => {
+  assert.equal(buildBaseUsername('Saikiran', 'Rudra'), 'saikiran.rudra');
+  assert.equal(buildBaseUsername('Sai Kiran', "O'Connor"), 'saikiran.oconnor');
+  assert.equal(buildBaseUsername('Mary-Jane', 'Watson'), 'maryjane.watson');
+  assert.equal(buildBaseUsername('José', 'García'), 'jose.garcia');
+  assert.equal(buildBaseUsername('Saikiran', 'Rudra', '', 'first_l'), 'saikiran_r');
+  assert.equal(buildBaseUsername('Saikiran', 'Rudra', 'Rao', 'first.middle.last'), 'saikiran.rao.rudra');
+  assert.equal(buildBaseUsername('Saikiran', 'Rudra', '', 'first.middle.last'), 'saikiran.rudra');
+  assert.equal(buildBaseUsername('', ''), '');
+  assert.equal(buildBaseUsername('A', ''), ''); // < 3 chars returns empty
+});
+
+// -------------------------------------------------------------
+// 17. Employee Database Draft Helpers & Schema
+// -------------------------------------------------------------
+test('Employee Drafts: sanitizeDraftFormData strips passwords and preserves safe fields', () => {
+  const sanitized = sanitizeDraftFormData({
+    firstName: 'Saikiran',
+    lastName: 'Rudra',
+    email: 'sai@company.com',
+    password: 'SecretPassword123!',
+    confirmPassword: 'SecretPassword123!',
+    department: 'Engineering',
+  });
+
+  assert.equal(sanitized.firstName, 'Saikiran');
+  assert.equal(sanitized.department, 'Engineering');
+  assert.equal('password' in sanitized, false);
+  assert.equal('confirmPassword' in sanitized, false);
+});
+
+test('Employee Drafts: buildDraftDisplayName and computeEmployeeDraftCompletion work accurately', () => {
+  assert.equal(buildDraftDisplayName({ firstName: 'Saikiran', lastName: 'Rudra' }), 'Saikiran Rudra');
+  assert.equal(buildDraftDisplayName({ email: 'sai@company.com' }), 'sai@company.com');
+  assert.equal(buildDraftDisplayName({ employeeId: 'EMP1005' }), 'Draft (EMP1005)');
+  assert.equal(buildDraftDisplayName({}), 'Untitled Employee Draft');
+
+  assert.equal(computeEmployeeDraftCompletion({}), 0);
+  const partial = computeEmployeeDraftCompletion({
+    firstName: 'Saikiran',
+    lastName: 'Rudra',
+    email: 'sai@company.com',
+    phone: '9876543210',
+  });
+  assert.ok(partial > 0 && partial < 100);
+});
+
+test('Employee Drafts: employeeDraftPayloadSchema validates steps and UUIDs', () => {
+  const valid = employeeDraftPayloadSchema.safeParse({
+    currentStep: 'payroll',
+    formData: { firstName: 'Saikiran', salary: '50000' },
+  });
+  assert.equal(valid.success, true);
+
+  const invalidStep = employeeDraftPayloadSchema.safeParse({
+    currentStep: 'unknown_step',
+    formData: {},
+  });
+  assert.equal(invalidStep.success, false);
+
+  const invalidUuid = employeeDraftPayloadSchema.safeParse({
+    id: 'not-a-uuid',
+    currentStep: 'personal',
+    formData: {},
+  });
+  assert.equal(invalidUuid.success, false);
 });

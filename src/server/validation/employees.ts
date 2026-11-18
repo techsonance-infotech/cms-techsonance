@@ -8,6 +8,15 @@ import {
   optionalDobSchema,
   optionalLinkedinUrlSchema,
   optionalGithubUrlSchema,
+  optionalSalarySchema,
+  optionalHourlyRateSchema,
+  optionalCtcSchema,
+  optionalCurrencySchema,
+  optionalBankNameSchema,
+  optionalBranchNameSchema,
+  optionalPfNumberSchema,
+  optionalUanNumberSchema,
+  optionalEsiNumberSchema,
   isJoiningDateValidForDob,
   cleanIndianPhone,
   validatePersonalIdByGovtId,
@@ -52,12 +61,12 @@ export const baseEmployeeSchema = z
     dateOfBirth: optionalDobSchema,
     skills: z.any().optional().nullable(),
     employmentType: employmentTypeSchema,
-    salary: safeNumber,
-    hourlyRate: safeNumber,
-    ctc: safeNumber,
-    pfNumber: z.string().trim().max(100, 'PF number cannot exceed 100 characters').optional().nullable(),
-    uanNumber: z.string().trim().max(100, 'UAN number cannot exceed 100 characters').optional().nullable(),
-    bankName: z.string().trim().max(150, 'Bank name cannot exceed 150 characters').optional().nullable(),
+    salary: optionalSalarySchema,
+    hourlyRate: optionalHourlyRateSchema,
+    ctc: optionalCtcSchema,
+    pfNumber: optionalPfNumberSchema,
+    uanNumber: optionalUanNumberSchema,
+    bankName: optionalBankNameSchema,
     bankAccountNumber: optionalBankAccountSchema,
     ifscCode: optionalIfscSchema,
     managerId: safeInt,
@@ -79,9 +88,9 @@ export const baseEmployeeSchema = z
     workShift: z.string().trim().max(100, 'Work shift cannot exceed 100 characters').optional().nullable(),
     noticePeriod: safeInt,
     // Financials / Compliance
-    currency: z.string().trim().max(10).optional().nullable(),
-    branchName: z.string().trim().max(100, 'Branch name cannot exceed 100 characters').optional().nullable(),
-    esiNumber: z.string().trim().max(100, 'ESI number cannot exceed 100 characters').optional().nullable(),
+    currency: optionalCurrencySchema,
+    branchName: optionalBranchNameSchema,
+    esiNumber: optionalEsiNumberSchema,
     panNumber: optionalPanSchema,
     aadhaarNumber: optionalAadhaarSchema,
     // Documents (Urls)
@@ -153,6 +162,19 @@ export const createEmployeeSchema = baseEmployeeSchema
         });
       }
     }
+    if (
+      typeof data.salary === 'number' &&
+      data.salary > 0 &&
+      typeof data.ctc === 'number' &&
+      data.ctc > 0 &&
+      data.ctc < data.salary * 12
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Annual CTC cannot be less than 12 × Monthly Base Salary.',
+        path: ['ctc'],
+      });
+    }
   });
 
 export const updateEmployeeSchema = baseEmployeeSchema
@@ -197,5 +219,18 @@ export const updateEmployeeSchema = baseEmployeeSchema
           path: ['personalIdNumber'],
         });
       }
+    }
+    if (
+      typeof data.salary === 'number' &&
+      data.salary > 0 &&
+      typeof data.ctc === 'number' &&
+      data.ctc > 0 &&
+      data.ctc < data.salary * 12
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Annual CTC cannot be less than 12 × Monthly Base Salary.',
+        path: ['ctc'],
+      });
     }
   });

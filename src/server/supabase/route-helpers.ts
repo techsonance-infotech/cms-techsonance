@@ -109,10 +109,13 @@ export async function buildLegacyUserIdMap(
 export function normalizeSupabaseEmployeeRecord(
   row: Record<string, unknown>,
   legacyUserIdMap: Map<string, number | null>,
-  profilesMap?: Map<string, any>
+  profilesMap?: Map<string, any>,
+  authUserRecord?: { user_metadata?: Record<string, any>; app_metadata?: Record<string, any> } | null
 ) {
   const authUserId = typeof row.user_id === 'string' ? row.user_id : null;
   const managerAuthId = typeof row.manager_id === 'string' ? row.manager_id : null;
+  const authUserMeta = authUserRecord?.user_metadata || {};
+  const authAppMeta = authUserRecord?.app_metadata || {};
 
   // Safe parse skills JSONB
   let parsedSkills: any = null;
@@ -240,6 +243,7 @@ export function normalizeSupabaseEmployeeRecord(
     maritalStatus: getField('marital_status', 'maritalStatus'),
     bloodGroup: getField('blood_group', 'bloodGroup'),
     nationality: getField('nationality', 'nationality'),
+    govtIdType: getField('govt_id_type', 'govtIdType') ?? 'Aadhaar Card',
     personalIdNumber:
       maskAadhaar(getField('personal_id_number', 'personalIdNumber')) ||
       maskAadhaar(getField('aadhaar_number', 'aadhaarNumber')) ||
@@ -268,10 +272,29 @@ export function normalizeSupabaseEmployeeRecord(
     resumeUrl: getField('resume_url', 'resumeUrl'),
 
     // System Access
+    username:
+      profile?.username ??
+      authUserMeta.username ??
+      getField('username', 'username') ??
+      null,
+    role:
+      authAppMeta.role ??
+      authUserMeta.role ??
+      profile?.role ??
+      getField('role', 'role') ??
+      null,
     permissions: getField('permissions', 'permissions') || [],
-    officeEmail: profile?.office_email ?? getField('office_email', 'officeEmail'),
+    officeEmail:
+      profile?.office_email ??
+      authUserMeta.officeEmail ??
+      getField('office_email', 'officeEmail') ??
+      null,
     accountExpiryDate:
-      profile?.account_expiry_date ?? getField('account_expiry_date', 'accountExpiryDate'),
+      profile?.account_expiry_date ??
+      authUserMeta.accountExpiryDate ??
+      getField('account_expiry_date', 'accountExpiryDate') ??
+      null,
+    hasAccount: Boolean(authUserRecord || profile),
 
     // Emergency Contact
     emergencyContactName: getField('emergency_contact_name', 'emergencyContactName'),
